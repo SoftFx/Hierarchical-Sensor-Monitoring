@@ -38,7 +38,10 @@ namespace hsm::collector::large_files
         inline std::size_t CharLength(const std::string& text, std::size_t at)
         {
             const auto c = static_cast<unsigned char>(text[at]);
-            std::size_t length = c < 0x80 ? 1 : c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+            std::size_t length = c < 0x80 ? 1 : c >= 0xF0 ? 4
+                                            : c >= 0xE0   ? 3
+                                            : c >= 0xC0   ? 2
+                                                          : 1;
             return at + length <= text.size() ? length : 1;
         }
 

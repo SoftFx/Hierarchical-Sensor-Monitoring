@@ -406,8 +406,7 @@ namespace hsm::collector::large_files
             {
                 absent_generation_ = session.generation;
                 absent_until_ = Now() + kFeatureAbsentRetryMs;
-                Say("absent", true, "Large files cannot be sent: the server has no file connections (the upgrade was answered " + std::to_string(opened.status) +
-                                        "); files wait and the server is asked again with the next session and every 30 minutes.");
+                Say("absent", true, "Large files cannot be sent: the server has no file connections (the upgrade was answered " + std::to_string(opened.status) + "); files wait and the server is asked again with the next session and every 30 minutes.");
                 outcome = Outcome{ Result::Later, "the server has no large files", absent_until_ };
                 return false;
             }
@@ -916,8 +915,7 @@ namespace hsm::collector::large_files
             const auto took = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - written_at).count();
             const std::int64_t heartbeat = connection_->Hello().heartbeat_ms > 0 ? connection_->Hello().heartbeat_ms : 30000;
             if (took >= 3 * heartbeat && took > 0)
-                Say("slow-link", true, "The link to the server passes about " + std::to_string(static_cast<std::int64_t>(frame_.size()) / (std::max<std::int64_t>)(took, 1)) +
-                                           " KB/s; a piece of " + std::to_string(frame_.size()) + " bytes must arrive within the server's frame deadline.");
+                Say("slow-link", true, "The link to the server passes about " + std::to_string(static_cast<std::int64_t>(frame_.size()) / (std::max<std::int64_t>)(took, 1)) + " KB/s; a piece of " + std::to_string(frame_.size()) + " bytes must arrive within the server's frame deadline.");
 
             switch (answer.kind)
             {

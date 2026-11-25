@@ -122,7 +122,10 @@ namespace hsm::collector::large_files
             return text + ")";
         }
 
-        std::int64_t TicksOf(const LARGE_INTEGER& filetime) { return static_cast<std::int64_t>(filetime.QuadPart) - kFiletimeTo1970; }
+        std::int64_t TicksOf(const LARGE_INTEGER& filetime)
+        {
+            return static_cast<std::int64_t>(filetime.QuadPart) - kFiletimeTo1970;
+        }
 
         std::int64_t TicksOf(const FILETIME& filetime)
         {
@@ -172,7 +175,10 @@ namespace hsm::collector::large_files
             return true;
         }
 
-        HANDLE AsHandle(void* handle) { return handle == nullptr ? INVALID_HANDLE_VALUE : static_cast<HANDLE>(handle); }
+        HANDLE AsHandle(void* handle)
+        {
+            return handle == nullptr ? INVALID_HANDLE_VALUE : static_cast<HANDLE>(handle);
+        }
 #else
         std::string ErrnoText(const char* what, int code)
         {
@@ -301,9 +307,7 @@ namespace hsm::collector::large_files
             const std::string name = entry->d_name;
             if (name == "." || name == "..")
                 continue;
-            struct stat status
-            {
-            };
+            struct stat status{};
             if (::fstatat(dir_fd, entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0)
                 continue; // gone between the two calls
             FolderEntry item;
@@ -323,7 +327,10 @@ namespace hsm::collector::large_files
 
     // ---- The source file ----
 
-    SourceFile::~SourceFile() { Close(); }
+    SourceFile::~SourceFile()
+    {
+        Close();
+    }
 
     bool SourceFile::IsOpen() const noexcept
     {
@@ -407,9 +414,7 @@ namespace hsm::collector::large_files
                 return OpenResult::Denied;
             return OpenResult::Failed;
         }
-        struct stat status
-        {
-        };
+        struct stat status{};
         if (::fstat(fd, &status) != 0 || !S_ISREG(status.st_mode))
         {
             error = "the path is not a regular file";
@@ -431,9 +436,7 @@ namespace hsm::collector::large_files
 #if defined(_WIN32)
         return HandleFacts(static_cast<HANDLE>(handle_), out, error);
 #else
-        struct stat status
-        {
-        };
+        struct stat status{};
         if (::fstat(fd_, &status) != 0)
         {
             error = ErrnoText("reading the file's facts", errno);
@@ -518,12 +521,8 @@ namespace hsm::collector::large_files
         Close(); // the delete happens when the last handle closes: ours is the only one
         return ok ? DeleteResult::Deleted : DeleteResult::Failed;
 #else
-        struct stat open_status
-        {
-        };
-        struct stat path_status
-        {
-        };
+        struct stat open_status{};
+        struct stat path_status{};
         if (::fstat(fd_, &open_status) != 0)
         {
             error = ErrnoText("reading the open file", errno);
@@ -574,9 +573,7 @@ namespace hsm::collector::large_files
             error = "the path is not a regular file";
         return read;
 #else
-        struct stat status
-        {
-        };
+        struct stat status{};
         if (::lstat(path.c_str(), &status) != 0)
         {
             error = ErrnoText("reading the file's facts", errno);
@@ -594,7 +591,10 @@ namespace hsm::collector::large_files
 
     // ---- State files ----
 
-    LockedStateFile::~LockedStateFile() { Unlock(); }
+    LockedStateFile::~LockedStateFile()
+    {
+        Unlock();
+    }
 
     bool LockedStateFile::Locked() const noexcept
     {
@@ -796,11 +796,17 @@ namespace hsm::collector::large_files
 #endif
     }
 
-    bool LockedStateFile::Remove(std::string& error) { return RemoveFile(path_, error); }
+    bool LockedStateFile::Remove(std::string& error)
+    {
+        return RemoveFile(path_, error);
+    }
 
     // ---- The digest list ----
 
-    RecordFile::~RecordFile() { Close(); }
+    RecordFile::~RecordFile()
+    {
+        Close();
+    }
 
     bool RecordFile::IsOpen() const noexcept
     {
@@ -870,9 +876,7 @@ namespace hsm::collector::large_files
             error = ErrnoText("opening the digest list", errno);
             return false;
         }
-        struct stat status
-        {
-        };
+        struct stat status{};
         if (::fstat(fd, &status) != 0 || (status.st_size != size && (::ftruncate(fd, 0) != 0 || ::ftruncate(fd, static_cast<off_t>(size)) != 0)))
         {
             error = ErrnoText("sizing the digest list", errno);

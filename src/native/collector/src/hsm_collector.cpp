@@ -1,16 +1,16 @@
 #include "hsm_collector/hsm_collector.h"
 
-#include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
-#include "double_format.hpp"                       // .NET shortest round-trip double text (#1426)
-#include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
-#include "tcp_connection_stats.hpp"                // TCP connection failure rate sampling (_WIN32 only for WindowsTcpFailureSampler)
-#include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
-#include "platform/hsm_linux_metric_sources.hpp"   // Linux /proc + statvfs metric-source factory (#1414; __linux__ only)
-#include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
-#include "hsm_scheduled_task.hpp"                  // InvokeIsolated + the periodic ScheduledTask
-#include "tables/hsm_table_pipeline.hpp"           // table sensors (#1848): in every build, packing with HSM_COLLECTOR_TABLES
-#include "tables/hsm_table_test_seams.hpp"         // their test-only seams (not in the public header)
-#include "large_files/hsm_large_files.hpp"         // large file values (#1887): in every build, uploads with HSM_COLLECTOR_LARGE_FILES
+#include "cpu_top.hpp"                               // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
+#include "double_format.hpp"                         // .NET shortest round-trip double text (#1426)
+#include "network_speed.hpp"                         // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
+#include "tcp_connection_stats.hpp"                  // TCP connection failure rate sampling (_WIN32 only for WindowsTcpFailureSampler)
+#include "windows_info.hpp"                          // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
+#include "platform/hsm_linux_metric_sources.hpp"     // Linux /proc + statvfs metric-source factory (#1414; __linux__ only)
+#include "platform/hsm_windows_metric_sources.hpp"   // Windows PDH metric-source factory (#1164; _WIN32 only)
+#include "hsm_scheduled_task.hpp"                    // InvokeIsolated + the periodic ScheduledTask
+#include "tables/hsm_table_pipeline.hpp"             // table sensors (#1848): in every build, packing with HSM_COLLECTOR_TABLES
+#include "tables/hsm_table_test_seams.hpp"           // their test-only seams (not in the public header)
+#include "large_files/hsm_large_files.hpp"           // large file values (#1887): in every build, uploads with HSM_COLLECTOR_LARGE_FILES
 #include "large_files/hsm_large_file_test_seams.hpp" // their test-only seams
 #if defined(HSM_COLLECTOR_LARGE_FILES)
 #include "large_files/hsm_large_file_mask.hpp"
@@ -5228,7 +5228,6 @@ namespace
         }
 
     private:
-
 #if defined(HSM_COLLECTOR_LARGE_FILES)
     public:
         // For tests: adjusts the file connection's options of every later run.

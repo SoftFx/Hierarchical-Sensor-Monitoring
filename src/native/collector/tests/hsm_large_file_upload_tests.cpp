@@ -108,7 +108,10 @@ namespace
         out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     }
 
-    bool Exists(const std::string& path) { return fs::exists(fs::u8path(path)); }
+    bool Exists(const std::string& path)
+    {
+        return fs::exists(fs::u8path(path));
+    }
 
     void SetModified(const std::string& path, int seconds_ago)
     {
@@ -302,7 +305,10 @@ namespace
         return buffer;
     }
 
-    bool Settled(hsm_large_file_t* file) { return Result(file).outcome != HSM_LARGE_FILE_PENDING; }
+    bool Settled(hsm_large_file_t* file)
+    {
+        return Result(file).outcome != HSM_LARGE_FILE_PENDING;
+    }
 
     // ---- Tests ----
 
@@ -331,7 +337,7 @@ namespace
         hsm_large_file_t* file = nullptr;
         Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
         Check(WaitFor([&] { return Settled(file); }, 5), "the file must settle" + rig.log.All() + "\nalive=" + std::to_string(lf::test::UploaderAlive(rig.collector)) + " received=" + std::to_string(rig.server->Received().size()) + " begins=" + std::to_string(rig.script->Begins().size()) + " conns=" + std::to_string(rig.script->Connections().size()) + " waits=" + std::to_string(rig.waits.Copy().size()) +
-                  (rig.waits.Copy().empty() ? std::string() : " first=" + rig.waits.Copy().front().first + " last=" + rig.waits.Copy().back().first));
+                                                             (rig.waits.Copy().empty() ? std::string() : " first=" + rig.waits.Copy().front().first + " last=" + rig.waits.Copy().back().first));
         const auto result = Result(file);
         Check(result.outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file));
         Check(result.source_deleted && !Exists(source), "the source is deleted after stored");
@@ -538,9 +544,9 @@ namespace
         Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
         // The file waits on the collector's clock (60 s, then 1 s): advance it.
         Check(WaitFor([&] {
-            rig.Advance(1000);
-            return Settled(file);
-        }),
+                  rig.Advance(1000);
+                  return Settled(file);
+              }),
               "settled");
         Check(Result(file).outcome == HSM_LARGE_FILE_STORED, "stored after no room and busy: " + Reason(file));
         Check(rig.script->Begins().size() == 3, "begun three times");

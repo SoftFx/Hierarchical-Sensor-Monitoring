@@ -24,7 +24,7 @@ namespace hsm::collector::large_files
     /// taken). Directories are left out.
     struct FolderEntry
     {
-        std::string name; // UTF-8; empty when name_valid is false
+        std::string name;     // UTF-8; empty when name_valid is false
         std::string raw_name; // the bytes as the system gave them (POSIX), for the report of a bad name
         std::int64_t size = 0;
         std::int64_t modified_ticks = 0;

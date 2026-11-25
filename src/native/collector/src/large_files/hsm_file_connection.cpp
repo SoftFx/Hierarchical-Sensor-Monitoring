@@ -440,11 +440,32 @@ namespace hsm::collector::large_files
         }
     }
 
-    bool FileConnection::Service() { return link_->Service(); }
-    std::chrono::steady_clock::time_point FileConnection::NextPingDue() const { return link_->NextPingDue(); }
-    void FileConnection::Close(std::int64_t linger_ms, int code, const std::string& reason) { link_->Close(linger_ms, code, reason); }
-    void FileConnection::Cancel() { link_->Cancel(); }
-    void FileConnection::ResetCancel() { link_->ResetCancel(); }
-    bool FileConnection::IsOpen() const { return link_->IsOpen(); }
-    const hsm::http::AckedLinkEnd& FileConnection::LastEnd() const { return link_->LastEnd(); }
+    bool FileConnection::Service()
+    {
+        return link_->Service();
+    }
+    std::chrono::steady_clock::time_point FileConnection::NextPingDue() const
+    {
+        return link_->NextPingDue();
+    }
+    void FileConnection::Close(std::int64_t linger_ms, int code, const std::string& reason)
+    {
+        link_->Close(linger_ms, code, reason);
+    }
+    void FileConnection::Cancel()
+    {
+        link_->Cancel();
+    }
+    void FileConnection::ResetCancel()
+    {
+        link_->ResetCancel();
+    }
+    bool FileConnection::IsOpen() const
+    {
+        return link_->IsOpen();
+    }
+    const hsm::http::AckedLinkEnd& FileConnection::LastEnd() const
+    {
+        return link_->LastEnd();
+    }
 } // namespace hsm::collector::large_files

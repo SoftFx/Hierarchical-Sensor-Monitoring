@@ -514,6 +514,63 @@ hsm_collector_stop(c); hsm_table_sensor_release(t);
   in memory (`max_backlog_bytes`, the oldest dropped and counted) and go again with the same producer
   and sequence.
 
+## Large files (0.16.0)
+
+A large file is a value of a File sensor whose content travels in pieces on the file connection of the
+collector session and is kept on the server's disk (ADR-0022; up to the server's limit, 64 GB by design). The
+behaviour is the managed collector's (`aicontext/features/collector/large-files/feature.md`); what the native
+collector does differently is in `aicontext/features/collector/large-files/native-collector.md`.
+
+```c
+hsm_collector_use_session_transport(c);
+hsm_collector_set_data_folder(c, NULL);                      /* the default: <LocalAppData>/HSMDataCollector/<identity> */
+hsm_large_file_options_t o = hsm_large_file_options_default(); /* zero in every field is its default */
+o.keep_source = 0;                                           /* delete the source once the server stored it */
+hsm_large_file_watch_t* w = NULL;
+hsm_collector_watch_large_files(c, "dumps", "C:\\App\\Dumps", "*.dmp", &o, &w);
+hsm_collector_start(c);
+hsm_large_file_t* f = NULL;
+hsm_collector_send_large_file(c, "dumps", "C:\\App\\Dumps\\on-request.dmp", &o, &f);
+hsm_large_file_result_t r = { sizeof r }; hsm_large_file_get_result(f, &r);   /* PENDING until settled */
+hsm_large_file_release(f);                                   /* the file stays queued */
+hsm_large_file_watch_release(w);                             /* stops watching */
+```
+
+- **Functions (11):** `hsm_large_file_options_default`, `hsm_collector_set_data_folder`,
+  `hsm_collector_watch_large_files`, `hsm_large_file_watch_get_stats`, `hsm_large_file_watch_state_reason`,
+  `hsm_large_file_watch_release`, `hsm_collector_send_large_file`, `hsm_large_file_get_result`,
+  `hsm_large_file_reason`, `hsm_large_file_cancel`, `hsm_large_file_release`. **Structs (3):**
+  `hsm_large_file_options_t`, `hsm_large_file_watch_stats_t`, `hsm_large_file_result_t`; **enums (2):**
+  `hsm_large_file_watch_state_t`, `hsm_large_file_outcome_t`; **handles (2):** `hsm_large_file_watch_t`,
+  `hsm_large_file_t`; **macro:** `HSM_LARGE_FILE_NO_SPEED_LIMIT`. All exist in every build.
+- **Options** start with `struct_size` and are read up to it; **0 in every field is its default**, so a
+  zero-initialised struct with `struct_size` set is safe: settle time 60 s (else at least 1 s), delete the source
+  after `stored`, 10,000,000 **bytes sent** per second (`HSM_LARGE_FILE_NO_SPEED_LIMIT` for none), the File sensor
+  registered with the alert "new data has been received" (`no_new_file_alert = 1` without it), sensor location
+  Module, no description, the server's history period, no TTL, no self-destroy. A new field will be appended, with
+  0 as its default. Output structs are written up to `min(struct_size, sizeof)`.
+- **Paths** (folder, mask, file, data folder) are UTF-8; a relative one is made absolute from the current
+  directory at the call. The mask has `*` and `?`, matches the whole name, ignores the case of ASCII letters on
+  Windows only, and may not contain `[`, `]`, `;`, `\`, `/` or a control character.
+- **Result codes.** `HSM_RESULT_INVALID_ARGUMENT` (with `hsm_collector_last_error`) for a mistake of the call;
+  `HSM_RESULT_INVALID_STATE` **only after dispose**. A collector that cannot send large files (the HTTP transport,
+  the in-memory default at Start, a libcurl without WebSocket, a build without `HSM_COLLECTOR_HTTP` and
+  `HSM_COLLECTOR_TABLES`) does not fail the call: the watch is `UNAVAILABLE` and the handed-over file ends
+  `UNAVAILABLE`, with the reason, said once.
+- **In every state** (as the managed lifecycle table): before Start a watch is `ACTIVE` and scans after Start, a
+  file is `PENDING` and uploads after Start; while Stopping or Stopped they wait for the next Start; after dispose
+  every call but the handle calls answers `INVALID_STATE`. `get_stats`, `state_reason`, `get_result`, `reason`,
+  `cancel` and both `release` calls are valid after the collector is destroyed.
+- **Threads.** One uploader thread of lowered priority, made at Start (or at the first watch or file while
+  running) and joined at Stop; the caller's thread never reads a file; Stop and dispose cut an upload (it continues
+  after the next Start) and do not wait for it. **The logger may be called on the uploader thread**: a logger must
+  not call stop, dispose or destroy (Stop and Dispose called there do nothing; destroy there is not allowed, as from
+  a lifecycle listener). A read blocked on a dead network share is cancelled on Windows (`CancelSynchronousIo`); on
+  Linux it can hold Stop until the read returns.
+- **No silent loss.** Every file not sent (refused, given up, vanished, unreadable, a link, a name that is not
+  UTF-8, a handed-over file still pending at dispose) is said once per file and run through the error channel and
+  counted in `.module/Collector queue stats/Queue overflow`; the watch counts `files_not_sent`.
+
 ## Alerts (registration payload)
 
 The alert builder ports the managed `HSMDataCollector.Alerts` model at the
