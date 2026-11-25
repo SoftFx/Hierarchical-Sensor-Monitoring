@@ -1,5 +1,4 @@
 using HSMServer.Core.Journal;
-using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 
@@ -97,18 +96,9 @@ namespace HSMServer.Notifications.Chats
         // A webhook is a secret: the record names the state of its channel, never the URL.
         private static void AddWebhookChange(List<JournalAppender.Change> changes, string channel, string before, string after)
         {
-            var wasSet = IsSet(before);
-            var isSet = IsSet(after);
-
-            if (wasSet == isSet && (!isSet || before == after))
-                return;
-
-            changes.Add(new(channel,
-                wasSet ? "set" : "not set",
-                !isSet ? "removed" : wasSet ? "changed" : "set"));
+            if (JournalAppender.Change.SecretChanged(before, after))
+                changes.Add(JournalAppender.Change.OfSecret(channel, before, after));
         }
-
-        private static bool IsSet(string webhookUrl) => !string.IsNullOrEmpty(webhookUrl);
 
         private static string DescribeBinding(in State state) => state.TelegramType switch
         {

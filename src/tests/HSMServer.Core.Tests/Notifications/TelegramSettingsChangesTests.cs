@@ -1,10 +1,12 @@
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Model.Configuration;
 using HSMServer.ServerConfiguration;
+using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,18 +77,37 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Null(TelegramSettingsChanges.Describe(changes, "admin"));
         }
 
+        // The save as the settings page runs it: the posted form is applied and persisted,
+        // then journaled — the journal never precedes the write it records (ADR-0010).
         [Fact]
-        public void Save_NameAndSwitchChanged_LeavesAServerSettingsRecordPerSetting_NamingTheInitiator()
+        public void Save_AppliesAndPersistsThePostedSettings_ThenJournalsTheChanges()
         {
             var mark = Records().Count;
+            var telegram = new TelegramConfig { BotName = "hsm_alerts_bot", BotToken = OldToken, IsRunning = true };
+            var persisted = false;
+            var journaledTooEarly = false;
 
-            Save(new TelegramConfig { BotName = "hsm_alerts_bot", BotToken = OldToken, IsRunning = true },
-                new TelegramSettingsViewModel { BotName = "hsm_oncall_bot", BotToken = OldToken, IsEnabled = false });
+            // A journal write that comes before the save persisted is refused — the appender
+            // logs and swallows it, so the records would go missing and the test with them.
+            var db = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailJournalWrite = _ => journaledTooEarly |= !persisted,
+            };
+
+            var config = Save(telegram, new TelegramSettingsViewModel { BotName = "hsm_oncall_bot", BotToken = NewToken, IsEnabled = false },
+                new JournalAppender(new JournalService(db), TimeProvider.System), onPersisted: () => persisted = true);
+
+            Assert.False(journaledTooEarly);
+            Assert.False(telegram.IsRunning);
+            Assert.Equal(NewToken, telegram.BotToken);
+            Assert.Equal("hsm_oncall_bot", telegram.BotName);
+            config.Verify(c => c.ResaveSettings(), Times.Once);
 
             var records = Records().Skip(mark).ToList();
             Assert.Equal(
                 [
                     ("Enable messages", "True", "False"),
+                    ("Bot token", "set", "changed"),
                     ("Bot name", "hsm_alerts_bot", "hsm_oncall_bot"),
                 ],
                 records.Select(r => (r.PropertyName, r.OldValue, r.NewValue)).ToList());
@@ -98,6 +119,21 @@ namespace HSMServer.Core.Tests.Notifications
                 Assert.Equal(JournalOperations.Update, JournalOperations.Of(r));
                 Assert.Null(r.ChangeSetId);
             });
+        }
+
+        // The journal is appended after the save landed: a storage failure of the journal
+        // must not fail or undo the save.
+        [Fact]
+        public void Save_WhenTheJournalWriteFails_StillAppliesAndPersistsTheSettings()
+        {
+            var telegram = new TelegramConfig { BotName = "hsm_alerts_bot", BotToken = OldToken, IsRunning = true };
+            var db = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false) { ShouldFailJournalWrite = _ => true };
+
+            var config = Save(telegram, new TelegramSettingsViewModel { BotToken = NewToken },
+                new JournalAppender(new JournalService(db), TimeProvider.System));
+
+            Assert.Equal(NewToken, telegram.BotToken);
+            config.Verify(c => c.ResaveSettings(), Times.Once);
         }
 
         [Theory]
@@ -122,13 +158,14 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public void Save_NothingChanged_LeavesNoRecord()
+        public void Save_NothingChanged_PersistsNothing_AndLeavesNoRecord()
         {
             var current = new TelegramConfig { BotName = "hsm_alerts_bot", BotToken = OldToken, IsRunning = true };
             var mark = Records().Count;
 
-            Save(current, new TelegramSettingsViewModel { BotName = current.BotName, BotToken = current.BotToken, IsEnabled = current.IsRunning });
+            var config = Save(current, new TelegramSettingsViewModel { BotName = current.BotName, BotToken = current.BotToken, IsEnabled = current.IsRunning });
 
+            config.Verify(c => c.ResaveSettings(), Times.Never);
             Assert.Equal(mark, Records().Count);
         }
 
@@ -146,10 +183,19 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
 
-        // The save as ConfigurationController.SaveTelegramSettings runs it: the changes of
-        // the posted form, journaled under the signed-in user.
-        private void Save(TelegramConfig current, TelegramSettingsViewModel posted) =>
-            TelegramSettingsChanges.Write(TelegramSettingsChanges.Between(current, posted), _journal, InitiatorInfo.AsUser("admin"));
+        // The save as ConfigurationController.SaveTelegramSettings runs it: the posted form
+        // against the current configuration, journaled under the signed-in user.
+        private Mock<IServerConfig> Save(TelegramConfig current, TelegramSettingsViewModel posted,
+            JournalAppender journal = null, Action onPersisted = null)
+        {
+            var config = new Mock<IServerConfig>();
+            config.SetupGet(c => c.Telegram).Returns(current);
+            config.Setup(c => c.ResaveSettings()).Callback(() => onPersisted?.Invoke());
+
+            TelegramSettingsChanges.Save(config.Object, posted, "admin", journal ?? _journal);
+
+            return config;
+        }
 
         // The journal's own read (the one behind the global Journal page).
         private List<JournalRecordModel> Records() =>

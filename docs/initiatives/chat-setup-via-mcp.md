@@ -78,11 +78,13 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
 - Bot credential: `TelegramConfig { BotName, BotToken, IsRunning }` in `Config/appsettings.json`.
   `SaveTelegramSettings` persists; `RestartTelegramBot` applies the token (the bot name and the on/off
   switch are read live). `TelegramBot.StartBotAsync` stops the running bot FIRST and validates the token
-  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token is
-  logged in clear in two places (`ConfigurationController.BuildTelegramChangesText`, since #1828 `TelegramSettingsChanges.Describe`, and
-  `TelegramBot.StartBotAsync` on failure).
-- Journal: `JournalKinds` has no chat or server-settings kind; `ChatsManager` is not subscribed to the
-  journal and the chat storage layer logs nothing, so a changed webhook leaves no "who and when".
+  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token
+  is kept out of the log since #1824 (`TelegramSettingsChanges.Describe` says only that it changed)
+  and out of the journal since #1828 (its record names the state of the setting).
+- Journal: since #1828 every chat write leaves `chat` records (`ChatsManager` journals create,
+  update and delete, a webhook and the Telegram chat id never reaching a record) and a bot settings
+  save leaves `serverSettings` records. The kinds list is public contract — the journal API and the
+  MCP journal tool descriptions enumerate it by hand — and a test pins the full list.
 
 ## Proposed Direction
 

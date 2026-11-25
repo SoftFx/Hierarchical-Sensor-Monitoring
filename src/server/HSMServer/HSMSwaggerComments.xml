@@ -1842,21 +1842,29 @@
         </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges">
             <summary>
-            What one save of the Telegram bot settings changes (#1824, #1828). The same list
-            feeds the log line of the save and the journal. The bot token is a secret: both say
-            THAT it changed, never the old or the new value.
+            One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
+            of the save and its journal records. The bot token is a secret: the log and the
+            journal say THAT it changed, never the old or the new value.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges.Change">
             <summary>
-            One changed setting. Property, OldValue and NewValue are the journal's cells;
-            LogLine is the save's log line for it.
+            One changed setting: the journal record of the change and the save's log line
+            for it.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Change.#ctor(System.String,System.String,System.String,System.String)">
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Change.#ctor(HSMServer.Core.Journal.JournalAppender.Change,System.String)">
             <summary>
-            One changed setting. Property, OldValue and NewValue are the journal's cells;
-            LogLine is the save's log line for it.
+            One changed setting: the journal record of the change and the save's log line
+            for it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Save(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel,System.String,HSMServer.Core.Journal.JournalAppender)">
+            <summary>
+            The save of the settings page: the changes of the posted form, applied to the
+            configuration and persisted, then journaled — the journal never precedes the
+            write it records. Nothing is applied and nothing is journaled when nothing
+            changed.
             </summary>
         </member>
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.ServerConfiguration.TelegramConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel)">

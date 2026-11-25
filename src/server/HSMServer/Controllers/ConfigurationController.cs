@@ -16,7 +16,6 @@ using System.Text;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Restore;
-using HSMServer.Core.TableOfChanges;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -156,22 +155,12 @@ namespace HSMServer.Controllers
         {
             if (ModelState.IsValid)
             {
-                var changes = TelegramSettingsChanges.Between(config.Telegram, settings);
+                var changes = TelegramSettingsChanges.Save(config, settings, GetUserName(), _journal);
 
                 if (changes.Count == 0)
                     _logger.Warn("SaveTelegramSettings: no changes detected");
                 else
-                {
                     _logger.Info($"SaveTelegramSettings: {TelegramSettingsChanges.Describe(changes, GetUserName())}");
-
-                    config.Telegram.IsRunning = settings.IsEnabled;
-                    config.Telegram.BotToken = settings.BotToken;
-                    config.Telegram.BotName = settings.BotName;
-
-                    config.ResaveSettings();
-
-                    TelegramSettingsChanges.Write(changes, _journal, InitiatorInfo.AsUser(GetUserName()));
-                }
             }
 
             return PartialView("_Telegram", settings);

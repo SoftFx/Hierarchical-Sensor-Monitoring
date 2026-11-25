@@ -43,7 +43,7 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, Telegram titl
 | `src/server/HSMServer/Notifications/Telegram/TelegramBot.cs` | Telegram sender + bot lifecycle. |
 | `src/server/HSMServer/Notifications/Slack/SlackNotificationChannel.cs` | Slack sender (one POST per `(alert, destination)`). |
 | `src/server/HSMServer/Notifications/Chats/ChatJournal.cs` | The journal's view of a chat: the snapshot of its journaled settings and the records between two snapshots (#1828). Written by `ChatsManager`, the single write path of chats. |
-| `src/server/HSMServer/Model/Configuration/TelegramSettingsChanges.cs` | The changes of one save of the bot settings — the save's log line and its `serverSettings` journal records (#1824, #1828). |
+| `src/server/HSMServer/Model/Configuration/TelegramSettingsChanges.cs` | One save of the bot settings: its changes, the save's log line and its `serverSettings` journal records (#1824, #1828). |
 
 ## Storage
 
@@ -279,7 +279,7 @@ The initiator: the write's — `ChatUpdate.Initiator`, which `ChatAdministration
 
 Sight: chat records resolve to the admin-only Global scope of the Journal. A manager of a folder the chat is bound to can edit the chat in the web UI but does not see its records.
 
-The Telegram bot settings: `SaveTelegramSettings` computes the changes of the save once (`TelegramSettingsChanges.Between`). The same list is the log line of the save and, once the save has landed, its `serverSettings` records — `Enable messages` and `Bot name` with old → new, `Bot token` as a state only (`not set → set`, `set → changed`, `set → removed`). Nothing changed → no record; an absent and an empty value are the same setting (a never-configured server holds nulls, the form posts an empty field as an empty string), so the first save that only names the bot leaves that one record.
+The Telegram bot settings: `SaveTelegramSettings` hands the posted form to `TelegramSettingsChanges.Save`. The changes of the save (`Between`) are applied and persisted, then journaled as `serverSettings` records — `Enable messages` and `Bot name` with old → new, `Bot token` as a state only (`not set → set`, `set → changed`, `set → removed`) — and the controller logs the same list of changes. Nothing changed → nothing is persisted and no record; an absent and an empty value are the same setting (a never-configured server holds nulls, the form posts an empty field as an empty string), so the first save that only names the bot leaves that one record.
 
 Both writers go through `JournalAppender`: each write gets a block of successive ticks, right after the previous block when the clock has not moved that far (the storage key is entity + ticks + type, and on Windows the wall clock stands still for about a millisecond), and the append is best-effort — a journal failure is logged and never fails the applied write. Records exist for changes made after deployment; there is no backfill.
 

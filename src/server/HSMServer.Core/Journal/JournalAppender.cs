@@ -12,14 +12,40 @@ namespace HSMServer.Core.Journal;
 /// write that changes it in several places — the chat settings (#1828) and the server
 /// settings. One record per change, under the write's enviroment wording (the text the
 /// operation tag derives from: "Create chat", "Remove chat", "Chat update"). No two
-/// records of one entity ever share a storage key. Best-effort like every journal append
-/// (ADR-0010): a failure is logged and never fails the write that already landed. What a
-/// record may carry is the caller's rule — a secret never reaches a <see cref="Change"/>.
+/// records of one entity ever share a storage key. Best-effort, as the journal's
+/// durability rule requires (ADR-0010): a failure is logged and never fails the write
+/// that already landed. What a record may carry is the caller's rule — a secret never
+/// reaches a <see cref="Change"/>.
 /// </summary>
 public sealed class JournalAppender
 {
-    /// <summary>One changed setting: the journal's Property, Old value and New value cells.</summary>
-    public readonly record struct Change(string Property, string OldValue, string NewValue);
+    /// <summary>
+    /// One changed setting: the journal's Property, Old value and New value cells. A secret
+    /// setting (a webhook, the bot token) is named by the state of the setting instead of its
+    /// value — see <see cref="OfSecret"/>.
+    /// </summary>
+    public readonly record struct Change(string Property, string OldValue, string NewValue)
+    {
+        /// <summary>
+        /// Whether a secret setting changed between two values. An absent and an empty value
+        /// are the same state.
+        /// </summary>
+        public static bool SecretChanged(string before, string after) =>
+            IsSet(before) != IsSet(after) || (IsSet(after) && before != after);
+
+        /// <summary>
+        /// The change of a secret setting: the record reads as the state of the setting —
+        /// not set, set, changed, removed — never as the old or the new value.
+        /// </summary>
+        public static Change OfSecret(string property, string before, string after)
+        {
+            var wasSet = IsSet(before);
+
+            return new(property, wasSet ? "set" : "not set", !IsSet(after) ? "removed" : wasSet ? "changed" : "set");
+        }
+
+        private static bool IsSet(string value) => !string.IsNullOrEmpty(value);
+    }
 
     // A wall clock this far BEHIND the last stamp stepped back; it starts a new time line
     // instead of being a slow clock.
