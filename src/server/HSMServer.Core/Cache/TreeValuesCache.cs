@@ -3414,6 +3414,9 @@ namespace HSMServer.Core.Cache
                 case AddSensorValuesRequest request:
                     AddNewSensorValues(request);
                     break;
+                case ServerSensorValuesRequest request:
+                    AddServerValues(request);
+                    break;
                 case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error, out var storeFailed):
                     _logger.Error(error);
 
