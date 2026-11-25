@@ -298,17 +298,18 @@ namespace HSMServer.Core.Tests.SensorApi
 
 
         // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
-        // setting and the folder whose agent/version.txt names the staged agent. `tableLimits` are
-        // the configured TableSensors limits the ingestion checks a table schema against (#1845);
-        // without them it uses the defaults, as the service does when none are given.
+        // setting and the folder whose agent/version.txt names the staged agent. `tableSensors` is the
+        // TableSensors section (#1845): the ingestion checks a table registration against its block
+        // limits, as in production (one source); the defaults when none is given.
         public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null,
-            HSMTableBlocks.TableBlockLimits tableLimits = null)
+            TableSensorsConfig tableSensors = null)
         {
             var telemetry = new RecordingTelemetry();
 
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.CollectorSessions).Returns(sessions);
             config.SetupGet(c => c.Agent).Returns(agent ?? new AgentConfig());
+            config.SetupGet(c => c.TableSensors).Returns(tableSensors ?? new TableSensorsConfig());
 
             var builder = webRoot is null ? WebApplication.CreateBuilder() : WebApplication.CreateBuilder(new WebApplicationOptions { WebRootPath = webRoot });
 
@@ -319,9 +320,8 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton<ISensorApiTelemetry>(telemetry);
             builder.Services.AddSingleton(config.Object);
             builder.Services.AddSingleton<TelemetryCollector>();
-            if (tableLimits is not null)
-                builder.Services.AddSingleton(tableLimits);
-            builder.Services.AddSingleton<SensorIngestionService>();
+            builder.Services.AddSingleton(provider => new SensorIngestionService(provider.GetRequiredService<ITreeValuesCache>(),
+                provider.GetRequiredService<ISensorApiTelemetry>(), config.Object.TableSensors.ToOptions().Limits));
             builder.Services.AddSingleton<AgentDirectives>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
