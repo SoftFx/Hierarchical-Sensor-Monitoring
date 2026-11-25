@@ -102,6 +102,25 @@ TypeScript 5.3 + Webpack 5:
   a top-level cross-site GET. Removing a product or node (`ProductController.RemoveProduct`,
   `HomeController.RemoveNode`) requires Manager of the node's ROOT product or admin — the removal is
   recursive and irreversible (#1512; `ProductControllerTests`).
+- Product roles are held per ROOT product (`User.ProductsRoles`); a node below the root has no roles
+  of its own. Every write of `ProductController` that names a product goes through one gate
+  (`DenyUnlessManager`): the caller must be an admin or a Manager of the root product of the posted
+  id; an id that is not in the tree is answered 404, everyone else 403, and a role entry on a nested
+  node's own id counts for nothing. The gate covers the product edit form (`EditProduct` POST: name,
+  description, default chats), the Members table (`AddUserRight`, `EditUserRole`, `RemoveUserRole`),
+  the move between folders (`MoveProduct`) and the removal. The role actions answer 400 for a body
+  that cannot be read and 404 for an unknown user, and look the user up only after the caller has
+  passed, so a refused caller cannot probe user ids. `MoveProduct` is POST only: a move changes
+  roles (the users of the folder the product leaves lose their folder role on it, the users of the
+  folder it enters receive theirs). Antiforgery is validated on `EditProduct`, `MoveProduct` and
+  `RemoveProduct`, whose callers send the token; the role actions take a JSON body, which a
+  cross-site form cannot send, and their callers send none. `ProductControllerTests` covers admin,
+  Manager, Viewer, a user with no role, a Manager of another product, an unknown id and a nested id
+  for each action.
+- A folder's Chats tab (`FoldersController.UpdateChats`) requires Manager of that folder or admin,
+  like the other writes of the folder edit page; an unknown folder id is answered 404
+  (`FoldersControllerUpdateChatsTests`). It validates no antiforgery token: the page replaces the
+  form's content with the saved partial, which drops the token the form was rendered with.
 - Access keys authenticate DataCollector instances (no user session needed)
 
 ## Feature Folders To Add Here
