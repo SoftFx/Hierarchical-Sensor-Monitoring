@@ -158,13 +158,15 @@ namespace hsm::collector::tables
         down_reason_ = std::move(reason);
     }
 
-    void SessionTableChannel::Report(std::string message)
+    void SessionTableChannel::Report(const std::string& kind, std::string message, bool error)
     {
         std::lock_guard<std::mutex> guard(reports_mutex_);
-        if (message == last_error_)
+        // Bounded: the kinds are few, but an outcome word is the server's.
+        if (reported_kinds_.size() >= kMaxReportedKinds)
+            reported_kinds_.clear();
+        if (!reported_kinds_.insert(kind).second)
             return;
-        last_error_ = message;
-        reports_.emplace_back(true, std::move(message));
+        reports_.emplace_back(error, std::move(message));
     }
 
     void SessionTableChannel::Info(std::string message)
@@ -310,9 +312,9 @@ namespace hsm::collector::tables
             {
                 no_id_generation_ = generation;
                 SetDown("the server's session states no sessionId: the server has no table connections");
-                Report("Cannot open the table connection to " + Url() +
-                       ": the server's session states no sessionId: the server has no table connections. Table blocks are kept "
-                       "(max_backlog_bytes, the oldest dropped and counted); asking again with every new session.");
+                Report("open:no-session-id", "Cannot open the table connection to " + Url() +
+                                                 ": the server's session states no sessionId: the server has no table connections. Table blocks are kept "
+                                                 "(max_backlog_bytes, the oldest dropped and counted); asking again with every new session.");
             }
             return false;
         }
@@ -345,7 +347,7 @@ namespace hsm::collector::tables
             {
                 // A failure that comes back after this connection is news again.
                 std::lock_guard<std::mutex> guard(reports_mutex_);
-                last_error_.clear();
+                reported_kinds_.clear();
             }
             Info("The table connection is up: frame limit " + std::to_string(MaxBlockBytes() + kTableFrameHeaderBytes) + " bytes, heartbeat " +
                  std::to_string(link->HeartbeatMs() / 1000) + " s.");
@@ -355,43 +357,59 @@ namespace hsm::collector::tables
             return false;
 
         SetDown(opened.why);
-        const std::string kept = "Table blocks are kept (max_backlog_bytes, the oldest dropped and counted)";
+        ReportOpenFailure(opened, session_id);
         switch (opened.status)
         {
         case 404:
-            refused_status_ = 404;
-            refused_at_ = now;
-            refused_generation_ = generation;
-            Report("The server refused the table connection with 404: table connections are switched off on " + Url() +
-                   " (CollectorSessions.MaxTableFrameBytes = 0). " + kept + "; asking again every " + Seconds(options_.refused_retry_ms) +
-                   " and with the next session.");
-            return false;
         case 400:
-            refused_status_ = 400;
+            refused_status_ = opened.status;
             refused_at_ = now;
             refused_generation_ = generation;
-            Report("The server refused the table connection with 400: " + Url() + " does not know the subprotocol " +
-                   SessionTableChannelOptions::kSubprotocol + " (a server older than table sensors). " + kept + "; asking again every " +
-                   Seconds(options_.refused_retry_ms) + " and with the next session.");
             return false;
         case 409:
             refused_session_ = session_id;
-            Report("The server refused the table connection with 409: it knows no live session " + session_id +
-                   " of this key. Table blocks are kept; waiting for the next session.");
             return false;
-        case 406:
-            Report("The server refused the table connection with 406: the access key cannot send. Table blocks are kept; retrying.");
-            break;
-        case 503:
-            Report("The server refused the table connection with 503: it is shutting down. Table blocks are kept; retrying.");
-            break;
         default:
-            Report("Cannot open the table connection to " + Url() + ": " + opened.why + ". Table blocks are kept; retrying.");
             break;
         }
         lift_with_next_session_ = false;
         next_attempt_at_ = now + std::chrono::milliseconds(Backoff());
         return false;
+    }
+
+    // Said once for a kind of failure (the step and the status or libcurl's code, AckedLinkOpen::kind),
+    // with the words of the first one: libcurl's text carries elapsed times, so the same timeout behind
+    // a proxy would otherwise be a new line at every attempt.
+    void SessionTableChannel::ReportOpenFailure(const AckedLinkOpen& opened, const std::string& session_id)
+    {
+        const std::string kept = "Table blocks are kept (max_backlog_bytes, the oldest dropped and counted)";
+        const std::string kind = "open:" + (opened.kind.empty() ? "status:" + std::to_string(opened.status) : opened.kind);
+        switch (opened.status)
+        {
+        case 404:
+            Report(kind, "The server refused the table connection with 404: table connections are switched off on " + Url() +
+                             " (CollectorSessions.MaxTableFrameBytes = 0). " + kept + "; asking again every " + Seconds(options_.refused_retry_ms) +
+                             " and with the next session.");
+            return;
+        case 400:
+            Report(kind, "The server refused the table connection with 400: " + Url() + " does not know the subprotocol " +
+                             SessionTableChannelOptions::kSubprotocol + " (a server older than table sensors). " + kept + "; asking again every " +
+                             Seconds(options_.refused_retry_ms) + " and with the next session.");
+            return;
+        case 409:
+            Report(kind, "The server refused the table connection with 409: it knows no live session " + session_id +
+                             " of this key. Table blocks are kept; waiting for the next session.");
+            return;
+        case 406:
+            Report(kind, "The server refused the table connection with 406: the access key cannot send. Table blocks are kept; retrying.");
+            return;
+        case 503:
+            Report(kind, "The server refused the table connection with 503: it is shutting down. Table blocks are kept; retrying.");
+            return;
+        default:
+            Report(kind, "Cannot open the table connection to " + Url() + ": " + opened.why + ". Table blocks are kept; retrying.");
+            return;
+        }
     }
 
     void SessionTableChannel::HandleEnd(const AckedLinkEnd& end, bool session_changed)
@@ -405,7 +423,7 @@ namespace hsm::collector::tables
         SetDown("the table connection ended: " + end.why);
         Info("The table connection ended after " + Seconds(lived) + ": " + end.why + ".");
         if (end.protocol_error)
-            Report("The table connection to " + Url() + " was closed: " + end.why + ". Table blocks are kept; reconnecting.");
+            Report("closed:" + std::to_string(end.close_code), "The table connection to " + Url() + " was closed: " + end.why + ". Table blocks are kept; reconnecting.");
 
         if (session_changed)
         {
@@ -489,10 +507,11 @@ namespace hsm::collector::tables
     {
         try
         {
-            AckedBinaryLink* link = link_.get();
-            const bool was_open = link != nullptr && link->IsOpen();
+            // True whenever this call opened a connection, also when it replaced the connection of an
+            // ended session with one of the new session: the blocks that waited go at once.
+            const std::int64_t opened_before = opened_.load();
             const bool open = Maintain();
-            return open && !was_open;
+            return open && opened_.load() > opened_before;
         }
         catch (...)
         {
@@ -768,7 +787,8 @@ namespace hsm::collector::tables
         if (body.is_discarded())
         {
             // A 200 settles the block whatever its body says; the refusals it lists are then unknown.
-            Info("The body of a table block ack is not JSON; the block is taken as stored.");
+            Report("ack-body:not-json", "The body of a table block ack is not JSON; the block is taken as stored.", /*error=*/false);
+            return answer;
         }
         else if (body.is_object())
         {
@@ -810,8 +830,8 @@ namespace hsm::collector::tables
         {
             // A 200 settles the block (wire contract); an outcome this version does not know is said
             // and taken as stored, so the block does not hold the ones behind it for ever.
-            Report("The server answered a table block with an outcome this collector does not know (" +
-                   (outcome.empty() ? std::string("none") : AckedBinaryLink::Printable(outcome)) + "); the block is taken as stored.");
+            Report("ack-outcome:" + AckedBinaryLink::Printable(outcome, 64), "The server answered a table block with an outcome this collector does not know (" +
+                                                                                 (outcome.empty() ? std::string("none") : AckedBinaryLink::Printable(outcome)) + "); the block is taken as stored.");
             answer.outcome = TableBlockOutcome::Stored;
         }
         return answer;

@@ -490,6 +490,7 @@ namespace hsm::http
 
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status_code);
             result.peer = PeerAddress(curl);
+            result.curl_code = static_cast<int>(rc);
             if (rc != CURLE_OK)
             {
                 if (cancelled_.load())
@@ -757,6 +758,7 @@ namespace hsm::http
     {
         if (curl_ != nullptr)
         {
+            close_cancelled_ = false;
             try
             {
                 CURL* curl = static_cast<CURL*>(curl_);
@@ -797,6 +799,7 @@ namespace hsm::http
                             waiting = rc == CURLE_OK && meta != nullptr && (static_cast<unsigned int>(meta->flags) & CURLWS_CLOSE) == 0;
                     }
                 }
+                close_cancelled_ = cancelled_.load();
             }
             catch (...)
             {

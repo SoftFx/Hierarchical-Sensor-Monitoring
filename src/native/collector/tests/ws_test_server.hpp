@@ -810,6 +810,10 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(mutex_);
             return table_unanswered_.count(id) != 0;
         }
+        // Answer the client's close of a table connection (the default) or not: a server that never
+        // answers keeps a client's close linger waiting for its whole bound.
+        void SetTableAnswerCloses(bool answer) { table_answer_closes_.store(answer, std::memory_order_release); }
+
         // Runs on the server's thread when the client's close frame of a session arrives, before it
         // is answered.
         void SetSessionCloseReceived(std::function<void()> hook)
@@ -1187,6 +1191,8 @@ namespace hsm::test
                         std::lock_guard<std::mutex> guard(mutex_);
                         side_close_codes_.push_back(CloseCode(frame.payload));
                     }
+                    if (!table_answer_closes_.load(std::memory_order_acquire))
+                        continue; // read on, unanswered, until the client lets the connection go
                     if (!closing)
                         reply(0x8, frame.payload.substr(0, 2));
                     break;
@@ -1814,6 +1820,7 @@ namespace hsm::test
         };
         std::atomic<bool> table_script_{ false };
         std::atomic<int> table_pings_{ 0 };
+        std::atomic<bool> table_answer_closes_{ true };
         std::map<int, TableOpen> table_open_;                                     // guarded by side_send_mutex_
         std::string live_session_;                                                // guarded by mutex_
         std::function<std::vector<std::string>(const std::string&)> table_names_; // guarded by mutex_

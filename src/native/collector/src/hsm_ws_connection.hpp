@@ -36,6 +36,10 @@ namespace hsm::http
         // The address libcurl connected to, "ip:port" ("[ip]:port" for IPv6); empty when no
         // connection was made. With a CDN or a proxy in front it is theirs, not the server's.
         std::string peer;
+        // libcurl's result code of the open (CURLcode as an int), 0 when it succeeded or did not
+        // get as far as libcurl. Says what KIND of failure it was, where `error` carries libcurl's
+        // words, which may include elapsed times.
+        int curl_code = 0;
     };
 
     // How the peer ended the connection: filled when Receive returns Closed, cleared by Open.
@@ -179,6 +183,10 @@ namespace hsm::http
         // none. Cleared by every Receive.
         int LastRefusalCode() const { return refusal_code_; }
 
+        // True when the last Close ended because the connection was cancelled (before it began or
+        // during its linger) rather than by the peer's answer or the linger running out.
+        bool LastCloseCancelled() const { return close_cancelled_; }
+
         void Cancel();
 
         bool IsOpen() const { return curl_ != nullptr; }
@@ -226,5 +234,6 @@ namespace hsm::http
         WebSocketClosure closure_; // how the peer ended the connection, kept past Release
         bool close_on_refusal_ = false;
         int refusal_code_ = 0;
+        bool close_cancelled_ = false;
     };
 } // namespace hsm::http
