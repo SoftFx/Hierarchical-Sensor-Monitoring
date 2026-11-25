@@ -596,6 +596,42 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task A_page_of_a_download_is_let_go_once_it_is_written()
+        {
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5 };
+            var table = await SeedAsync(12);
+            WeakReference firstPage = null;
+            bool? firstAliveAtThird = null;
+
+            // The first page is the one the result held for its whole life; by the third read two pages were written.
+            var blocks = new StubBlocks(_service)
+            {
+                OnRead = (rows, call) =>
+                {
+                    if (call == 1)
+                        firstPage = new WeakReference(rows);
+
+                    if (call == 3)
+                    {
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect();
+                        firstAliveAtThird = firstPage.IsAlive;
+                    }
+
+                    return rows;
+                },
+            };
+
+            var (status, csv, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal(200, status);
+            Assert.False(Aborted(context));
+            Assert.Equal(13, csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
+            Assert.False(firstAliveAtThird);
+        }
+
+        [Fact]
         public void The_file_name_is_the_history_exports_with_unsafe_characters_replaced()
         {
             var name = TablePageService.FileName("prod/quotes/EUR:USD*", Hour0, Hour0.AddHours(1));

@@ -504,6 +504,9 @@ namespace HSMServer.TablePages
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+        // Taken (and cleared) by the execution: no page outlives its writing, the first one included.
+        private TableRows _first = first;
+
         internal string FileName => fileName;
 
         public async Task ExecuteResultAsync(ActionContext context)
@@ -519,7 +522,8 @@ namespace HSMServer.TablePages
             response.ContentType = "text/csv; charset=utf-8";
             response.Headers.ContentDisposition = disposition.ToString();
 
-            var page = first;
+            var page = _first;
+            _first = null;
             var header = true;
             long written = 0;
 
@@ -533,6 +537,9 @@ namespace HSMServer.TablePages
 
                     if (page.NextFromTicks is not { } next)
                         break;
+
+                    // Written: let it go before the next page is read, which can be as large.
+                    page = null;
 
                     var (rows, error) = await service.ReadPageAsync(sensorId, new DateTime(next, DateTimeKind.Utc), to, token);
 
