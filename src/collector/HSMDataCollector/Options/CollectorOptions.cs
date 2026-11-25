@@ -100,6 +100,9 @@ namespace HSMDataCollector.Core
         /// </summary>
         internal bool ManualTableTick { get; set; }
 
+        /// <summary>For tests: makes the table block compressor instead of <c>new TableBlockWriter()</c> (a test makes it throw).</summary>
+        internal Func<HSMTableBlocks.TableBlockWriter> TableCompressorFactory { get; set; }
+
         /// <summary>
         /// Headers the collector adds to every request that carries sensor values, next to its
         /// own <c>Key</c> and <c>ClientName</c>. They state facts about the host for the server

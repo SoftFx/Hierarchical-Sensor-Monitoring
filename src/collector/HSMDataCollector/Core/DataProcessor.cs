@@ -47,8 +47,17 @@ namespace HSMDataCollector.Core
 
         internal SensorsStorage SensorStorage { get; }
 
-        /// <summary>The table sensors of the collector (ADR-0021); set by the collector right after construction.</summary>
-        internal TablePipeline Tables { get; set; }
+        /// <summary>
+        /// The table sensors of the collector (ADR-0021): null until the first table sensor is created, so a collector
+        /// without table sensors has none of their machinery. Set by the collector under its lifecycle gate.
+        /// </summary>
+        internal TablePipeline Tables
+        {
+            get => Volatile.Read(ref _tables);
+            set => Volatile.Write(ref _tables, value);
+        }
+
+        private TablePipeline _tables;
 
         /// <summary>
         /// Per-collector scheduler used by sensors and the message deduplicator. Owned by the
@@ -99,12 +108,23 @@ namespace HSMDataCollector.Core
         public bool Start()
         {
             Volatile.Write(ref _diagnosticsSuppressedFlag, 0);
-            Volatile.Write(ref _sensorsStopped, 0);
 
-            var dataStarted = _dataQueue.Start();
-            var priorityStarted = dataStarted && _priorityQueue.Start();
-            var fileStarted = priorityStarted && _fileQueue.Start();
-            var commandStarted = fileStarted && _commandQueue.Start();
+            bool dataStarted = false, priorityStarted = false, fileStarted = false, commandStarted = false;
+
+            try
+            {
+                dataStarted = _dataQueue.Start();
+                priorityStarted = dataStarted && _priorityQueue.Start();
+                fileStarted = priorityStarted && _fileQueue.Start();
+                commandStarted = fileStarted && _commandQueue.Start();
+            }
+            catch (Exception)
+            {
+                // A queue that threw while starting: the ones started before it are not left running behind a
+                // collector that reports Stopped.
+                RollbackStartedQueues(dataStarted, priorityStarted, fileStarted, commandStarted);
+                throw;
+            }
 
             if (!commandStarted)
             {
@@ -112,6 +132,7 @@ namespace HSMDataCollector.Core
                 return false;
             }
 
+            // Never throws: a table pipeline that cannot start says so through its sensors and reports.
             Tables?.Start();
 
             return true;
@@ -133,9 +154,6 @@ namespace HSMDataCollector.Core
 
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
-
-            // The sensors have published their last bars: a table loss reported from now on goes to the stop line.
-            Volatile.Write(ref _sensorsStopped, 1);
 
             if (mode.FlushAcceptedWork())
                 await StopWithFlushAsync(mode, failures).ConfigureAwait(false);
@@ -487,23 +505,18 @@ namespace HSMDataCollector.Core
         bool ITableDiagnostics.CanAcceptData => CanAcceptData;
 
         /// <summary>
-        /// Lost table rows go to the <c>Queue overflow</c> sensor under the queue "Table rows". Without that sensor they
-        /// are not added to the stop line of lost values: the table pipeline reports them in words of its own.
+        /// Lost table rows go to the <c>Queue overflow</c> sensor under the queue "Table rows" while that sensor takes
+        /// values: from its start until it has published its last bar of the run. False otherwise; the table pipeline then
+        /// keeps them in its ledger, and its one stop line says them.
         /// </summary>
-        void ITableDiagnostics.ReportDroppedRows(long rows)
+        bool ITableDiagnostics.TryReportDroppedRows(long rows)
         {
             if (rows <= 0)
-                return;
+                return true;
 
-            var sensor = DefaultSensors.QueueOverflowSensor;
+            var sensor = DefaultSensors?.QueueOverflowSensor;
 
-            // Once the sensors have stopped, the Queue overflow bar has been published for the last time this run: a
-            // loss counted into it now would never be seen. It goes to the stop line instead, as it does without the
-            // sensor (#1846 review, item 7). Each loss is counted in exactly one of the two.
-            if (sensor != null && Volatile.Read(ref _sensorsStopped) == 0)
-                sensor.AddValue(TablePipeline.DroppedRowsQueueName, (int)Math.Min(rows, int.MaxValue));
-            else
-                Interlocked.Add(ref _unreportedTableRows, rows);
+            return sensor != null && rows <= int.MaxValue && sensor.TryAddValue(TablePipeline.DroppedRowsQueueName, (int)rows);
         }
 
         private void EmitOverflowDrops(string queueName, int droppedCount)
@@ -524,12 +537,6 @@ namespace HSMDataCollector.Core
         // Values evicted from a full queue while no Queue overflow sensor was registered.
         private long _unreportedOverflow;
 
-        // Table rows lost while no Queue overflow sensor could count them (none registered, or the sensors had stopped).
-        private long _unreportedTableRows;
-
-        // 1 from the moment the sensors stopped in a stop until the next Start.
-        private int _sensorsStopped;
-
         /// <summary>
         /// One line per run for the drops no sensor counted, at Error: it is the only report of
         /// that loss. Same wording as the native collector's stop line. Taken with an exchange,
@@ -542,10 +549,8 @@ namespace HSMDataCollector.Core
             if (lost > 0)
                 _logger.Error($"Collector stop: {lost} value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).");
 
-            var lostRows = Interlocked.Exchange(ref _unreportedTableRows, 0);
-
-            if (lostRows > 0)
-                _logger.Error($"Collector stop: {lostRows} table row(s) were lost during this run and are not in the Queue overflow sensor (not registered, or reported after it published its last bar).");
+            // The table rows lost in the run that are in no published bar: one line, the only one about table rows.
+            Tables?.ReportStopLine();
         }
 
         private void LogDiscardedItems(int count, string queueName)

@@ -22,8 +22,9 @@ namespace HSMDataCollector.Tables
         private readonly bool[] _hasNulls;
 
 
-        internal TableRowBuffer(bool[] doubleColumns)
+        internal TableRowBuffer(bool[] doubleColumns, Func<Action> growthHook = null)
         {
+            _growthHook = growthHook;
             _doubleColumns = doubleColumns;
             _columnCount = doubleColumns.Length;
             _values = new long[_columnCount][];
@@ -46,20 +47,21 @@ namespace HSMDataCollector.Tables
 
 
         /// <summary>
-        /// Appends one row. The cells are checked by the sensor before (count and types), so this cannot fail but for
-        /// memory.
+        /// Appends one row. The cells are checked by the sensor before (count and types). The only failure is memory
+        /// while the buffer grows, and it leaves the buffer as it was: every array is allocated before any is swapped in
+        /// and before any row is written.
         /// </summary>
         internal void Append(long ticks, ReadOnlySpan<TableCell> cells)
         {
-            EnsureCapacity(Count + 1);
+            Prepare(1, cells);
             WriteRow(Count, ticks, cells);
             Count++;
         }
 
-        /// <summary>Appends <paramref name="rows"/> rows; <paramref name="cells"/> is row-major.</summary>
+        /// <summary>Appends <paramref name="rows"/> rows; <paramref name="cells"/> is row-major. All or nothing, as the single row.</summary>
         internal void Append(ReadOnlySpan<DateTime> times, ReadOnlySpan<TableCell> cells, int rows)
         {
-            EnsureCapacity(Count + rows);
+            Prepare(rows, cells);
 
             for (var row = 0; row < rows; row++)
                 WriteRow(Count + row, TableSensor.ToUtcTicks(times[row]), cells.Slice(row * _columnCount, _columnCount));
@@ -146,43 +148,91 @@ namespace HSMDataCollector.Tables
             }
         }
 
+        // The null map exists: Prepare made it before the first row was written.
         private void MarkNull(int column, int row)
         {
-            var map = _nulls[column];
-            var needed = TableNullMap.ByteLength(_times.Length);
-
-            if (map == null || map.Length < needed)
-            {
-                var grown = new byte[needed];
-
-                if (map != null)
-                    Buffer.BlockCopy(map, 0, grown, 0, map.Length);
-
-                _nulls[column] = map = grown;
-            }
-
-            TableNullMap.SetNull(map, row);
+            TableNullMap.SetNull(_nulls[column], row);
             _hasNulls[column] = true;
         }
 
-        private void EnsureCapacity(int needed)
+        // For tests: what runs before the arrays of a growth are allocated, so a test can make the allocation fail.
+        private readonly Func<Action> _growthHook;
+
+        // Makes room for `rows` more rows and a null map for every column a null cell of them needs. Every new array is
+        // allocated first; only when all of them exist are they swapped in, so an allocation that fails (out of memory)
+        // leaves the buffer exactly as it was.
+        private void Prepare(int rows, ReadOnlySpan<TableCell> cells)
         {
-            if (_times != null && _times.Length >= needed)
-                return;
+            var needed = Count + rows;
+            var grows = _times == null || _times.Length < needed;
 
-            var capacity = Math.Max(InitialCapacity, _times == null ? 0 : _times.Length);
-
-            while (capacity < needed)
-                capacity = capacity > int.MaxValue / 2 ? needed : capacity * 2;
-
-            Array.Resize(ref _times, capacity);
+            // At most 255 columns (the format): a small stack buffer.
+            Span<bool> needsMap = stackalloc bool[_columnCount];
+            var anyMap = false;
 
             for (var column = 0; column < _columnCount; column++)
             {
-                Array.Resize(ref _values[column], capacity);
+                if (_nulls[column] != null)
+                    continue;
+
+                for (var cell = column; cell < cells.Length; cell += _columnCount)
+                    if (cells[cell].Kind == TableCell.KindNone)
+                    {
+                        needsMap[column] = true;
+                        anyMap = true;
+                        break;
+                    }
+            }
+
+            if (!grows && !anyMap)
+                return;
+
+            var capacity = _times?.Length ?? 0;
+
+            if (grows)
+            {
+                capacity = Math.Max(InitialCapacity, capacity);
+
+                while (capacity < needed)
+                    capacity = capacity > int.MaxValue / 2 ? needed : capacity * 2;
+            }
+
+            _growthHook?.Invoke()?.Invoke();
+
+            var times = grows ? new long[capacity] : _times;
+            var values = new long[_columnCount][];
+            var nulls = new byte[_columnCount][];
+
+            for (var column = 0; column < _columnCount; column++)
+            {
+                values[column] = grows ? new long[capacity] : _values[column];
 
                 if (_nulls[column] != null)
-                    Array.Resize(ref _nulls[column], TableNullMap.ByteLength(capacity));
+                    nulls[column] = grows ? new byte[TableNullMap.ByteLength(capacity)] : _nulls[column];
+                else if (needsMap[column])
+                    nulls[column] = new byte[TableNullMap.ByteLength(capacity)];
+            }
+
+            // Nothing below allocates: copy and swap.
+            if (grows && _times != null)
+            {
+                Array.Copy(_times, times, Count);
+
+                for (var column = 0; column < _columnCount; column++)
+                {
+                    Array.Copy(_values[column], values[column], Count);
+
+                    if (_nulls[column] != null)
+                        Buffer.BlockCopy(_nulls[column], 0, nulls[column], 0, TableNullMap.ByteLength(Count));
+                }
+            }
+
+            _times = times;
+
+            for (var column = 0; column < _columnCount; column++)
+            {
+                _values[column] = values[column];
+                _nulls[column] = nulls[column];
             }
         }
     }
