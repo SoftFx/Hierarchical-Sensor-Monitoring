@@ -290,10 +290,10 @@ namespace HSMServer.Core.Tests.Controllers
 
         private ProductModel[] RootProducts() => [Own, Sibling, Foreign];
 
-        // The sensor a path names inside a root product; the path may start with the separator.
+        // The sensor a path names inside a root product: an exact, ordinal match, as the cache's path index.
         private BaseSensorModel SensorByPath(Guid productId, string path) =>
             new[] { ServiceAlive, Cpu, Mem, Report, SiblingCpu, ForeignCpu }
-                .FirstOrDefault(s => s.Root.Id == productId && s.Path.Trim('/') == path?.Trim('/'));
+                .FirstOrDefault(s => s.Root.Id == productId && string.Equals(s.Path, path, StringComparison.Ordinal));
 
         private static ProductModel BuildProduct(string name, Guid? folderId) =>
             new(EntitiesFactory.BuildProductEntity(name: name) with { Id = Guid.NewGuid().ToString(), FolderId = folderId?.ToString() });

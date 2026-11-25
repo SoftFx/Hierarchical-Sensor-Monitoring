@@ -30,6 +30,18 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Import_ToANestedNode_ResolvesTheSensorBelowIt()
+        {
+            // The paths of a file are relative to the node the import was started on.
+            var tree = new WebAccessFixture();
+
+            var answer = await tree.Alerts(tree.Admin).ImportAlerts(Import(tree.ServiceAlive.Parent.Id, File(sensors: ["Service alive"])));
+
+            Assert.Equal(string.Empty, answer);
+            Assert.Equal([tree.ServiceAlive.Id], ImportedPolicies(tree).Select(u => u.Id));
+        }
+
+        [Fact]
         public async Task Import_ByProductName_WritesToEachNamedProduct()
         {
             // A file exported from a folder names its products; the node the import was started on is not used.

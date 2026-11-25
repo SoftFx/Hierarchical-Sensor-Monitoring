@@ -149,7 +149,8 @@ namespace HSMServer.Controllers
 
             foreach (var sensorPath in importGroup.Sensors)
             {
-                var fullSensorPath = $"{targetNode.Path}/{sensorPath}";
+                // A root product has an empty path of its own: its sensors are indexed by their bare path.
+                var fullSensorPath = string.IsNullOrEmpty(targetNode.Path) ? sensorPath : $"{targetNode.Path}/{sensorPath}";
 
                 if (_cache.TryGetSensorByPath(productId, fullSensorPath, out var sensor))
                 {
@@ -159,7 +160,7 @@ namespace HSMServer.Controllers
                     sensorNames[sensor.Id] = sensor.DisplayName;
                 }
                 else
-                    toast.AddError("Sensor by path not found", $"{productId}{fullSensorPath}");
+                    toast.AddError("Sensor by path not found", $"{productId}/{fullSensorPath}");
             }
         }
 
