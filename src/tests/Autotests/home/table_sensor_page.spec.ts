@@ -215,17 +215,19 @@ test('A refused range shows the server text; a busy server is asked again, then 
   await expect(page.locator(`#tableDownloadNote_${sensorId}`)).toContainText('The download was refused (400): From must be before To');
   await expect(page.locator(`#tableChart_${sensorId}`)).toBeVisible();
 
-  // 503: the store cannot be read now. The answer is played by the test (a real 503 needs a broken store); the
-  // page waits Retry-After, asks at most three times more, then offers a retry, which reaches the real server.
+  // 503: a store that kept changing under the read (Retry-After: 1). The answer is played by the test (a real one
+  // needs merges racing the read); the page waits Retry-After, asks at most three times more, then shows the
+  // server's text with a retry, which reaches the real server.
+  const storeChanged = 'The table store changed during the read; the request can be sent again.';
   let busy = 0;
   await page.route('**/TableSensors/Chart', route => {
     busy++;
-    return route.fulfill({ status: 503, headers: { 'Retry-After': '1' }, contentType: 'text/plain', body: 'The table block store cannot be read now.' });
+    return route.fulfill({ status: 503, headers: { 'Retry-After': '1' }, contentType: 'text/plain', body: storeChanged });
   });
 
   await page.locator(`#tablePeriod_${sensorId}`).selectOption('hour');
   await expect(page.locator(`#tableStatus_${sensorId}`)).toContainText('The server is busy, trying again');
-  await expect(page.locator(`#tableNoData_${sensorId}`)).toContainText('The server is still busy', { timeout: 15000 });
+  await expect(page.locator(`#tableNoData_${sensorId}`)).toContainText(`The server is still busy: ${storeChanged}`, { timeout: 15000 });
   expect(busy).toBe(4);
   await expect(page.locator(`#tableStatus_${sensorId}`)).toBeHidden();
 
@@ -336,6 +338,12 @@ test('Only value columns are offered, and odd column names show literally', asyn
   const offered = page.locator(`#tableColumns_${twoTimesId} input[type=checkbox]`);
   await expect(offered).toHaveCount(1);
   await expect(offered).toHaveAttribute('data-column-name', 'bid');
+  const now = Date.now();
+  const refusal = await page.request.post('/TableSensors/Chart', {
+    data: { id: twoTimesId, from: new Date(now - 3600e3).toISOString(), to: new Date(now).toISOString(), columns: [1], buckets: 500 },
+  });
+  expect(refusal.status()).toBe(400);
+  expect(await refusal.text()).toBe('Column 1 is not a value column: it is a time column.');
 
   // "CPU %{y}" and "<b>x</b>": in the chooser, the legend and the hover, as they are written.
   const oddId = await openSensor(page, 'odd');
@@ -353,7 +361,7 @@ test('Only value columns are offered, and odd column names show literally', asyn
   await expect(graph.locator('b')).toHaveCount(0);
 });
 
-test('The facts use the exact first and last time when the answer has them, and round a bucket bound outwards', async ({ page }) => {
+test('The facts use the exact first and last time of the answer, and without them round a bucket bound outwards', async ({ page }) => {
   test.setTimeout(120_000);
   expect(quotesId).not.toBe('');
 
@@ -361,19 +369,17 @@ test('The facts use the exact first and last time when the answer has them, and 
   const sensorId = await openSensor(page, 'eurusd');
   await expect(page.locator(`#tableFacts_${sensorId}`)).toContainText(`${rowCount} rows`);
 
-  // firstTime and lastTime (played onto the real answer): used as they are, in rows mode too.
-  await page.route('**/TableSensors/Chart', async route => {
-    const answer = await (await route.fetch()).json();
-    answer.firstTime = '2026-11-25T10:00:00.1234567Z';
-    answer.lastTime = '2026-11-25T10:29:59.9876543Z';
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) });
-  });
+  // firstTime and lastTime of the real answer: written as the server sent them, to the last fraction digit.
+  const asked = chartRequest(page);
   await page.evaluate((id) => (window as any).loadTableChart(id, true), sensorId);
+  const real = await (await asked).json();
+  expect(real.firstTime).toBeTruthy();
+  expect(real.lastTime).toBeTruthy();
+  const shown = (iso: string) => iso.replace('T', ' ').replace(/Z$/, '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   await expect(page.locator(`#tableFacts_${sensorId}`))
-    .toHaveText(`${rowCount} rows, the first at 2026-11-25 10:00:00.1234567, the last at 2026-11-25 10:29:59.9876543 UTC.`);
-  await page.unroute('**/TableSensors/Chart');
+    .toHaveText(`${rowCount} rows, the first at ${shown(real.firstTime)}, the last at ${shown(real.lastTime)} UTC.`);
 
-  // Without them, a buckets answer gives bounds to the bucket; the upper one is rounded up, never truncated
+  // Without them (an answer played without the fields), a buckets answer gives bounds to the bucket; the upper one is rounded up, never truncated
   // below the rows (the bucket of 10:00:00.0004999 ends at 10:00:01.0004999, shown as 10:00:01.001).
   const count = 120;
   const nulls = Array(count).fill(null);
