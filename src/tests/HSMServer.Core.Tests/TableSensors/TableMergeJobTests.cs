@@ -1117,6 +1117,44 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_change_of_period_while_the_open_hour_already_holds_blocks_takes_effect_from_the_hour_after_it()
+        {
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            // The hour before hour 0 is merged, so the sensor has its placement.
+            _now = Hour0.AddMinutes(-50);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(-51), 1.0, 1)]))));
+            Assert.Equal(1, Pass(Hour0.AddMinutes(3)).HoursMerged);
+            Assert.Equal(new TablePlacement(1, Hour0.AddHours(-1).Ticks), _server.Batches.GetPlacement(_product, b.Id));
+
+            // Five minutes into hour 0 a block has arrived in it, and the period changes. The pass runs while hour 0 is
+            // still open (it merges nothing of it).
+            _now = Hour0.AddMinutes(5);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(4), 2.0, 2)]))));
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+            Assert.Equal(0, Pass(Hour0.AddMinutes(6)).HoursMerged);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // The cut-off is the hour after the open hour: the whole of hour 0 stays in the old class.
+            var placement = _server.Batches.GetPlacement(_product, b.Id);
+            Assert.Equal(new TablePlacement(5, Hour0.AddHours(-1).Ticks, [new TablePlacementSegment(Hour0.AddHours(-1).Ticks, Hour0.AddHours(1).Ticks, 1)]), placement);
+            Assert.Equal((1, 5), (placement.ClassOf(Hour0.Ticks), placement.ClassOf(Hour0.AddHours(1).Ticks)));
+
+            // Also the rows that arrive in hour 0 after the change: the hour is merged whole into P1, the next one into P5.
+            _now = Hour0.AddMinutes(50);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(49), 3.0, 3)]))));
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(69), 4.0, 4)]))));
+            Pass(Hour0.AddHours(2).AddMinutes(3));
+
+            Assert.Equal([1], _server.Batches.GetHour(_product, Hour0.Ticks).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(2L, _server.Batches.GetHour(_product, Hour0.Ticks).Classes[0].Rows);
+            Assert.Equal([5], _server.Batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(placement, _server.Batches.GetPlacement(_product, b.Id));
+            Assert.Equal(4, Rows(b).Count);
+        }
+
+        [Fact]
         public async Task A_repeat_of_an_hour_that_did_not_commit_gives_every_sensor_the_class_of_the_run_before_a_change_of_period()
         {
             var a = await RegisterAsync("a", keep: TimeIntervalModel.None);

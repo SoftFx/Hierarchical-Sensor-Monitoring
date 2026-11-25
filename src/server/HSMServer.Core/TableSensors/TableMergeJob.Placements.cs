@@ -52,11 +52,21 @@ namespace HSMServer.Core.TableSensors
         }
 
         /// <summary>
-        /// The merge hour a change of period takes effect from: an hour no part of which can be on disk. The merge writes an
-        /// hour only after closing it, and only hours with blocks; so it is the hour after the newest one with blocks of the
-        /// product, after the newest committed one, and not before the current hour of the clock or an earlier change. A merge
-        /// that repeats an earlier hour (a run that crashed before its commit) then gives every sensor the class the earlier
-        /// run gave it, and the parts of the two runs name the same classes.
+        /// The merge hour a change of period takes effect from: an hour no part of which can be on disk, and none of whose
+        /// blocks can have been merged under the old class. The latest of:
+        /// <list type="bullet">
+        /// <item>the current hour of the pass's clock;</item>
+        /// <item>the hour AFTER the newest arrival hour with blocks of the product, the open hour included: at 10:05 with a
+        /// block in the 10:00 hour the cut-off is 11:00, and the whole 10:00 hour stays in the old class;</item>
+        /// <item>the hour after the newest committed hour;</item>
+        /// <item>the end of the last segment (an earlier change).</item>
+        /// </list>
+        /// The later cut-off is the safe one. An hour that holds blocks is never at or after it, whatever the clocks say: the
+        /// merge takes an hour for closed by the clock of its pass, the block store files a block under the hour of its own
+        /// clock, and a clock set back can make an hour look open that a run of the merge has already written parts of. A
+        /// merge that repeats an earlier hour (a run that crashed before its commit) then gives every sensor the class the
+        /// earlier run gave it, and the parts of the two runs name the same classes. The price: a change made while the
+        /// current hour already holds blocks applies to the rows that arrive from the next hour on.
         /// </summary>
         private long Cutoff(Guid product, DateTime utcNow, TablePlacement placement)
         {
