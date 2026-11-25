@@ -755,7 +755,12 @@ namespace hsm::collector::large_files
         // begin, the pieces and end, until the file is stored or the attempt ends.
         Outcome Upload(Item& item, SourceFile& source, const SourceFacts& start, const FileHello& hello, UploadRecord& record, bool have_record)
         {
-            FileFacts facts{ item.sensor, item.name, start.size, start.modified_ticks, start.identity };
+            FileFacts facts;
+            facts.path = item.sensor;
+            facts.name = item.name;
+            facts.size = start.size;
+            facts.modified_ticks = start.modified_ticks;
+            facts.source = start.identity;
             facts.secure = item.options->secure;
             std::int64_t piece_bytes = record.Facts().piece_bytes > 0 && record.Facts().piece_bytes <= hello.piece_bytes ? record.Facts().piece_bytes : hello.piece_bytes;
             int in_a_row = 0;
@@ -1104,8 +1109,12 @@ namespace hsm::collector::large_files
         // Discards the upload a record names: on this connection, or after a begin with the facts it was begun with.
         Outcome DiscardRecorded(Item& item, UploadRecord& record)
         {
-            FileFacts original{ record.Facts().sensor, record.Facts().key.name, record.Facts().key.size, record.Facts().key.modified_ticks,
-                                record.Facts().key.identity };
+            FileFacts original;
+            original.path = record.Facts().sensor;
+            original.name = record.Facts().key.name;
+            original.size = record.Facts().key.size;
+            original.modified_ticks = record.Facts().key.modified_ticks;
+            original.source = record.Facts().key.identity;
             original.secure = record.Facts().secure;
             for (int round = 0; round < 8; ++round)
             {
@@ -1324,7 +1333,12 @@ namespace hsm::collector::large_files
                 return;
             }
 
-            FileFacts facts{ routed->sensor, routed->name, size, routed->time_ticks, routed->source };
+            FileFacts facts;
+            facts.path = routed->sensor;
+            facts.name = routed->name;
+            facts.size = size;
+            facts.modified_ticks = routed->time_ticks;
+            facts.source = routed->source;
             facts.secure = false;
             facts.status = routed->status == HSM_SENSOR_STATUS_OK ? -1 : routed->status;
             facts.comment = routed->comment;
