@@ -541,7 +541,7 @@ namespace HSMServer.Core.TableSensors
                     if (!weekSet.Contains(new TableBatchWeek(StorageWeek.GetStartTicks(hour.HourTicks), period)))
                         continue;
 
-                    var (min, max) = RowTimes(hour, period);
+                    var (min, max) = RowTimes(hour);
 
                     if (min < toTicks && max >= fromTicks)
                         sources.Add(new ReadSourceItem(Math.Max(min, fromTicks), hour.HourTicks, null, period));
@@ -557,24 +557,19 @@ namespace HSMServer.Core.TableSensors
             return new ReadPlan(product, store, batches, tableId, table.Id, sources, keptUnreadable, generation, stale);
         }
 
-        // The row times a merged hour can hold for a sensor whose rows of it are in the given class: the hour is read only
-        // when they meet the range asked for.
-        // - The record names the class: the sensor's rows were merged into it, so they are within that class's own range.
-        //   Not the union of every class of the record: with rows of P1 only at 10:00 and of P5 only at 12:00, a read of
-        //   the P1 sensor for 11:00 would select the hour through the gap between the two, and report a batch it could not
-        //   read (BatchesFailed) for a range that can hold none of its rows.
-        // - The record does not name the class: the sensor's rows of the hour are there only if they were moved there from
-        //   a class the record names, and their times are within the union of the record's ranges (dropped classes
-        //   included: rows moved out of one are within its range).
-        // For the move (#1850 part 4c): rows moved into a class the record already names are within the range of the class
-        // they came from, not of the one they are in; the move must make this function answer the union for such an hour.
-        private static (long Min, long Max) RowTimes(TableBatchHour hour, int period)
+        // The row times a merged hour can hold for a sensor: the union of the ranges of every class its record names
+        // (dropped classes included), whatever class holds the sensor's rows now (#1850 part 4c). The sensor's rows were
+        // merged into one class of the record, and a move copies them unchanged into another class, which the record may
+        // name too: rows moved from P1 into P5 are within P1's range, not P5's own, so P5's own range would miss them. The
+        // hour is read only when the union meets the range asked for. An hour selected through the gap between two classes
+        // (rows of P1 only at 10:00 and of P5 only at 12:00, a read of the P1 sensor for 11:00) costs a seek and reports
+        // nothing: the store skips every index record whose rows cannot meet the range before it fetches the batch
+        // (ReadBatches), so a record whose batch is missing is not counted as failed for a range that can hold none of its
+        // rows (TableChartReadTests.A_merged_hour_is_selected_by_the_range_of_the_class_that_holds_the_sensors_rows_...).
+        // Part 4b answered a named class's own range instead; the move needs the union.
+        private static (long Min, long Max) RowTimes(TableBatchHour hour)
         {
             long min = long.MaxValue, max = long.MinValue;
-
-            foreach (var range in hour.Classes)
-                if (range.PeriodWeeks == period)
-                    return range.Batches > 0 ? (range.MinTime, range.MaxTime) : (min, max);
 
             foreach (var range in hour.Classes)
                 if (range.Batches > 0)
@@ -607,9 +602,11 @@ namespace HSMServer.Core.TableSensors
 
         private static void ReadBatches(ITableBatchStore batches, ITableRowSink collector, Guid product, Guid sensorId, int period, long hour, long fromTicks, long toTicks)
         {
-            var reads = batches.ReadSensor(product, sensorId, period, [hour], out var failed);
+            // Only the records whose rows can meet the range: one out of it is skipped before its batch is fetched, so a
+            // missing batch there is no failure (#1850 part 4c).
+            var reads = batches.ReadSensor(product, sensorId, period, [hour], fromTicks, toTicks, out var failed);
 
-            // Index records without their batch, or that do not decode: their rows are missing (#1850 part 4b).
+            // Index records in the range without their batch, or that do not decode: their rows are missing (#1850 part 4b).
             for (int i = 0; i < failed; i++)
                 collector.BatchFailed();
 

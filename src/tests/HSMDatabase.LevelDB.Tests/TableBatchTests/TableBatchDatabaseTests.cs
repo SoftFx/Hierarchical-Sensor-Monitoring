@@ -894,6 +894,39 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
+        public void A_read_with_a_range_skips_a_record_out_of_it_before_its_batch_so_only_a_missing_batch_in_the_range_fails()
+        {
+            // A's batches of hour 0 in P4: [+0, +9], [+10, +19], [+20, +29]; and a moved batch of hour 1, [+5, +14].
+            var store = Open();
+            long hour1 = Week0 + Hour;
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 3))]);
+            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), hour1, Mark(hour1), [Batch(_sensorA, hour1 + 5, 0)]);
+
+            // Every batch survives as its index record only. A range that meets three of the four records counts those three
+            // (#1850 part 4c): the first, out of it, is skipped before its batch is fetched.
+            store.BatchMissing = (_, _) => true;
+            var read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 10, hour1 + 6, out var failed);
+            Assert.Empty(read);
+            Assert.Equal((3, 3L), (failed, store.Statistics.ReadFailures));
+
+            // [from, to): a record whose last time is the first tick of the range meets it; one that starts at its end does not.
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 29, hour1 + 5, out failed);
+            Assert.Equal((0, 1), (read.Count, failed));
+            store.BatchMissing = null;
+
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 19, hour1 + 5, out failed);
+            Assert.Equal([(Week0, 1, false), (Week0, 2, false)], read.Select(r => (r.HourTicks, r.Ordinal, r.Moved)));
+            Assert.Equal(0, failed);
+
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], hour1 + 14, hour1 + 15, out failed);
+            Assert.Equal([(hour1, 0, true)], read.Select(r => (r.HourTicks, r.Ordinal, r.Moved)));
+
+            // Without a range, every record.
+            Assert.Equal(4, store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], out failed).Count);
+            Assert.Equal(4L, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
         public void A_sensors_generation_changes_with_its_own_placement_and_moved_batches_and_with_every_write_of_its_product()
         {
             var store = Open();

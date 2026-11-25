@@ -641,9 +641,17 @@ namespace HSMDatabase.LevelDB.TableBatches
         }
 
         public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours) =>
-            ReadSensor(productId, sensorId, periodWeeks, hours, out _);
+            ReadSensor(productId, sensorId, periodWeeks, hours, null, out _);
 
-        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed)
+        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed) =>
+            ReadSensor(productId, sensorId, periodWeeks, hours, null, out failed);
+
+        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, long fromTicks, long toTicks, out int failed) =>
+            ReadSensor(productId, sensorId, periodWeeks, hours, (fromTicks, toTicks), out failed);
+
+        // range: [from, to) of the row times; an index record whose rows cannot meet it is skipped before its batch is
+        // fetched. Null: every record.
+        private List<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, (long From, long To)? range, out int failed)
         {
             ArgumentNullException.ThrowIfNull(hours);
             failed = 0;
@@ -662,6 +670,15 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     var selected = week.OrderBy(h => h).ToArray();
                     var found = new List<TableBatchRead>();
+                    int weekFailed = 0;
+
+                    void Add(byte[] key, byte[] value, bool moved)
+                    {
+                        if (!TryReadIndexed(handle.Db, key, value, moved, range, out var read))
+                            weekFailed++;
+                        else if (read is not null)
+                            found.Add(read);
+                    }
 
                     using (var iterator = handle.Db.CreateIterator())
                     {
@@ -671,17 +688,17 @@ namespace HSMDatabase.LevelDB.TableBatches
                         {
                             var prefix = IndexPrefix(hour, sensorId);
                             for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
-                                found.Add(ReadIndexed(handle.Db, iterator.Key(), iterator.Value(), moved: false));
+                                Add(iterator.Key(), iterator.Value(), moved: false);
 
                             // The region of moved batches: 0xFF | hour | sensor | 0x00 | ...
                             var movedPrefix = MovedIndexPrefix(hour, sensorId);
                             for (iterator.Seek(movedPrefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(movedPrefix); iterator.Next())
-                                found.Add(ReadIndexed(handle.Db, iterator.Key(), iterator.Value(), moved: true));
+                                Add(iterator.Key(), iterator.Value(), moved: true);
                         }
                     }
 
-                    failed += found.Count(f => f is null);
-                    result.AddRange(found.Where(f => f is not null));
+                    failed += weekFailed;
+                    result.AddRange(found);
                 }
                 finally
                 {
@@ -692,9 +709,13 @@ namespace HSMDatabase.LevelDB.TableBatches
             return result.OrderBy(r => r.HourTicks).ThenBy(r => r.Moved).ThenBy(r => r.Ordinal).ToList();
         }
 
-        // An index record and its batch; null (counted) when the batch is missing or the record is damaged.
-        private TableBatchRead ReadIndexed(DB db, byte[] key, byte[] value, bool moved)
+        // An index record and its batch. False (counted) when the batch is missing or the record is damaged; true with a null
+        // read when the record's rows cannot meet the range: skipped before its batch is fetched, so a record out of the range
+        // whose batch is missing is no failure (it would add no row to the answer either way).
+        private bool TryReadIndexed(DB db, byte[] key, byte[] value, bool moved, (long From, long To)? range, out TableBatchRead read)
         {
+            read = null;
+
             try
             {
                 Guid sensor;
@@ -722,16 +743,20 @@ namespace HSMDatabase.LevelDB.TableBatches
                 if (value.Length != 17 || value[0] != IndexVersion)
                     throw new FormatException($"an index record of {value.Length} bytes, version {(value.Length > 0 ? value[0] : 0)}");
 
+                long last = BinaryPrimitives.ReadInt64LittleEndian(value.AsSpan(1));
+                if (range is { } r && (last < r.From || first >= r.To))
+                    return true;
+
                 var batch = (BatchMissing?.Invoke(hour, ordinal) == true ? null : db.Get(batchKey)) ?? throw new FormatException("the batch of an index record is missing");
 
-                return new TableBatchRead(sensor, hour, ordinal, moved, first, BinaryPrimitives.ReadInt64LittleEndian(value.AsSpan(1)),
-                    BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(9)), batch);
+                read = new TableBatchRead(sensor, hour, ordinal, moved, first, last, BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(9)), batch);
+                return true;
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException)
             {
                 Statistics.Add(ref Statistics.ReadFailures);
                 _logger.Error($"A table batch record could not be read: {ex.Message}");
-                return null;
+                return false;
             }
         }
 
