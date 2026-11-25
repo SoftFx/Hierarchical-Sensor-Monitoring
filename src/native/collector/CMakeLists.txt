@@ -175,7 +175,8 @@ if(HSM_COLLECTOR_HTTP)
     # private, so it adds nothing to what a consumer of the built library links.
     find_package(nlohmann_json REQUIRED)
     get_target_property(HSM_NLOHMANN_JSON_INCLUDES nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
-    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp
+        src/hsm_acked_binary_link.cpp) # the second connection of a session (#1848)
     target_include_directories(hsm_collector_core SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
     target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
