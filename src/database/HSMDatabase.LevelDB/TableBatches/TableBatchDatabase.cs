@@ -223,17 +223,15 @@ namespace HSMDatabase.LevelDB.TableBatches
                                 product.Generation++;
                             }
 
-                            // A mark of the hour here was written by a run that did not reach the commit (a committed hour
-                            // returned above). The part is always written again, whatever that run wrote: its metadata cannot
-                            // tell which sensors' rows it holds. The hour's keys of this database are deleted and the new ones
-                            // and the mark written in one write.
-                            var rewrite = handle.Db.Get(HourKey(hour, TagMark)) is not null;
-
+                            // The hour is not committed (a committed hour returned above), so whatever this database holds
+                            // of it was left by a run that did not reach the commit, or by a move of the hour as it was
+                            // committed before Hours was lost. The part is always written again, whatever is there: its
+                            // metadata cannot tell which sensors' rows it holds. Every key of the hour in this database, in
+                            // both regions (the hour's own and the moved batches), is deleted, and the new keys and the mark
+                            // written, in one write. Not by the mark: keys of the hour without its mark must not survive.
                             long bytes = 0;
                             using var batch = new WriteBatch();
-
-                            if (rewrite)
-                                DeleteHourKeys(handle.Db, hour, batch);
+                            var rewrite = DeleteHourKeys(handle.Db, hour, batch) > 0;
 
                             for (int i = 0; i < part.Batches.Count; i++)
                             {
@@ -291,9 +289,10 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
-        // Under the product's lock. Deletes the part of the hour (index records, batches, mark) from every week database of the
-        // product's week whose class is not among the given ones and that holds a mark of the hour. One synced write each,
-        // pinned as a part write is, so the newest week's database is flushed when the next week starts.
+        // Under the product's lock. Deletes everything of the hour (index records, batches, the mark, its moved batches) from
+        // every week database of the product's week whose class is not among the given ones and that holds any key of the
+        // hour, with or without its mark. One synced write each, pinned as a part write is, so the newest week's database
+        // is flushed when the next week starts.
         private void RemoveStaleParts(ProductState product, long week, long hour, HashSet<int> classes)
         {
             foreach (var stale in product.Weeks.Where(w => w.WeekStartTicks == week && !classes.Contains(w.PeriodWeeks)).ToList())
@@ -304,11 +303,10 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 try
                 {
-                    if (handle.Db.Get(HourKey(hour, TagMark)) is null)
+                    using var batch = new WriteBatch();
+                    if (DeleteHourKeys(handle.Db, hour, batch) == 0)
                         continue;
 
-                    using var batch = new WriteBatch();
-                    DeleteHourKeys(handle.Db, hour, batch);
                     handle.Db.Write(batch, _syncWrite);
                     handle.Dirty = true;
                     Statistics.Add(ref Statistics.PartsRewritten);
@@ -324,27 +322,48 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
-        // Adds to the batch a delete of every key of one hour in a week database: the hour region (index records, batches, the
-        // mark) and the hour's keys in the region of moved batches (0xFF | hour). A part written again replaces everything the
-        // database holds of the hour, moved copies included, so an hour merged again from its blocks never sits beside a moved
-        // copy of the same rows. The move writes the hour's mark into the database it moves into, which is how a repeat finds
-        // that database (feature doc, "Moved batches and an hour merged again").
-        private static void DeleteHourKeys(DB db, long hour, WriteBatch batch)
+        // Adds to the batch a delete of every key of one hour in a week database, and answers how many: the hour region (index
+        // records, batches, the mark) and the hour's keys in the region of moved batches (0xFF | hour). The write of an
+        // uncommitted hour replaces everything a database of its week holds of the hour, moved copies included, so an hour
+        // merged again from its blocks never sits beside a moved copy of the same rows. It looks at the keys themselves, in
+        // every database of the week, and not at the hour's mark (feature doc, "Moved batches and an hour merged again").
+        private static int DeleteHourKeys(DB db, long hour, WriteBatch batch)
         {
             using var iterator = db.CreateIterator();
+            int deleted = 0;
 
             foreach (var prefix in new[] { HourKey(hour, TagIndex)[..8], MovedHourPrefix(hour) })
-                for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
+                for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next(), deleted++)
                     batch.Delete(iterator.Key());
+
+            return deleted;
         }
 
         /// <summary>
         /// Writes batches of one sensor and merge hour into the region of moved batches of a week database (the move of a
         /// sensor to another period class, #1850 PR 4, writes there: after every hour key, so it never overlaps ingest).
         /// One synced write. Nothing is committed: the hour's commit is the merge's.
+        /// <para>
+        /// <paramref name="record"/> is the hour's mark as the database the batches come from holds it
+        /// (<see cref="ReadMark"/>): the committed record, byte for byte. When the destination has no mark of the hour, the
+        /// record is written as its mark in the same write, so moved batches of an hour never exist in a database without
+        /// the hour's mark, and a rebuild of the hours database sees the same bytes in every database of the hour.
+        /// </para>
         /// </summary>
-        internal void WriteMoved(Guid productId, TableBatchWeek week, long hour, IReadOnlyList<TableBatchToWrite> batches)
+        internal void WriteMoved(Guid productId, TableBatchWeek week, long hour, byte[] record, IReadOnlyList<TableBatchToWrite> batches)
         {
+            ArgumentNullException.ThrowIfNull(record);
+            ArgumentNullException.ThrowIfNull(batches);
+
+            try
+            {
+                DecodeCommit(hour, record);
+            }
+            catch (FormatException ex)
+            {
+                throw new ArgumentException($"Not the record of the merged hour {new DateTime(hour, DateTimeKind.Utc):O}: {ex.Message}", nameof(record), ex);
+            }
+
             var product = Product(productId, create: true);
 
             lock (product.Lock)
@@ -367,6 +386,10 @@ namespace HSMDatabase.LevelDB.TableBatches
                         batch.Put(MovedBatchKey(b.SensorId, hour, i), b.Batch);
                     }
 
+                    // A mark already there is the hour's own (a part of the hour in this class), the same bytes.
+                    if (handle.Db.Get(HourKey(hour, TagMark)) is null)
+                        batch.Put(HourKey(hour, TagMark), record);
+
                     handle.Db.Write(batch, _syncWrite);
                     handle.Dirty = true;
                 }
@@ -374,6 +397,29 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     Release(handle);
                 }
+            }
+        }
+
+        /// <summary>
+        /// The mark of a merge hour in a week database: the hour's record as its commit wrote it, or null when that
+        /// database holds none (or does not exist). What a move passes to <see cref="WriteMoved"/>.
+        /// </summary>
+        internal byte[] ReadMark(Guid productId, TableBatchWeek week, long hour)
+        {
+            if (Product(productId, create: false) is null)
+                return null;
+
+            var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: false, pin: false);
+            if (handle is null)
+                return null;
+
+            try
+            {
+                return handle.Db.Get(HourKey(hour, TagMark));
+            }
+            finally
+            {
+                Release(handle);
             }
         }
 
