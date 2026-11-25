@@ -24,7 +24,7 @@
                     style="background-color:@Model.Background; color:@Model.Foreground">
                 <div class="w-100">
                     <div class='d-flex col-md-auto'>
-                        <div style="font-weight: bold;">@Html.Raw(Model.Name)</div>
+                        <div style="font-weight: bold;">@Model.Name</div>
                         @if (Model.Id.HasValue && user.IsFolderManager(Model.Id.Value))
                         {
                             <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@Model.Id"

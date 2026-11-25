@@ -298,9 +298,13 @@
     // Per-channel Remove buttons. Each clears only its channel; the Chat row and the other
     // channels stay intact. On success the form reopens on the just-cleared channel's tab so
     // the user can paste a new URL without an extra click.
+    // The chat's name goes into the script as a JSON string and is escaped once for the dialogs below. Written
+    // into a template literal directly, a name would be evaluated as part of the script.
+    const chatName = escapeHtml(@Json.Serialize(Model.Name));
+
     function removeChannel(channelName, channelTab, actionUrl, confirmText) {
         showConfirmationModal(
-            `Removing ${channelName} from chat '@Model.Name'`,
+            `Removing ${escapeHtml(channelName)} from chat '${chatName}'`,
             confirmText,
             function () {
                 $.ajax({
@@ -352,7 +356,7 @@
                 "Telegram binding",
                 "telegram",
                 "@Url.Action(nameof(NotificationsController.RemoveTelegramBinding), ViewConstants.NotificationsController)",
-                `Telegram binding will be removed from chat '@Model.Name'. The chat itself, its folder bindings, and other channels stay intact.`
+                `Telegram binding will be removed from chat '${chatName}'. The chat itself, its folder bindings, and other channels stay intact.`
             );
         });
 
@@ -361,7 +365,7 @@
                 "Slack webhook",
                 "slack",
                 "@Url.Action(nameof(NotificationsController.ClearSlackWebhook), ViewConstants.NotificationsController)",
-                `Slack webhook will be removed from chat '@Model.Name'. The chat itself and other channels stay intact.`
+                `Slack webhook will be removed from chat '${chatName}'. The chat itself and other channels stay intact.`
             );
         });
 
@@ -370,7 +374,7 @@
                 "Mattermost webhook",
                 "mattermost",
                 "@Url.Action(nameof(NotificationsController.ClearMattermostWebhook), ViewConstants.NotificationsController)",
-                `Mattermost webhook will be removed from chat '@Model.Name'. The chat itself and other channels stay intact.`
+                `Mattermost webhook will be removed from chat '${chatName}'. The chat itself and other channels stay intact.`
             );
         });
     });

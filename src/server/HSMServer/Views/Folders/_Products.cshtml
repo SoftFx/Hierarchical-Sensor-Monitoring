@@ -58,7 +58,7 @@ else
             @foreach (var product in Model.DisplayProducts)
             {
                 <tr id="row_product_@product.Id">
-                    <td class="text-break">@Html.Raw(product.Name)</td>
+                    <td class="text-break">@product.Name</td>
                     <td>
                         <span title="@product.UpdateTime.ToDefaultFormat()" time="@product.UpdateTime">
                             @product.UpdateTime.GetTimeAgo()

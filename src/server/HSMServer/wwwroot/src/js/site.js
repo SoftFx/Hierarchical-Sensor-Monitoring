@@ -75,9 +75,24 @@ window.copyToClipboard = function(text) {
     showToast("Copied!");
 }
 
+const htmlEscapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+// Text that goes into an HTML string (a name, a path, a server message) passes through this first:
+// it then shows as the text it is, whatever characters it carries.
+window.escapeHtml = function (text) {
+    return (text === null || text === undefined ? '' : String(text)).replace(/[&<>"']/g, c => htmlEscapes[c]);
+}
+
+// For the helpers that take ready HTML (toast, confirmation dialog). The markup the UI builds itself
+// stays (line breaks, emphasis, coloured spans, links); scripts, event handlers and javascript: links
+// do not. Callers still escape the text they put into that HTML: this is the second line, not the first.
+window.sanitizeHtml = function (html) {
+    return window.DOMPurify.sanitize(html === null || html === undefined ? '' : String(html), { ADD_ATTR: ['target'] });
+}
+
 window.showToast = function (message, header = 'Info') {
-    document.getElementById('toast_body').innerHTML = message;
-    document.getElementById('toast_header').innerHTML = header;
+    document.getElementById('toast_body').innerHTML = sanitizeHtml(message);
+    document.getElementById('toast_header').innerHTML = sanitizeHtml(header);
     let currentToast = document.getElementById('liveToast')
     let currentToastInstance = bootstrap.Toast.getOrCreateInstance(currentToast)
     currentToastInstance.show();

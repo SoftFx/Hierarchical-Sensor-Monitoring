@@ -234,6 +234,7 @@ namespace HSMServer.ServiceExtensions
                         sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors))
                     .AddSingleton<IApiTokenUsageGate>(sp => sp.GetRequiredService<MonitoringGate>())
                     .AddSingleton<TreeViewModel>()
+                    .AddSingleton<UserTreeAccess>()
                     .AddSingleton<ISensorApiTelemetry, SensorApiTelemetry>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<SensorIngestionService>()

@@ -60,12 +60,12 @@
                                 @if (user.IsManager(product.Id))
                                 {
                                     <a id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
-                                        @Html.Raw(product.Name)
+                                        @product.Name
                                     </a>
                                 }
                                 else
                                 {
-                                    @Html.Raw(product.Name)
+                                    @product.Name
                                 }
                             </td>
                             <td class="text-break">
@@ -76,7 +76,7 @@
                                 else
                                 {
                                     var managers = string.Join(", ", product.Managers);
-                                    <span>@Html.Raw(managers)</span>
+                                    <span>@managers</span>
                                 }
                             </td>
                             <td>
@@ -199,8 +199,8 @@
             name = $('#inputName_' + key).text().trim().substring(0, 100);
 
             showConfirmationModal(
-                `Removing '${name}' product`,
-                `Do you really want to remove '${name}' product?`,
+                `Removing '${escapeHtml(name)}' product`,
+                `Do you really want to remove '${escapeHtml(name)}' product?`,
                 function () {
                     // POST + antiforgery header (#1512): the action rejects GET and a missing token.
                     $.ajax({

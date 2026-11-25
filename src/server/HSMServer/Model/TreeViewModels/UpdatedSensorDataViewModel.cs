@@ -89,7 +89,9 @@ namespace HSMServer.Model.TreeViewModel
 
         internal UpdatedSensorDataViewModel(SensorNodeViewModel sensor, User user) : this(sensor)
         {
-            var count = user.History.NewValuesCnt;
+            // The counter belongs to the sensor whose history is connected in the user's state; asked
+            // about another sensor, it says nothing.
+            var count = user.History.Table?.SensorId == sensor.Id.ToString() ? user.History.NewValuesCnt : 0;
 
             if (count > MaxNewValuesCount)
                 NewValuesCount = $"{MaxNewValuesCount}+";

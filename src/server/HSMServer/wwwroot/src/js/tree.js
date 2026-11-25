@@ -427,7 +427,7 @@ function buildContextMenu(node) {
                     selectedNodesNames.push($('#jstree').jstree().get_node(selectedNodes[i]).data.jstree.title)
                 }
 
-                let nodesNamesString = selectedNodesNames.join(', ');
+                let nodesNamesString = selectedNodesNames.map(escapeHtml).join(', ');
                 if (selectedNodesCount > maxNames) {
                     nodesNamesString += ` and other ${selectedNodesCount - maxNames} items`;
                 }
@@ -446,10 +446,10 @@ function buildContextMenu(node) {
                         }).done((response) => {
                             updateTreeTimer();
 
-                            let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                            let message = escapeHtml(response.responseInfo).replace(/(?:\r\n|\r|\n)/g, '<br>')
 
                             if (response.errorMessage !== "")
-                                message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
+                                message += `<span style="color: red">${escapeHtml(response.errorMessage).replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
 
                             showToast(message);
 
@@ -478,10 +478,10 @@ function buildContextMenu(node) {
                         success: (response) => {
                             updateTreeTimer();
 
-                            let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                            let message = escapeHtml(response.responseInfo).replace(/(?:\r\n|\r|\n)/g, '<br>')
 
                             if (response.errorMessage !== "")
-                                message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
+                                message += `<span style="color: red">${escapeHtml(response.errorMessage).replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
 
                             showToast(message);
 
@@ -588,7 +588,7 @@ function buildContextMenu(node) {
                     $.when(getFullPathAction(node.id)).done((path) => {
                         showConfirmationModal(
                             `Remove ${type}`,
-                            `Do you really want to remove ${path}?`,
+                            `Do you really want to remove ${escapeHtml(path)}?`,
                             () => {
                                 $.ajax({
                                     url: `${removeNodeAction}`,
@@ -679,7 +679,7 @@ function buildContextMenu(node) {
                                     url: importAlerts
                                 }).done((errorMessage) => {
                                     if (errorMessage) {
-                                        showToast(errorMessage, "Importing error!");
+                                        showToast(escapeHtml(errorMessage).replace(/(?:\r\n|\r|\n)/g, '<br>'), "Importing error!");
                                     }
                                     else {
                                         showToast(`Alerts have been successfully imported.`);
@@ -688,7 +688,7 @@ function buildContextMenu(node) {
                             }
 
                             reader.onerror = function () {
-                                showToast(`There is some errors while reading the file '${fileName}'.`, "Error!");
+                                showToast(`There is some errors while reading the file '${escapeHtml(fileName)}'.`, "Error!");
                             }
                         }
                     });

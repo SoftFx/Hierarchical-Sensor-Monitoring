@@ -102,6 +102,7 @@ TypeScript 5.3 + Webpack 5:
   a top-level cross-site GET. Removing a product or node (`ProductController.RemoveProduct`,
   `HomeController.RemoveNode`) requires Manager of the node's ROOT product or admin — the removal is
   recursive and irreversible (#1512; `ProductControllerTests`).
+- The tree page and the history routes resolve every sensor, node or folder id from the client through `UserTreeAccess`: an entity of a product the user has no role on is answered like an unknown id. Names, paths and file content from collectors and users are output as text. Both rules: `web-ui-access/feature.md`.
 - Product roles are held per ROOT product (`User.ProductsRoles`); a node below the root has no roles
   of its own. Six writes of `ProductController` go through one gate (`DenyUnlessManager`): the
   caller must be an admin or a Manager of the root product of the posted id; an id that is not in
@@ -166,6 +167,7 @@ TypeScript 5.3 + Webpack 5:
 - `token-usage-monitoring/` - per-token self-monitoring of `/api/v1` + `/mcp` access (#1402): request rate and duration per API token, plus the aggregate auth-failure counter.
 - `agent-download/` - admin-only per-product HSM Agent (Windows) bundle download and its `agent-release.txt` staging; also the admin **Downloads** page (#1550, Configuration menu) that offers both bundles for a chosen product.
 - `linux-probe-download/` - its Linux sibling (#1424): per-product probe `.tar.gz` with `install.sh`, staged from `probe-release.txt`.
+- `web-ui-access/` - which sensors, nodes and folders a web user can address by id in the tree page, the history routes and the per-node journal (`UserTreeAccess`), and how collector- and user-supplied text is put into pages (encoding rules for views and scripts, file previews).
 - `background-services/` - hosted services, queue workers, startup/shutdown.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.
