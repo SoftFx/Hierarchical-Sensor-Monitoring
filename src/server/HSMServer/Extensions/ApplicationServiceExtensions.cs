@@ -54,6 +54,13 @@ namespace HSMServer.ServiceExtensions
         private static readonly HashSet<Type> _asyncStorageTypes = [];
 
 
+        // The feed sensors of table sensors (#1847): values the server derives itself for sensors of a user's product,
+        // through the cache without an access key, given only to the server's own service, never to a controller. The
+        // adapter is not disposable, so the container disposes the cache once (under ITreeValuesCache).
+        public static IServiceCollection AddTableFeedSensors(this IServiceCollection services) =>
+            services.AddSingleton<HSMServer.Core.Cache.IServerSensorValues>(provider => new HSMServer.Core.Cache.ServerSensorValues(provider.GetRequiredService<ITreeValuesCache>()))
+                    .AddHostedService<BackgroundServices.TableFeedSensorsService>();
+
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
         {
             services.AddSingleton(config);
@@ -77,6 +84,8 @@ namespace HSMServer.ServiceExtensions
             // by the read route of the Sensor API and the web UI.
             services.AddSingleton<HSMServer.Core.TableSensors.ITableChartReader>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
             services.AddSingleton(_ => new HSMServer.Core.TableSensors.TableReadGate(config.TableSensors.MaxConcurrentReads));
+
+            services.AddTableFeedSensors();
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
