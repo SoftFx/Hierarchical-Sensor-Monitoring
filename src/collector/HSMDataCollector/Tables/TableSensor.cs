@@ -386,6 +386,9 @@ namespace HSMDataCollector.Tables
             }
         }
 
+        /// <summary>An empty buffer of this sensor's shape, for rows packed again from a block.</summary>
+        internal TableRowBuffer NewBuffer() => new TableRowBuffer(_doubleColumns, () => BeforeBufferGrowthForTests);
+
         /// <summary>For tests: <see cref="TakeRows(TableRun)"/> in the sensor's current run.</summary>
         internal TableRowBuffer TakeRows() => TakeRows(Run);
 

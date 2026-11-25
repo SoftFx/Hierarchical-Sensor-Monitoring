@@ -1,7 +1,7 @@
 # Feature: Table Sensors in the Managed Collector
 
 > Owner: collector | Last reviewed: 2026-11-25 | Canonical: yes
-> Scope: how an application declares table sensors in `HSMDataCollector`, adds rows, and how the collector buffers, registers, packs and delivers them (#1846, ADR-0021 points 5–7).
+> Scope: how an application declares table sensors in `HSMDataCollector`, adds rows, and how the collector buffers, registers, packs and delivers them over the table connection of its session (#1846, ADR-0021 points 5–7).
 
 ---
 
@@ -35,11 +35,11 @@ double? noAsk = null; eurusd.AddRow(DateTime.UtcNow, 1.0841, noAsk);         // 
 await collector.Stop();                                                      // sends what it holds at once
 ```
 
-**State of the steps (epic #1842).** Part 1 of this step (this document as written): the API, the buffer, the tick,
-the registration on the session, packing and splitting, the bounded backlog, the answers to blocks, the stop drain.
-The table connection that carries the blocks to the server is part 2: until it lands, the session sender answers every
-block "not delivered", so blocks wait in the backlog (bounded, the oldest dropped and counted). The local file of
-undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3.
+**State of the steps (epic #1842).** This document is parts 1 and 2 of this step: the API, the buffer, the tick, the
+registration on the session, packing and splitting, the bounded backlog, the answers to blocks, the stop drain
+(part 1), and the table connection that carries the blocks to the server (part 2, "The table connection" below). The
+local file of undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3: until then a block that is not delivered
+lives in memory only.
 
 ## Invariants
 
@@ -75,6 +75,12 @@ undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3.
   of this feature, at Start, during the run and at Stop. A table sensor created while the collector runs starts the
   pipeline's run at once. A compressor that cannot be made makes the sensor `Unavailable` with the reason; it never fails
   `Start`.
+- **The table connection follows the session.** It is made with the first table sensor and opened only while the
+  session is up and after a table registration of the run was accepted; it names that session's `sessionId`, and it
+  is replaced when the session is. One attempt to open it at a time, with the session's backoff.
+- **A block leaves the backlog only by an answer of the server** (or by the bound, or by the stop): no ack, a close of
+  the connection (`1013` included), a refused upgrade and a lost session all leave it where it is, and it goes again
+  with the same producer id and sequence.
 - **A collector with a table sensor has a run from `Start` to `Stop`, also when none of its sensors can send** (an
   HTTP collector, a custom sender, no compressor): that run has the tick and the ledger and no delivery loop, and it
   never makes the compressor. The rows an `Unavailable` sensor refuses are lost rows, reported like every other loss.
@@ -149,10 +155,13 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
 | `src/collector/HSMDataCollector/Tables/TableRowBuffer.cs` | Rows column by column, null maps on first use |
 | `src/collector/HSMDataCollector/Tables/ITableBlockChannel.cs` | The internal seam to the sender: registration, put, limits; the answers (`TableBlockAck`, `TableRegistrationResult`) |
 | `src/collector/HSMDataCollector/Tables/TablePath.cs` | The server's normalized path form |
-| `src/collector/HSMDataCollector/Client/Session/SessionDataSender.Tables.cs` | The session's side: table registrations as a `commands` request of their own |
+| `src/collector/HSMDataCollector/Client/Session/SessionDataSender.Tables.cs` | The session's side: table registrations as a `commands` request of their own; makes the table connection with the first table sensor |
+| `src/collector/HSMDataCollector/Client/Session/TableConnection.cs` | The table connection: the loop that keeps it, the upgrade, the hello and the probe, a block and its ack, the closes, the stop |
 | `src/collector/HSMDataCollector.Tests/Tables/` | Unit tests (both TFMs: linked into the net8 IntegrationTests) |
 | `src/collector/HSMDataCollector.Tests/Transport/TableRegistrationSessionTests.cs` | Registration over a real session |
-| `tests/conformance/collector/table_sensor_contract.hsmtest` | The portable behaviour (rule 9) |
+| `src/collector/HSMDataCollector.Tests/Transport/TableConnectionTests.cs`, `ScriptedSessionServer.Tables.cs` | The table connection against the scripted server, and that server's table side |
+| `src/collector/HSMDataCollector.IntegrationTests/Tests/TableSensorEndToEndTests.cs` | Rows through the real server and back through `tableHistory` |
+| `tests/conformance/collector/table_sensor_contract.hsmtest`, `table_connection_contract.hsmtest` | The portable behaviour (rule 9) |
 
 ## Data Flow
 
@@ -168,15 +177,18 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
    `Pending` sensors, then **packs**: each `Registered` sensor of the run has its buffer swapped for its spare under the
    sensor's lock (writers never wait for packing; a sensor that belongs to another run by now gives nothing), the
    rows are cut into pieces that keep to the block limits, the pieces are grouped into blocks (a table once per block),
-   each block is written with one `TableBlockWriter` (reused) and checked against the frame limit: a block too large is
-   split by tables, then by rows, and packed again. Blocks get the next producer sequence and go to the end of the
-   backlog; the buffer room goes back. A pack observes its token (the run's; at stop the drain budget) before every
+   each block is written with one `TableBlockWriter` (reused) and checked as written against the frame limit and every
+   block limit the table connection checks before a put (decompressed bytes, rows, tables): a block that breaks one is
+   split by tables, then by rows, and packed again; a single row that breaks one on its own (a server may state a
+   decompressed limit smaller than a row) is dropped and counted as too large. Blocks get the next producer sequence
+   and go to the end of the backlog; the buffer room goes back. A pack observes its token (the run's; at stop the drain budget) before every
    compression pass: the rows it has not packed when the token fires are dropped and counted. The tick then signals the
    delivery loop. Nothing is reported while a gate or lock of the pipeline is held: reports are queued and written once
    the gates are released, so a host logger that calls back into the collector (even `Dispose`) cannot deadlock it.
-3. **Delivery** (`DeliverAsync`, a loop of its own): the head of the backlog is put; the next block goes only after
-   the answer to the one before. A block stays in flight, out of reach of the backlog bound, until its answer is
-   applied: the removal from the backlog, the end of in-flight and the accounting are one step under the backlog's lock.
+3. **Delivery** (`DeliverAsync`, a loop of its own): the head of the backlog is put on the table connection (below);
+   the next block goes only after the answer to the one before. A block stays in flight, out of reach of the backlog
+   bound, until its answer is applied: the removal from the backlog, the end of in-flight and the accounting are one
+   step under the backlog's lock.
    An answer that came back is applied whatever the token says by then: a block the server stored is never counted as
    lost.
 4. **Stop** (`FlushAsync`, inside `DataProcessor.StopWithFlushAsync`): runs on a thread of its own beside the value
@@ -184,10 +196,11 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
    drain back). It takes the run out of the pipeline and begins its drain: from that moment the run's rows are refused
    and counted until the next `Start`, also while the collector is still `Stopping` for its value queues. It ends the
    tick and the loop, runs the final pack (after a pack of the run that is under way), delivers until the budget is
-   spent or a block is not delivered, then closes the run (nothing of it is packed or enqueued again) and drops and
-   counts the rest (the backlog, and rows of sensors still `Pending`). A start rollback does the same without
-   delivering. An answer to a registration request of an earlier run changes nothing: every run registers its sensors
-   itself.
+   spent or a block is not delivered, closes the table connection (before the session is closed; within the budget
+   but for at most 1.25 s, see "Stop" below), then closes the run (nothing of it is packed or enqueued again) and
+   drops and counts the rest (the backlog, and rows of sensors still `Pending`). A start rollback does the same
+   without delivering. An answer to a registration request of an earlier run changes nothing: every run registers
+   its sensors itself.
 
 ### Registration
 
@@ -207,6 +220,131 @@ session is up), when a sensor is created while running, and at every tick while 
 
 Every `Start` registers every sensor again (`Registered` goes back to `Pending`), under a new producer id.
 
+### The table connection
+
+Blocks travel on a second WebSocket of the session (`Client/Session/TableConnection.cs`; the contract is "Table
+connection" in `aicontext/features/api/wire-contract/feature.md`, the server's side
+`aicontext/features/server/collector-session/feature.md`). The session sender owns it and makes it with the first
+table sensor; a collector without table sensors has no object, no loop and no task of it.
+
+- **When it is opened.** By a loop of its own, never by `AddRow` or the tick: once a table registration of the run
+  was accepted, and only while the session is up. The upgrade is `GET` of the session route with
+  `Sec-WebSocket-Protocol: hsm.tables.v1`, the headers the session sends (`Key`, `ClientName`, the collector kind and
+  version, `ExtraRequestHeaders`) and `X-Hsm-Session`: the `sessionId` of the session's hello. There is one attempt at
+  a time and none while the session is down; the pauses between attempts are the session's backoff with its jitter
+  (`SessionTimings.MinBackoff` to `MaxBackoff`), starting over after a connection that lived a minute. A session
+  whose hello states no `sessionId` (a server before table sensors) gets no attempt, which is said once.
+- **Hello.** The server's first frame states `maxFrameBytes`, `heartbeatSeconds` and `blockLimits`. From then on the
+  pipeline packs for those numbers (`ITableBlockChannel.MaxBlockBytes` is `maxFrameBytes` less the 40-byte frame
+  header; `BlockLimits`); before the first hello it packs for the defaults (4 MiB, the default block limits). A hello
+  the collector cannot work with (a frame limit of 104 bytes or less, a heartbeat outside 1 s to 1 h, block limits the
+  format cannot take) closes the connection with `1002`.
+- **Probe.** Right after the hello the collector sends a header without a block (kind 2) and takes the connection as
+  up only when its ack, `200`, comes back as the first answer, within the open timeout (15 s).
+- **One block at a time.** A block is one binary message: the header (frame version 1, kind 1, the request id, the
+  producer id, the producer sequence) and the block, written as two fragments so the block is not copied. The
+  collector then waits for the text ack of that request id up to `CollectorOptions.RequestTimeout` (30 s). **No ack in
+  time closes the connection** (with a close frame, `1000`, not a reset), so a late ack cannot be taken for the next
+  block's, and the same frame content (the same producer id and sequence) goes on the next connection; a block the
+  server had stored is answered `duplicate` there. One put follows its block across up to three lost connections,
+  waiting up to 15 s for each (`SessionTimings.TableConnectionWait`); after that it answers "not delivered" and the
+  block goes again with the next delivery. Writing a frame is bounded by ten heartbeats (at least 10 s): a frame over
+  64 KiB may wait unread on the server for its frame budget.
+- **Heartbeat.** As on the session: a `ping` when nothing was sent for a heartbeat, and the connection is given up
+  after two and a half heartbeats without a frame from the server, except while a block is being written.
+- **What the collector takes from the server**: text frames only, and of those acks, `ping` and `pong` (a push with an
+  `op` it does not know is ignored, as on the session). Everything else is a protocol error: a binary frame (the
+  collector closes with `1003`), a text that is not a JSON object (`1007`), an ack of a request it never sent or a
+  frame that is neither an ack nor a push (`1002`), a text frame larger than 1 MiB (`1009`; an ack lists at most 100
+  refused tables, so a larger one is a broken server). The connection is closed with that code, the error is reported
+  once, the connection is opened again after the backoff, and the block that waited is sent again.
+
+**The ack of a block**, by status. A refusal a repeat cannot cure is never sent again; a fault is never final. The
+server sends `200`, `400`, `503` and `500` for a block (`CollectorSessionHandler.HandleBlockAsync`); the other rows
+say what the collector does should a later server send them.
+
+| Ack | Answer to the pipeline | Can a repeat cure it? | The block |
+|---|---|---|---|
+| `200` (any 2xx), `stored` | `Stored` | settled | leaves the backlog; refused tables as under "Answers to a block" |
+| `200`, `duplicate`, with `refused` or with `"refusedKnown":false` | `Duplicate` | settled | leaves the backlog; the refusals listed are applied |
+| `200`, `allRefused` | `AllRefused` | no | dropped, every row counted, the reasons applied |
+| `200`, an outcome this version does not know, or a body that is not JSON | `Stored`, reported once | settled: a `200` settles a block | leaves the backlog |
+| `400`, and every 4xx not named below | `Invalid` | no: the same frame would be refused again | dropped, every row counted, reported |
+| `408`, `429` | `NotDelivered`, with `retryAfter` | yes | kept at the head, same producer and sequence |
+| `503`, `500`, every other 5xx | `NotDelivered`, with `retryAfter` (capped at 5 minutes) | yes | kept at the head, same producer and sequence |
+| any other status (1xx, 3xx, below 100, 600 and above) | `NotDelivered`; the connection is closed with `1002` | yes | kept |
+| no ack within `RequestTimeout` | none: the connection is closed | yes | the same frame on the next connection |
+
+**A refused upgrade**, by status (the statuses are the server's, `CollectorSessionHandler.HandleAsync`). In every
+case the blocks wait in the backlog under its bound (`MaxTableBacklogBytes`; the oldest are dropped and counted), and
+the refusal is reported once until it changes.
+
+| Status | What the server says | The collector |
+|---|---|---|
+| `404` | table connections are off (`CollectorSessions.MaxTableFrameBytes = 0`), or sessions are | asks again every 5 minutes (`SessionTimings.TableRefusedRetry`) and with the next session (a restarted server comes with one) |
+| `400` | it does not know `hsm.tables.v1` (a server before table sensors) | asks again every 5 minutes and with the next session |
+| `409` | `X-Hsm-Session` names no live session of this key | no further attempt with that session; the next session is the next chance |
+| `406` | the key cannot send | tries again with the session's backoff |
+| `503` | it is shutting down | tries again with the session's backoff |
+| any other, no answer within the open timeout, a connection that fails | | tries again with the session's backoff |
+
+**A close**, and the end of the session:
+
+| What ended the connection | The collector |
+|---|---|
+| `1013` from the server: its wait for the table frame budget passed its bound, the block was not stored | opens a connection again after the session's backoff with jitter and sends the same frame; the block is never dropped for it |
+| `1000` from the server: replaced by a newer table connection, or its session ended | waits for the end of its own session or one backoff, whichever is first, then connects under the session that is up |
+| the collector's session ended, or a new session is up | closes the table connection and opens one that names the new `sessionId`; the block in flight is sent again on it |
+| `1001` (shutdown), `1008` (the key can no longer send), `1002` / `1007` / `1009`, a connection lost without a close | opens a connection again after the backoff; the block is kept |
+
+The server holds **one large-frame reservation per access key**, so collectors that share a key and send frames over
+64 KiB are served one after another, and one that waits past the server's bound (180 s by default) is closed with
+`1013`. The collector's answer is always the same frame again; collectors that see `1013` repeatedly need keys of
+their own (the server's log names the key as the cause).
+
+**A hello with smaller limits than a block was packed for** (a server reconfigured between two connections, or a
+block packed before the first hello): the put answers `TooLarge` without sending, and the pipeline reads the rows
+back from the block and packs them again into blocks that fit, in the block's place, each of at most half the
+block's rows (whatever limits the pipeline reads at that moment: the put may have judged by a newer hello); a row that
+breaks a limit on its own is dropped and counted as too large. A `TooLarge` for a block of one row is final: the row
+is dropped and counted as too large, reported once. So every `TooLarge` removes the head or halves it: the answers
+`TooLarge` to the rows of one block are at most twice its rows, and no answer keeps the delivery loop turning without
+progress or a wait. The new blocks take its sequence, or the next one when the block may have reached the server: a
+put of it ended without an answer, or this put wrote its frame on a connection that was lost before the ack (the put
+says so with its `TooLarge`). The blocks behind it, which were never put, are numbered after them. So a sequence
+that was on the wire is never given to other rows, and the next sequence never goes back below one.
+
+**Stop.** The table drain ends by closing the table connection (`ITableBlockChannel.CloseAsync`, which is
+`TableConnection.StopAsync` with a linger of one second), before the session is closed: a close frame `1000` (written
+even when the budget is spent; it is bounded by 250 ms on its own), then the server's answer for at most a second or
+what is left of the budget, then the socket is aborted and the connection's loop is waited for, up to a second. That
+last wait is outside the drain budget: the loop ends as soon as its socket is aborted, so it is short in practice, and
+it is kept so that the table connection is down before the session's close is sent. A stop can so pass its drain
+budget by at most about 1.25 s (the close frame and the wait for the loop). A block in flight when the budget ends
+stays in the backlog and the run's close counts its rows once, as not delivered at stop. The next `Start` starts the
+loop again and opens nothing until a registration of the new run was accepted.
+
+**Dispose**, and the rollback of a failed start, close the run without delivering (`TablePipeline.StopWithoutFlushAsync`,
+also reached from `TablePipeline.Dispose` and from the terminal stop of `DataCollector.Dispose`): the run's tick and
+delivery loop are ended (the wait for the delivery loop is at most a second), the table connection is closed through
+the same `CloseAsync` with a budget already spent, so the close frame `1000` is still written (at most 250 ms) and no
+answer is waited for, the socket is aborted and the connection's loop is waited for up to a second; then everything
+the run holds is dropped and counted. So the table part of a dispose blocks the host for at most about 2.25 s (in
+practice milliseconds: both loops end on their cancellation) and never throws, from any state.
+`TableConnection.Dispose` itself (the session sender's dispose, after that) only cancels and aborts: no handshake, no
+wait.
+
+**.NET Framework.** The code is the same on both targets: `ClientWebSocket` takes the subprotocol, the request
+headers (`Key`, `ClientName`, `X-Hsm-Session`, the collector headers) and fragmented binary messages on net472 as
+on net6.0, and the table connection configures its socket through the session's own `SessionConnection.Configure`.
+What differs: (1) net472 has no per-connection certificate callback, so with `AllowUntrustedServerCertificate` on
+`wss` no session can exist there, and so no table connection: table sensors are `Unavailable`, as decided for the
+session; (2) a refused upgrade says its status differently, in the `HttpWebResponse` of a `WebException` inside the
+`WebSocketException` on .NET Framework and only in the exception's text on .NET 6 (`TableConnection.UpgradeStatus`
+reads both; a status it cannot read is treated as "any other"). Checked on net48: the sockets of `ClientWebSocket`
+do not count against `ServicePointManager.DefaultConnectionLimit` (five to one host with a limit of two), so the
+second socket does not compete with the session or with the host's own requests.
+
 ### Answers to a block
 
 | Answer | What the collector does |
@@ -218,6 +356,9 @@ reported only. More refused than listed (`refusedCount` > 100): reported |
 | `allRefused` | final: dropped, every row counted, the listed reasons applied |
 | `400` | final: dropped, every row counted, reported as an invalid block |
 | `503` / `500` / no answer | kept at the head, sent again with the same producer and sequence on a later tick; a `retryAfter` is honoured (capped at 5 minutes) |
+
+This is what the pipeline does with the answer of its channel; which ack of the table connection gives which answer
+is the table under "The table connection".
 
 ## Loss and its reports
 
@@ -244,12 +385,12 @@ counted on its sensor only, and so is a row added before the first `Start`.
 | backlog full | `MaxTableBacklogBytes` passed: the oldest blocks (never the one being sent) are dropped |
 | refused by the server | refused tables of a block, `allRefused`, `400` |
 | not delivered at stop | what a stop could not deliver |
-| row too large / packing failed | a single row larger than a frame; a fault of the packer |
+| row too large / packing failed | a single row larger than a frame or a block limit of the table connection (at the pack, or a `TooLarge` for a block of one row); a fault of the packer |
 | buffer could not grow | an allocation failed while a sensor's buffer grew (out of memory) |
 
 ## Storage / Persistence
 
-None in part 1: rows and blocks live in memory only, and a new producer id is taken at every `Start`. The opt-in local
+None yet: rows and blocks live in memory only, and a new producer id is taken at every `Start`. The opt-in local
 file of undelivered blocks with its own bound comes with part 3.
 
 ## UI / Operator Visibility
@@ -260,8 +401,9 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 ## Dependencies
 
 - Depends on: `src/api/HSMTableBlocks` (block writer, schema id), `src/api/HSMSensorDataObjects` (registration DTO),
-  the collector session (`aicontext/features/api/wire-contract/feature.md`, "Table sensor registration" and
-  "Table connection"), `CollectorScheduler`, `DataProcessor` (data gate, error channel, stop drain).
+  the collector session and its table connection (`aicontext/features/api/wire-contract/feature.md`, "Table sensor
+  registration" and "Table connection"; the server's side in `aicontext/features/server/collector-session/feature.md`),
+  `CollectorScheduler`, `DataProcessor` (data gate, error channel, stop drain).
 - Used by: applications with dense feeds (ticks).
 
 ## Tests
@@ -280,13 +422,39 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   from every writer, and every delivered row is checked against the run that accepted it (recorded at `AddRow`).
   `QueueOverflowFinalBarTests`: a loss the overflow sensor took after the snapshot of a periodic send in flight is in
   the bar its stop publishes.
+- The table connection, both TFMs, against `ScriptedSessionServer` (which takes the table upgrade, sends a hello with
+  settable limits, decodes each binary frame with the block reader and answers it as scripted): `TableConnectionTests`:
+  the upgrade, hello and probe; every ack status; a lost ack and its `duplicate` (the end of the wait is decided by the
+  test through `AckDeadlineForTests`, not by a clock); `1013`; `1000`; each upgrade refusal (404, 400, 409, 406, 503)
+  and the 404 / 400 asked again with the next session; a block in flight across a new session; splitting by the
+  hello's frame limit and block limits, a block packed before a smaller hello, and one packed again after a lost ack
+  (new sequences, never the stored block's); a stop with a block in flight; a binary frame, an oversized frame, a text
+  that is not JSON and a foreign ack from the server; the heartbeat; start, stop, start; dispose and stop from every
+  state; no table connection object without a table sensor.
+- End to end, net8.0, the Docker-backed lane: `TableSensorEndToEndTests` registers a table sensor on the real server,
+  delivers rows at a tick and in the stop drain, and reads them back through `POST api/sensors/tableHistory`.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver and, since 0.15.0,
-  the native driver (tables build; see "Native collector").
+  the native driver (tables build; see "Native collector"); `table_connection_contract.hsmtest` through the .NET
+  driver on the scripted session server; the native driver marks the verbs of the table connection
+  `CONFORMANCE-UNSUPPORTED (#1848)` and does not run that fixture until the table connection of step 6.
 
 ## Known Issues / Limitations
 
-- Part 1 has no table connection: blocks are not delivered by the session sender yet (part 2).
 - No local file: a crash or a stop that cannot deliver loses what is held (counted); a restart takes a new producer id.
+- **Rows can be stored twice after a smaller hello.** A block whose frame went out without an answer (a lost ack) may
+  be on the server. When a connection's hello then allows less than that block needs, its rows are packed again under
+  new sequences after its own, and a server that did store the block stores those rows a second time: it cannot
+  recognise them as a duplicate. A row that the new limits do not take at all is dropped and counted as too large,
+  although the server may hold it in the first block (counted as lost, perhaps stored). It takes a lost ack and a
+  server whose limits were lowered between two connections. What cannot happen: rows lost without a count because a
+  new block took the sequence of a block the server held and was answered `duplicate`.
+- **A `409` is not asked again within its session.** The collector waits for its next session; when the server
+  refused a session that is in fact alive, blocks wait until that session ends.
+- **Collectors that share an access key take turns with frames over 64 KiB** (one reservation per key on the server):
+  see `1013` above. The collector cannot tell that cause from a spent budget; the server's log does.
+- **A block waits for the table connection for at most 15 s per put** and three connections; while the connection
+  cannot be opened, each delivery reports "not delivered" (deduplicated) and the backlog holds the blocks under its
+  bound.
 - `MaxTableBufferBytes` bounds the rows waiting for the tick (8 bytes per column per row). The arrays behind them are
   bounded apart from it: a buffer that grew past 256 rows gives its arrays up when a tick has packed it, so a quiet
   sensor keeps at most two buffers of 256 rows (4 KiB per column); the arrays of a busy sensor follow its rows. A busy
@@ -421,6 +589,15 @@ accepted once and under a run that was accepting during its call). The shared fi
 `tests/conformance/collector/table_sensor_contract.hsmtest` and its must-fail fixture run in the native tables build.
 
 ## Open Points
+
+- Wire contract against the server, found while writing the table connection (the collector follows the server):
+  the contract says the key is checked first (`406` "whatever else is true") and lists `404` before `400`; the
+  server answers `404` for sessions switched off before it looks at the key or at the upgrade, and checks the
+  subprotocol (`400`) before table connections switched off (`404`). A collector with a valid key that offers
+  `hsm.tables.v1` sees no difference; a collector with a bad key against a server without sessions gets `404`, not
+  `406`. And a session that ends between the server's check of `X-Hsm-Session` and the attachment is not a `409`:
+  the upgrade is accepted and closed with `1000` "its session ended" before any hello (the collector reports it and
+  tries again). Either the contract or the server should be made to agree.
 
 - Wire contract: an acknowledgement could carry the number of refused rows (or the indexes of all refused tables), so
   that a collector can count every lost row on its sensor also beyond the first 100 refused tables. A server change.

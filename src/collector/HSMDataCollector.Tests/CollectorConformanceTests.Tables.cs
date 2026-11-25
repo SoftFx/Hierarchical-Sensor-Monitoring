@@ -218,6 +218,9 @@ namespace HSMDataCollector.Tests
         {
             var name = step.Arg(0);
             state.TableSensors[name] = state.Collector.CreateTableSensor(ExpandTextToken(name), TableOptions(step.Arg(1), location));
+
+            // On a session collector the first table sensor makes the table connection: its wait for an ack is set now.
+            ConfigureTableConnection(state);
         }
 
         // name:type pairs, comma-separated; type double or int64. "none" declares no column.
@@ -328,6 +331,8 @@ namespace HSMDataCollector.Tests
 
             Task<TableBlockAck> ITableBlockChannel.PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token) =>
                 Tables.PutBlockAsync(producer, sequence, block, token);
+
+            Task ITableBlockChannel.CloseAsync(CancellationToken budget) => Task.CompletedTask;
         }
     }
 }

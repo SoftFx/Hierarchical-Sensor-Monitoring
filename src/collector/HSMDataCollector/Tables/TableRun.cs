@@ -283,7 +283,17 @@ namespace HSMDataCollector.Tables
 
         internal TableRun Run { get; }
 
-        internal long Sequence { get; }
+        /// <summary>
+        /// The producer sequence. Changed only for a block that was never put, when a block ahead of it is packed again
+        /// into more or fewer blocks: the order stays, and a number that may have reached the server is never reused.
+        /// </summary>
+        internal long Sequence { get; set; }
+
+        /// <summary>
+        /// True once its frame may have reached the server without an answer (a put that ended without one, or a put
+        /// answered TooLarge after an earlier connection of it was lost): the server may hold it under its sequence.
+        /// </summary>
+        internal bool MaybeSent { get; set; }
 
         internal byte[] Bytes { get; }
 
