@@ -96,9 +96,13 @@ test('Markup in a sensor path, a comment and a file is shown as text', async ({ 
       const id = await idOf(text);
       await page.evaluate(node => ($('#jstree') as any).jstree('open_node', node), id);
     };
+    // A page is opened by its own address (/Home/{id}, what a link or a bookmark holds): a full load every
+    // time, with no dependence on what the tree widget is doing at that moment.
+    const ids = new Map<string, string>();
     const select = async (text: string) => {
-      const id = await idOf(text);
-      await page.evaluate(node => (window as any).activateNode('', node), id);
+      const id = ids.get(text)!;
+      await page.goto(`/Home/${id}`);
+      await page.locator('#jstree[aria-busy="false"]').waitFor({ timeout: 15000 });
       return id;
     };
 
@@ -109,11 +113,16 @@ test('Markup in a sensor path, a comment and a file is shown as text', async ({ 
     await expect(anchor(sensorName)).toBeVisible({ timeout: 10000 });
     await expectNoMarkupRan(page);
 
+    for (const name of [nodeName, sensorName, fileSensorName, tableSensorName, pageSensorName])
+      ids.set(name, await idOf(name));
+
     // The sensor page: the full path in the header, the comment next to the status.
     const sensorId = await select(sensorName);
     await expect(page.locator('#nodeHeader')).toContainText(`${productName}/${nodeName}/${sensorName}`, { timeout: 10000 });
+    // The comment is sanitized when it is received: its text stays, the element in it is dropped.
     await expect(page.locator('[id^="errorInfo_"]')).toContainText('one < two');
     await expect(page.locator('[id^="errorInfo_"]')).toContainText('end');
+    await expect(page.locator('[id^="errorInfo_"]')).not.toContainText('onerror');
     await expectNoMarkupRan(page);
 
     // Removing the sensor asks about its path: the question shows the path, as typed.
@@ -156,10 +165,10 @@ test('Markup in a sensor path, a comment and a file is shown as text', async ({ 
     await expectNoMarkupRan(page);
 
     expect(dialogs).toEqual([]);
-
-    await page.goto('/Product/Index');
-    await cleanup.product(page, productName);
   } finally {
+    // Also after a failure: a product left behind would keep its markup-named nodes in the tree.
+    await page.goto('/Product/Index').catch(() => {});
+    await cleanup.product(page, productName);
     await page.close();
   }
 });

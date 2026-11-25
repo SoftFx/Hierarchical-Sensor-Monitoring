@@ -17,11 +17,12 @@ Two rules of the cookie-authenticated web UI live here.
 ### Access by id
 
 - A sensor or node is **visible** to a user when the user is an admin or holds any role (Viewer or Manager) on its **root product**. A folder is visible when the user is an admin, holds a role on the folder, or sees at least one of its products. This is the rule the tree itself is built by (`TreeViewModel.GetUserProducts`, `VisibleTreeViewModel`).
-- A folder role does not imply a role on every product in the folder (a per-product role removal narrows it). A folder therefore shows a user only the products they see: in its children list, in its journal, and when an action fans out over the folder (Grafana switch, mute).
+- A folder role does not imply a role on every product in the folder (a per-product role removal narrows it). A folder therefore shows a user only the products they see: in its children list, in its panel statistics, in its journal, and when an action fans out over the folder (the Grafana switch). A folder's own settings are inherited by every product in it, so changing them (`UpdateFolderInfo`) needs the folder Manager role, as the bulk edit already does.
 - An id the user cannot see is answered **exactly like an unknown id**, and nothing changes: no data, no name in an error text, nothing connected to the user's state, nothing opened in the user's tree, no write.
 - `UserTreeAccess` answers visibility only. Whether a user may **change** what they see (Manager role) is checked by the action or the service it calls (`RemoveNode`, `EditAlerts`, the sensor move, the policy lists through `CookieUserAccess`).
-- **Per-user state is checked again by its readers.** `SelectNode` connects the selected entity to state kept on the `User` object: the children pages (`SelectedNode`), the history table (`History.Table`), the journal (`Journal`). That state outlives the request and a role change, so every reader checks that the connected entity is still visible: `GetGrid`/`GetList`, `TableHistory` and the table pages, `ExportHistory`, the recent files of a file sensor, `JournalController.GetPage`.
-- The history table belongs to the connected sensor. A request that names another sensor is not answered from it (recent files), and both the named and the connected sensor must be visible (table, export).
+- **Per-user state is checked again by its readers.** `SelectNode` connects the selected entity to state kept on the `User` object: the children pages (`SelectedNode`), the history table (`History.Table`), the journal (`Journal`). That state outlives the request and a role change, so every reader checks it again, per request: `GetGrid`/`GetList` (a folder's product list is taken anew), `TableHistory` and the table pages, `ExportHistory`, the recent files of a file sensor, `JournalController.GetPage` (of the loaded records only those of sensors and nodes visible now are paged and counted).
+- The history table in the user's state belongs to one sensor: the last one selected, in any browser tab. A table, export or recent-files request names its sensor; after the lookup the state is connected to that sensor, so the rows served are the rows of the sensor asked for. The "new values" counter is reported only for the sensor it counts.
+- Database compaction and export (`Compact`, `Export`) and unsealing act on the whole database and are admin-only.
 - A new action in these controllers resolves ids through `UserTreeAccess` and nothing else. Do not inject `TreeViewModel` into a controller that takes ids from the client.
 
 ### Text in pages
@@ -31,7 +32,7 @@ Two rules of the cookie-authenticated web UI live here.
 - A name is never written into an inline event handler or a script string literal. Razor's HTML encoding does not protect there: the browser decodes the attribute before running it, and a template literal still evaluates `${...}`. Pass it as a `data-` attribute read with `dataset`, or as `@Json.Serialize(value)`.
 - Script: text that joins an HTML string goes through `escapeHtml` (site.js). `showToast` and `showConfirmationModal` take ready HTML and pass it through `sanitizeHtml` (DOMPurify) as a second line; callers still escape the names and paths they put in. Values set into an element use `.text()`.
 - HTML built in C# for a table that inserts cells as markup (the per-node journal table, DataTables) encodes each piece of recorded text where the cell is built (`JournalRecordViewModel`, `JournalController.GetPage`).
-- File sensors: the text preview sets text; the table (CSV) preview renders cells with DataTables' text renderer; "Preview" in a new tab shows any non-PDF file inside a sandboxed frame (`sandbox` without `allow-same-origin`), so a page from a file runs its own scripts in an origin of its own and cannot reach the site's cookies, storage or pages.
+- File sensors: a preview requests the file as text (`dataType: "text"`), so the response is never taken for a script by its content type; the text preview sets text; the table (CSV) preview renders cells with DataTables' text renderer; "Preview" in a new tab shows any non-PDF file inside a sandboxed frame (`sandbox` without `allow-same-origin`), so a page from a file runs its own scripts in an origin of its own and cannot reach the site's cookies, storage or pages.
 
 ## Primary Workflows
 
@@ -78,13 +79,14 @@ A refused id looks like a missing one: the node panel shows "No Data", tables an
 
 ## Tests
 
-- `HomeControllerAccessTests`, `SensorHistoryControllerAccessTests` (`src/tests/HSMServer.Core.Tests/Controllers`): every id-addressed action asked by a member of the product, a user of another product and an admin; the per-user state after a role is taken away; a folder with products the user does not see. Shared tree: `WebAccessFixture`.
-- `EncodedOutputViewTests` (`.../Views`): the fixed views rendered through the Razor engine (`ViewRenderer`) with names made of markup.
+- `HomeControllerAccessTests`, `SensorHistoryControllerAccessTests` (`src/tests/HSMServer.Core.Tests/Controllers`): every id-addressed action asked by a member of the product, a user of another product and an admin; the per-user state after a role is taken away; a folder with products the user does not see, and one where a role is taken from one of its products; folder settings by role; requests that name another sensor than the selected one. Shared tree: `WebAccessFixture`.
+- `EncodedOutputViewTests` (`.../Views`): the fixed views rendered through the Razor engine (`ViewRenderer`) with names made of markup; the tree metadata with a quoted name.
 - `JournalRecordEncodingTests` (`.../Journal`): the Record cell.
 - `home/collector_text_is_shown_as_text.spec.ts` (`src/tests/Autotests`): a sensor registered through the Sensor API with markup in its path, comment and files, walked through the tree, the sensor page, the removal dialog and the file previews.
 
 ## Known Issues / Limitations
 
 - Visibility is not the Manager role: `UserTreeAccess` never answers whether a user may change an entity. A write action carries its own role check.
-- The check is per request at the level of the selected entity. A folder's children list and journal are filtered when the folder is selected; a role taken away from one of its products takes effect on the next selection.
+- A folder's journal is loaded when the folder is selected, for the products visible then. Records of a product that stops being visible are left out from the next page on; a product that becomes visible later shows its records after the folder is selected again.
+- Comments are stored sanitized (HTML with the text already encoded). Where one is written through a text-only path (the recent files list, a journal record of a manual status change), `<` and `&` typed in the comment show as entities.
 - Dashboards, the alert template pages and the product, folder and access key administration pages have their own controllers and are outside this feature.
