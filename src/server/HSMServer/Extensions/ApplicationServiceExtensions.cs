@@ -69,8 +69,10 @@ namespace HSMServer.ServiceExtensions
             // The put and read of table blocks (#1844), for the transport of step 3 (#1845). Constructed on first
             // resolve; its constructor opens nothing (the store opens on the first put or read, and the first put raises
             // the sequence floor), so a block store that cannot open costs table puts only.
-            services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => new HSMServer.Core.TableSensors.TableBlockService(
+            // The same instance owns the hourly merge (#1850), run by TableMergeService.
+            services.AddSingleton(provider => new HSMServer.Core.TableSensors.TableBlockService(
                 provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.TableSensors.ToOptions()));
+            services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
@@ -254,6 +256,7 @@ namespace HSMServer.ServiceExtensions
                     .AddHostedService<BackgroundServices.DatabaseServices.ApiTokenRetentionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistoryCompactionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistorySealingService>()
+                    .AddHostedService<BackgroundServices.DatabaseServices.TableMergeService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>

@@ -31,6 +31,19 @@ namespace HSMServer.Core.TableSensors
         /// defect found in that time loses nothing. Reads take a merged hour from its batches and ignore those blocks.
         /// </summary>
         public int DeleteMergedBlocksAfterHours { get; init; } = DefaultDeleteMergedBlocksAfterHours;
+
+        public const int DefaultMergeMemoryBudgetMb = 256;
+
+        /// <summary>
+        /// The memory the merge of one product's hour may take for its rows (#1850), estimated per row by its table's columns
+        /// (<see cref="TableMergeJob.RowBytes"/>: 8 bytes and a null bit a cell, 20 a row: 45 for 3 columns, 280 for 32) plus
+        /// what the block reader allocates per table of a block (<see cref="TableMergeJob.TableBytes"/>: 104 + its id, 80 a
+        /// column): an hour above it is merged in several passes over its blocks, each keeping a share of the tables.
+        /// </summary>
+        public int MergeMemoryBudgetMb { get; init; } = DefaultMergeMemoryBudgetMb;
+
+        /// <summary>How long after its end an arrival hour is merged: blocks of a put in flight at the boundary are in by then.</summary>
+        public TimeSpan MergeGrace { get; init; } = TimeSpan.FromMinutes(2);
     }
 
 
@@ -91,7 +104,14 @@ namespace HSMServer.Core.TableSensors
 
         public string Message { get; init; }
 
-        public int AcceptedTables => Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate ? TableCount - RefusedCount : 0;
+        /// <summary>
+        /// The tables taken: for <see cref="TableBlockPutOutcome.Stored"/> and <see cref="TableBlockPutOutcome.Duplicate"/> the
+        /// tables not refused (by <see cref="RefusedCount"/>, the exact count), 0 for a refusal; null when
+        /// <see cref="RefusalsKnown"/> is false (a duplicate whose hour was merged, or whose envelope cannot be read): which
+        /// tables were taken is not known then.
+        /// </summary>
+        public int? AcceptedTables => !RefusalsKnown ? null
+            : Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate ? TableCount - RefusedCount : 0;
     }
 
 
@@ -153,5 +173,11 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>Blocks that could not be read (missing or damaged); their rows are not in the result.</summary>
         public int BlocksFailed { get; init; }
+
+        /// <summary>Batches of merged hours decoded for the read (#1850).</summary>
+        public int BatchesRead { get; init; }
+
+        /// <summary>Batches that could not be read (a damaged record or batch); their rows are not in the result.</summary>
+        public int BatchesFailed { get; init; }
     }
 }

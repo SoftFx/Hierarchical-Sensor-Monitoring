@@ -50,6 +50,9 @@ namespace HSMServer.ServerConfiguration
         // How long the blocks of a merged hour are kept after the hour is committed (#1850); 0 deletes them at once.
         public int DeleteMergedBlocksAfterHours { get; set; } = TableBlockOptions.DefaultDeleteMergedBlocksAfterHours;
 
+        // The memory the merge of one product's hour may take for its rows (#1850); a larger hour is merged in several passes.
+        public int MergeMemoryBudgetMb { get; set; } = TableBlockOptions.DefaultMergeMemoryBudgetMb;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -66,6 +69,7 @@ namespace HSMServer.ServerConfiguration
             Check(MaxTextReadRows, int.MaxValue, nameof(MaxTextReadRows));
             Check(MaxConcurrentReads, 1024, nameof(MaxConcurrentReads));
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
+            Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
 
             if (DeleteMergedBlocksAfterHours < 0 || DeleteMergedBlocksAfterHours > 8760)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(DeleteMergedBlocksAfterHours)} = {DeleteMergedBlocksAfterHours} is invalid: expected 0..8760 hours.");
@@ -80,6 +84,7 @@ namespace HSMServer.ServerConfiguration
                 MinFreeDiskMb = MinFreeDiskMb,
                 MaxOpenBatchDatabases = MaxOpenBatchDatabases,
                 DeleteMergedBlocksAfterHours = DeleteMergedBlocksAfterHours,
+                MergeMemoryBudgetMb = MergeMemoryBudgetMb,
             };
         }
 

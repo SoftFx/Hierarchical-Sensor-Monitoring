@@ -140,12 +140,213 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(merged ? 1 : 0, reopened.GetHours(_product).Count);
             Assert.Equal(partsOnDisk, reopened.GetWeeks(_product).Count);
 
-            // The merge runs the hour again: the parts already written are skipped, the hour is committed once.
+            // The merge runs the hour again: the parts already written are written again, the hour is committed once.
             reopened.WriteHour(_product, Commit(Week0), TwoParts());
             Assert.True(reopened.IsHourMerged(_product, Week0));
             Assert.Equal(2, reopened.ReadSensor(_product, _sensorA, 1, [Week0]).Count);
             Assert.Equal(1, reopened.ReadSensor(_product, _sensorB, 4, [Week0]).Count);
             Assert.Equal([1, 4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+        }
+
+        // === A repeat that differs from the crashed run ===
+
+        // The first run writes its parts and crashes before the commit.
+        private TableBatchDatabase CrashBeforeCommit(TableBatchHourCommit commit, TableBatchHourPart[] parts)
+        {
+            var store = Open();
+            store.Checkpoint = p =>
+            {
+                if (p == "before-commit")
+                    throw new CheckpointException(p);
+            };
+
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, commit, parts));
+            store.Dispose();
+            return Open();
+        }
+
+        // Hours removed: the next open rebuilds it from the marks.
+        private TableBatchDatabase RebuildHours(TableBatchDatabase store)
+        {
+            store.Dispose();
+            Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName), recursive: true);
+            return Open();
+        }
+
+        [Fact]
+        public void A_repeat_with_another_batch_split_rewrites_the_part()
+        {
+            var store = CrashBeforeCommit(Commit(Week0), [Part(4, (_sensorA, 0, 2))]);
+
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 3))]);
+
+            Assert.Equal([0, 1, 2], store.ReadSensor(_product, _sensorA, 4, [Week0]).Select(r => r.Ordinal));
+            Assert.Equal(3, store.GetHours(_product).Single().Classes.Single().Batches);
+            Assert.Equal(1, store.Statistics.PartsRewritten);
+            Assert.Equal(3, RebuildHours(store).ReadSensor(_product, _sensorA, 4, [Week0]).Count);
+        }
+
+        [Fact]
+        public void A_repeat_with_another_list_of_unreadable_blocks_rewrites_the_part_and_a_rebuild_restores_the_committed_record()
+        {
+            // The first run could not read block 42 and wrote one batch; the repeat read it and writes two.
+            var store = CrashBeforeCommit(Commit(Week0) with { UnreadableBlocks = [42] }, [Part(4, (_sensorA, 0, 1))]);
+
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 2))]);
+
+            Assert.Equal(2, store.ReadSensor(_product, _sensorA, 4, [Week0]).Count);
+            Assert.Empty(store.GetHour(_product, Week0).UnreadableBlocks);
+            Assert.Equal(1, store.Statistics.PartsRewritten);
+
+            var rebuilt = RebuildHours(store);
+            Assert.Empty(rebuilt.GetHour(_product, Week0).UnreadableBlocks);
+            Assert.Equal(2, rebuilt.ReadSensor(_product, _sensorA, 4, [Week0]).Count);
+        }
+
+        [Fact]
+        public void A_sensor_moved_to_another_class_between_the_runs_leaves_no_part_in_the_old_class_and_its_rows_are_read_once()
+        {
+            // The first run: sensor A in class 1, sensor B in class 4. The repeat: A in class 4 too.
+            var store = CrashBeforeCommit(Commit(Week0), [Part(1, (_sensorA, 0, 2)), Part(4, (_sensorB, 100, 1))]);
+
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 2), (_sensorB, 100, 1))]);
+
+            Assert.Empty(store.ReadSensor(_product, _sensorA, 1, [Week0]));
+            Assert.Equal(2, store.ReadSensor(_product, _sensorA, 4, [Week0]).Count);
+            Assert.Single(store.ReadSensor(_product, _sensorB, 4, [Week0]));
+            Assert.Equal([4], store.GetHour(_product, Week0).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(2, store.Statistics.PartsRewritten); // P1 deleted, P4 written again
+
+            // The old class's database holds nothing of the hour, its mark included: a rebuild restores the committed record.
+            var rebuilt = RebuildHours(store);
+            Assert.Equal([4], rebuilt.GetHour(_product, Week0).Classes.Select(c => c.PeriodWeeks));
+            Assert.Empty(rebuilt.ReadSensor(_product, _sensorA, 1, [Week0]));
+            Assert.Equal(2, rebuilt.ReadSensor(_product, _sensorA, 4, [Week0]).Count);
+        }
+
+        [Fact]
+        public void A_rebuild_does_not_commit_an_hour_whose_marks_disagree()
+        {
+            // The first run writes both parts with one block unreadable and crashes before the commit.
+            var store = CrashBeforeCommit(Commit(Week0) with { UnreadableBlocks = [42] }, TwoParts());
+
+            // The repeat read the block: it rewrites the P1 part and crashes before the P4 part.
+            store.Checkpoint = p => { if (p == "part-written") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), TwoParts()));
+            store.Checkpoint = null;
+            Assert.False(store.IsHourMerged(_product, Week0));
+
+            // Every class the records name has a mark, but the marks are of two runs: the hour is not merged.
+            var rebuilt = RebuildHours(store);
+            Assert.False(rebuilt.IsHourMerged(_product, Week0));
+            Assert.Equal(0, rebuilt.Statistics.HoursRebuilt);
+
+            // The merge repeats it and commits the record of the repeat.
+            rebuilt.WriteHour(_product, Commit(Week0), TwoParts());
+            Assert.Empty(rebuilt.GetHour(_product, Week0).UnreadableBlocks);
+            Assert.Equal(2, rebuilt.Statistics.PartsRewritten);
+            Assert.Equal([1, 4], RebuildHours(rebuilt).GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+        }
+
+        [Fact]
+        public void A_repeat_equal_to_the_crashed_run_writes_its_parts_again_and_they_are_read_once()
+        {
+            var store = CrashBeforeCommit(Commit(Week0), TwoParts());
+
+            store.WriteHour(_product, Commit(Week0), TwoParts());
+
+            Assert.Equal(3, store.Statistics.BatchesWritten);
+            Assert.Equal(2, store.Statistics.PartsRewritten);
+            Assert.True(store.IsHourMerged(_product, Week0));
+            Assert.Equal(2, store.ReadSensor(_product, _sensorA, 1, [Week0]).Count);
+            Assert.Single(store.ReadSensor(_product, _sensorB, 4, [Week0]));
+        }
+
+        [Fact]
+        public void Two_sensors_that_swapped_classes_between_the_runs_are_each_stored_once_in_their_new_class()
+        {
+            // One row each at the same time: the parts of the two runs have the same counts and ranges per class.
+            var store = Open();
+            store.Checkpoint = p => { if (p == "part-written") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 1)), Part(4, (_sensorB, 0, 1))]));
+            store.Checkpoint = null;
+
+            // A is in P4 now, B in P1.
+            store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorB, 0, 1)), Part(4, (_sensorA, 0, 1))]);
+
+            Assert.Empty(store.ReadSensor(_product, _sensorA, 1, [Week0]));
+            Assert.Single(store.ReadSensor(_product, _sensorA, 4, [Week0]));
+            Assert.Single(store.ReadSensor(_product, _sensorB, 1, [Week0]));
+            Assert.Empty(store.ReadSensor(_product, _sensorB, 4, [Week0]));
+        }
+
+        [Fact]
+        public void A_rebuild_does_not_commit_parts_of_two_runs_with_the_same_metadata_and_another_commit_time()
+        {
+            var time = new DateTime(2026, 11, 2, 1, 7, 0, DateTimeKind.Utc);
+            var store = Open(clock: () => time);
+            store.Checkpoint = p => { if (p == "before-commit") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), TwoParts()));
+
+            // The repeat, a minute later, writes the P1 part again and stops before the P4 part.
+            time = time.AddMinutes(1);
+            store.Checkpoint = p => { if (p == "part-written") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), TwoParts()));
+            store.Checkpoint = null;
+
+            var rebuilt = RebuildHours(store);
+            Assert.False(rebuilt.IsHourMerged(_product, Week0));
+            Assert.Equal(0, rebuilt.Statistics.HoursRebuilt);
+        }
+
+        [Theory]
+        [InlineData("part-written")]  // the part of the new record written, the old class's part not removed yet
+        [InlineData("stale-removed")] // the old class's part removed, the commit not written
+        public void A_repeat_that_moved_a_sensor_and_crashed_leaves_no_rebuilt_hour_without_its_rows(string point)
+        {
+            // The first run: A in P1, B in P4; it crashes before the commit.
+            var store = CrashBeforeCommit(Commit(Week0), [Part(1, (_sensorA, 0, 2)), Part(4, (_sensorB, 100, 1))]);
+
+            // B moved to P1: the repeat's record names P1 only, and the repeat crashes.
+            store.Checkpoint = p => { if (p == point) throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 2), (_sensorB, 100, 1))]));
+            store.Checkpoint = null;
+
+            // Retention drops the P4 database and the merged hours are lost: the rebuild commits the hour only with B's rows.
+            store.DropWeek(_product, new TableBatchWeek(Week0, 4));
+            var rebuilt = RebuildHours(store);
+
+            Assert.True(rebuilt.IsHourMerged(_product, Week0));
+            Assert.Equal([1], rebuilt.GetHour(_product, Week0).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(2, rebuilt.ReadSensor(_product, _sensorA, 1, [Week0]).Count);
+            Assert.Single(rebuilt.ReadSensor(_product, _sensorB, 1, [Week0]));
+        }
+
+        [Fact]
+        public void The_database_a_repeat_removed_a_part_from_is_flushed_when_the_next_week_is_written()
+        {
+            var store = CrashBeforeCommit(Commit(Week0), [Part(1, (_sensorA, 0, 2)), Part(4, (_sensorB, 100, 1))]);
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 2), (_sensorB, 100, 1))]);
+
+            var week0 = store.WeekPath(_product, Week0, 1);
+            Assert.Contains(Directory.GetFiles(week0, "*.log"), f => new FileInfo(f).Length > 0);
+
+            store.WriteHour(_product, Commit(Week0 + Week), [Part(4, (_sensorA, 0, 1))]);
+
+            Assert.All(Directory.GetFiles(week0, "*.log"), f => Assert.Equal(0, new FileInfo(f).Length));
+        }
+
+        [Fact]
+        public void A_repeat_that_crashed_before_removing_the_old_class_part_is_not_rebuilt_while_that_part_is_there()
+        {
+            var store = CrashBeforeCommit(Commit(Week0), [Part(1, (_sensorA, 0, 2)), Part(4, (_sensorB, 100, 1))]);
+
+            store.Checkpoint = p => { if (p == "part-written") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 2), (_sensorB, 100, 1))]));
+            store.Checkpoint = null;
+
+            // The P1 mark is the repeat's, the P4 mark the first run's: not committed, the hour stays on its blocks.
+            Assert.False(RebuildHours(store).IsHourMerged(_product, Week0));
         }
 
         [Fact]
@@ -230,6 +431,40 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal([Week0, Week0 + Hour], reopened.GetHours(_product).Select(h => h.HourTicks));
             Assert.Equal(2L, reopened.GetWatermarks(_product)[_producer]);
             Assert.Equal(2, reopened.Statistics.HoursRebuilt);
+        }
+
+        [Fact]
+        public void The_commit_time_of_an_hour_survives_a_restart()
+        {
+            var committedAt = new DateTime(2026, 11, 2, 1, 7, 0, DateTimeKind.Utc);
+            var store = Open(clock: () => committedAt);
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
+            Assert.Equal(committedAt.Ticks, store.GetHours(_product).Single().CommitTicks);
+            store.Dispose();
+
+            var reopened = Open(clock: () => committedAt.AddDays(3));
+            Assert.Equal(committedAt.Ticks, reopened.GetHours(_product).Single().CommitTicks);
+        }
+
+        [Fact]
+        public void A_rebuilt_merged_hours_database_takes_the_time_of_the_rebuild_as_the_commit_time()
+        {
+            var committedAt = new DateTime(2026, 11, 2, 1, 7, 0, DateTimeKind.Utc);
+            var store = Open(clock: () => committedAt);
+            store.WriteHour(_product, Commit(Week0, sequence: 4), [Part(4, (_sensorA, 0, 1))]);
+            store.Dispose();
+
+            Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName), recursive: true);
+
+            var rebuiltAt = committedAt.AddDays(2);
+            var reopened = Open(clock: () => rebuiltAt);
+            var hour = Assert.Single(reopened.GetHours(_product));
+            Assert.Equal(rebuiltAt.Ticks, hour.CommitTicks);
+            Assert.Equal(4L, reopened.GetWatermarks(_product)[_producer]);
+            reopened.Dispose();
+
+            // Written to the rebuilt database: the next open reads the rebuild time back.
+            Assert.Equal(rebuiltAt.Ticks, Open(clock: () => rebuiltAt.AddDays(1)).GetHours(_product).Single().CommitTicks);
         }
 
         [Fact]
@@ -464,6 +699,32 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal([4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
         }
 
+        [Fact]
+        public void A_drop_whose_removal_of_hours_fails_is_a_counted_store_fault_and_the_hours_stay_hidden()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), TwoParts());
+            store.WriteHour(_product, Commit(Week0 + Hour), [Part(1, (_sensorA, 0, 1))]);
+            Assert.Equal(2, store.GetHours(_product).Count); // a snapshot of the hours taken before the drop
+
+            store.Checkpoint = p => { if (p == "drop-hours") throw new IOException("write failure injected by the test"); };
+            Assert.Throws<TableBatchStoreException>(() => store.DropWeek(_product, new TableBatchWeek(Week0, 1)));
+            store.Checkpoint = null;
+
+            Assert.Equal(1, store.Statistics.WriteFailures);
+            Assert.False(Directory.Exists(store.WeekPath(_product, Week0, 1)));
+            Assert.Equal([new TableBatchWeek(Week0, 4)], store.GetWeeks(_product));
+
+            // The second hour had only the dropped class: hidden from the reads, in memory and after a reopen.
+            var hour = Assert.Single(store.GetHours(_product));
+            Assert.Equal([4], hour.Classes.Select(c => c.PeriodWeeks));
+            store.Dispose();
+
+            var reopened = Open();
+            Assert.Equal([Week0], reopened.GetHours(_product).Select(h => h.HourTicks));
+            Assert.Equal([4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+        }
+
         // === Dispose ===
 
         [Fact]
@@ -664,9 +925,11 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
 
         // === Helpers ===
 
-        private TableBatchDatabase Open(long writeBufferSize = 8L * 1024 * 1024, Func<string, Options, DB> open = null, string root = null)
+        private TableBatchDatabase Open(long writeBufferSize = 8L * 1024 * 1024, Func<string, Options, DB> open = null, string root = null, Func<DateTime> clock = null)
         {
             var store = new TableBatchDatabase(root ?? _root, writeBufferSize, open);
+            if (clock is not null)
+                store.Clock = clock;
             _stores.Add(store);
             return store;
         }
