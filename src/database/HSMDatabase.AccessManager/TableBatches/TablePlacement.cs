@@ -14,29 +14,42 @@ namespace HSMDatabase.AccessManager.TableBatches
     /// before a change of the sensor's period and not moved yet. The class of an hour is <see cref="ClassOf"/>: the merge
     /// writes an hour's rows of the sensor into it and every read looks there, so the two never disagree. Kept durably by
     /// the batch store, per product (<see cref="ITableBatchStore.SetPlacement"/>).
+    /// <para>
+    /// <see cref="FirstHour"/> is the first merge hour the sensor can have rows in, recorded when the placement is first
+    /// written. No segment reaches before it: a segment says "rows of this sensor may be in that class for these hours",
+    /// which retention reads as a reason to keep a week database, and a sensor has no rows before its first hour.
+    /// </para>
     /// </summary>
     public sealed record TablePlacement
     {
-        public TablePlacement(int target, IReadOnlyList<TablePlacementSegment> segments = null)
+        public TablePlacement(int target, long firstHour, IReadOnlyList<TablePlacementSegment> segments = null)
         {
             if (target < 0 || target > ushort.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(target), target, "a period class of 0 to 65,535 weeks");
 
             Target = target;
+            FirstHour = firstHour;
             Segments = segments ?? [];
 
             for (int i = 0; i < Segments.Count; i++)
             {
                 var s = Segments[i];
                 if (s.FirstHour >= s.EndHour || s.PeriodWeeks == target || s.PeriodWeeks < 0 || s.PeriodWeeks > ushort.MaxValue ||
-                    (i > 0 && s.FirstHour < Segments[i - 1].EndHour))
-                    throw new ArgumentException("Segments are non-empty, ordered, apart, and of a class other than the target.", nameof(segments));
+                    s.FirstHour < (i > 0 ? Segments[i - 1].EndHour : firstHour))
+                    throw new ArgumentException("Segments are non-empty, ordered, apart, not before the first hour, and of a class other than the target.", nameof(segments));
             }
         }
 
 
         /// <summary>The class the sensor's hours are merged into from the last change on (its history setting in whole weeks).</summary>
         public int Target { get; }
+
+        /// <summary>
+        /// The first merge hour the sensor can have rows in: the oldest arrival hour with blocks of its product that was
+        /// not committed when the merge first wrote the placement (the hour it was merging, or an earlier one left behind),
+        /// or, for a placement rebuilt from the indexes, the sensor's first hour with a batch. No segment starts before it.
+        /// </summary>
+        public long FirstHour { get; }
 
         /// <summary>Earlier hours whose rows are in another class, in hour order, apart; hours outside them are in <see cref="Target"/>.</summary>
         public IReadOnlyList<TablePlacementSegment> Segments { get; }
@@ -55,8 +68,9 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// The placement after the sensor's period changes to <paramref name="target"/>, effective from the merge hour
         /// <paramref name="cutoffHour"/> (an hour no part of which can be on disk yet, so a merge that repeats an earlier hour
         /// gives every sensor the class the earlier run gave it). Every hour before it keeps the class it has: the hours in
-        /// the old target before the cut-off become a segment of the old target, and a segment whose class is the new target
-        /// goes (its rows are where the sensor's hours now belong). Hours from the cut-off on take the new target.
+        /// the old target from the first hour to the cut-off become a segment of the old target, and a segment whose class
+        /// is the new target goes (its rows are where the sensor's hours now belong). Hours from the cut-off on take the new
+        /// target. Nothing reaches before <see cref="FirstHour"/>: the sensor has no rows there.
         /// </summary>
         public TablePlacement Retarget(int target, long cutoffHour)
         {
@@ -67,7 +81,7 @@ namespace HSMDatabase.AccessManager.TableBatches
                 throw new ArgumentOutOfRangeException(nameof(cutoffHour), cutoffHour, "the cut-off of a change is never before an earlier change");
 
             var result = new List<TablePlacementSegment>();
-            long covered = long.MinValue;
+            long covered = FirstHour;
 
             foreach (var segment in Segments)
             {
@@ -82,7 +96,7 @@ namespace HSMDatabase.AccessManager.TableBatches
             if (cutoffHour > covered)
                 result.Add(new TablePlacementSegment(covered, cutoffHour, Target));
 
-            return new TablePlacement(target, Merge(result.Where(s => s.PeriodWeeks != target)));
+            return new TablePlacement(target, FirstHour, Merge(result.Where(s => s.PeriodWeeks != target)));
         }
 
         /// <summary>The placement without the hours <c>[firstHour, endHour)</c> in segments: those hours are in the target now (the move).</summary>
@@ -104,7 +118,7 @@ namespace HSMDatabase.AccessManager.TableBatches
                     result.Add(s with { FirstHour = endHour });
             }
 
-            return new TablePlacement(Target, result);
+            return new TablePlacement(Target, FirstHour, result);
         }
 
         // Adjacent segments of one class become one.
@@ -122,8 +136,8 @@ namespace HSMDatabase.AccessManager.TableBatches
         }
 
         public bool Equals(TablePlacement other) =>
-            other is not null && Target == other.Target && Segments.SequenceEqual(other.Segments);
+            other is not null && Target == other.Target && FirstHour == other.FirstHour && Segments.SequenceEqual(other.Segments);
 
-        public override int GetHashCode() => HashCode.Combine(Target, Segments.Count);
+        public override int GetHashCode() => HashCode.Combine(Target, FirstHour, Segments.Count);
     }
 }

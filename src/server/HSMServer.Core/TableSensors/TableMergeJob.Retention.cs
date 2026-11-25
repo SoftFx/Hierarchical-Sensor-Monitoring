@@ -328,7 +328,7 @@ namespace HSMServer.Core.TableSensors
                 if (record.Envelope.IsRefused(i))
                     continue;
 
-                var (sensor, period) = Resolve(product, Path(directory.Entries[i].TableId), resolved, utcNow, hour, create: false);
+                var (sensor, period) = Resolve(product, Path(directory.Entries[i].TableId), resolved, utcNow, hour, createFrom: null);
                 classes.Add(sensor is not null && entry.Sequence >= sensor.FirstSequence ? period : 1);
             }
 
@@ -338,7 +338,7 @@ namespace HSMServer.Core.TableSensors
         // The classes of every table sensor of a product (its whole tree) for the hour; the shortest class when it has none.
         private List<int> ProductClasses(Guid product, long hour, DateTime utcNow)
         {
-            var classes = TableSensorsOf(product).Select(table => PlaceSensor(product, table, utcNow, create: false).ClassOf(hour)).ToList();
+            var classes = TableSensorsOf(product).Select(table => PlaceSensor(product, table, utcNow, createFrom: null).ClassOf(hour)).ToList();
             return classes.Count == 0 ? [1] : classes;
         }
 

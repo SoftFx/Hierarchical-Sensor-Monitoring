@@ -46,7 +46,7 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// </summary>
         public const string PlacementsName = "Placements";
 
-        private const byte PlacementVersion = 1;
+        private const byte PlacementVersion = 2;
 
         internal const byte TagIndex = 0x00;
         internal const byte TagBatch = 0x01;
@@ -1167,8 +1167,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         // batches) name the sensors with batches there. A sensor's rows of an hour are in one database; should two hold them
         // (a move that stopped between its copy and the delete of the source), the hour region is taken: it is the source,
         // complete until it is deleted, which happens only after the switch. A sensor's target is the class of its newest
-        // hour; its earlier runs in another class are its segments, each up to the start of the next run. Only the index
-        // records are read (and the moved region's keys); no batch is decoded. Uncommitted hours are not looked at.
+        // hour; its earlier runs in another class are its segments, each from its own first hour up to the start of the next
+        // run; its first hour is its first hour with a batch (no segment reaches before it). Only the index records are
+        // read (and the moved region's keys); no batch is decoded. Uncommitted hours are not looked at.
         //
         // Nothing is written before the scan has ended: the result and the complete key go in one synced write, which also
         // deletes whatever the database held (it had no complete key, so nothing of it was trusted). A rebuild that stops
@@ -1234,7 +1235,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 for (int i = 0; i < list.Count;)
                 {
                     int period = list[i].Value.Class;
-                    long first = i == 0 ? long.MinValue : list[i].Key;
+                    long first = list[i].Key;
 
                     int j = i;
                     while (j < list.Count && list[j].Value.Class == period)
@@ -1246,7 +1247,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                     i = j;
                 }
 
-                var placement = new TablePlacement(target, segments);
+                var placement = new TablePlacement(target, list[0].Key, segments);
                 rebuilt[sensor] = placement;
                 batch.Put(PlacementKey(sensor), EncodePlacement(placement));
             }
@@ -1284,18 +1285,22 @@ namespace HSMDatabase.LevelDB.TableBatches
             return key;
         }
 
-        // u8 version (1), u16 target, i32 count, per segment i64 first hour, i64 end hour, u16 class. Little-endian.
+        // u8 version (2), u16 target, i64 the sensor's first hour, i32 count, per segment i64 first hour, i64 end hour,
+        // u16 class. Little-endian. Version 1 had no first hour; a database that holds one does not decode and is rebuilt.
+        private const int PlacementHeader = 15;
+
         internal static byte[] EncodePlacement(TablePlacement placement)
         {
-            var value = new byte[7 + 18 * placement.Segments.Count];
+            var value = new byte[PlacementHeader + 18 * placement.Segments.Count];
             value[0] = PlacementVersion;
             BinaryPrimitives.WriteUInt16LittleEndian(value.AsSpan(1), (ushort)placement.Target);
-            BinaryPrimitives.WriteInt32LittleEndian(value.AsSpan(3), placement.Segments.Count);
+            BinaryPrimitives.WriteInt64LittleEndian(value.AsSpan(3), placement.FirstHour);
+            BinaryPrimitives.WriteInt32LittleEndian(value.AsSpan(11), placement.Segments.Count);
 
             for (int i = 0; i < placement.Segments.Count; i++)
             {
                 var s = placement.Segments[i];
-                var at = value.AsSpan(7 + 18 * i);
+                var at = value.AsSpan(PlacementHeader + 18 * i);
                 BinaryPrimitives.WriteInt64LittleEndian(at, s.FirstHour);
                 BinaryPrimitives.WriteInt64LittleEndian(at[8..], s.EndHour);
                 BinaryPrimitives.WriteUInt16LittleEndian(at[16..], (ushort)s.PeriodWeeks);
@@ -1306,24 +1311,24 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         internal static TablePlacement DecodePlacement(byte[] value)
         {
-            if (value.Length < 7 || value[0] != PlacementVersion)
+            if (value.Length < PlacementHeader || value[0] != PlacementVersion)
                 throw new FormatException($"a placement of {value.Length} bytes, version {(value.Length > 0 ? value[0] : 0)}");
 
-            int count = BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(3));
-            if (count < 0 || value.Length != 7 + 18L * count)
+            int count = BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(11));
+            if (count < 0 || value.Length != PlacementHeader + 18L * count)
                 throw new FormatException($"a placement of {value.Length} bytes with {count} segments");
 
             var segments = new TablePlacementSegment[count];
             for (int i = 0; i < count; i++)
             {
-                var at = value.AsSpan(7 + 18 * i);
+                var at = value.AsSpan(PlacementHeader + 18 * i);
                 segments[i] = new TablePlacementSegment(BinaryPrimitives.ReadInt64LittleEndian(at), BinaryPrimitives.ReadInt64LittleEndian(at[8..]),
                     BinaryPrimitives.ReadUInt16LittleEndian(at[16..]));
             }
 
             try
             {
-                return new TablePlacement(BinaryPrimitives.ReadUInt16LittleEndian(value.AsSpan(1)), segments);
+                return new TablePlacement(BinaryPrimitives.ReadUInt16LittleEndian(value.AsSpan(1)), BinaryPrimitives.ReadInt64LittleEndian(value.AsSpan(3)), segments);
             }
             catch (ArgumentException ex)
             {

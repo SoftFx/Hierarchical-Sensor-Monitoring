@@ -16,20 +16,25 @@ namespace HSMServer.Core.TableSensors
     {
         /// <summary>
         /// The placement of a table sensor of a product, brought up to its history setting. A sensor without one gets one
-        /// only when <paramref name="create"/> (the merge, before it writes the sensor's first batch); otherwise the setting's
-        /// class is answered and nothing is written. A setting whose class differs from the target is a change of period:
-        /// recorded durably, effective from <see cref="Cutoff"/>, so every hour before it keeps the class it has.
+        /// only when <paramref name="createFrom"/> is given (the merge, before it writes the sensor's first batch): the
+        /// first hour of the new placement (<see cref="FirstUncommittedHour"/>). Otherwise the setting's class is answered
+        /// and nothing is written. A setting whose class differs from the target is a change of period: recorded durably,
+        /// effective from <see cref="Cutoff"/>, so every hour before it keeps the class it has.
         /// </summary>
-        internal TablePlacement PlaceSensor(Guid product, TableSensorModel sensor, DateTime utcNow, bool create)
+        internal TablePlacement PlaceSensor(Guid product, TableSensorModel sensor, DateTime utcNow, long? createFrom)
         {
             int setting = TablePeriodClass.Of(sensor, utcNow);
             var placement = Batches.GetPlacement(product, sensor.Id);
 
             if (placement is null)
             {
-                placement = new TablePlacement(setting);
-                if (create)
-                    Batches.SetPlacement(product, sensor.Id, placement);
+                // Not stored: a sensor without batches, as it would be placed now (it has no segment, so its first hour
+                // decides nothing).
+                if (createFrom is not long firstHour)
+                    return new TablePlacement(setting, utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour);
+
+                placement = new TablePlacement(setting, firstHour);
+                Batches.SetPlacement(product, sensor.Id, placement);
 
                 return placement;
             }
@@ -69,6 +74,25 @@ namespace HSMServer.Core.TableSensors
             return cutoff;
         }
 
+        /// <summary>
+        /// The first merge hour a sensor whose placement is created during the merge of <paramref name="hour"/> can have
+        /// rows in: the oldest arrival hour with blocks of the product that is not committed. That is the hour being merged,
+        /// unless an earlier hour was left behind (a batch that did not verify, merged after the next start): it is merged
+        /// later and may hold the sensor's rows. Durable in the placement (<see cref="TablePlacement.FirstHour"/>): a segment
+        /// of a later change of period starts there, not at the start of time.
+        /// </summary>
+        private long FirstUncommittedHour(Guid product, long hour)
+        {
+            long first = hour;
+            var asked = new HashSet<long>();
+
+            foreach (var entry in Blocks.GetBlocks(product))
+                if (entry.ArrivalHourTicks < first && asked.Add(entry.ArrivalHourTicks) && !Batches.IsHourMerged(product, entry.ArrivalHourTicks))
+                    first = entry.ArrivalHourTicks;
+
+            return first;
+        }
+
         // Every placement of a sensor that has batches is brought up to its setting at the start of a pass, so a change on a
         // folder or a product (which moves many sensors at once and raises no event per sensor) is recorded within a pass,
         // whether or not the sensor has new rows. A product of the batch store that is not in the tree is left alone.
@@ -95,7 +119,7 @@ namespace HSMServer.Core.TableSensors
 
                     foreach (var sensor in TableSensorsOf(product))
                         if (placements.ContainsKey(sensor.Id))
-                            PlaceSensor(product, sensor, utcNow, create: false);
+                            PlaceSensor(product, sensor, utcNow, createFrom: null);
                 }
                 catch (Exception ex)
                 {

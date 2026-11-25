@@ -899,13 +899,14 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         public void A_placement_is_stored_durably_and_read_back_after_a_restart()
         {
             var store = Open();
-            var placement = new TablePlacement(5, [new TablePlacementSegment(long.MinValue, Week0 + 3 * Hour, 1)]);
+            var placement = new TablePlacement(5, Week0 + Hour, [new TablePlacementSegment(Week0 + Hour, Week0 + 3 * Hour, 1)]);
             store.SetPlacement(_product, _sensorA, placement);
-            store.SetPlacement(_product, _sensorB, new TablePlacement(0));
+            store.SetPlacement(_product, _sensorB, new TablePlacement(0, Week0));
             store.Dispose();
 
             var reopened = Open();
             Assert.Equal(placement, reopened.GetPlacement(_product, _sensorA));
+            Assert.Equal(Week0 + Hour, reopened.GetPlacement(_product, _sensorA).FirstHour);
             Assert.Equal(1, reopened.GetPlacement(_product, _sensorA).ClassOf(Week0 + 2 * Hour));
             Assert.Equal(5, reopened.GetPlacement(_product, _sensorA).ClassOf(Week0 + 3 * Hour));
             Assert.Equal(2, reopened.GetPlacements(_product).Count);
@@ -934,9 +935,10 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.PlacementsName), recursive: true);
 
             var reopened = Open();
-            Assert.Equal(new TablePlacement(5, [new TablePlacementSegment(long.MinValue, Week0 + 2 * Hour, 1)]), reopened.GetPlacement(_product, _sensorA));
-            Assert.Equal(new TablePlacement(5), reopened.GetPlacement(_product, _sensorB));
-            Assert.Equal(new TablePlacement(5), reopened.GetPlacement(_product, sensorC));
+            // Each sensor's first hour is its first hour with a batch, and no segment starts before it.
+            Assert.Equal(new TablePlacement(5, Week0, [new TablePlacementSegment(Week0, Week0 + 2 * Hour, 1)]), reopened.GetPlacement(_product, _sensorA));
+            Assert.Equal(new TablePlacement(5, Week0), reopened.GetPlacement(_product, _sensorB));
+            Assert.Equal(new TablePlacement(5, Week0 + Hour), reopened.GetPlacement(_product, sensorC));
             Assert.Equal(1, reopened.Statistics.PlacementsRebuilt);
             reopened.Dispose();
 
@@ -964,28 +966,36 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Single(Directory.GetDirectories(Path.GetDirectoryName(placementsPath), TableBatchDatabase.PlacementsName + ".damaged-*"));
 
             var again = Open();
-            Assert.Equal(new TablePlacement(1), again.GetPlacement(_product, _sensorA));
-            Assert.Equal(new TablePlacement(4), again.GetPlacement(_product, _sensorB));
+            Assert.Equal(new TablePlacement(1, Week0), again.GetPlacement(_product, _sensorA));
+            Assert.Equal(new TablePlacement(4, Week0), again.GetPlacement(_product, _sensorB));
             Assert.Equal(1, again.Statistics.PlacementsRebuilt);
         }
 
         [Fact]
         public void A_change_of_period_keeps_every_earlier_hour_in_its_class_and_a_change_back_drops_the_segment()
         {
-            const long c1 = 100 * Hour, c2 = 200 * Hour, c3 = 300 * Hour;
+            const long first = 10 * Hour, c1 = 100 * Hour, c2 = 200 * Hour, c3 = 300 * Hour;
 
-            var p = new TablePlacement(5).Retarget(1, c1);
-            Assert.Equal([new TablePlacementSegment(long.MinValue, c1, 5)], p.Segments);
+            // The segment of the old class starts at the sensor's first hour, not at the start of time: the sensor has no
+            // rows before it, and a segment is what makes retention keep a week database.
+            var p = new TablePlacement(5, first).Retarget(1, c1);
+            Assert.Equal([new TablePlacementSegment(first, c1, 5)], p.Segments);
             Assert.Equal((5, 1), (p.ClassOf(c1 - Hour), p.ClassOf(c1)));
+            Assert.Equal(first, p.FirstHour);
 
             p = p.Retarget(53, c2);
-            Assert.Equal([new TablePlacementSegment(long.MinValue, c1, 5), new TablePlacementSegment(c1, c2, 1)], p.Segments);
-            Assert.Equal((5, 1, 53), (p.ClassOf(0), p.ClassOf(c1), p.ClassOf(c2)));
+            Assert.Equal([new TablePlacementSegment(first, c1, 5), new TablePlacementSegment(c1, c2, 1)], p.Segments);
+            Assert.Equal((5, 1, 53), (p.ClassOf(first), p.ClassOf(c1), p.ClassOf(c2)));
+
+            // A segment before the first hour is refused, and so is a first hour the store did not write.
+            Assert.Throws<ArgumentException>(() => new TablePlacement(1, first, [new TablePlacementSegment(first - Hour, c1, 5)]));
+            Assert.Throws<FormatException>(() => TableBatchDatabase.DecodePlacement([1, 5, 0, 0, 0, 0, 0]));
+            Assert.Equal(p, TableBatchDatabase.DecodePlacement(TableBatchDatabase.EncodePlacement(p)));
 
             // Back to 5: the hours in 5 are where the sensor's hours belong again; those in 53 become a segment.
             p = p.Retarget(5, c3);
             Assert.Equal([new TablePlacementSegment(c1, c2, 1), new TablePlacementSegment(c2, c3, 53)], p.Segments);
-            Assert.Equal((5, 1, 53, 5), (p.ClassOf(0), p.ClassOf(c1), p.ClassOf(c2), p.ClassOf(c3)));
+            Assert.Equal((5, 1, 53, 5), (p.ClassOf(first), p.ClassOf(c1), p.ClassOf(c2), p.ClassOf(c3)));
 
             Assert.Same(p, p.Retarget(5, c3 + Hour));
             Assert.Throws<ArgumentOutOfRangeException>(() => p.Retarget(1, c3 - Hour));

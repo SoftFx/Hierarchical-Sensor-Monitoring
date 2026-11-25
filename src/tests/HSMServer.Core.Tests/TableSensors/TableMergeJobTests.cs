@@ -1093,7 +1093,7 @@ namespace HSMServer.Core.Tests.TableSensors
             _now = Hour0.AddMinutes(10);
             AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]))));
             Pass(Hour0.AddHours(1).AddMinutes(3));
-            Assert.Equal(new TablePlacement(1), _server.Batches.GetPlacement(_product, b.Id));
+            Assert.Equal(new TablePlacement(1, Hour0.Ticks), _server.Batches.GetPlacement(_product, b.Id));
 
             // The period changes while hour 1 has blocks: the change takes effect from hour 2.
             _now = Hour0.AddMinutes(70);
@@ -1102,7 +1102,7 @@ namespace HSMServer.Core.Tests.TableSensors
             Pass(Hour0.AddHours(2).AddMinutes(3));
 
             var placement = _server.Batches.GetPlacement(_product, b.Id);
-            Assert.Equal(new TablePlacement(5, [new TablePlacementSegment(long.MinValue, Hour0.AddHours(2).Ticks, 1)]), placement);
+            Assert.Equal(new TablePlacement(5, Hour0.Ticks, [new TablePlacementSegment(Hour0.Ticks, Hour0.AddHours(2).Ticks, 1)]), placement);
             Assert.Equal([1], _server.Batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(c => c.PeriodWeeks));
 
             _now = Hour0.AddMinutes(130);
@@ -1165,8 +1165,8 @@ namespace HSMServer.Core.Tests.TableSensors
             // No new rows: the next pass records the change for the three sensors that inherit it, from the next hour.
             Pass(Hour0.AddHours(2));
             foreach (var sensor in sensors)
-                Assert.Equal(new TablePlacement(1, [new TablePlacementSegment(long.MinValue, Hour0.AddHours(2).Ticks, inherited)]), _server.Batches.GetPlacement(_product, sensor.Id));
-            Assert.Equal(new TablePlacement(0), _server.Batches.GetPlacement(_product, own.Id));
+                Assert.Equal(new TablePlacement(1, Hour0.Ticks, [new TablePlacementSegment(Hour0.Ticks, Hour0.AddHours(2).Ticks, inherited)]), _server.Batches.GetPlacement(_product, sensor.Id));
+            Assert.Equal(new TablePlacement(0, Hour0.Ticks), _server.Batches.GetPlacement(_product, own.Id));
         }
 
         [Fact]
@@ -1192,6 +1192,70 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(1, Pass(p5).WeeksDropped);
             Assert.DoesNotContain(new TableBatchWeek(WeekStart, 1), _server.Batches.GetWeeks(_product));
             Assert.Equal(0, _server.Batches.MergeStatistics.MoveWeeksPending);
+        }
+
+        [Fact]
+        public async Task A_segment_starts_at_the_sensors_first_hour_so_a_sensor_keeps_no_week_from_before_it_existed()
+        {
+            // The review's sequence. Last week's P1 database holds only sensor a.
+            var a = await RegisterAsync("a", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.Equal([new TableBatchWeek(WeekStart, 1)], _server.Batches.GetWeeks(_product));
+
+            // Sensor b is created in P1 a week later, merges its first batch, and is then kept for ever.
+            var later = Hour0.AddDays(7);
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            _now = later.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(later.AddMinutes(1), 2.0, 2)]))));
+            Pass(later.AddHours(1).AddMinutes(3));
+            Assert.Equal(new TablePlacement(1, later.Ticks), _server.Batches.GetPlacement(_product, b.Id));
+
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = TimeIntervalModel.None })).IsOk);
+            Pass(later.AddHours(2));
+
+            // b's hours in P1 are the ones from its first hour to the cut-off: nothing of last week.
+            var placement = _server.Batches.GetPlacement(_product, b.Id);
+            Assert.Equal(new TablePlacement(0, later.Ticks, [new TablePlacementSegment(later.Ticks, later.AddHours(2).Ticks, 1)]), placement);
+
+            // Last week's P1 database goes when its period has passed: b never had a row in it. This week's P1 database
+            // holds b's rows, owed to P0, and is kept.
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            Assert.Equal(1, Pass(p1).WeeksDropped);
+            Assert.Equal([new TableBatchWeek(WeekStart + Week, 1)], _server.Batches.GetWeeks(_product));
+            Assert.Equal(0, _server.Batches.MergeStatistics.MoveWeeksPending);
+
+            Assert.Equal(0, Pass(p1.AddDays(7)).WeeksDropped);
+            Assert.Equal(1, _server.Batches.MergeStatistics.MoveWeeksPending);
+            Assert.Equal(1, _server.Service.Read(b.Id, later.AddHours(-1), later.AddHours(1)).Value.RowCount);
+            Assert.Empty(Rows(a));
+        }
+
+        [Fact]
+        public async Task The_first_hour_of_a_placement_is_the_oldest_hour_with_blocks_not_committed_when_it_was_created()
+        {
+            var a = await RegisterAsync("a", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            // Hour 0 (rows of a) does not verify and is left on its blocks; hour 1 (rows of b) is merged first.
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            _server.Job.AfterDecode = (sensor, batch) =>
+            {
+                if (sensor == a.Id)
+                    batch.Columns[1].DoubleValues[0] += 0.5;
+            };
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).Mismatches);
+
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(61), 2.0, 2)]))));
+            Pass(Hour0.AddHours(2).AddMinutes(3));
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // b's placement was created while hour 0 was still to be merged: its first hour is hour 0, not hour 1.
+            Assert.Equal(new TablePlacement(1, Hour0.Ticks), _server.Batches.GetPlacement(_product, b.Id));
         }
 
         [Fact]

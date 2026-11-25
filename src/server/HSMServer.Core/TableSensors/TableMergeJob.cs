@@ -369,6 +369,8 @@ namespace HSMServer.Core.TableSensors
             var unreadable = new List<long>();
             long dropped = 0, expired = 0;
             long weekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
+            // The first hour of the placement of a sensor that gets its placement in this merge.
+            long firstHour = FirstUncommittedHour(product, hour);
 
             // The shares of the tables, by path: one share (null: every table) while the rows held fit the budget, several
             // otherwise, each table weighed by TableBytes. The index gives the hour's rows but not their width, so
@@ -427,7 +429,7 @@ namespace HSMServer.Core.TableSensors
                         if (share is not null && (path is null || !share.Contains(path)))
                             continue;
 
-                        var (sensor, period) = Resolve(product, path, resolved, utcNow, hour);
+                        var (sensor, period) = Resolve(product, path, resolved, utcNow, hour, createFrom: firstHour);
 
                         if (sensor is null || entry.Sequence < sensor.FirstSequence || !Matches(sensor, t))
                         {
@@ -623,9 +625,10 @@ namespace HSMServer.Core.TableSensors
         }
 
         // The table sensor on a path and the class of its rows of the hour (its placement, #1850 part 4b): the merge writes
-        // them there and every read looks there. The merge creates the placement of a sensor that has none (create).
+        // them there and every read looks there. The merge creates the placement of a sensor that has none (createFrom: the
+        // first hour of such a placement); retention creates none (null).
         private (TableSensorModel Sensor, int Period) Resolve(Guid product, string path, Dictionary<string, (TableSensorModel, int)> resolved, DateTime utcNow,
-            long hour, bool create = true)
+            long hour, long? createFrom)
         {
             if (path is null)
                 return (null, 0);
@@ -633,7 +636,7 @@ namespace HSMServer.Core.TableSensors
             if (!resolved.TryGetValue(path, out var found))
             {
                 found = _cache.TryGetSensorByPath(product, path, out var sensor) && sensor is TableSensorModel table
-                    ? (table, PlaceSensor(product, table, utcNow, create).ClassOf(hour))
+                    ? (table, PlaceSensor(product, table, utcNow, createFrom).ClassOf(hour))
                     : (null, 0);
 
                 resolved[path] = found;
