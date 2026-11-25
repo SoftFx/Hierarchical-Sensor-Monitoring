@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMCommon.Collections;
+using HSMCommon.Constants;
 using HSMCommon.Extensions;
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
@@ -141,6 +142,9 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
+
+        /// <summary>Raised after a root product took a new name, on the product's queue.</summary>
+        public event Action<ProductModel> RootProductRenamedEvent;
 
         public event Action<string, int, int> RequestProcessed;
 
@@ -382,9 +386,13 @@ namespace HSMServer.Core.Cache
         // old path); nodes themselves are never moved (ADR-0018).
         //
         // A root's name is no part of the root-relative paths the index and
-        // the aliases are keyed by, so a root rename leaves them valid; only
-        // an empty name is refused, which would leave the root in
-        // _productsByName under its old name.
+        // the aliases are keyed by, so a root rename leaves them valid. Two
+        // root renames are refused: to an empty name, which would leave the
+        // root in _productsByName under its old name, and of the
+        // self-monitoring product, which the server's own collector finds by
+        // its name at every start and creates anew when the name is gone
+        // (DataCollectorWrapper): a rename would split its history at the
+        // next restart.
         private static string RenameRefusal(ProductModel product, ProductUpdate update)
         {
             if (update.Name is null || update.Name == product.DisplayName)
@@ -397,6 +405,10 @@ namespace HSMServer.Core.Cache
                 return $"Cannot rename node '{product.FullPath}' to '{update.Name}': only a root product can be renamed, " +
                        "a node's name is part of its sensors' paths. Move the sensors to the new path instead.";
 
+            if (product.DisplayName == CommonConstants.SelfMonitoringProductName)
+                return $"Cannot rename '{product.DisplayName}': it is the server's self-monitoring product, " +
+                       "which the server finds by this name at every start.";
+
             return null;
         }
 
@@ -408,22 +420,98 @@ namespace HSMServer.Core.Cache
             if (RenameRefusal(product, update) is { } refusal)
                 throw new InvalidOperationException(refusal);
 
-            if (product.IsRoot && !string.IsNullOrEmpty(update.Name) && product.DisplayName != update.Name)
+            var oldName = product.DisplayName;
+            var requestedName = product.IsRoot && !string.IsNullOrEmpty(update.Name) && oldName != update.Name ? update.Name : null;
+
+            // The requested name is reserved before anything changes, so a name
+            // another root holds refuses the whole update. The old name is given
+            // up only after the model answered: whether the product takes the
+            // name is the model's decision (the change-ownership rule of a node
+            // property, ProductModel.Update), and re-keying ahead of it listed a
+            // product under a name it did not get, lost it under the name it
+            // kept and left the declined name reserved. Until then both names
+            // find the product, so a lookup by its current name never misses
+            // (alert delivery looks the root up by name, SendAlertMessage).
+            if (requestedName is not null)
             {
-                var oldName = product.DisplayName;
                 lock (_productsByNameLock)
                 {
-                    if (_productsByName.TryAdd(update.Name, product))
-                        _productsByName.TryRemove(oldName, out _);
-                    else
+                    if (!_productsByName.TryAdd(requestedName, product))
                         throw new InvalidOperationException(
-                            $"Cannot rename root product {product.Id} from '{oldName}' to '{update.Name}': target name already in use");
+                            $"Cannot rename root product {product.Id} from '{oldName}' to '{requestedName}': target name already in use");
                 }
             }
 
-            _database.UpdateProduct(product.Update(update).ToEntity());
+            try
+            {
+                product.Update(update);
+            }
+            finally
+            {
+                if (requestedName is not null)
+                {
+                    var nameToRelease = product.DisplayName == requestedName ? oldName : requestedName;
+
+                    lock (_productsByNameLock)
+                        _productsByName.TryRemove(new KeyValuePair<string, ProductModel>(nameToRelease, product));
+                }
+            }
+
+            _database.UpdateProduct(product.ToEntity());
 
             NotifyAboutProductChange(product);
+
+            if (requestedName is not null && product.DisplayName == requestedName)
+                CompleteRootRename(product, oldName);
+        }
+
+        // A root's name is the first segment of the full path of every sensor
+        // under it, and the full path is what alert templates and dashboard
+        // panel subscriptions match. The sensors are treated as a moved sensor
+        // is (#1718 decision 5): as if the product had always had this name.
+        // Otherwise the sensors already there keep the templates of the old
+        // name and miss those of the new one, next to sensors created after the
+        // rename that get the new name's, until somebody saves each template.
+        //
+        // Runs inside the rename, on the product's own queue, which owns the
+        // policies of every sensor here: no value of the product is evaluated
+        // between the rename and the re-evaluation, and the rename returns
+        // when it is over. The queue is held for as long as it takes (every
+        // sensor of the product against every template).
+        private void CompleteRootRename(ProductModel root, string oldName)
+        {
+            List<BaseSensorModel> sensors;
+
+            // A sensor being moved in is in the tree before its move is
+            // complete; under the lock only complete moves are seen.
+            lock (_treeStructureLock)
+                sensors = [.. root.GetAllSensors()];
+
+            if (!_alertTemplates.IsEmpty)
+            {
+                foreach (var sensor in sensors)
+                {
+                    try
+                    {
+                        ReevaluateTemplates(sensor);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, $"Template re-evaluation of sensor {sensor.Id} failed after the rename of product {root.Id}");
+                    }
+                }
+            }
+
+            _logger.Info($"Root product renamed: Id = {root.Id}, '{oldName}' -> '{root.DisplayName}', Sensors = {sensors.Count}");
+
+            try
+            {
+                RootProductRenamedEvent?.Invoke(root);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"A subscriber failed on the rename of product {root.Id}");
+            }
         }
 
 
@@ -742,7 +830,9 @@ namespace HSMServer.Core.Cache
         /// <returns>list of root products (without parent)</returns>
         public List<ProductModel> GetProducts()
         {
-            return [.. _productsByName.Values];
+            // Distinct: while a root is being renamed, both its old and its
+            // requested name find it (UpdateProduct(ProductUpdate)).
+            return [.. _productsByName.Values.Distinct()];
         }
 
 

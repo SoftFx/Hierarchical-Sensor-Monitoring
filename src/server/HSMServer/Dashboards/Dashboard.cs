@@ -26,6 +26,7 @@ namespace HSMServer.Dashboards
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.SensorMovedEvent += SensorMovedHandler;
+            _cache.RootProductRenamedEvent += RootProductRenamedHandler;
 
             Panels = new RDict<Panel>(ThrowUpdateEvent);
         }
@@ -35,6 +36,7 @@ namespace HSMServer.Dashboards
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.SensorMovedEvent += SensorMovedHandler;
+            _cache.RootProductRenamedEvent += RootProductRenamedHandler;
 
             Panels = new RDict<Panel>(ThrowUpdateEvent);
             DataPeriod = GetPeriod(entity.DataPeriod);
@@ -63,6 +65,7 @@ namespace HSMServer.Dashboards
         {
             _cache.ChangeSensorEvent -= ChangeSensorHandler;
             _cache.SensorMovedEvent -= SensorMovedHandler;
+            _cache.RootProductRenamedEvent -= RootProductRenamedHandler;
 
             base.Dispose();
 
@@ -130,6 +133,17 @@ namespace HSMServer.Dashboards
         {
             foreach (var (_, panel) in Panels)
                 panel.AddMovedSensor(sensor);
+        }
+
+        // A root rename changes the full path of every sensor of the product:
+        // the same rule as a move, for all of them at once.
+        private void RootProductRenamedHandler(ProductModel product)
+        {
+            List<BaseSensorModel> sensors = null;
+
+            foreach (var (_, panel) in Panels)
+                if (panel.HasActiveSubscription)
+                    panel.AddMovedSensors(sensors ??= [.. product.GetAllSensors()]);
         }
 
 
