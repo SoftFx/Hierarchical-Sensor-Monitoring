@@ -48,6 +48,18 @@ namespace HSMServer.Core.TableSensors
         /// start (#1850 part 4b): nothing of them was merged, dropped or judged for expiry. The next pass tries again.
         /// </summary>
         public int ProductsNotReconciled { get; init; }
+
+        /// <summary>Steps of the move between period classes run (#1850 part 4c): copy steps (each cut of at most 64 MB) and expired steps.</summary>
+        public int MoveSteps { get; init; }
+
+        /// <summary>Bytes of batches the move copied into their new class.</summary>
+        public long MovedBytes { get; init; }
+
+        /// <summary>Rows the move deleted because the sensor's new period had passed for their week (expired steps).</summary>
+        public long MoveExpiredRows { get; init; }
+
+        /// <summary>Week databases compacted after a tenth of them was deleted.</summary>
+        public int Compactions { get; init; }
     }
 
 
@@ -202,13 +214,23 @@ namespace HSMServer.Core.TableSensors
                         merged++;
                 }
 
-                Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
+                int lag = DueHours(utcNow).Count;
+                Stats.Set(ref Stats.LagHours, lag);
+
+                // The move between period classes (#1850 part 4c): after the merge, so that no placement is written and no hour
+                // merged while a step runs, and before retention, which then sees the week databases the steps released. Copy
+                // steps only while the merge has no lag; the recovery of a step in flight and expired steps always.
+                var moves = RunMoves(utcNow, unreconciled, lag == 0, token, ref fault);
 
                 // After the merge, so that a catch-up merges what it can before retention judges what is left.
                 var (weeks, expired) = RunRetention(utcNow, token, ref fault);
 
+                // After retention, on this thread: a compaction never runs beside the drop of its database.
+                RunCompactions(utcNow, moves, token, ref fault);
+
                 return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
-                    WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count };
+                    WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count,
+                    MoveSteps = moves.Steps, MovedBytes = moves.MovedBytes, MoveExpiredRows = moves.ExpiredRows, Compactions = moves.Compactions };
             }
             catch (Exception ex)
             {

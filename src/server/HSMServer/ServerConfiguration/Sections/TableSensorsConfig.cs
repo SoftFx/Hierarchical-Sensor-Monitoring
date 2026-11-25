@@ -82,6 +82,12 @@ namespace HSMServer.ServerConfiguration
         // False: no Rows sensor per table sensor is created or posted (the product's sensors still are).
         public bool FeedTableSensors { get; set; } = true;
 
+        // The move of a table sensor's rows into the class of its new period (#1850 part 4c): the time and the bytes copied
+        // (plus the database compacted) one merge pass may spend on it. At least one step runs in a pass with work.
+        public int MoveSecondsPerPass { get; set; } = TableBlockOptions.DefaultMoveSecondsPerPass;
+
+        public int MoveMegabytesPerPass { get; set; } = TableBlockOptions.DefaultMoveMegabytesPerPass;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -103,6 +109,8 @@ namespace HSMServer.ServerConfiguration
             Check(MaxDownloadRows, MaxDownloadRowsLimit, nameof(MaxDownloadRows));
             Check(FeedProductPeriodMinutes, 1440, nameof(FeedProductPeriodMinutes));
             Check(FeedTablePeriodMinutes, 1440, nameof(FeedTablePeriodMinutes));
+            Check(MoveSecondsPerPass, 3600, nameof(MoveSecondsPerPass));
+            Check(MoveMegabytesPerPass, 1_048_576, nameof(MoveMegabytesPerPass));
 
             // The table period is drained on a tick of the product period.
             if (FeedTablePeriodMinutes % FeedProductPeriodMinutes != 0)
@@ -124,6 +132,8 @@ namespace HSMServer.ServerConfiguration
                 DeleteMergedBlocksAfterHours = DeleteMergedBlocksAfterHours,
                 MergeMemoryBudgetMb = MergeMemoryBudgetMb,
                 MaxChartScanRows = MaxChartScanRows,
+                MoveSecondsPerPass = MoveSecondsPerPass,
+                MoveMegabytesPerPass = MoveMegabytesPerPass,
             };
         }
 

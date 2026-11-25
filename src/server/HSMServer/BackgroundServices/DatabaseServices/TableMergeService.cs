@@ -40,9 +40,12 @@ namespace HSMServer.BackgroundServices.DatabaseServices
                 if (report.Mismatches > 0 || report.Fault is not null)
                     _logger.Warn($"Table merge pass: {report.HoursMerged} hours merged, {report.Mismatches} product hours did not verify" +
                                  (report.Fault is null ? string.Empty : $", stopped on a fault: {report.Fault}"));
-                else if (report.HoursMerged > 0 || report.HoursDeleted > 0 || report.WeeksDropped > 0 || report.ExpiredHoursDeleted > 0)
+                else if (report.HoursMerged > 0 || report.HoursDeleted > 0 || report.WeeksDropped > 0 || report.ExpiredHoursDeleted > 0 ||
+                         report.MoveSteps > 0 || report.Compactions > 0)
                     _logger.Info($"Table merge pass: {report.HoursMerged} hours merged, the blocks of {report.HoursDeleted} merged hours deleted, " +
-                                 $"{report.WeeksDropped} week databases dropped and {report.ExpiredHoursDeleted} expired hours of blocks deleted by retention");
+                                 $"{report.WeeksDropped} week databases dropped and {report.ExpiredHoursDeleted} expired hours of blocks deleted by retention; " +
+                                 $"move: {report.MoveSteps} steps, {report.MovedBytes / 1048576.0:F1} MB copied, {report.MoveExpiredRows} expired rows deleted, " +
+                                 $"{report.Compactions} week databases compacted");
             }
             finally
             {

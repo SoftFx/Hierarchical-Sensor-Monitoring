@@ -899,6 +899,9 @@ namespace HSMServer.Core.Tests.TableSensors
         // records the change: the hours merged so far stay in P1 (a segment of s's placement), owed to the move.
         private async Task<(BaseSensorModel S, BaseSensorModel R)> SeedMoveAsync(int hours)
         {
+            // The steps here are made by hand (MoveHour); the job's are held off (TableMergeJobTests has the job's own).
+            _service.Merge.MoveStepsPerPass = 0;
+
             var s = await RegisterAsync("s");
             var r = await RegisterAsync("r");
             await KeepAsync(s, 7);

@@ -170,6 +170,25 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// </summary>
         public long ProductsNotReconciled;
 
+        // The move between period classes (#1850 part 4c).
+
+        /// <summary>Gauge: sensor-weeks of eligible sensors still in segments of an old class at the end of the last pass.</summary>
+        public long MoveStepsPending;
+        /// <summary>Rows the move copied into their new class.</summary>
+        public long RowsMoved;
+        /// <summary>Bytes of batches the move copied into their new class.</summary>
+        public long MovedBytes;
+        /// <summary>Rows the move deleted because the sensor's new period had passed for their week (expired steps).</summary>
+        public long RowsExpiredByMove;
+        /// <summary>Faults of the move: a step that did not complete, a step in flight not recovered, a compaction that failed (each tried again by a later pass).</summary>
+        public long MoveFaults;
+        /// <summary>Steps that could not run now: a copy into a database retention dropped, too little free disk, a copy the store refused.</summary>
+        public long MoveStepsRefused;
+        /// <summary>Week databases compacted after a tenth of them was deleted.</summary>
+        public long DatabasesCompacted;
+        /// <summary>Copy steps that first deleted rows of the sensor a move had left in their target (a move whose in-flight record was lost).</summary>
+        public long MoveLeftoversCleaned;
+
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
 
         public void Set(ref long gauge, long value) => Interlocked.Exchange(ref gauge, value);

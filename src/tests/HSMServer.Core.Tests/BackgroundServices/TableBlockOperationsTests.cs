@@ -63,6 +63,8 @@ public sealed class TableBlockOperationsTests : IDisposable
         Assert.Equal(32, options.MaxOpenBatchDatabases);
         Assert.Equal(24, options.DeleteMergedBlocksAfterHours);
         Assert.Equal(256, options.MergeMemoryBudgetMb);
+        Assert.Equal(10, options.MoveSecondsPerPass);
+        Assert.Equal(256, options.MoveMegabytesPerPass);
     }
 
     [Theory]
@@ -79,6 +81,9 @@ public sealed class TableBlockOperationsTests : IDisposable
     [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), -1)]
     [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), 8761)]
     [InlineData(nameof(TableSensorsConfig.MergeMemoryBudgetMb), 0)]
+    [InlineData(nameof(TableSensorsConfig.MoveSecondsPerPass), 0)]
+    [InlineData(nameof(TableSensorsConfig.MoveSecondsPerPass), 3601)]
+    [InlineData(nameof(TableSensorsConfig.MoveMegabytesPerPass), 0)]
     public void A_value_out_of_range_fails_the_validation_with_the_name_of_its_key(string key, long value)
     {
         var config = new TableSensorsConfig();
@@ -174,10 +179,18 @@ public sealed class TableBlockOperationsTests : IDisposable
 
         Assert.Equal(10, Single<int>("Rows merged").Value);
         Assert.Equal((0, SensorStatus.Ok), Single<int>("Verification mismatches") is var v ? (v.Value, v.Status) : default);
-        foreach (var name in new[] { "Arrival hours merged", "Merge lag", "Last merge duration", "Unreadable blocks kept", "Rows of removed sensors dropped", "Rows expired before the merge", "Merged hours holding blocks", "Batch weeks dropped", "Retention faults", "Expired blocks deleted", "Expired block rows deleted", "Move weeks pending" })
+        foreach (var name in new[] { "Arrival hours merged", "Merge lag", "Last merge duration", "Unreadable blocks kept", "Rows of removed sensors dropped", "Rows expired before the merge", "Merged hours holding blocks", "Batch weeks dropped", "Retention faults", "Expired blocks deleted", "Expired block rows deleted", "Move weeks pending",
+                                     "Move steps pending", "Moved rows", "Rows expired by the move", "Move faults", "Move steps refused", "Move leftovers cleaned", "Batch databases compacted" })
             Assert.Equal(0, Single<int>(name).Value);
         Assert.Equal(0.0, Single<double>("Merged blocks size").Value);
         Assert.Equal(0.0, Single<double>("Merged batches size").Value);
+        Assert.Equal(0.0, Single<double>("Moved batches size").Value);
+
+        // A move fault is an error in the sample in which it grew, and Ok again at the next sample without a new one.
+        merge.Add(ref merge.MoveFaults);
+        sensors.SendInfo();
+        sensors.SendInfo();
+        Assert.Equal([(0, SensorStatus.Ok), (1, SensorStatus.Error), (1, SensorStatus.Ok)], Values<int>("Move faults").Select(x => (x.Value, x.Status)));
 
         // A mismatch is an error for as long as the count is above 0, not only in the sample in which it grew.
         merge.Add(ref merge.VerificationMismatches);

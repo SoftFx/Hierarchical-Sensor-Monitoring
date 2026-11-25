@@ -37,7 +37,7 @@ namespace HSMServer.Core.Tests.TableSensors
     /// No timing: the job's clock is a parameter, the stores' clocks are seams.
     /// </summary>
     [Collection("Database collection")]
-    public class TableMergeJobTests : MonitoringCoreTestsBase<TableMergeFixture>, IAsyncLifetime
+    public partial class TableMergeJobTests : MonitoringCoreTestsBase<TableMergeFixture>, IAsyncLifetime
     {
         private static readonly DateTime Hour0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);
         private static readonly DateTime From = Hour0.AddHours(-3), To = Hour0.AddHours(12);
@@ -1174,6 +1174,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_change_of_period_takes_effect_from_the_hour_after_every_hour_with_blocks_and_earlier_hours_keep_their_class()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
 
             _now = Hour0.AddMinutes(10);
@@ -1205,6 +1208,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_change_of_period_while_the_open_hour_already_holds_blocks_takes_effect_from_the_hour_after_it()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
 
             // The hour before hour 0 is merged, so the sensor has its placement.
@@ -1243,6 +1249,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_repeat_of_an_hour_that_did_not_commit_gives_every_sensor_the_class_of_the_run_before_a_change_of_period()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             var a = await RegisterAsync("a", keep: TimeIntervalModel.None);
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
 
@@ -1273,6 +1282,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_change_on_the_product_is_recorded_for_every_sensor_that_inherits_it_within_a_pass()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             var sensors = new List<BaseSensorModel>();
             foreach (var name in new[] { "x", "y", "z" })
                 sensors.Add(await RegisterAsync(name));
@@ -1296,6 +1308,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task Retention_keeps_a_week_database_whose_rows_are_owed_to_a_longer_period_and_drops_it_once_that_has_passed_too()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
 
             _now = Hour0.AddMinutes(10);
@@ -1321,6 +1336,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_segment_starts_at_the_sensors_first_hour_so_a_sensor_keeps_no_week_from_before_it_existed()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // The review's sequence. Last week's P1 database holds only sensor a.
             var a = await RegisterAsync("a", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
             _now = Hour0.AddMinutes(10);
@@ -1385,6 +1403,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_period_lengthened_before_its_week_expired_protects_an_hour_still_to_be_merged_and_a_block_kept_unreadable()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // The review's sequence. A sensor kept for one week; hour 0 is committed with one block the merge could not
             // read (kept), hour 1 holds readable rows and keeps faulting in its merge.
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
@@ -1449,6 +1470,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_period_shortened_deletes_nothing_before_the_class_that_holds_the_rows_has_passed()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // Kept for five weeks, then for one: an hour still to be merged and before the cut-off is held by P5.
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
 
@@ -1525,6 +1549,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_placement_write_that_fails_does_not_let_retention_drop_rows_the_setting_now_keeps()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // The review's sequence. A sensor kept for one week, its hour merged into P1; a second product for comparison.
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
             var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
@@ -1648,6 +1675,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_period_lengthened_after_the_reconciliation_whose_write_fails_in_the_merge_keeps_its_week_database()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // The review's first sequence. A sensor kept for one week, its hour 0 merged into the P1 database of the week.
             var s = await RegisterAsync("s", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
 
@@ -1696,6 +1726,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_period_lengthened_after_the_reconciliation_of_an_inactive_sensor_keeps_its_week_database()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // The review's second sequence: no write fails. A sensor kept for one week has rows in hour 0 only.
             var s = await RegisterAsync("s", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
 
@@ -1783,6 +1816,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_shortened_period_frees_nothing_until_the_class_that_holds_the_rows_has_passed()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // Kept for five weeks; hour 0 merged into W P5, hour 1 never merged (it does not verify).
             var s = await RegisterAsync("s", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
 
@@ -1831,6 +1867,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task A_rebuilt_placement_covers_an_older_hour_merged_after_the_rebuild_and_a_later_change_keeps_it_where_it_was_merged()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             // The review's sequence. Hour 0 holds the first rows of s and does not verify; hour 1 is committed with s's first
             // batch.
             var s = await RegisterAsync("s", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
@@ -1872,6 +1911,9 @@ namespace HSMServer.Core.Tests.TableSensors
         [Fact]
         public async Task Retention_drops_a_week_by_its_class_when_the_period_was_shortened()
         {
+            // What holds while the rows wait for the move (#1850 part 4c): the move held off.
+            HoldMoves();
+
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
 
             _now = Hour0.AddMinutes(10);
@@ -1894,9 +1936,20 @@ namespace HSMServer.Core.Tests.TableSensors
             public TableMergeJob Job => Service.Merge;
         }
 
+        // The steps of the move held off in every job of the test, restarts included (TableMergeJob.MoveStepsPerPass = 0).
+        private bool _movesHeld;
+
+        private void HoldMoves()
+        {
+            _movesHeld = true;
+            _server.Job.MoveStepsPerPass = 0;
+        }
+
         private Server Build(IDatabaseCore database, ITreeValuesCache cache, TableBlockOptions options = null)
         {
             var service = new TableBlockService(database, cache, options ?? new TableBlockOptions { MinFreeDiskMb = 0 });
+            if (_movesHeld)
+                service.Merge.MoveStepsPerPass = 0;
             var blocks = (TableBlockDatabase)database.TableBlocks;
             var batches = (TableBatchDatabase)database.TableBatches;
 
