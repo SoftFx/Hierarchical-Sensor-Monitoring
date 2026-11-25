@@ -1789,6 +1789,47 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_rebuilt_placement_covers_an_older_hour_merged_after_the_rebuild_and_a_later_change_keeps_it_where_it_was_merged()
+        {
+            // The review's sequence. Hour 0 holds the first rows of s and does not verify; hour 1 is committed with s's first
+            // batch.
+            var s = await RegisterAsync("s", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("s", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            _server.Job.AfterDecode = (_, batch) => batch.Columns[1].DoubleValues[0] += 0.5;
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).Mismatches);
+            _server.Job.AfterDecode = null;
+
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("s", [(Hour0.AddMinutes(61), 2.0, 2)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(2).AddMinutes(3)).HoursMerged);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // The placements are lost and rebuilt from the indexes: s's first hour is its first hour with a batch, hour 1.
+            await RestartAsync(crash: false, beforeOpen: settings => Directory.Delete(Path.Combine(settings.PathToTableBlocks,
+                TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.PlacementsName), recursive: true));
+            Assert.Equal(new TablePlacement(1, Hour0.AddHours(1).Ticks), _server.Batches.GetPlacement(_product, s.Id));
+
+            // After the restart hour 0 is merged, into the class that holds it (P1); its merge lowers the first hour to it.
+            Assert.Equal(1, Pass(Hour0.AddHours(2).AddMinutes(4)).HoursMerged);
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.Equal(new TablePlacement(1, Hour0.Ticks), _server.Batches.GetPlacement(_product, s.Id));
+
+            // s is kept for ever from now on: the segment of the old class starts at hour 0, so hour 0 is looked for where it
+            // was merged.
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = s.Id, KeepHistory = TimeIntervalModel.None })).IsOk);
+            Pass(Hour0.AddHours(3));
+            var placement = _server.Batches.GetPlacement(_product, s.Id);
+            Assert.Equal((0, 1, 1), (placement.Target, placement.ClassOf(Hour0.Ticks), placement.ClassOf(Hour0.AddHours(1).Ticks)));
+            Assert.Equal(2, Rows(s).Count);
+
+            // And the P1 database of the week, which holds both hours, is kept past P1's time.
+            Assert.Equal(0, Pass(new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc)).WeeksDropped);
+            Assert.Equal(2, Rows(s).Count);
+        }
+
+        [Fact]
         public async Task Retention_drops_a_week_by_its_class_when_the_period_was_shortened()
         {
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));

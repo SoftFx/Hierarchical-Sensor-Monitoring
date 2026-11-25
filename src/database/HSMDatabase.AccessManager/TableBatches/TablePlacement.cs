@@ -47,7 +47,10 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>
         /// The first merge hour the sensor can have rows in: the oldest arrival hour with blocks of its product that was
         /// not committed when the merge first wrote the placement (the hour it was merging, or an earlier one left behind),
-        /// or, for a placement rebuilt from the indexes, the sensor's first hour with a batch. No segment starts before it.
+        /// or, for a placement rebuilt from the indexes, the sensor's first hour with a batch. The merge job lowers it to an
+        /// older hour not committed yet when it merges with the placement or records a change of period
+        /// (<see cref="WithFirstHour"/>), so a rebuilt placement covers an hour merged after later ones. No segment starts
+        /// before it.
         /// </summary>
         public long FirstHour { get; }
 
@@ -98,6 +101,14 @@ namespace HSMDatabase.AccessManager.TableBatches
 
             return new TablePlacement(target, FirstHour, Merge(result.Where(s => s.PeriodWeeks != target)));
         }
+
+        /// <summary>
+        /// The placement with its first hour lowered to <paramref name="firstHour"/> (never raised: the same placement when
+        /// it is not earlier). The class of no hour changes (hours before the first hour are in no segment); a later
+        /// <see cref="Retarget"/> starts its segment there.
+        /// </summary>
+        public TablePlacement WithFirstHour(long firstHour) =>
+            firstHour < FirstHour ? new TablePlacement(Target, firstHour, Segments) : this;
 
         /// <summary>The placement without the hours <c>[firstHour, endHour)</c> in segments: those hours are in the target now (the move).</summary>
         public TablePlacement WithoutHours(long firstHour, long endHour)

@@ -20,6 +20,17 @@ namespace HSMServer.Core.TableSensors
         /// first hour of the new placement (<see cref="FirstUncommittedHour"/>). Otherwise the setting's class is answered
         /// and nothing is written. A setting whose class differs from the target is a change of period: recorded durably,
         /// effective from <see cref="Cutoff"/>, so every hour before it keeps the class it has.
+        /// <para>
+        /// The first hour of a stored placement is lowered (never raised) to the oldest arrival hour with blocks of the
+        /// product that is not committed, the rule the merge uses when it creates a placement: by the merge
+        /// (<paramref name="createFrom"/>, that hour as the merge of an hour sees it) and before a change of period. A
+        /// placement rebuilt from the indexes takes the sensor's first hour with a batch, and an older hour not committed yet
+        /// (a batch that did not verify, merged after later hours) may hold the sensor's rows: without this, a later change
+        /// would start its segment after that hour, and the hour, merged into the old target, would be looked for in the new
+        /// one. Lowering changes the class of no hour (hours before the first hour are in no segment, so in the target), only
+        /// where the next change's segment starts. No flag is needed: the lowering applies to every placement, and for one
+        /// created by the merge it changes nothing unless a block lands in an older hour (a clock set back).
+        /// </para>
         /// </summary>
         internal TablePlacement PlaceSensor(Guid product, TableSensorModel sensor, DateTime utcNow, long? createFrom)
         {
@@ -40,10 +51,22 @@ namespace HSMServer.Core.TableSensors
             }
 
             if (placement.Target == setting)
+            {
+                if (createFrom is long first && first < placement.FirstHour)
+                {
+                    var lowered = placement.WithFirstHour(first);
+                    Batches.SetPlacement(product, sensor.Id, lowered);
+                    _logger.Info($"Table sensor [{sensor.Id}][{sensor.FullPath}]: its first hour lowered to " +
+                                 $"{new DateTime(first, DateTimeKind.Utc):yyyy-MM-dd HH:mm}, an hour not committed before its first batch");
+                    return lowered;
+                }
+
                 return placement;
+            }
 
             long cutoff = Cutoff(product, utcNow, placement);
-            var changed = placement.Retarget(setting, cutoff);
+            var from = Math.Min(createFrom ?? long.MaxValue, FirstUncommittedHour(product, cutoff));
+            var changed = placement.WithFirstHour(from).Retarget(setting, cutoff);
             Batches.SetPlacement(product, sensor.Id, changed);
 
             _logger.Info($"Table sensor [{sensor.Id}][{sensor.FullPath}]: period class P{placement.Target} -> P{setting} from the merge hour " +

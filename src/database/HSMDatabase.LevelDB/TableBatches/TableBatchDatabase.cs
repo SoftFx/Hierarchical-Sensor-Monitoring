@@ -1178,7 +1178,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         // (a move that stopped between its copy and the delete of the source), the hour region is taken: it is the source,
         // complete until it is deleted, which happens only after the switch. A sensor's target is the class of its newest
         // hour; its earlier runs in another class are its segments, each from its own first hour up to the start of the next
-        // run; its first hour is its first hour with a batch (no segment reaches before it). Only the index records are
+        // run; its first hour is its first hour with a batch (no segment reaches before it; an older hour not committed yet
+        // may hold rows of the sensor, and the merge job, which sees the blocks, lowers the first hour to it before it
+        // depends on it: TableMergeJob.PlaceSensor). Only the index records are
         // read (and the moved region's keys); no batch is decoded. Uncommitted hours are not looked at.
         //
         // Nothing is written before the scan has ended: the result and the complete key go in one synced write, which also
