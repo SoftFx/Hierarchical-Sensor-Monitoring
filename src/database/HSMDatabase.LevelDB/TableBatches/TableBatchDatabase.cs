@@ -111,7 +111,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// for the leases of the week, under the cache lock), "drop-deleting" (before the folder is deleted); "forget-hours"
         /// (before hours are removed from Hours); "dispose-waiting" (a dispose waits for leases,
         /// under the cache lock), "dispose-product" (before a dispose takes a product's lock); "product-opening" (a product's
-        /// open, under its slot's gate and outside the store-wide lock).
+        /// open, under its slot's gate and outside the store-wide lock); "product-busy" (a call found the product's slot held,
+        /// by an open or a dispose, right before it waits for it), "dispose-open-busy" (a dispose found a slot held by an
+        /// open, right before it waits for it).
         /// </summary>
         internal Action<string> Checkpoint { get; set; }
 
@@ -825,8 +827,11 @@ namespace HSMDatabase.LevelDB.TableBatches
                     _products[productId] = slot = new ProductSlot();
             }
 
-            lock (slot.Gate)
+            bool gateTaken = false;
+            try
             {
+                EnterGate(slot, "product-busy", ref gateTaken);
+
                 lock (_productsLock)
                 {
                     if (_disposed)
@@ -867,6 +872,23 @@ namespace HSMDatabase.LevelDB.TableBatches
                 CloseProductDatabases(product);
                 throw new TableBatchStoreException("The table batch store is closed.");
             }
+            finally
+            {
+                if (gateTaken)
+                    Monitor.Exit(slot.Gate);
+            }
+        }
+
+        // Takes a slot's gate. A caller that finds it held says so first (the checkpoint, for tests that must know a second
+        // caller has arrived at a slot another one holds) and then waits for it.
+        private void EnterGate(ProductSlot slot, string busyPoint, ref bool taken)
+        {
+            Monitor.TryEnter(slot.Gate, ref taken);
+            if (taken)
+                return;
+
+            Checkpoint?.Invoke(busyPoint);
+            Monitor.Enter(slot.Gate, ref taken);
         }
 
         private ProductState OpenProduct(Guid productId, string folder)
@@ -1501,10 +1523,22 @@ namespace HSMDatabase.LevelDB.TableBatches
             // before the dispose began): its gate is taken once, after which the slot's state is final.
             var products = new List<ProductState>();
             foreach (var slot in slots)
-                lock (slot.Gate)
+            {
+                bool gateTaken = false;
+                try
+                {
+                    EnterGate(slot, "dispose-open-busy", ref gateTaken);
+
                     lock (_productsLock)
                         if (slot.State is not null)
                             products.Add(slot.State);
+                }
+                finally
+                {
+                    if (gateTaken)
+                        Monitor.Exit(slot.Gate);
+                }
+            }
 
             lock (_cacheLock)
             {
