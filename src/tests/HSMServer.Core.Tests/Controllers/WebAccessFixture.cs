@@ -201,7 +201,7 @@ namespace HSMServer.Core.Tests.Controllers
             };
 
         public AlertsController Alerts(User user) =>
-            new(Chats.Object, Folders.Object, Tree, Cache.Object, Users.Object, PolicyWriter()) { ControllerContext = Context(user) };
+            new(Chats.Object, Access, Cache.Object, Users.Object, PolicyWriter()) { ControllerContext = Context(user) };
 
         private PolicyAdministrationService PolicyWriter()
         {
