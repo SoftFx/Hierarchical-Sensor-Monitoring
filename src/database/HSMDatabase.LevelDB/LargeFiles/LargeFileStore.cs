@@ -188,13 +188,13 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         var record = entry.Record;
 
                         if (record.State != LargeFileState.Uploading)
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.AlreadyStored, default, record.FileId, record.TotalPieces, record.TotalPieces, null, null);
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.AlreadyStored, default, record.FileId, record.TotalPieces, record.TotalPieces, record.PieceSize, null, null);
 
                         if (entry.Checking)
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.Checking, default, record.FileId, record.PieceCount, record.TotalPieces, CheckingRetry, null);
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.Checking, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize, CheckingRetry, null);
 
                         if (IsLive(entry, now, limits))
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.Busy, default, record.FileId, record.PieceCount, record.TotalPieces,
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.Busy, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize,
                                 Max(entry.LeaseTouched + limits.LeaseTimeout - now, TimeSpan.FromSeconds(1)), "Another connection uploads this file.");
 
                         if (record.PieceSize == pieceSize)
@@ -204,7 +204,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                             var lease = Grant(entry, now, maxPieceSize);
 
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.Continue, lease, record.FileId, record.PieceCount, pieceCount, null, null);
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.Continue, lease, record.FileId, record.PieceCount, pieceCount, record.PieceSize, null, null);
                         }
 
                         if (round > 0)
@@ -291,7 +291,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
             _logger.Info($"Large file upload {record.FileId:N} started: product {record.ProductId}, sensor {record.SensorId}, {record.Size} bytes in {pieceCount} pieces");
 
-            return new LargeFileBeginResult(LargeFileBeginOutcome.Started, lease, record.FileId, 0, pieceCount, null, null);
+            return new LargeFileBeginResult(LargeFileBeginOutcome.Started, lease, record.FileId, 0, pieceCount, pieceSize, null, null);
         }
 
         // === Append ===
@@ -1386,7 +1386,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
         private static long PieceCountOf(long size, int pieceSize) => (size + pieceSize - 1) / pieceSize;
 
         private static LargeFileBeginResult Refused(LargeFileBeginOutcome outcome, string error, TimeSpan? retry = null) =>
-            new(outcome, default, Guid.Empty, 0, 0, retry, error);
+            new(outcome, default, Guid.Empty, 0, 0, 0, retry, error);
 
         private static string TooManyMessage(LargeFileStoreLimits limits) =>
             $"{limits.MaxUploadsInProgress} uploads are in progress (LargeFiles.MaxUploadsInProgress).";
@@ -1464,6 +1464,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
             }
         }
 
+        // Only the product folders: uploads/ and archives/ themselves stay. archives/ is bind-mounted into Caddy read-only
+        // (#1885), so the store never deletes, renames or recreates it.
         private void RemoveEmptyProductFolders()
         {
             foreach (var subtree in new[] { UploadsFolderName, ArchivesFolderName })

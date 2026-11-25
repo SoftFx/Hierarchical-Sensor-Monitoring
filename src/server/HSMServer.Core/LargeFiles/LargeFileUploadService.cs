@@ -156,7 +156,7 @@ namespace HSMServer.Core.LargeFiles
             ct.ThrowIfCancellationRequested();
 
             if (!TryResolveSensor(request.ProductId, request.SensorPath, out var sensor, out var error))
-                return Task.FromResult(new LargeFileBeginResult(LargeFileBeginOutcome.SensorRefused, default, Guid.Empty, 0, 0, null, error));
+                return Task.FromResult(new LargeFileBeginResult(LargeFileBeginOutcome.SensorRefused, default, Guid.Empty, 0, 0, 0, null, error));
 
             var key = new LargeFileUploadKey(request.ProductId, sensor.Id, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity);
 

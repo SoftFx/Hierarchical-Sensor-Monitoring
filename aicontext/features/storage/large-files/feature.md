@@ -57,7 +57,7 @@ The time is the server's acceptance time, chosen on the product's queue when the
 <LargeFiles.Folder>/archives/<productId:N>/<archiveId:N>.zip       finished archives only: the subtree Caddy will see (#1885)
 ```
 
-GUIDs in the `N` format (32 hex digits). Nothing a client sent is part of a path. The `.rec` stays in `uploads/` after packing: it is the file's state. The folder is `IDatabaseSettings.LargeFilesFolder` (`PathToLargeFiles`), set from `LargeFiles.Folder`: not under `Databases` (it is not a database, is not part of `TotalDbSize` and is not backed up; sensor history is not backed up either).
+GUIDs in the `N` format (32 hex digits). Nothing a client sent is part of a path. **The `archives/` directory itself is never deleted, renamed or recreated** (nor the store's folder replaced): step 3's compose bind-mounts it into Caddy read-only, and a replaced directory would leave the mount on a stale one. The store creates it when it is missing and removes only empty `archives/<productId>/` subfolders (pinned by `LargeFileStoreTests.The_archives_folder_itself_is_never_removed_or_replaced_only_its_empty_product_folders`). The `.rec` stays in `uploads/` after packing: it is the file's state. The folder is `IDatabaseSettings.LargeFilesFolder` (`PathToLargeFiles`), set from `LargeFiles.Folder`: not under `Databases` (it is not a database, is not part of `TotalDbSize` and is not backed up; sensor history is not backed up either).
 
 ### The record (`.rec`, version 1)
 
@@ -84,7 +84,7 @@ At its first use the store reads every record into an index by file id and by **
 | `Continue` | a part of the key exists with the same piece size: a new lease, `NextPiece` = the record's piece count |
 | `Started` | otherwise: a new file id; the part and the index are created empty and flushed, then the record (so a record always has its files) |
 
-A part of the key with **another piece size** is removed (logged, counted in `Parts removed`) and the begin starts a new file id: nothing of the old part can mix in. `SensorRefused` is the service's (below). The piece count is `ceil(size / pieceSize)`; a file of 0 bytes has no piece and may finish at once.
+Every answer carries `PieceSize`: the record's piece size (the request's on `Started`, the record's on `Continue`, `AlreadyStored`, `Checking` and `Busy`, 0 for a refusal). A part of the key with **another piece size** is removed (logged, counted in `Parts removed`) and the begin starts a new file id: nothing of the old part can mix in. `SensorRefused` is the service's (below). The piece count is `ceil(size / pieceSize)`; a file of 0 bytes has no piece and may finish at once.
 
 **Free space.** `free − LargeFiles.MinFreeDiskMb − reservations ≥ the new upload's reservation`. From its begin until its first `CommitArchive` an upload reserves what its part still needs (announced size − bytes in the part) plus room for its archive (announced size + 1 MiB, `LargeFileStore.ArchiveSlack`); after the first commit nothing. A re-encryption reserves the current archive's length + 1 MiB from `BeginArchive` until its commit or abandon (in memory: a restart drops it with the temporary file). Reservations are counted under the store's lock, so two begins cannot pass on the same free bytes, and they come from the records, so they survive a restart. The free space is of the volume of the store's folder (on Linux the nearest existing folder, so a mounted volume counts; on Windows the drive). Test seam: `FreeBytes`.
 

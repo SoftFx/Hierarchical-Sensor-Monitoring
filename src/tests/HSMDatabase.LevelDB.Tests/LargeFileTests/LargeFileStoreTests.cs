@@ -67,6 +67,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Equal(LargeFileBeginOutcome.Started, begin.Outcome);
             Assert.Equal(0, begin.NextPiece);
             Assert.Equal(4, begin.PieceCount);
+            Assert.Equal(Piece, begin.PieceSize);
             Assert.Equal(begin.FileId, begin.Lease.FileId);
 
             var uploads = Path.Combine(_root, "uploads", _product.ToString("N"));
@@ -125,7 +126,9 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.False(reopened.HasFiles(Guid.NewGuid()));
             Assert.Equal(ReadPieces(reopened.OpenPieces(begin.FileId)).SelectMany(p => p.Bytes.ToArray()), content);
 
-            Assert.Equal(LargeFileBeginOutcome.AlreadyStored, Begin(reopened, Key("app.dmp", content.Length)).Outcome);
+            var stored = Begin(reopened, Key("app.dmp", content.Length));
+            Assert.Equal(LargeFileBeginOutcome.AlreadyStored, stored.Outcome);
+            Assert.Equal(Piece, stored.PieceSize);
         }
 
         [Fact]
@@ -187,6 +190,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Equal(LargeFileBeginOutcome.Continue, again.Outcome);
             Assert.Equal(begin.FileId, again.FileId);
             Assert.Equal(1, again.NextPiece);
+            Assert.Equal(Piece, again.PieceSize);
             Assert.NotEqual(begin.Lease.LeaseId, again.Lease.LeaseId);
 
             AppendAll(reopened, again.Lease, content, from: 1);
@@ -258,6 +262,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Equal(LargeFileBeginOutcome.Started, second.Outcome);
             Assert.NotEqual(first.FileId, second.FileId);
             Assert.Equal(2, second.PieceCount);
+            Assert.Equal(2 * Piece, second.PieceSize);
             Assert.Null(store.TryGetFile(first.FileId));
             Assert.False(File.Exists(Path.Combine(_root, "uploads", _product.ToString("N"), $"{first.FileId:N}.part")));
             Assert.Equal(1, store.Statistics.PartsRemoved);
@@ -335,7 +340,9 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             var store = Open(new LargeFileStoreLimits { MaxFileSizeBytes = 10 * Piece });
 
             Assert.Equal(LargeFileBeginOutcome.Started, Begin(store, Key("max", 10 * Piece)).Outcome);
-            Assert.Equal(LargeFileBeginOutcome.TooLarge, Begin(store, Key("over", 10 * Piece + 1)).Outcome);
+            var tooLarge = Begin(store, Key("over", 10 * Piece + 1));
+            Assert.Equal(LargeFileBeginOutcome.TooLarge, tooLarge.Outcome);
+            Assert.Equal(0, tooLarge.PieceSize);
             Assert.Equal(LargeFileBeginOutcome.TooLarge, Begin(store, Key("negative", -1)).Outcome);
 
             Assert.Equal(LargeFileBeginOutcome.BadPieceSize, store.Begin(Key("p1", Piece), null, Piece - 1, 4 * Piece).Outcome);
@@ -539,6 +546,33 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
 
             Assert.False(File.Exists(oldPath));
             Assert.Empty(reopened.TryGetFile(id).PreviousArchiveIds);
+        }
+
+        [Fact]
+        public void The_archives_folder_itself_is_never_removed_or_replaced_only_its_empty_product_folders()
+        {
+            // Caddy bind-mounts <folder>/archives read-only (#1885): the store must keep that very directory.
+            var store = Open();
+            var id = Verify(store, "a", Content(Piece));
+            var pack = Started(store.BeginArchive(id));
+            File.WriteAllBytes(pack.TempPath, [1]);
+            store.CommitArchive(pack, 1, 1, [1]);
+
+            var archives = new DirectoryInfo(Path.Combine(_root, LargeFileStore.ArchivesFolderName));
+            var created = archives.CreationTimeUtc;
+            var marker = Path.Combine(archives.FullName, "kept-by-the-mount");
+            File.WriteAllText(marker, "x");
+
+            Assert.True(store.Remove(id, "test"));
+            store.RunStorePass();
+            _now = _now.AddDays(30);
+            store.RunStorePass();
+
+            archives.Refresh();
+            Assert.True(archives.Exists);
+            Assert.Equal(created, archives.CreationTimeUtc);
+            Assert.True(File.Exists(marker));
+            Assert.Empty(Directory.GetDirectories(archives.FullName));
         }
 
         [Fact]

@@ -140,12 +140,17 @@ namespace HSMDatabase.AccessManager.LargeFiles
     }
 
 
+    /// <summary>
+    /// What a begin answered. <paramref name="PieceSize"/> is the record's piece size: the request's on Started, the record's
+    /// on Continue, AlreadyStored, Checking and Busy, 0 for a refusal.
+    /// </summary>
     public sealed record LargeFileBeginResult(
         LargeFileBeginOutcome Outcome,
         UploadLease Lease,
         Guid FileId,
         long NextPiece,
         long PieceCount,
+        int PieceSize,
         TimeSpan? RetryAfter,
         string Error);
 
