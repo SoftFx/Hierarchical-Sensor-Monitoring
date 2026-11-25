@@ -360,6 +360,63 @@ namespace HSMDataCollector.Tests.Tables
             }
         }
 
+        // Third review, finding b: a table sensor created while the rollback of a failed start ran (the collector still
+        // Starting, the rollback's run already taken out of the pipeline) started a second run, which the rollback never
+        // closed: the collector reached Stopped with a tick and a delivery loop alive, and the next Start reused that
+        // run and its producer.
+        [Fact]
+        public async Task A_table_sensor_created_during_a_start_rollback_starts_no_run()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                collector.CreateTableSensor("t", Quotes());
+
+                var pipeline = collector.TablePipeline;
+                var once = 0;
+                var statusAtCreation = CollectorStatus.Stopped;
+                ITableSensor late = null;
+
+                // The rollback has taken its run out of the pipeline and has not ended.
+                pipeline.OnStopWaitsForPackForTests = () =>
+                {
+                    if (Interlocked.Exchange(ref once, 1) == 1)
+                        return;
+
+                    statusAtCreation = collector.Status;
+                    late = collector.CreateTableSensor("late", Quotes());
+                };
+
+                await Within(collector.Start(Task.FromException(new InvalidOperationException("scripted: the starting task failed"))), "the failed start did not end");
+
+                Assert.NotNull(late);
+                Assert.Equal(CollectorStatus.Starting, statusAtCreation);
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+                Assert.True(pipeline.CurrentRun == null, "the collector is Stopped with a table run alive");
+                Assert.Equal(1, pipeline.RunCount);
+
+                // The next Start makes a run of its own, and the sensor created during the rollback is in it.
+                await collector.Start();
+
+                var run = pipeline.CurrentRun;
+
+                Assert.Equal(2, run.Number);
+
+                await collector.TickTablesAsync();
+
+                Assert.Equal(TableSensorState.Registered, late.State);
+                Assert.True(late.AddRow(T0, 1.0, 2.0));
+
+                await collector.TickTablesAsync();
+
+                var block = Assert.Single(sender.Stored);
+
+                Assert.Equal(run.Producer, block.Producer);
+                Assert.Single(block.RowsOf("late"));
+            }
+        }
+
         // Finding 6: a buffer that cannot grow leaves AddRow returning false, the reservation given back and the buffer
         // as it was; the rows before and after go out whole.
         [Fact]

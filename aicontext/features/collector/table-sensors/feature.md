@@ -78,6 +78,11 @@ undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3.
 - **A collector with a table sensor has a run from `Start` to `Stop`, also when none of its sensors can send** (an
   HTTP collector, a custom sender, no compressor): that run has the tick and the ledger and no delivery loop, and it
   never makes the compressor. The rows an `Unavailable` sensor refuses are lost rows, reported like every other loss.
+- **Whether a run may start is decided under the collector's lifecycle lock** (`DataCollector._tableRunMayStart`): from
+  the moment a `Start` has started the processor until a `Stop`, a `Dispose` or the rollback of that start begins.
+  The status alone does not say it: the collector is still `Starting` while the rollback of a failed start stops its
+  processor. A table sensor created during a rollback is created and starts no run; the rollback closes whatever run
+  exists when it ends, so the collector never reaches `Stopped` with a tick or a delivery loop alive.
 - **One object per run.** Everything a run owns is in its `TableRun`, made at `Start` and closed at the end of its stop:
   the cancellation, the packing and delivery gates, the backlog and the block in flight, the producer id and sequence,
   the bytes reserved by writers, the registration marks and the loss ledger. A sensor holds a reference to its current
