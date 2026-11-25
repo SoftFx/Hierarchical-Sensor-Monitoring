@@ -1605,6 +1605,65 @@ namespace
         Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
+    // A table the channel's limits can never take (its identifier, its column count; the create checks
+    // the default limits only) is Unavailable once those limits are known: at Start, or at its creation
+    // in a run. Limits that change inside a run do not split such a table down to single rows: its rows
+    // of each pack are one "packing failed" loss, reported once.
+    void TableOverConnectionLimits()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::TableBlockLimits limits;
+        limits.max_columns_per_table = 3;
+        limits.max_table_id_length = 40; // "conformance-host/conformance-module/" is 36 bytes
+        channel->SetLimits(limits);
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        std::vector<std::string> lines;
+        hsm_collector_set_logger(
+            collector.value, [](hsm_log_level_t, const char* message, void* user) { static_cast<std::vector<std::string>*>(user)->push_back(message); }, &lines);
+        const auto count_lines = [&](const std::string& text) {
+            return std::count_if(lines.begin(), lines.end(), [&](const std::string& line) { return line.find(text) != std::string::npos; });
+        };
+
+        Table wide = CreateTable(collector.value, "w", { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "b", HSM_TABLE_COLUMN_DOUBLE }, { "c", HSM_TABLE_COLUMN_DOUBLE } });
+        Table named = CreateTable(collector.value, "a-longer-name", { { "a", HSM_TABLE_COLUMN_DOUBLE } });
+        Table narrow = CreateTable(collector.value, "n", { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "b", HSM_TABLE_COLUMN_DOUBLE } });
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(wide).state), "too many columns, at create");
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(wide).state), "too many columns");
+        Check(Reason(wide).find("4 columns with the time and a table may have 3") != std::string::npos, "reason '" + Reason(wide) + "'");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(named).state), "too long a name");
+        Check(Reason(named).find("a table name may have 40") != std::string::npos, "reason '" + Reason(named) + "'");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_PENDING), static_cast<int>(Stats(narrow).state), "a table that fits");
+        Table late = CreateTable(collector.value, "late", { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "b", HSM_TABLE_COLUMN_DOUBLE }, { "c", HSM_TABLE_COLUMN_DOUBLE } });
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(late).state), "too many columns, created in a run");
+        tables::test::RunTick(collector.value);
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(narrow).state), "registered");
+        for (const auto& registrations : channel->Registrations())
+            for (const auto& registration : registrations)
+                Check(registration.path.find("/n") != std::string::npos, "a table the connection cannot take was registered: " + registration.path);
+
+        // The limits shrink inside the run: 1000 rows a tick, one loss each, one report.
+        limits.max_columns_per_table = 2;
+        channel->SetLimits(limits);
+        auto* pipeline = tables::test::Pipeline(collector.value);
+        std::vector<std::int64_t> times(1000);
+        std::vector<hsm_table_cell_t> cells(2000);
+        for (int tick = 1; tick <= 2; ++tick)
+        {
+            Check(hsm_table_sensor_add_rows(narrow.value, times.data(), cells.data(), nullptr, 1000, nullptr) == HSM_RESULT_OK, "add rows");
+            tables::test::RunTick(collector.value);
+            CheckEqual(std::int64_t{ 1000 } * tick, pipeline->Ledger().Total(tables::TableDropReason::PackingFailed), "packing failed after tick " + std::to_string(tick));
+            CheckEqual(std::int64_t{ 0 }, pipeline->Ledger().Total(tables::TableDropReason::RowTooLarge), "no row is too large");
+            CheckEqual(std::uint64_t{ 1000 } * static_cast<std::uint64_t>(tick), Stats(narrow).rows_dropped, "dropped on the sensor");
+            CheckEqual(std::int64_t{ 0 }, pipeline->ReservedBytes(), "reserved bytes");
+        }
+        CheckEqual(std::size_t{ 0 }, channel->Puts().size(), "puts");
+        CheckEqual(static_cast<std::ptrdiff_t>(1), count_lines("cannot be packed"), "reported once");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+    }
+
     // A table run whose threads cannot be made (the host's thread limit: std::thread throws) is rolled
     // back: the collector's Start returns OK and runs, no thread of the table run is left, rows are
     // refused and counted, the sensors say why; the stop and the next Start work as usual. For the tick's
@@ -2104,6 +2163,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_losses_at_stop_reach_the_stop_line", [](const std::string&) { LossesAtStopReachTheStopLine(); } },
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
         { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
+        { "native_table_over_connection_limits", [](const std::string&) { TableOverConnectionLimits(); } },
         { "native_table_start_failure_rolls_back", [](const std::string&) { StartFailureRollsBack(); } },
         { "native_table_stop_failure_completes", [](const std::string&) { StopFailureCompletes(); } },
         { "native_table_reports_reach_the_host_with_no_lock_held", [](const std::string&) { ReportsReachTheHostWithNoLockHeld(); } },

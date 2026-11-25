@@ -380,6 +380,15 @@ for every lifecycle report).
 - `Unavailable` is decided at creation and again **at every Start** (the managed collector decides it once, when it is
   constructed): native transports are chosen by a call before Start. A sensor `Unavailable` in one run is `Pending` in
   the next if a channel exists by then. `Refused` stays final in both.
+- A table the channel's limits can never take (a path longer than its `max_table_id_length`, more columns than its
+  `max_columns_per_table`; the create checks the default limits only) is `Unavailable` with that reason as soon as
+  the limits are known: at Start, or at its creation when a channel exists. Its rows are refused and counted as
+  `SensorUnavailable`, it is never registered, and the other sensors are not touched. Should the limits change inside
+  a run, a pack does not split such a table down to single rows: its rows of the pack are one "packing failed" loss,
+  reported once per sensor (`native_table_over_connection_limits`). The managed collector registers such a table, and
+  each of its packs throws on it: every row that pack took, of every sensor, is counted as "packing failed" and the
+  failure is reported at every tick. Limits a split can satisfy (tables, rows, decompressed bytes, the frame) split as
+  in managed.
 - A cell is a raw 8-byte union read by the column's type, so a double given to an int64 column is not detected (the
   managed `TableCell` knows its kind and throws). The C++ wrapper's `TableCell` does detect it and throws.
 - A create on a disposed collector is refused with `HSM_RESULT_INVALID_STATE`, like every native create (managed gives

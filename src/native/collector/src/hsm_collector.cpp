@@ -3152,7 +3152,7 @@ namespace
 
                 std::string reason;
                 const auto channel = TableChannelFor(reason);
-                if (!pipeline->CreateSensor(normalized, columns, description, keep_history_ms, reason, out, error))
+                if (!pipeline->CreateSensor(normalized, columns, description, keep_history_ms, channel, reason, out, error))
                     return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
 
                 // A table sensor created while the collector runs starts the pipeline's run at once.

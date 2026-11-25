@@ -144,6 +144,17 @@ namespace hsm::collector::tables
         return true;
     }
 
+    std::string TableLimitProblem(const std::string& path, std::size_t value_columns, const TableBlockLimits& limits)
+    {
+        if (path.size() > static_cast<std::size_t>(limits.max_table_id_length))
+            return "its path has " + std::to_string(path.size()) + " bytes in UTF-8 and a table name may have " +
+                   std::to_string(limits.max_table_id_length);
+        if (value_columns + 1 > static_cast<std::size_t>(limits.max_columns_per_table))
+            return "it has " + std::to_string(value_columns + 1) + " columns with the time and a table may have " +
+                   std::to_string(limits.max_columns_per_table);
+        return std::string();
+    }
+
     // ---- The ledger and the shared block -------------------------------------------------------------
 
     TableLedger::TableLedger() noexcept
@@ -678,7 +689,8 @@ namespace hsm::collector::tables
 
     bool TablePipeline::CreateSensor(const std::string& path, const std::vector<TableRegistrationColumn>& columns,
                                      const std::string& description, std::int64_t keep_history_ms,
-                                     const std::string& unavailable_reason, std::shared_ptr<TableSensor>& out, std::string& error)
+                                     const std::shared_ptr<ITableChannel>& channel, const std::string& unavailable_reason,
+                                     std::shared_ptr<TableSensor>& out, std::string& error)
     {
         TableSchema schema;
         if (!BuildSchema(columns, schema, error))
@@ -686,13 +698,24 @@ namespace hsm::collector::tables
 
         // A running pipeline decides by its run; a stopped one by what the collector has now (and
         // decides again at the next Start). Read before sensors_mutex_: Start takes the two the other way.
-        std::string reason = unavailable_reason;
+        std::string reason = channel ? std::string() : unavailable_reason;
+        std::shared_ptr<ITableChannel> deciding = channel;
         bool running = false;
         {
             std::lock_guard<std::mutex> lifecycle(lifecycle_mutex_);
             running = running_;
             if (running_)
+            {
+                deciding = channel_;
                 reason = channel_ ? std::string() : channel_reason_;
+            }
+        }
+        // The limits of a channel are known: a table they can never take refuses its rows from the start.
+        if (deciding)
+        {
+            const std::string problem = TableLimitProblem(path, columns.size(), deciding->Limits());
+            if (!problem.empty())
+                reason = "the table connection can never take its table: " + problem;
         }
 
         std::lock_guard<std::mutex> guard(sensors_mutex_);
@@ -764,18 +787,27 @@ namespace hsm::collector::tables
                     drain_done_ = false;
                 }
 
-                // Every Start registers every sensor again; whether a sensor can send at all is decided now.
+                // Every Start registers every sensor again; whether a sensor can send at all is decided now,
+                // and with a channel by its limits too (the create checked the defaults only).
+                const TableBlockLimits limits = channel_ ? channel_->Limits() : TableBlockLimits{};
                 for (const auto& sensor : SnapshotSensors())
                 {
                     const auto state = sensor->State();
                     if (state == HSM_TABLE_SENSOR_REFUSED)
                         continue;
-                    if (!channel_)
+                    std::string reason = channel_reason_;
+                    if (channel_)
                     {
-                        if (state != HSM_TABLE_SENSOR_UNAVAILABLE || sensor->Reason() != channel_reason_)
+                        const std::string problem = TableLimitProblem(sensor->Path(), sensor->ColumnCount(), limits);
+                        if (!problem.empty())
+                            reason = "the table connection can never take its table: " + problem;
+                    }
+                    if (!reason.empty())
+                    {
+                        if (state != HSM_TABLE_SENSOR_UNAVAILABLE || sensor->Reason() != reason)
                         {
-                            sensor->SetState(HSM_TABLE_SENSOR_UNAVAILABLE, channel_reason_);
-                            Note("The table sensor " + sensor->Path() + " cannot send its rows: " + channel_reason_ + ". Its rows are dropped and counted.");
+                            sensor->SetState(HSM_TABLE_SENSOR_UNAVAILABLE, reason);
+                            Note("The table sensor " + sensor->Path() + " cannot send its rows: " + reason + ". Its rows are dropped and counted.");
                         }
                     }
                     else
@@ -1343,11 +1375,29 @@ namespace hsm::collector::tables
             writer_ = std::make_unique<TableBlockWriter>(limits);
         }
 
+        // A table these limits can never take (they changed inside the run; Start and the create check
+        // them) is not split row by row: its rows of this pack are one loss, "packing failed" as in the
+        // managed pack, reported once per sensor.
+        for (Taken& entry : taken)
+        {
+            const std::string problem = TableLimitProblem(entry.sensor->Path(), entry.sensor->ColumnCount(), limits);
+            if (problem.empty())
+                continue;
+            const auto count = static_cast<std::int64_t>(entry.rows->Count());
+            entry.sensor->Drop(count, TableDropReason::PackingFailed);
+            entry.settled = count;
+            if (entry.sensor->FirstLimitReport())
+                Note("The table sensor " + entry.sensor->Path() + " cannot be packed: " + problem +
+                     ". Its rows are dropped and counted (packing failed); this is reported once.");
+        }
+
         // The rows of each sensor in pieces that each fit the limits on their own: an upper bound of a
         // table's directory entry, and per row its values and its share of the maps.
         std::vector<Piece> pieces;
         for (Taken& entry : taken)
         {
+            if (entry.settled == static_cast<std::int64_t>(entry.rows->Count()))
+                continue;
             TableSensor& sensor = *entry.sensor;
             const auto overhead = static_cast<std::int64_t>(32 + sensor.Path().size() + sensor.ColumnCount() + 1);
             const auto per_row = static_cast<std::int64_t>(8 * (sensor.ColumnCount() + 1) + sensor.ColumnCount() + 1);

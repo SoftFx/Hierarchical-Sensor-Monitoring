@@ -384,6 +384,7 @@ if(HSM_COLLECTOR_TABLES)
             native_table_too_large_is_final_and_sequences_never_go_back
             native_table_pack_failure_settles_every_row
             native_table_reports_reach_the_host_with_no_lock_held
+            native_table_over_connection_limits
             native_table_start_failure_rolls_back
             native_table_stop_failure_completes
             native_table_stress_writers_ticks_and_restarts)

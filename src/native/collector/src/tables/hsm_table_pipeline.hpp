@@ -168,6 +168,9 @@ namespace hsm::collector::tables
         /// Allocates nothing.
         std::int64_t DiscardRows(TableDropReason reason) noexcept;
 
+        /// True the first time only: a table the connection's limits can never take is reported once.
+        bool FirstLimitReport() noexcept { return !limit_reported_.exchange(true, std::memory_order_acq_rel); }
+
         TableRegistration BuildRegistration() const;
 
         const std::shared_ptr<TableShared>& Shared() const noexcept { return shared_; }
@@ -195,6 +198,7 @@ namespace hsm::collector::tables
         std::atomic<int> state_{ HSM_TABLE_SENSOR_PENDING };
         std::atomic<std::uint64_t> accepted_{ 0 };
         std::atomic<std::uint64_t> dropped_{ 0 };
+        std::atomic<bool> limit_reported_{ false };
     };
 
     /// A packed block waiting for its final answer; its tables in directory order.
@@ -276,6 +280,10 @@ namespace hsm::collector::tables
         Count,
     };
 
+    /// Why a table can never be in a block under `limits` (its identifier or its column count), whatever
+    /// the split; empty when it can.
+    std::string TableLimitProblem(const std::string& path, std::size_t value_columns, const TableBlockLimits& limits);
+
     struct TablePipelineOptions
     {
         std::int64_t tick_period_ms = 10000;
@@ -300,20 +308,22 @@ namespace hsm::collector::tables
         static bool BuildSchema(const std::vector<TableRegistrationColumn>& columns, TableSchema& schema, std::string& error);
 
         /// Creates a sensor, or returns the one created before under the same path with the same
-        /// columns. False with `error` for a mistake of the call. `unavailable_reason` empty: the
-        /// collector has a channel now; else the sensor is Unavailable (a running pipeline decides by
-        /// its own run instead).
+        /// columns. False with `error` for a mistake of the call. A stopped pipeline decides by what the
+        /// collector has now: `channel` (the sensor is Unavailable when the channel's limits can never
+        /// take its table), else Unavailable with `unavailable_reason`; a running pipeline decides by
+        /// its own run instead.
         bool CreateSensor(const std::string& path, const std::vector<TableRegistrationColumn>& columns,
                           const std::string& description, std::int64_t keep_history_ms,
-                          const std::string& unavailable_reason, std::shared_ptr<TableSensor>& out, std::string& error);
+                          const std::shared_ptr<ITableChannel>& channel, const std::string& unavailable_reason,
+                          std::shared_ptr<TableSensor>& out, std::string& error);
 
         /// Starts a run: a new producer id, sequence 0, every sensor registered again (Registered and
-        /// Unavailable go to Pending when `channel` exists; every sensor but a Refused one becomes
-        /// Unavailable with `unavailable_reason` when it does not), the tick and the delivery thread.
-        /// Queues its reports: the caller flushes them once it holds no lock (a host logger may call
-        /// back into the collector).
-        /// A start whose threads cannot be made is rolled back: no thread of the run is left, rows are
-        /// refused, and the sensors are Unavailable for this run (tried again at the next Start).
+        /// Unavailable go to Pending when `channel` exists and its limits can take the table; every
+        /// sensor but a Refused one becomes Unavailable with `unavailable_reason` when it does not), the
+        /// tick and the delivery thread. Queues its reports: the caller flushes them once it holds no
+        /// lock (a host logger may call back into the collector). A start whose threads cannot be made
+        /// is rolled back: no thread of the run is left, rows are refused, and the sensors are
+        /// Unavailable for this run (tried again at the next Start).
         void Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason) noexcept;
         /// The first half of a stop, before the collector's final Queue overflow report: rows are
         /// refused from now on, the tick is joined, every buffer is taken (each sensor's mutex once) and
