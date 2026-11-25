@@ -33,11 +33,15 @@ namespace HSMServer.SensorApi.Sessions
 
     // The server-wide budget of bytes that table connections hold for frames being received and
     // waiting for their put (#1845, CollectorSessions.MaxTableBytesInFlight). A take waits, first
-    // come first served, until the bytes are free; nothing ever takes more than the capacity.
+    // come first served, until the bytes are free; nothing ever takes more than the capacity. An
+    // access key holds at most one take at a time: a second large frame of the same key waits like
+    // any other waiter until the first is done, so the connections of one key (one client, or one
+    // that slows its frames down on purpose) cannot fill the budget for every other key.
     internal sealed class TableFrameBudget(long capacity)
     {
         private readonly object _lock = new();
         private readonly LinkedList<Waiter> _waiters = new();
+        private readonly HashSet<Guid> _holders = new();
         private long _inUse;
 
 
@@ -62,21 +66,23 @@ namespace HSMServer.SensorApi.Sessions
         }
 
 
-        // True when the bytes were taken at once. Never ahead of a waiter.
-        public bool TryTake(long bytes)
+        // True when the bytes were taken at once. Never ahead of a waiter, never a second take of a key.
+        public bool TryTake(long bytes, Guid key)
         {
             lock (_lock)
             {
-                if (_waiters.Count > 0 || _inUse + bytes > Capacity)
+                if (_waiters.Count > 0 || _inUse + bytes > Capacity || _holders.Contains(key))
                     return false;
 
                 _inUse += bytes;
+                _holders.Add(key);
                 return true;
             }
         }
 
-        // Waits until the bytes are free and takes them. A cancelled wait takes nothing.
-        public async Task TakeAsync(long bytes, CancellationToken token)
+        // Waits until the bytes are free and the key holds no other take, and takes them. A cancelled
+        // wait takes nothing.
+        public async Task TakeAsync(long bytes, Guid key, CancellationToken token)
         {
             if (bytes > Capacity)
                 throw new ArgumentOutOfRangeException(nameof(bytes), bytes, $"more than the budget of {Capacity} bytes");
@@ -86,13 +92,14 @@ namespace HSMServer.SensorApi.Sessions
 
             lock (_lock)
             {
-                if (_waiters.Count == 0 && _inUse + bytes <= Capacity)
+                if (_waiters.Count == 0 && _inUse + bytes <= Capacity && !_holders.Contains(key))
                 {
                     _inUse += bytes;
+                    _holders.Add(key);
                     return;
                 }
 
-                waiter = new Waiter(bytes);
+                waiter = new Waiter(bytes, key);
                 node = _waiters.AddLast(waiter);
             }
 
@@ -100,13 +107,16 @@ namespace HSMServer.SensorApi.Sessions
                 await waiter.Granted.Task.ConfigureAwait(false);
         }
 
-        public void Release(long bytes)
+        public void Release(long bytes, Guid key)
         {
             if (bytes <= 0)
                 return;
 
             lock (_lock)
+            {
                 _inUse -= bytes;
+                _holders.Remove(key);
+            }
 
             Wake();
         }
@@ -128,19 +138,34 @@ namespace HSMServer.SensorApi.Sessions
             Wake();
         }
 
-        // Grants the waiters at the head that fit, in order: a large waiter at the head is not
-        // overtaken by smaller ones behind it.
+        // Grants the waiters that fit, in order: a large waiter is not overtaken by smaller ones behind
+        // it. A waiter whose key holds a take is passed over (it waits for its own key, not for the
+        // bytes), and does not hold back the waiters of other keys behind it.
         private void Wake()
         {
             List<Waiter> granted = null;
 
             lock (_lock)
             {
-                while (_waiters.First is { } first && _inUse + first.Value.Bytes <= Capacity)
+                var node = _waiters.First;
+
+                while (node is not null)
                 {
-                    _inUse += first.Value.Bytes;
-                    _waiters.RemoveFirst();
-                    (granted ??= []).Add(first.Value);
+                    var next = node.Next;
+                    var waiter = node.Value;
+
+                    if (!_holders.Contains(waiter.Key))
+                    {
+                        if (_inUse + waiter.Bytes > Capacity)
+                            break;
+
+                        _inUse += waiter.Bytes;
+                        _holders.Add(waiter.Key);
+                        _waiters.Remove(node);
+                        (granted ??= []).Add(waiter);
+                    }
+
+                    node = next;
                 }
             }
 
@@ -150,9 +175,11 @@ namespace HSMServer.SensorApi.Sessions
         }
 
 
-        private sealed class Waiter(long bytes)
+        private sealed class Waiter(long bytes, Guid key)
         {
             public long Bytes { get; } = bytes;
+
+            public Guid Key { get; } = key;
 
             public TaskCompletionSource Granted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
@@ -166,8 +193,10 @@ namespace HSMServer.SensorApi.Sessions
     // takes, at most MaxTableFrameBytes), and only then gets a buffer: an exact allocation, never
     // the shared pool, so a large frame leaves nothing pooled behind. The reservation is held until
     // the frame is done (its put answered) and is taken while holding nothing else, so connections
-    // waiting for it cannot hold each other up.
-    internal sealed class TableFrameMemory(TableFrameBudget budget, int maxFrameBytes, Func<CancellationToken, Task> waitForBudget) : IFrameMemory, IDisposable
+    // waiting for it cannot hold each other up. `key` is the access key of the connection (one take
+    // per key); `reserved` is called once the reservation is held (the frame's deadline starts).
+    internal sealed class TableFrameMemory(TableFrameBudget budget, int maxFrameBytes, Guid key, Func<CancellationToken, Task> waitForBudget,
+        Action reserved = null) : IFrameMemory, IDisposable
     {
         public const int FreeAllowance = 64 * 1024;
 
@@ -189,10 +218,11 @@ namespace HSMServer.SensorApi.Sessions
             {
                 var reservation = ReservationFor(maxFrameBytes);
 
-                if (!budget.TryTake(reservation))
+                if (!budget.TryTake(reservation, key))
                     await waitForBudget(token).ConfigureAwait(false);
 
                 Interlocked.Exchange(ref _reserved, reservation);
+                reserved?.Invoke();
             }
 
             return GC.AllocateUninitializedArray<byte>(size);
@@ -206,7 +236,7 @@ namespace HSMServer.SensorApi.Sessions
         }
 
         // The frame is done: its buffer and the put's copy are no longer used.
-        public void EndFrame() => budget.Release(Interlocked.Exchange(ref _reserved, 0));
+        public void EndFrame() => budget.Release(Interlocked.Exchange(ref _reserved, 0), key);
 
         public void Dispose() => EndFrame();
     }

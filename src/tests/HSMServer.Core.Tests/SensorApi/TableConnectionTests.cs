@@ -699,6 +699,165 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // === What one frame can make the server hold (independent review of #1865) ===
+
+        // A block of many refused tables: the ack lists at most the first 100, each name cut for
+        // printing, with the exact count in refusedCount; the block is judged as before, and the
+        // stored envelope records every refused table.
+        [Fact]
+        public async Task ABlockOfManyRefusedTables_GetsASmallAck_WithTheExactCount()
+        {
+            await using var host = await StartHost();
+            var sensor = await RegisterAsync("q");
+
+            using var table = await OpenTableAsync(host);
+
+            var unknown = Enumerable.Range(0, 150).Select(i => ($"unknown/{i:D3}/" + new string('x', 400), T0, 1.0)).ToArray();
+
+            await table.SendBlockAsync(1, _producer, 1, Block(unknown));
+            var refused = await table.ReceiveAckAsync();
+
+            Assert.Equal("allRefused", refused.Outcome);
+            Assert.Equal(150, refused.RefusedCount);
+            Assert.Equal(100, refused.Refused.Count);
+            Assert.All(refused.Refused, entry => Assert.True(entry.Table.Length <= 256 + "...".Length, $"a name of {entry.Table.Length} characters"));
+            Assert.Equal(Enumerable.Range(0, 100), refused.Refused.Select(entry => entry.Index));
+            Assert.True(refused.Raw.ToJsonString().Length < 40_000, $"an ack of {refused.Raw.ToJsonString().Length} characters");
+
+            await table.SendBlockAsync(2, _producer, 2, Block(unknown.Append(("q", T0, 5.0)).ToArray()));
+            var stored = await table.ReceiveAckAsync();
+
+            Assert.Equal("stored", stored.Outcome);
+            Assert.Equal(150, stored.RefusedCount);
+            Assert.Equal(100, stored.Refused.Count);
+            Assert.Equal(1, Read(sensor).RowCount);
+
+            var store = _databaseCoreManager.DatabaseCore.TableBlocks;
+            var entry = store.GetBlocks(TestProductsManager.ProductId)[^1];
+            Assert.Equal(150, store.ReadBlock(entry).Envelope.Refusals.Count);
+        }
+
+        // A frame the store does not take as a block names no producer: it is not noted, and so it
+        // is never reported as a second connection of that producer.
+        [Fact]
+        public async Task AFrameThatIsNotABlock_IsNotNotedAsAProducer()
+        {
+            await using var host = await StartHost();
+            await RegisterAsync("q");
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            await first.SendBlockAsync(1, _producer, 1, Block("q", (T0, 1.0, 1L)));
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+
+            await second.SendBlockAsync(1, _producer, 2, [1, 2, 3, 4, 5, 6, 7, 8]);
+            Assert.Equal(400, (await second.ReceiveAckAsync()).Status);
+
+            Assert.Empty(host.Log.Matching("Two live table connections"));
+        }
+
+        // The producer-conflict warning is one line a minute for the whole server, with the count
+        // of the conflicts since the last line: producer ids are the clients', so a per-id throttle
+        // would let ever new ids write a line each.
+        [Fact]
+        public async Task ProducerConflicts_AreOneLineAMinute_ForTheWholeServer_WithACount()
+        {
+            await using var host = await StartHost();
+            await RegisterAsync("q");
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            var other = Guid.NewGuid();
+
+            await first.SendBlockAsync(1, _producer, 1, Block("q", (T0, 1.0, 1L)));
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            await second.SendBlockAsync(1, _producer, 2, Block("q", (T0.AddSeconds(1), 2.0, 2L)));
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+
+            await first.SendBlockAsync(2, other, 1, Block("q", (T0.AddSeconds(2), 3.0, 3L)));
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            await second.SendBlockAsync(2, other, 2, Block("q", (T0.AddSeconds(3), 4.0, 4L)));
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+
+            Assert.Single(host.Log.Matching("Two live table connections"));
+
+            host.Time.Advance(TimeSpan.FromMinutes(1));
+
+            await second.SendBlockAsync(3, other, 3, Block("q", (T0.AddSeconds(4), 5.0, 5L)));
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+
+            var lines = host.Log.Matching("Two live table connections");
+
+            Assert.Equal(2, lines.Length);
+            Assert.Contains("2 such block(s)", lines[1].Message);
+        }
+
+        // A large frame holds its reservation of the budget for at most the silence limit from the
+        // reservation, however its bytes trickle in: then the connection is cut and the bytes go back.
+        [Fact]
+        public async Task AReservedFrame_HasADeadline_ThatArrivingBytesDoNotMove()
+        {
+            await using var host = await StartBudgetHost();
+            var budget = host.Handler.TableBudget;
+            var before = host.Time.Timers.Count;
+
+            using var table = await OpenTableAsync(host);
+
+            var frame = TableConnectionTestClient.Frame(1, 1, _producer, 1, new byte[200 * 1024]);
+
+            await table.Socket.SendAsync(frame.AsMemory(0, 100 * 1024), WebSocketMessageType.Binary, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => budget.InUse == BudgetReservation, "the frame to reserve its bytes");
+
+            var limit = new CollectorSessionsConfig().SilenceLimit;
+            ManualTimer deadline = null;
+
+            await TestWait.UntilAsync(() => (deadline = host.Time.Timers.Skip(before).FirstOrDefault(t => t.DueTime == limit && t.Arms == 1)) is not null,
+                "the deadline of the reserved frame to be set");
+
+            await table.Socket.SendAsync(frame.AsMemory(100 * 1024, 50 * 1024), WebSocketMessageType.Binary, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => host.Registry.TableConnectionCount == 1 && budget.InUse == BudgetReservation, "the connection to read on");
+
+            Assert.Equal(1, deadline.Arms);
+
+            deadline.Fire();
+
+            await TestWait.UntilAsync(() => budget.InUse == 0 && host.Registry.TableConnectionCount == 0, "the reservation to go back with the connection");
+        }
+
+        // An access key holds at most one reservation: a second large frame of the same key waits for
+        // the first, even with room in the budget.
+        [Fact]
+        public async Task ASecondLargeFrameOfOneKey_WaitsForTheFirst_EvenWithRoomInTheBudget()
+        {
+            await using var host = await StartHost(sessions => { sessions.MaxTableFrameBytes = BudgetFrameBytes; sessions.MaxTableBytesInFlight = 2 * BudgetReservation; });
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            var frame = TableConnectionTestClient.Frame(1, 1, _producer, 1, LargeBlock("q", 1));
+
+            await first.Socket.SendAsync(frame.AsMemory(0, frame.Length - 1), WebSocketMessageType.Binary, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => budget.InUse == BudgetReservation, "the first frame to reserve its bytes");
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame of the key to wait");
+            Assert.Equal(BudgetReservation, budget.InUse);
+
+            await first.Socket.SendAsync(frame.AsMemory(frame.Length - 1), WebSocketMessageType.Binary, endOfMessage: true, Deadline());
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+            await sending;
+
+            await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
+        }
+
+
         // === The table frame budget ===
 
         // The budget holds one large frame (CollectorSessions.MaxTableBytesInFlight = what one

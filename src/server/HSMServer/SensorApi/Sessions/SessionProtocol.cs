@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Text.Json;
 using HSMServer.Core.TableSensors;
@@ -82,6 +83,7 @@ namespace HSMServer.SensorApi.Sessions
         private static readonly JsonEncodedText _tables = JsonEncodedText.Encode("tables");
         private static readonly JsonEncodedText _refused = JsonEncodedText.Encode("refused");
         private static readonly JsonEncodedText _refusedKnown = JsonEncodedText.Encode("refusedKnown");
+        private static readonly JsonEncodedText _refusedCount = JsonEncodedText.Encode("refusedCount");
         private static readonly JsonEncodedText _index = JsonEncodedText.Encode("index");
         private static readonly JsonEncodedText _table = JsonEncodedText.Encode("table");
         private static readonly JsonEncodedText _reason = JsonEncodedText.Encode("reason");
@@ -147,7 +149,12 @@ namespace HSMServer.SensorApi.Sessions
         // null when they are not known (a duplicate whose first put cannot be read back, or, after
         // the merge of #1850, was merged and deleted): the list is then left out and
         // "refusedKnown":false says so.
-        public static void WriteBlockAck(IBufferWriter<byte> output, long id, string outcome, int tables, IReadOnlyList<TableRefusalInfo> refused)
+        // At most the first MaxAckedRefusals refused tables, each identifier cut for printing, and the exact count in
+        // refusedCount: a block of tens of thousands of refused tables must not make an ack of tens of megabytes.
+        public const int MaxAckedRefusals = 100;
+        public const int MaxAckedTableIdLength = 256;
+
+        public static void WriteBlockAck(IBufferWriter<byte> output, long id, string outcome, int tables, IReadOnlyList<TableRefusalInfo> refused, int refusedCount)
         {
             using var writer = new Utf8JsonWriter(output);
 
@@ -166,13 +173,14 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
+            writer.WriteNumber(_refusedCount, refusedCount);
             writer.WriteStartArray(_refused);
 
-            foreach (var refusal in refused)
+            foreach (var refusal in refused.Take(MaxAckedRefusals))
             {
                 writer.WriteStartObject();
                 writer.WriteNumber(_index, refusal.Index);
-                writer.WriteString(_table, refusal.TableId);
+                writer.WriteString(_table, CollectorSession.Printable(refusal.TableId, MaxAckedTableIdLength));
                 writer.WriteString(_reason, refusal.Reason.ToString());
                 writer.WriteEndObject();
             }

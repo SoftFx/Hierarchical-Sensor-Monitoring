@@ -509,7 +509,9 @@ namespace HSMServer.SensorApi.Sessions
             {
                 if (_handling)
                 {
-                    _closeRequest = (status, reason);
+                    // The first close asked for stands: the shutdown's 1001 is not overwritten by the 1000 of
+                    // the session ending under it.
+                    _closeRequest ??= (status, reason);
                     return;
                 }
 
