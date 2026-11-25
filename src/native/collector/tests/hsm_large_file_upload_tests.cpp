@@ -20,6 +20,7 @@
 #include "file_server_script.hpp"
 #include "ws_test_server.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -677,6 +678,35 @@ namespace
         hsm_large_file_release(file);
     }
 
+    // A piece without an answer is sent again on a new connection once the request timeout passed.
+    void NativeLargeFileUnansweredPieceIsSentAgain()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("silent.dmp");
+        const std::string bytes = Content(3 * 65536, 3);
+        WriteFile(source, bytes);
+        rig.script->AnswerPieceNext(FileScriptAnswer::Default());
+        rig.script->AnswerPieceNext(FileScriptAnswer::NoAnswer());
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor(
+                  [&] {
+                      rig.Advance(1000);
+                      return Settled(file);
+                  },
+                  30),
+              "settled" + rig.log.All());
+        Check(Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file));
+        std::vector<std::int64_t> numbers;
+        for (const auto& piece : rig.script->Pieces())
+            numbers.push_back(piece.number);
+        Check(numbers == std::vector<std::int64_t>{ 0, 1, 1, 2 }, "the unanswered piece again");
+        Check(rig.script->StoredFiles().begin()->second == bytes, "the bytes");
+        hsm_large_file_release(file);
+    }
+
     void NativeLargeFileEmptyFileIsStored()
     {
         Rig rig;
@@ -826,7 +856,10 @@ namespace
         Check(WaitFor(
                   [&] {
                       rig.Advance(1000);
-                      return rig.script->Discards().size() == 1;
+                      // On the new connection the first discard is answered 404 (it holds no upload);
+                      // the collector begins with the facts it began with, then discards that upload.
+                      const auto discards = rig.script->Discards();
+                      return std::any_of(discards.begin(), discards.end(), [](const FileServerScript::DiscardRecord& d) { return d.status == 200; });
                   },
                   30),
               "the upload is discarded" + rig.log.All());
@@ -856,6 +889,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_close_1008_is_final", [](const std::string&) { NativeLargeFileClose1008IsFinal(); } },
         { "native_large_file_corrupt_state_is_set_aside", [](const std::string&) { NativeLargeFileCorruptStateIsSetAside(); } },
         { "native_large_file_checksum_mismatch_sends_the_piece_again", [](const std::string&) { NativeLargeFileChecksumMismatchSendsThePieceAgain(); } },
+        { "native_large_file_unanswered_piece_is_sent_again", [](const std::string&) { NativeLargeFileUnansweredPieceIsSentAgain(); } },
         { "native_large_file_cpp_wrapper", [](const std::string&) { NativeLargeFileCppWrapper(); } },
         { "native_large_file_empty_file_is_stored", [](const std::string&) { NativeLargeFileEmptyFileIsStored(); } },
         { "native_large_file_http_transport_is_unavailable", [](const std::string&) { NativeLargeFileHttpTransportIsUnavailable(); } },
