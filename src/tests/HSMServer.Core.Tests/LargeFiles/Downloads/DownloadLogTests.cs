@@ -43,10 +43,11 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             }
         }
 
-        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit)
+        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null)
         {
             lock (_lock)
-                return _rows.Where(r => r.TimeTicks >= fromTicks && r.TimeTicks <= toTicks && (productId is null || r.ProductId == productId))
+                return _rows.Where(r => r.TimeTicks >= fromTicks && r.TimeTicks <= toTicks && (productId is null || r.ProductId == productId) &&
+                                        (fileId is null || r.FileId == fileId))
                             .OrderByDescending(r => r.TimeTicks).Take(limit).ToList();
         }
 
@@ -271,6 +272,35 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
         [Fact]
+        public void ReadFile_Returns_The_Records_Of_One_File_Newest_First_With_A_Limit()
+        {
+            var sameProductOtherFile = Target(_archive.ProductId);
+            var otherProductSameFileId = _archive with { ProductId = Guid.NewGuid(), ArchiveId = Guid.NewGuid() };
+            var reencrypted = _archive with { ArchiveId = Guid.NewGuid(), PasswordVersion = 4 };
+
+            for (var i = 0; i < 4; i++)
+            {
+                _log.Record(_user with { UserId = Guid.NewGuid() }, i == 3 ? reencrypted : _archive, Start.AddHours(i));
+                _log.Record(_user with { UserId = Guid.NewGuid() }, sameProductOtherFile, Start.AddHours(i));
+                _log.Record(_user with { UserId = Guid.NewGuid() }, otherProductSameFileId, Start.AddHours(i));
+            }
+
+            var all = _log.ReadFile(_archive.ProductId, _archive.FileId, 100);
+
+            Assert.Equal([Start.AddHours(3), Start.AddHours(2), Start.AddHours(1), Start], all.Select(r => r.TimeUtc));
+            Assert.All(all, r =>
+            {
+                Assert.Equal(_archive.ProductId, r.ProductId);
+                Assert.Equal(_archive.FileId, r.FileId);
+            });
+            Assert.Equal(4, all[0].PasswordVersion); // every archive of the file, the re-encrypted one included
+
+            Assert.Equal([Start.AddHours(3), Start.AddHours(2)], _log.ReadFile(_archive.ProductId, _archive.FileId, 2).Select(r => r.TimeUtc));
+            Assert.Empty(_log.ReadFile(_archive.ProductId, _archive.FileId, 0));
+            Assert.Empty(_log.ReadFile(_archive.ProductId, Guid.NewGuid(), 10));
+        }
+
+        [Fact]
         public void RemoveOlderThan_Removes_Strictly_Older_Records()
         {
             for (var i = 0; i < 4; i++)
@@ -381,6 +411,13 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             Assert.Equal(2, reread.Read(target.ProductId, Start, Start.AddDays(10), 2).Count);
             Assert.Equal(11, reopened.DownloadLog.Read(0, long.MaxValue, null, 100).Count);
+
+            // One file's records, newest first, the limit counted after the file filter.
+            Assert.Equal([Start.AddDays(4), Start.AddDays(4), Start.AddDays(3)],
+                reread.ReadFile(target.ProductId, target.FileId, 3).Select(r => r.TimeUtc));
+            Assert.All(reread.ReadFile(other.ProductId, other.FileId, 100), r => Assert.Equal(other.FileId, r.FileId));
+            Assert.Equal(5, reread.ReadFile(other.ProductId, other.FileId, 100).Count);
+            Assert.Empty(reread.ReadFile(target.ProductId, other.FileId, 100));
 
             Assert.Equal(4, reread.RemoveOlderThan(Start.AddDays(2)));
             Assert.Equal([Start.AddDays(4), Start.AddDays(4), Start.AddDays(3), Start.AddDays(2)],

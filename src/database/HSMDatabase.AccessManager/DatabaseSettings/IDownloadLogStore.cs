@@ -11,9 +11,10 @@ namespace HSMDatabase.AccessManager.DatabaseSettings
         // Throws when the record cannot be written (the database cannot be opened, or the write fails).
         void Put(DownloadRecordEntity entity);
 
-        // Records with fromTicks <= time <= toTicks, newest first, at most `limit`; only the product's when productId is set.
-        // A row that cannot be parsed is skipped.
-        List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit);
+        // Records with fromTicks <= time <= toTicks, newest first, at most `limit`; only the product's when productId is set,
+        // only the file's when fileId is set (the limit counts the records that pass both). A row that cannot be parsed is
+        // skipped.
+        List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null);
 
         // Removes every record strictly older than the ticks; returns how many.
         int RemoveOlderThan(long ticksExclusive);

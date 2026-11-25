@@ -118,6 +118,14 @@ namespace HSMServer.Core.LargeFiles.Downloads
             return _store.Read(fromUtc.Ticks, toUtc.Ticks, productId, limit).Select(ToRecord).ToList();
         }
 
+        public IReadOnlyList<DownloadRecord> ReadFile(Guid productId, Guid fileId, int limit)
+        {
+            if (limit <= 0)
+                return [];
+
+            return _store.Read(DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks, productId, limit, fileId).Select(ToRecord).ToList();
+        }
+
         public int RemoveOlderThan(DateTime utc) => _store.RemoveOlderThan(utc.Ticks);
 
 

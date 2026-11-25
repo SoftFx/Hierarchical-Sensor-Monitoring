@@ -33,6 +33,7 @@ namespace HSMServer.Core.LargeFiles.Downloads
 
         public Guid ArchiveId { get; init; }
 
+        /// <summary>The dump password version the archive opens with; 0 for a file that is not secure.</summary>
         public int PasswordVersion { get; init; }
 
         public string FileName { get; init; }
@@ -51,7 +52,7 @@ namespace HSMServer.Core.LargeFiles.Downloads
     }
 
 
-    /// <summary>What is downloaded, as the download decided it.</summary>
+    /// <summary>What is downloaded, as the download decided it. <c>PasswordVersion</c> is 0 for a file that is not secure.</summary>
     public sealed record DownloadTarget(Guid ProductId, Guid SensorId, Guid FileId, Guid ArchiveId, int PasswordVersion, string FileName);
 
 
@@ -73,6 +74,12 @@ namespace HSMServer.Core.LargeFiles.Downloads
 
         /// <summary>Records of a product in a time range, newest first, at most <paramref name="limit"/>.</summary>
         IReadOnlyList<DownloadRecord> Read(Guid productId, DateTime fromUtc, DateTime toUtc, int limit);
+
+        /// <summary>
+        /// Records of one file of a product (every archive of it), newest first, at most <paramref name="limit"/>, over the
+        /// whole retention.
+        /// </summary>
+        IReadOnlyList<DownloadRecord> ReadFile(Guid productId, Guid fileId, int limit);
 
         /// <summary>Removes records older than the time; returns how many.</summary>
         int RemoveOlderThan(DateTime utc);

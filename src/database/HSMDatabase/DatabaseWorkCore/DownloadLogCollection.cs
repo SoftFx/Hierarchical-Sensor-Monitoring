@@ -55,7 +55,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit)
+        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null)
         {
             var records = new List<DownloadRecordEntity>();
 
@@ -81,7 +81,7 @@ namespace HSMDatabase.DatabaseWorkCore
                         continue;
                     }
 
-                    if (entity is null || (productId is { } product && entity.ProductId != product))
+                    if (entity is null || (productId is { } product && entity.ProductId != product) || (fileId is { } file && entity.FileId != file))
                         continue;
 
                     records.Add(entity);
