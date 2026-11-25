@@ -191,6 +191,74 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Directory.Delete(root, recursive: true);
         }
 
+        /// <summary>
+        /// What retention and a read's plan scan with years of hourly commits (#1850 part 4b, a recorded limitation): one
+        /// product with five years of merged hours (43,800 records in Hours, 261 week databases of one class kept for
+        /// ever, 100 sensors with a placement), each hour one small batch, so that only the number of hours and weeks
+        /// counts. Measured on a store opened fresh: the open (every record of Hours loaded), the calls a retention pass
+        /// and a plan make under the product's lock (GetHours when its list must be built again and when it is cached,
+        /// GetHoursWithoutDatabases, GetWeeks, GetPlacements), and the rebuild of Hours and of Placements at an open.
+        /// <c>HSM_TABLE_BATCH_STORE_BENCH=1 dotnet test --filter "FullyQualifiedName~Five_years_of_hourly_commits"</c>
+        /// </summary>
+        [TableBatchStoreBenchmarkFact]
+        public void Five_years_of_hourly_commits()
+        {
+            const int Hours = 5 * 365 * 24;
+            var product = Guid.NewGuid();
+            var root = Path.Combine(_root, "five-years");
+            var sensors = Enumerable.Range(1, 100).Select(i => new Guid(i, 0, 0, new byte[8])).ToArray();
+
+            output.WriteLine($"runtime {RuntimeInformation.FrameworkDescription}, {RuntimeInformation.OSDescription}");
+
+            var store = new TableBatchDatabase(root);
+            foreach (var sensor in sensors)
+                store.SetPlacement(product, sensor, new TablePlacement(0, Week0));
+
+            var watch = Stopwatch.StartNew();
+            for (int h = 0; h < Hours; h++)
+            {
+                long hour = Week0 + h * Hour;
+                var batch = new TableBatchToWrite(sensors[h % sensors.Length], hour + 1, hour + 2, 2, [1, 2, 3, 4, 5, 6, 7, 8]);
+                store.WriteHour(product, Commit(hour, h), [new TableBatchHourPart(0, [batch])]);
+            }
+            output.WriteLine($"written: {Hours:N0} hours in {store.GetWeeks(product).Count} week databases, {watch.Elapsed.TotalSeconds:N0} s, {Size(root) / 1048576.0:N1} MB");
+            store.Dispose();
+
+            double Ms(Action action, int times = 1)
+            {
+                var w = Stopwatch.StartNew();
+                for (int i = 0; i < times; i++)
+                    action();
+                return w.Elapsed.TotalMilliseconds / times;
+            }
+
+            // A fresh open: the first call loads Hours and Placements.
+            store = new TableBatchDatabase(root);
+            output.WriteLine($"open (Hours and Placements loaded, through GetWeeks): {Ms(() => store.GetWeeks(product)):N1} ms");
+            output.WriteLine($"GetHours, its list built ({Hours:N0} hours x has-a-database): {Ms(() => store.GetHours(product)):N1} ms");
+            output.WriteLine($"GetHours, cached: {Ms(() => store.GetHours(product), 100):N3} ms");
+            output.WriteLine($"GetHoursWithoutDatabases (never cached; once per product and retention pass): {Ms(() => store.GetHoursWithoutDatabases(product), 5):N1} ms");
+            output.WriteLine($"GetWeeks (sorted copy): {Ms(() => store.GetWeeks(product), 100):N3} ms; GetPlacements (copy of 100): {Ms(() => store.GetPlacements(product), 100):N3} ms");
+            output.WriteLine($"IsHourMerged: {Ms(() => store.IsHourMerged(product, Week0 + 1000 * Hour), 1000) * 1000:N2} us");
+
+            // The list of GetHours is built again after every commit, drop and forgotten hour: one more hour, then the list.
+            long next = Week0 + (long)Hours * Hour;
+            store.WriteHour(product, Commit(next, Hours), [new TableBatchHourPart(0, [new TableBatchToWrite(sensors[0], next + 1, next + 2, 2, [1, 2, 3])])]);
+            output.WriteLine($"GetHours after one more commit (built again): {Ms(() => store.GetHours(product)):N1} ms");
+            store.Dispose();
+
+            // The rebuilds at an open: Hours from the marks, Placements from the indexes.
+            Directory.Delete(Path.Combine(root, TableBatchDatabase.FolderName, product.ToString("N"), TableBatchDatabase.HoursName), recursive: true);
+            store = new TableBatchDatabase(root);
+            output.WriteLine($"open with Hours rebuilt from the marks of every week database: {Ms(() => store.GetWeeks(product)):N0} ms ({store.Statistics.HoursRebuilt:N0} hours)");
+            store.Dispose();
+
+            Directory.Delete(Path.Combine(root, TableBatchDatabase.FolderName, product.ToString("N"), TableBatchDatabase.PlacementsName), recursive: true);
+            store = new TableBatchDatabase(root);
+            output.WriteLine($"open with Placements rebuilt from the indexes: {Ms(() => store.GetWeeks(product)):N0} ms ({store.GetPlacements(product).Count} sensors)");
+            store.Dispose();
+        }
+
         private void TenProducts(List<TableBatchToWrite> hour, Guid median)
         {
             var root = Path.Combine(_root, "ten");
