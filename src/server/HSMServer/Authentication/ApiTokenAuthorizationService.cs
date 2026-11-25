@@ -76,6 +76,15 @@ namespace HSMServer.Authentication
         // answers 403 and discloses nothing about any concrete target, so it
         // must not feed the enumeration-probe signal of per-target 404s.
         ApiTokenAuthorization AuthorizeProductCreate(ClaimsPrincipal principal);
+
+        // Decision for creating a chat — the admin-only write that has no boundary to
+        // authorize against (the chat does not exist yet). The web UI's AddChat is
+        // admin-only — a chat created with an attacker-supplied webhook URL would
+        // exfiltrate every alert sent to it — and the mirror keeps that rule: an admin
+        // owner with a read-write token is allowed. Unlike the Global-boundary writes it
+        // answers Forbidden, never NotFound: a creation has no target whose existence a
+        // 403 could disclose. A denial is recorded ONCE, as AuthorizationDenied.
+        ApiTokenAuthorization AuthorizeChatCreate(ClaimsPrincipal principal);
     }
 
 
@@ -136,6 +145,15 @@ namespace HSMServer.Authentication
             // read-only tokens on unsafe methods — so every transport (REST,
             // MCP) gets the same decision from this one place.
             if (TryResolveCaller(principal, out _, out var readOnly) && !readOnly)
+                return ApiTokenAuthorization.Allowed;
+
+            Record(principal, write: true, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
+            return ApiTokenAuthorization.Forbidden;
+        }
+
+        public ApiTokenAuthorization AuthorizeChatCreate(ClaimsPrincipal principal)
+        {
+            if (TryResolveCaller(principal, out var owner, out var readOnly) && owner.IsAdmin && !readOnly)
                 return ApiTokenAuthorization.Allowed;
 
             Record(principal, write: true, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);

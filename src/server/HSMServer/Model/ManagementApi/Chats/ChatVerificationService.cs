@@ -6,7 +6,6 @@ using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.ComponentModel;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -59,10 +58,10 @@ namespace HSMServer.Model.ManagementApi.Chats
             // The area's anti-enumeration split: an INVISIBLE chat answers the same 404 as an
             // unknown one (global or bound to a folder the caller can see); only a visible
             // chat the caller may not operate on answers 403.
-            if (chat is null || !IsChatVisible(caller, chat))
+            if (chat is null || !ChatSight.IsVisible(caller, chat, _authorization))
                 return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.NotFound);
 
-            if (!CanOperate(caller, chat))
+            if (!ChatSight.CanOperate(caller, chat, _authorization))
                 return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.Forbidden);
 
             if (!TryChannel(channel, out var parsed))
@@ -95,10 +94,10 @@ namespace HSMServer.Model.ManagementApi.Chats
         {
             var chat = _chats[chatId];
 
-            if (chat is null || !IsChatVisible(caller, chat))
+            if (chat is null || !ChatSight.IsVisible(caller, chat, _authorization))
                 return Fail<ChatInvitationDto>(PolicyWriteOutcome.NotFound);
 
-            if (!CanOperate(caller, chat))
+            if (!ChatSight.CanOperate(caller, chat, _authorization))
                 return Fail<ChatInvitationDto>(PolicyWriteOutcome.Forbidden);
 
             var isDirect = kind is "direct";
@@ -132,18 +131,6 @@ namespace HSMServer.Model.ManagementApi.Chats
                 ExpiresAt = expiresAt,
                 NextSteps = isDirect ? [.. ChatInvitationDto.DirectNextSteps] : [.. ChatInvitationDto.GroupNextSteps],
             });
-        }
-
-        private bool CanOperate(ClaimsPrincipal caller, Chat chat) =>
-            _authorization.CanSeeChatDetail(caller, StableCopy.Of(() => chat.Folders));
-
-        // The chat sight rule of the read service (ChatsReadService.IsChatVisible): global, or
-        // bound to at least one folder the caller can see.
-        private bool IsChatVisible(ClaimsPrincipal caller, Chat chat)
-        {
-            var folders = StableCopy.Of(() => chat.Folders);
-
-            return folders.Count == 0 || folders.Any(id => _authorization.IsVisible(caller, ApiTokenResource.Folder(id)));
         }
 
         private User ResolveOwner(ClaimsPrincipal caller) =>

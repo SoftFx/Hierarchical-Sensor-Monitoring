@@ -769,6 +769,59 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
 
+        // ---- chat creation (the admin-only boundary-less write, #1829) ------------
+
+
+        [Fact]
+        public void ChatCreate_AdminOwner_ReadWriteToken_Allowed()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Allowed, CreateService().AuthorizeChatCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ChatCreate_NonAdminOwner_Forbidden()
+        {
+            // The web UI's AddChat is admin-only — a chat created with an attacker-supplied
+            // webhook would exfiltrate every alert sent to it — and the mirror keeps that.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, CreateService().AuthorizeChatCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ChatCreate_ReadOnlyToken_Forbidden()
+        {
+            // Even an admin's read-only credential cannot create.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: true);
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, CreateService().AuthorizeChatCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ChatCreate_Denial_IsRecordedOnceAsDenied_NeverAsNotFound()
+        {
+            // A creation has no target, so there is nothing to enumerate: the refusal is the
+            // 403 signal — one AuthorizationDenied record, never the per-target 404 signal.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeChatCreate(Principal()));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+        }
+
+
         private static ApiTokenInfo BuildInfo(bool readOnly = false) => new()
         {
             EntityId = Guid.NewGuid(),

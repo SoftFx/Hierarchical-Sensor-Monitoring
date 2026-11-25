@@ -16,8 +16,12 @@ namespace HSMServer.Model.Notifications
         // bot-invite path can build an invitation token against it before any row is in storage.
         public bool IsNewChat { get; set; }
 
-        [Required(ErrorMessage = "Name is required")]
-        [StringLength(100, ErrorMessage = "{0} length should be less than {1}.")]
+        // The messages are the write engine's own (ChatNameValidator): the form enforces the
+        // two rules client- and server-side before the engine runs, and the engine — the one
+        // rule behind this form and the management API (#1829) — repeats them for every other
+        // caller and adds the uniqueness check.
+        [Required(ErrorMessage = ChatNameValidator.NameRequiredMessage)]
+        [StringLength(ChatNameValidator.NameMaxLength, ErrorMessage = "{0} length should be less than {1}.")]
         public string Name { get; set; }
 
         public string Description { get; set; }

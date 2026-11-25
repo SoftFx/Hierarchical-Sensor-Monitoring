@@ -339,13 +339,127 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
 
-        private static ChatEntity BuildChatEntity(Guid id, bool telegramBound = false) =>
+        // #1829: chat names are unique per server — one rule for the web form and the API,
+        // ignoring case and excluding the chat itself.
+        [Fact]
+        public async Task CreateChat_NameHeldByAnotherChat_IgnoringCase_AnswersInvalid_AndStoresNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, chat: null);
+            _chats.Setup(m => m.GetValues()).Returns([new Chat(BuildChatEntity(Guid.NewGuid(), name: "Ops alerts"))]);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "OPS ALERTS" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Chat with the same name already exists."], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        // A creation carries no name at all: the name is required there, while a partial
+        // update may omit it.
+        [Fact]
+        public async Task CreateChat_NoName_AnswersInvalid_AndStoresNothing()
+        {
+            SetupNoChatAnywhere();
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Name is required"], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData("   ", "Name is required")]
+        [InlineData("", "Name is required")]
+        [InlineData("The name of this chat is far too long for a chat name because it has more than one hundred characters in it, which the form forbids!",
+            "Name length should be less than 100.")]
+        public async Task CreateChat_NameBreakingARule_AnswersInvalid_AndStoresNothing(string name, string message)
+        {
+            SetupNoChatAnywhere();
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = name },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([message], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateChat_NameWithSurroundingSpaces_IsStoredTrimmed()
+        {
+            SetupNoChatAnywhere();
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "  Ops  " },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.True(result.Success);
+            _chats.Verify(m => m.TryAdd(It.Is<Chat>(c => c.Name == "Ops")), Times.Once);
+        }
+
+        // The uniqueness check excludes the chat itself: keeping a chat's own name in
+        // another letter case is no clash with it.
+        [Fact]
+        public async Task UpdateChat_RenameToItsOwnNameInAnotherCase_IsAccepted()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns([new Chat(BuildChatEntity(chatId, name: "Ops"))]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "OPS" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+        [Fact]
+        public async Task UpdateChat_RenameToAnotherChatsName_AnswersInvalid_AndChangesNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Ops")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "On-call")),
+            ]);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "ON-CALL" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Chat with the same name already exists."], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+        // A partial update that omits the name leaves the name rule alone — an update may
+        // rename nothing.
+        [Fact]
+        public async Task UpdateChat_WithoutName_IsNotCheckedAgainstTheNameRule()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+
+        private static ChatEntity BuildChatEntity(Guid id, bool telegramBound = false, string name = "pre-created") =>
             new()
             {
                 Id = id.ToByteArray(),
                 Author = AuthorId.ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                Name = "pre-created",
+                Name = name,
                 SendMessages = Chat.DefaultSendMessages,
                 MessagesAggregationTimeSec = Chat.DefaultMessagesAggregationTimeSec,
                 TelegramChatId = telegramBound ? 12345L : null,

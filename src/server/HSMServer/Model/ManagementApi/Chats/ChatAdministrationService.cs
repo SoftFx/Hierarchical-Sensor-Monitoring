@@ -12,16 +12,15 @@ using System.Threading.Tasks;
 namespace HSMServer.Model.ManagementApi.Chats
 {
     /// <summary>
-    /// The write engine behind the chat web flows (#1825): create (idempotent towards a row
-    /// pre-created by the Telegram /start flow), partial update with the explicit channel-clear
-    /// flags, webhook URL-shape validation in one place, and the chat-folder binding under the
-    /// "only folders the caller manages" rule. The web controller delegates here; the
-    /// /api/v1 + MCP surface (#1829) will call the same engine. Transport-agnostic: it answers
-    /// the area's write envelope (<see cref="PolicyWriteResult"/>), never an IActionResult.
-    /// The NAME rule (required, at most 100 characters) is not here yet — it lives in the
-    /// view model's DataAnnotations, so the web flow enforces it but a non-MVC caller does
-    /// not; #1829 moves it behind the shared name validator of the chat-setup initiative
-    /// (docs/initiatives/chat-setup-via-mcp.md) before the API/MCP write surface ships.
+    /// The write engine behind the chat web flows (#1825) and the management surface
+    /// (#1829): create (idempotent towards a row pre-created by the Telegram /start flow),
+    /// partial update with the explicit channel-clear flags, the chat name rule
+    /// (<see cref="ChatNameValidator"/>), webhook URL-shape validation in one place, and the
+    /// chat-folder binding under the "only folders the caller manages" rule. Transport-
+    /// agnostic: it answers the area's write envelope (<see cref="PolicyWriteResult"/>),
+    /// never an IActionResult. Admission is the caller's — the web controller's filters and
+    /// the management surface's service decide who may write; the engine decides what a
+    /// valid write is.
     /// </summary>
     public sealed class ChatAdministrationService
     {
@@ -47,10 +46,10 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         public async Task<PolicyWriteResult> CreateChatAsync(ChatUpdate update, ChatFolderBinding binding, Guid authorId, InitiatorInfo initiator)
         {
-            var stamped = update with { Initiator = initiator };
+            var stamped = Stamp(update, initiator);
             var withId = stamped.Id == Guid.Empty ? stamped with { Id = Guid.NewGuid() } : stamped;
 
-            if (ValidateWebhooks(withId) is { } invalid)
+            if (Validate(withId, nameRequired: true) is { } invalid)
                 return invalid;
 
             Chat chat;
@@ -81,9 +80,9 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         public async Task<PolicyWriteResult> UpdateChatAsync(ChatUpdate update, ChatFolderBinding binding, InitiatorInfo initiator)
         {
-            var stamped = update with { Initiator = initiator };
+            var stamped = Stamp(update, initiator);
 
-            if (ValidateWebhooks(stamped) is { } invalid)
+            if (Validate(stamped) is { } invalid)
                 return invalid;
 
             if (!_chats.TryGetValue(stamped.Id, out var chat))
@@ -120,22 +119,31 @@ namespace HSMServer.Model.ManagementApi.Chats
         }
 
 
-        // The same webhook URL-shape rule the web form enforced (NotificationsController's
-        // ValidateWebhooks, #1329), in one place now: a non-null webhook field of a write must
-        // be an absolute http/https URL. Null means "no change" and passes. Field keys match
-        // the form's property names, so the web re-render finds its spans.
-        private static PolicyWriteResult ValidateWebhooks(ChatUpdate update)
+        // The write rules of both surfaces: the chat name (#1829 — required on a creation,
+        // at most 100 characters, unique per server ignoring case; an omitted name, a
+        // partial update, is not checked) and the webhook URL-shape rule the web form
+        // enforced (NotificationsController's ValidateWebhooks, #1329): a non-null webhook
+        // field of a write must be an absolute http/https URL. Null means "no change" and
+        // passes. Every problem answers in one body; field keys match the form's property
+        // names, so the web re-render finds its spans. Internal: the management surface
+        // runs the same validation first, to answer a request's every problem in one body
+        // before the engine applies anything.
+        internal PolicyWriteResult Validate(ChatUpdate update, bool nameRequired = false)
         {
             Dictionary<string, string[]> errors = null;
+            var name = nameRequired ? update.Name ?? string.Empty : update.Name;
 
-            Validate(update.SlackWebhookUrl, nameof(ChatUpdate.SlackWebhookUrl));
-            Validate(update.MattermostWebhookUrl, nameof(ChatUpdate.MattermostWebhookUrl));
+            if (name is not null && ChatNameValidator.FindError(name, update.Id, _chats.GetValues() ?? []) is { } nameError)
+                (errors ??= []).Add(nameof(ChatUpdate.Name), [nameError]);
+
+            ValidateWebhook(update.SlackWebhookUrl, nameof(ChatUpdate.SlackWebhookUrl));
+            ValidateWebhook(update.MattermostWebhookUrl, nameof(ChatUpdate.MattermostWebhookUrl));
 
             return errors is null
                 ? null
                 : PolicyWriteResult.Fail(PolicyWriteOutcome.Invalid, errors);
 
-            void Validate(string url, string field)
+            void ValidateWebhook(string url, string field)
             {
                 if (url is null)
                     return;
@@ -145,6 +153,11 @@ namespace HSMServer.Model.ManagementApi.Chats
                     (errors ??= []).Add(field, ["Webhook URL must be a valid URL"]);
             }
         }
+
+        // The write's initiator on the update, and the name trimmed — it is stored exactly
+        // as it was validated.
+        private static ChatUpdate Stamp(ChatUpdate update, InitiatorInfo initiator) =>
+            update with { Initiator = initiator, Name = update.Name?.Trim() };
 
         // A brand-new chat is built from the update the same way the web form built it
         // (ChatViewModel.ToNewChat): defaults for the omitted settings, author + creation time

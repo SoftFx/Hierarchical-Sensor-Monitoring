@@ -21,7 +21,10 @@ The server already stores everything the setup needs, but every write is web-UI-
 
 The management API and MCP expose chats read-only (`GET /api/v1/chats`, `list_chats` / `get_chat` — the
 `destination.chats` id source). `aicontext/features/server/mcp/feature.md` lists "folder/chat lifecycle
-tools (web-UI only)" among the known gaps; this initiative closes the chat half.
+tools (web-UI only)" among the known gaps; this initiative closes the chat half — #1829 landed it
+(`POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, on the web editor's
+engine and gates). What remains of the problem above is the bot credential (#1830) and the guide
+(#1827, #1831).
 
 ## Goals
 
@@ -59,11 +62,14 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
   reverse index. `ChatAdministrationService.BindFoldersAsync` (#1825 — the write engine behind the web
   POST flows, ex-`NotificationsController.SyncFolders`) rewrites it through `FolderUpdate`, touching
   only the folders the caller manages (`ChatFolderBinding.Managed`, built by the web from
-  `GetUserFolders(CurrentUser)` — never from request data). That folder write is already journaled
+  `GetUserFolders(CurrentUser)`, by the management API from the folders the token's owner manages
+  (#1829) — never from request data). That folder write is already journaled
   ("Folder chats update", kind `folder`).
-- Validation: the name is required and at most 100 characters, with no uniqueness check — although the
-  `ChatDto` doc says "unique per server" and alert import resolves chats by name. A webhook must be an
-  absolute http/https URL (`ChatAdministrationService.ValidateWebhooks`, #1825); nothing else is
+- Validation: the name is required and at most 100 characters; since #1829 it is also unique per server
+  ignoring case (excluding the chat itself) — `ChatNameValidator` behind `ChatAdministrationService.Validate`,
+  one rule for the API and the web form. Before, nothing enforced the uniqueness the
+  `ChatDto` doc promises and alert import relies on (it resolves chats by name). A webhook must be an
+  absolute http/https URL (the same `Validate`, #1825); nothing else is
   checked. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
   `ClearTelegramBinding`): at the model an
   empty value means "no change", and the web form refuses an empty field for a stored webhook, pointing
