@@ -4,6 +4,7 @@
 @using HSMServer.Model.ViewModel
 @using HSMServer.Extensions
 @using HSMServer.Core.Model
+@using HSMServer.Model.Authentication
 
 @model SensorInfoViewModel
 
@@ -35,7 +36,8 @@
     <div class="d-flex w-100">
         <li class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
         <span>@Model.Status</span>
-        @if (!Model.IsMuted)
+        @* "Edit last value" writes into the sensor: it is offered to those who manage it, as in the tree's menu. *@
+        @if (!Model.IsMuted && User is User user && user.IsManager(Model.RootProductId))
         {
             <span onclick="loadEditSensorStatusModal('@Model.EncodedId')">
                 <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
