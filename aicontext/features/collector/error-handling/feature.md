@@ -47,7 +47,7 @@ DataCollector must never crash the host application. All exceptions from sensor 
 ### Diagnostic Sensors
 
 - `CollectorErrors` — receives deduplicated error messages.
-- `QueueOverflow` — overflow + retry-drop counts per queue.
+- `QueueOverflow` — overflow + retry-drop counts per queue; lost table rows under the queue "Table rows" (#1846, `table-sensors/feature.md`).
 - `PackageProcessTime`, `PackageDataCount`, `PackageContentSize` — send statistics; suppressed after the stop drain boundary (#1075, see `data-pipeline/feature.md`).
 
 ---

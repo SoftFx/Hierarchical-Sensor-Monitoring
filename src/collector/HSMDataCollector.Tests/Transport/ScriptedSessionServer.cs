@@ -106,6 +106,30 @@ namespace HSMDataCollector.Tests.Transport
         /// <summary>Requests of <paramref name="op"/> are acknowledged with this status from now on (200 by default).</summary>
         public void AckWith(string op, int status) => _ackStatus[op] = status;
 
+        private readonly ConcurrentDictionary<string, string> _registrationErrors = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// A successful ack of a <c>commands</c> request that carries <paramref name="path"/> names it with
+        /// <paramref name="error"/>, as the server names a registration it refuses.
+        /// </summary>
+        public void RefuseRegistrationOf(string path, string error) => _registrationErrors[path] = error;
+
+        // The per-path errors of a commands ack: the scripted refusals of the paths the request carries.
+        private string RegistrationErrorsFor(string op, string body)
+        {
+            if (op != "commands" || _registrationErrors.IsEmpty || string.IsNullOrEmpty(body))
+                return "{}";
+
+            var errors = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            using (var document = JsonDocument.Parse(body))
+                foreach (var element in document.RootElement.EnumerateArray())
+                    if (element.TryGetProperty("Path", out var path) && _registrationErrors.TryGetValue(path.GetString() ?? string.Empty, out var error))
+                        errors[path.GetString()] = error;
+
+            return JsonSerializer.Serialize(errors);
+        }
+
         /// <summary>
         /// Accepts this many more <c>list</c> frames, then answers every later one with
         /// <paramref name="status"/>, or with nothing at all when the status is 0. A negative
@@ -390,7 +414,7 @@ namespace HSMDataCollector.Tests.Transport
             try
             {
                 await SendAsync(socket, status >= 200 && status < 300
-                    ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{{}}}}"
+                    ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{RegistrationErrorsFor(op, body)}}}"
                     : $"{{\"ack\":{id.Value},\"status\":{status},\"error\":\"scripted refusal\"}}").ConfigureAwait(false);
             }
             catch (Exception)

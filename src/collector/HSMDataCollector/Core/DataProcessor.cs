@@ -10,6 +10,7 @@ using HSMDataCollector.Exceptions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
+using HSMDataCollector.Tables;
 using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -17,7 +18,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Core
 {
-    internal sealed class DataProcessor : IDisposable
+    internal sealed class DataProcessor : IDisposable, ITableDiagnostics
     {
         private readonly DataQueueProcessor _dataQueue;
         private readonly PriorityDataQueueProcessor _priorityQueue;
@@ -45,6 +46,9 @@ namespace HSMDataCollector.Core
         private DefaultSensorsCollection DefaultSensors => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (DefaultSensorsCollection)SensorStorage.Windows : (DefaultSensorsCollection)SensorStorage.Unix;
 
         internal SensorsStorage SensorStorage { get; }
+
+        /// <summary>The table sensors of the collector (ADR-0021); set by the collector right after construction.</summary>
+        internal TablePipeline Tables { get; set; }
 
         /// <summary>
         /// Per-collector scheduler used by sensors and the message deduplicator. Owned by the
@@ -107,6 +111,8 @@ namespace HSMDataCollector.Core
                 return false;
             }
 
+            Tables?.Start();
+
             return true;
         }
 
@@ -167,6 +173,10 @@ namespace HSMDataCollector.Core
             // spent sends nothing and its items are discarded and counted.
             using (var drainBudget = new CancellationTokenSource(GetFlushTimeout(mode)))
             {
+                // The table blocks go on a connection of their own (ADR-0021 point 7): their drain runs beside the
+                // value queues' under the same budget, so it does not make the stop longer.
+                var tablesDrain = Tables != null ? Tables.FlushAsync(drainBudget.Token) : Task.CompletedTask;
+
                 // Registrations first: the values behind them are of little use to a server that
                 // was never told what those sensors are. Their package diagnostics are suppressed
                 // like every diagnostic of a non-data flush (#1075, below).
@@ -205,6 +215,8 @@ namespace HSMDataCollector.Core
 
                 if (fileStopped)
                     await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures, valuesFailed).ConfigureAwait(false);
+
+                await TryStopPhase(() => tablesDrain, failures).ConfigureAwait(false);
             }
         }
 
@@ -223,6 +235,7 @@ namespace HSMDataCollector.Core
                 TryStopPhase(() => _priorityQueue.StopAsync(mode).AsTask(), failures),
                 TryStopPhase(() => _fileQueue.StopAsync(mode).AsTask(), failures),
                 TryStopPhase(() => _commandQueue.StopAsync(mode).AsTask(), failures),
+                TryStopPhase(() => Tables != null ? Tables.StopWithoutFlushAsync() : Task.CompletedTask, failures),
             };
             await Task.WhenAll(stopTasks).ConfigureAwait(false);
         }
@@ -271,6 +284,7 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            Tables?.Dispose();
             _messageDeduplicator?.Dispose();
             SensorStorage?.Dispose();
             _dataQueue?.Dispose();
@@ -461,6 +475,20 @@ namespace HSMDataCollector.Core
         /// </summary>
         public void ReportRequeueEviction(string queueName, int droppedCount) =>
             EmitOverflowDrops(queueName, droppedCount);
+
+        bool ITableDiagnostics.CanAcceptData => CanAcceptData;
+
+        /// <summary>
+        /// Lost table rows go to the <c>Queue overflow</c> sensor under the queue "Table rows". Without that sensor they
+        /// are not added to the stop line of lost values: the table pipeline reports them in words of its own.
+        /// </summary>
+        void ITableDiagnostics.ReportDroppedRows(long rows)
+        {
+            if (rows <= 0)
+                return;
+
+            DefaultSensors.QueueOverflowSensor?.AddValue(TablePipeline.DroppedRowsQueueName, (int)Math.Min(rows, int.MaxValue));
+        }
 
         private void EmitOverflowDrops(string queueName, int droppedCount)
         {

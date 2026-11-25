@@ -27,7 +27,7 @@ namespace HSMDataCollector.Client.Session
     /// The body of a frame is the JSON the HTTP route of the same name takes, byte for byte:
     /// every element is written by the serializer of the HTTP client.
     /// </summary>
-    internal sealed class SessionDataSender : IDataSender, ICancelableDataSender, IErrorReportingSender, ICollectorTransport
+    internal sealed partial class SessionDataSender : IDataSender, ICancelableDataSender, IErrorReportingSender, ICollectorTransport
     {
         // What the close handshake of a graceful stop may take, so that the server sees a
         // normal closure. A terminal stop does not wait.

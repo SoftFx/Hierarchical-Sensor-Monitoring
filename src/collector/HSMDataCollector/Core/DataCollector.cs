@@ -27,7 +27,7 @@ namespace HSMDataCollector.Core
     }
 
 
-    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector
+    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector, ITableSensorCollector
     {
         private readonly LoggerManager _logger = new LoggerManager();
 
@@ -159,6 +159,8 @@ namespace HSMDataCollector.Core
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
             _dataProcessor.TransportReportsElsewhere = UsesTransportOfAnotherCollector;
+            _dataProcessor.Tables = new Tables.TablePipeline(options, _dataSender as Tables.ITableBlockChannel, FindWhyTablesCannotBeSent(),
+                                                             _dataProcessor, _scheduler, _logger);
 
             // The sender this collector created reports its faults through the collector's
             // deduplicated error channel (#1659 A4). A sender that came with the options keeps
@@ -192,6 +194,37 @@ namespace HSMDataCollector.Core
         // on it or dispose it, or the owner, still running, would deliver nothing from then on
         // and say nothing about it.
         private bool UsesTransportOfAnotherCollector => _ownTransport == null && _dataSender is ICollectorTransport;
+
+        // Why this collector cannot send table sensors, or null when it can (ADR-0021 point 7: tables need the
+        // session transport). Read once, at construction: a sensor created on a collector that cannot send tables
+        // stays Unavailable for the life of the collector.
+        private string FindWhyTablesCannotBeSent()
+        {
+            if (UsesTransportOfAnotherCollector)
+                return "this collector uses the collector session of the collector created first from the same options; create table sensors on that collector";
+
+            if (_dataSender is Tables.ITableBlockChannel channel)
+                return channel.TablesUnavailableReason;
+
+            if (_dataSender is HsmHttpsClient)
+                return _httpByDefaultReason != null
+                    ? $"table sensors need the collector session transport, and this collector sends over HTTP because {_httpByDefaultReason}"
+                    : "table sensors need the collector session transport, and this collector sends over HTTP (CollectorOptions.Transport)";
+
+            return "table sensors need the collector session transport, and this collector was given a custom CollectorOptions.DataSender";
+        }
+
+        /// <inheritdoc/>
+        public ITableSensor CreateTableSensor(string path, TableSensorOptions options) =>
+            _dataProcessor.Tables.Create(path, options, _options.ComputerName, _options.Module, _lifecycle.CanRegisterSensors);
+
+        /// <summary>
+        /// For tests: one table tick now. With <see cref="CollectorOptions.ManualTableTick"/> it also waits for the
+        /// registration and the delivery it starts.
+        /// </summary>
+        internal Task TickTablesAsync() => _dataProcessor.Tables.TickAsync();
+
+        internal Tables.TablePipeline TablePipeline => _dataProcessor.Tables;
 
         public Task<ConnectionResult> TestConnection() => _dataSender.TestConnectionAsync().AsTask();
 

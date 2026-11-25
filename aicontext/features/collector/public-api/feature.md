@@ -37,6 +37,9 @@ Everything a host application touches: `DataCollector` construction, `CollectorO
 | `MaxSensors` | int | `100000` | > 0 |
 | `Transport` (3.9.0) | `CollectorTransport` | `Http` | `Http` or `Session`. `Session` is a collector session, one WebSocket instead of the HTTP routes, with no fallback to them (`../http-client/feature.md`). Belongs to the built-in sender: with a custom `DataSender` it has no effect and Start says so |
 | `ExtraRequestHeaders` (3.7.0) | IDictionary<string, string> | empty, get-only | name: a plain header token, not `Key` / `ClientName`, not a body or connection header (`Content-*`, `Host`, `Connection`, `Upgrade`, ...), not `Sec-WebSocket-*`, not `Cookie` / `Cookie2` (the .NET Framework handler replaces a hand-set cookie header with its own container, so net472 would lose what net6.0 sends), and one the HTTP stack accepts as a request header; value: printable ASCII (or tab), not null. Read once, when the collector creates its sender. Used by the built-in sender only: with a custom `DataSender` they are validated and otherwise unused. Sent with value requests only (`../http-client/feature.md`, directive channel) |
+| `TableTickPeriod` (4.1.0) | TimeSpan | 10 s | >= 1 s. The table tick: the rows of all table sensors go out as one block ([`../table-sensors/feature.md`](../table-sensors/feature.md)) |
+| `MaxTableBufferBytes` (4.1.0) | long | 64 MiB | > 0. Rows waiting for the tick, 8 bytes per column per row (time included); past it a row is dropped and counted |
+| `MaxTableBacklogBytes` (4.1.0) | long | 64 MiB | > 0. Packed blocks waiting for delivery; past it the oldest go, counted |
 
 **Native port (C++)**: `hsm_collector_options_t` (`src/native/collector`, #1095) mirrors this table field-for-field (`0` = managed default per field; the dedup window's `0` = log immediately). The C ABI also mirrors the lifecycle surface — status state machine, `dispose`, `TestConnection`, lifecycle listeners, `MaxSensors` cap — and a pluggable log sink. The `DataSender` seam is not exposed until the HTTP transport (#1096). Contract: [`docs/native-collector-c-abi.md`](../../../../docs/native-collector-c-abi.md).
 
@@ -68,6 +71,7 @@ All factories live on `IDataCollector`/`DataCollector` (`Core/DataCollector.cs`)
 | Function (no params) | `CreateNoParamsFuncSensor<T>(path, descr, Func<T>, interval)`, `Create{1Min,5Min}NoParamsFuncSensor`, `CreateFunctionSensor<T>(path, func, options)` | `INoParamsFuncSensor<T>` |
 | Function (params) | `CreateParamsFuncSensor<T,U>(path, descr, Func<List<U>,T>, interval)`, `Create{1Min,5Min}ParamsFuncSensor`, `CreateValuesFunctionSensor<T,U>` | `IParamsFuncSensor<T,U>` |
 | Service commands | `CreateServiceCommandsSensor()` | `IServiceCommandsSensor` |
+| Table (#1846) | `CreateTableSensor(path, TableSensorOptions)` on the optional capability `ITableSensorCollector` (implemented by `DataCollector`; also an `IDataCollector` extension). Throws only for a mistake of the call; a collector that cannot send tables (HTTP, a custom `DataSender`, a shared session) returns a sensor in state `Unavailable`. Details: [`../table-sensors/feature.md`](../table-sensors/feature.md) | `ITableSensor` |
 
 Sensor interfaces (`PublicAPI/SensorsAPI/*`):
 
@@ -77,6 +81,7 @@ Sensor interfaces (`PublicAPI/SensorsAPI/*`):
 - `IFileSensor`: instant-string surface + `Task<bool> SendFile(filePath, status, comment)`.
 - `IMonitoringRateSensor`: instant-double surface.
 - `IServiceCommandsSensor`: `SendCustomCommand(command, initiator)`, `SendUpdate(initiator[, newVersion[, oldVersion]])`, `SendRestart/SendStart/SendStop(initiator)`.
+- `ITableSensor` (`PublicAPI/TableSensors/ITableSensor.cs`, #1846): `AddRow(time, cells…)` for 1–4 cells, `AddRow(time, TableCell[])`, `AddRow(time, ReadOnlySpan<TableCell>)`, `AddRows(DateTime[], TableCell[], rowCount)`, `AddRows(ReadOnlySpan<DateTime>, ReadOnlySpan<TableCell>)`; `State`, `StateReason`, `RowsAccepted`, `RowsDropped`. The span overloads are the first `System.Memory` types in the public surface of the net472 build; the array overloads need none in the host's code.
 - `IBaseFuncSensor` (lives in the `Obsolete` folder but is NOT `[Obsolete]` — it is the current return type of `CreateFunctionSensor`/`CreateValuesFunctionSensor`): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant adds `AddValue(U)`.
 - `ILastValueSensor` creation gotcha: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with the implicit `null` default **throw `ArgumentException` at creation** (`ThrowIfUnsupportedValue(customDefault)`); pass a non-null default.
 
