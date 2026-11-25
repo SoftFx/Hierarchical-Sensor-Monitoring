@@ -241,6 +241,13 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours);
 
         /// <summary>
+        /// <see cref="ReadSensor(Guid, Guid, int, IReadOnlyCollection{long})"/>, and in <paramref name="failed"/> the batches it could not
+        /// read: an index record that does not decode or whose batch is missing (each also counted in <c>ReadFailures</c> and logged).
+        /// A reader adds them to its answer's <c>BatchesFailed</c> (#1850 part 4b): their rows are missing.
+        /// </summary>
+        IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed);
+
+        /// <summary>
         /// Drops a week database: closes it (waiting for the reads that hold it; reads that start meanwhile find nothing
         /// there), records the drop durably in the product's record of dropped databases and deletes its folder. Its hours
         /// keep their records (see <see cref="ForgetHours"/>). A write into a dropped week database is refused. A delete that fails throws <see cref="TableBatchStoreException"/> with the week already dropped; the

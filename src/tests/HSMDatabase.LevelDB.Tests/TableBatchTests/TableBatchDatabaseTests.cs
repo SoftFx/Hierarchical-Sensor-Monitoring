@@ -767,6 +767,22 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(0, third.Statistics.HoursRebuilt);
         }
 
+        [Fact]
+        public void A_read_counts_the_batches_it_could_not_read()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 2))]);
+            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), Week0 + Hour, [Batch(_sensorA, Week0 + Hour + 5, 0)]);
+
+            store.BatchMissing = (hour, ordinal) => ordinal == 1 || hour == Week0 + Hour;
+            var read = store.ReadSensor(_product, _sensorA, 4, [Week0, Week0 + Hour], out var failed);
+            store.BatchMissing = null;
+
+            Assert.Equal([0], read.Select(r => r.Ordinal));
+            Assert.Equal(2, failed);
+            Assert.Equal(2, store.Statistics.ReadFailures);
+        }
+
         // === Placements (#1850 part 4b) ===
 
         [Fact]

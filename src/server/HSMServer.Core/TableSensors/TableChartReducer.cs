@@ -147,6 +147,8 @@ namespace HSMServer.Core.TableSensors
 
         public void BatchFailed() => BatchesFailed++;
 
+        public void CountKeptUnreadableBlocks(int count) => BlocksFailed += count;
+
         public bool CanStopBefore(long nextMinTime)
         {
             if (_scanned < _maxScanRows)

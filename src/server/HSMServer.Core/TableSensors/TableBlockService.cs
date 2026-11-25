@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.AccessManager.TableBlocks;
 using HSMDatabase.SealedHistory;
@@ -314,6 +315,8 @@ namespace HSMServer.Core.TableSensors
         // False when a source of blocks of the plan has been committed since: the plan is stale.
         private bool TryReduce(ReadPlan plan, TableChartReducer reducer, long fromTicks, long toTicks, CancellationToken token)
         {
+            reducer.CountKeptUnreadableBlocks(plan.KeptUnreadable);
+
             for (int i = 0; i < plan.Sources.Count; i++)
             {
                 var source = plan.Sources[i];
@@ -329,6 +332,14 @@ namespace HSMServer.Core.TableSensors
                     token.ThrowIfCancellationRequested();
 
                     if (source.Blocks is not null && plan.Batches is not null && plan.Batches.IsHourMerged(plan.Product, source.Hour))
+                    {
+                        BeforeChartReplan?.Invoke(source.Hour);
+                        return false;
+                    }
+
+                    // A week database retention dropped since the plan (#1850 part 4b): the rest of the week would read
+                    // nothing, so the answer would hold part of a week. Planned again, the week is not in the plan at all.
+                    if (source.Blocks is null && !plan.Batches.GetWeeks(plan.Product).Contains(new TableBatchWeek(StorageWeek.GetStartTicks(source.Hour), source.Period)))
                     {
                         BeforeChartReplan?.Invoke(source.Hour);
                         return false;
@@ -360,6 +371,7 @@ namespace HSMServer.Core.TableSensors
         {
             var plan = Plan(table, fromTicks, toTicks);
             var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
+            collector.CountKeptUnreadableBlocks(plan.KeptUnreadable);
 
             for (int i = 0; i < plan.Sources.Count; i++)
             {
@@ -374,12 +386,14 @@ namespace HSMServer.Core.TableSensors
             return collector.Build();
         }
 
-        // One source of a read: the blocks of one arrival hour not merged, or one merged hour.
-        private readonly record struct ReadSourceItem(long MinTime, long Hour, List<TableBlockIndexEntry> Blocks);
+        // One source of a read: the blocks of one arrival hour not merged, or one merged hour and the class that holds the
+        // sensor's rows of it (its placement, #1850 part 4b).
+        private readonly record struct ReadSourceItem(long MinTime, long Hour, List<TableBlockIndexEntry> Blocks, int Period = 0);
 
-        // What a read of one table sensor visits, and in which order (the read rule above ReadRows).
+        // What a read of one table sensor visits, and in which order (the read rule above ReadRows); and the blocks in its range
+        // that committed hours list as unreadable (kept): counted as failed blocks, as they were before their hour was merged.
         private sealed record ReadPlan(Guid Product, ITableBlockStore Store, ITableBatchStore Batches, byte[] TableId, Guid SensorId,
-            int Period, List<ReadSourceItem> Sources);
+            List<ReadSourceItem> Sources, int KeptUnreadable);
 
         private ReadPlan Plan(TableSensorModel table, long fromTicks, long toTicks)
         {
@@ -389,8 +403,10 @@ namespace HSMServer.Core.TableSensors
             var tableId = Encoding.UTF8.GetBytes(table.Path);
 
             var blocks = store.GetBlocks(product);
-            var committed = new Dictionary<long, bool>();
+            // The record of a committed hour, null for an hour that is not: asked once per hour with candidate blocks.
+            var committed = new Dictionary<long, TableBatchHour>();
             var blockHours = new SortedDictionary<long, List<TableBlockIndexEntry>>();
+            int keptUnreadable = 0;
 
             for (int b = 0; b < blocks.Count; b++)
             {
@@ -399,11 +415,18 @@ namespace HSMServer.Core.TableSensors
                     continue;
 
                 var hour = entry.ArrivalHourTicks;
-                if (!committed.TryGetValue(hour, out var isCommitted))
-                    committed[hour] = isCommitted = batches?.IsHourMerged(product, hour) ?? false;
+                if (!committed.TryGetValue(hour, out var record))
+                    committed[hour] = record = batches?.GetHour(product, hour);
 
-                if (isCommitted)
+                if (record is not null)
+                {
+                    // A block the merge could not read stays, listed in the hour's record: its rows are not in the batches.
+                    // Whether it held rows of this sensor is not known, so it counts, as it did before the merge (in range
+                    // and at or above the sensor's first sequence, the same test as for the blocks of an unmerged hour).
+                    if (record.UnreadableBlocks.Contains(entry.Sequence))
+                        keptUnreadable++;
                     continue;
+                }
 
                 if (!blockHours.TryGetValue(hour, out var list))
                     blockHours[hour] = list = [];
@@ -421,30 +444,44 @@ namespace HSMServer.Core.TableSensors
                 sources.Add(new ReadSourceItem(Math.Max(min, fromTicks), hour, list));
             }
 
-            int period = 0;
-            if (batches is not null)
+            // A sensor without a placement has no batch (the merge writes the placement before its first batch).
+            if (batches?.GetPlacement(product, table.Id) is { } placement)
             {
-                period = TablePeriodClass.Of(table, DateTime.UtcNow);
+                var weeks = batches.GetWeeks(product).ToHashSet();
 
                 foreach (var hour in batches.GetHours(product))
                 {
                     // Taken from its blocks above: it was not committed when that was decided.
-                    if (committed.TryGetValue(hour.HourTicks, out var isCommitted) && !isCommitted)
+                    if (committed.TryGetValue(hour.HourTicks, out var record) && record is null)
                         continue;
 
                     // Every block of the hour is below the sensor's first sequence: none of its rows are the sensor's.
                     if (hour.LastBlockSequence < table.FirstSequence)
                         continue;
 
+                    // The class that holds the sensor's rows of the hour, and the hour's rows by the union of its record's
+                    // ranges: the sensor's rows may be in a class the record does not name (moved there from one it names),
+                    // and their times are within the record's ranges. The class's database of the week must exist.
+                    int period = placement.ClassOf(hour.HourTicks);
+                    if (!weeks.Contains(new TableBatchWeek(StorageWeek.GetStartTicks(hour.HourTicks), period)))
+                        continue;
+
+                    long min = long.MaxValue, max = long.MinValue;
                     foreach (var range in hour.Classes)
-                        if (range.PeriodWeeks == period && range.Batches > 0 && range.MinTime < toTicks && range.MaxTime >= fromTicks)
-                            sources.Add(new ReadSourceItem(Math.Max(range.MinTime, fromTicks), hour.HourTicks, null));
+                        if (range.Batches > 0)
+                        {
+                            min = Math.Min(min, range.MinTime);
+                            max = Math.Max(max, range.MaxTime);
+                        }
+
+                    if (min < toTicks && max >= fromTicks)
+                        sources.Add(new ReadSourceItem(Math.Max(min, fromTicks), hour.HourTicks, null, period));
                 }
             }
 
             sources.Sort((a, b) => a.MinTime != b.MinTime ? a.MinTime.CompareTo(b.MinTime) : a.Hour.CompareTo(b.Hour));
 
-            return new ReadPlan(product, store, batches, tableId, table.Id, period, sources);
+            return new ReadPlan(product, store, batches, tableId, table.Id, sources, keptUnreadable);
         }
 
         private void ReadSource(ReadPlan plan, ReadSourceItem source, ITableRowSink sink, long fromTicks, long toTicks, CancellationToken token)
@@ -462,13 +499,19 @@ namespace HSMServer.Core.TableSensors
             else
             {
                 token.ThrowIfCancellationRequested();
-                ReadBatches(plan.Batches, sink, plan.Product, plan.SensorId, plan.Period, source.Hour, fromTicks, toTicks);
+                ReadBatches(plan.Batches, sink, plan.Product, plan.SensorId, source.Period, source.Hour, fromTicks, toTicks);
             }
         }
 
         private static void ReadBatches(ITableBatchStore batches, ITableRowSink collector, Guid product, Guid sensorId, int period, long hour, long fromTicks, long toTicks)
         {
-            foreach (var read in batches.ReadSensor(product, sensorId, period, [hour]))
+            var reads = batches.ReadSensor(product, sensorId, period, [hour], out var failed);
+
+            // Index records without their batch, or that do not decode: their rows are missing (#1850 part 4b).
+            for (int i = 0; i < failed; i++)
+                collector.BatchFailed();
+
+            foreach (var read in reads)
             {
                 if (read.LastTime < fromTicks || read.FirstTime >= toTicks)
                     continue;

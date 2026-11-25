@@ -115,6 +115,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// </summary>
         internal Action<string> Checkpoint { get; set; }
 
+        /// <summary>Test seam: a batch for which it answers true reads as missing, its index record still there (hour, ordinal).</summary>
+        internal Func<long, int, bool> BatchMissing { get; set; }
+
         /// <summary>Deletes a dropped week's folder. Test seam for a delete that fails.</summary>
         internal Action<string> DeleteFolder { get; set; } = path => Directory.Delete(path, recursive: true);
 
@@ -534,9 +537,13 @@ namespace HSMDatabase.LevelDB.TableBatches
                 return product.Weeks.OrderBy(w => w.WeekStartTicks).ThenBy(w => w.PeriodWeeks).ToArray();
         }
 
-        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours)
+        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours) =>
+            ReadSensor(productId, sensorId, periodWeeks, hours, out _);
+
+        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed)
         {
             ArgumentNullException.ThrowIfNull(hours);
+            failed = 0;
 
             var result = new List<TableBatchRead>();
             if (hours.Count == 0 || Product(productId, create: false) is null)
@@ -570,6 +577,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                         }
                     }
 
+                    failed += found.Count(f => f is null);
                     result.AddRange(found.Where(f => f is not null));
                 }
                 finally
@@ -611,7 +619,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 if (value.Length != 17 || value[0] != IndexVersion)
                     throw new FormatException($"an index record of {value.Length} bytes, version {(value.Length > 0 ? value[0] : 0)}");
 
-                var batch = db.Get(batchKey) ?? throw new FormatException("the batch of an index record is missing");
+                var batch = (BatchMissing?.Invoke(hour, ordinal) == true ? null : db.Get(batchKey)) ?? throw new FormatException("the batch of an index record is missing");
 
                 return new TableBatchRead(sensor, hour, ordinal, moved, first, BinaryPrimitives.ReadInt64LittleEndian(value.AsSpan(1)),
                     BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(9)), batch);

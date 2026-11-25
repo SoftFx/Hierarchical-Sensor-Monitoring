@@ -181,12 +181,12 @@ namespace HSMServer.Core.Tests.TableSensors
             _service.AfterChartPlan = null;
             var after = Reduce(a, 100);
 
-            // Both read hour 0 from its batches: the rows of the two readable blocks, and no failure counted (the record of
-            // the commit lists the block it kept; the read of a merged hour does not count it, as Read does not).
+            // Both read hour 0 from its batches: the rows of the two readable blocks, and the block the commit lists as kept
+            // unreadable is counted as a failed block (#1850 part 4b), as it is before the merge: the answer is incomplete.
             Assert.Equal(after.BucketRows, during.BucketRows);
             Assert.Equal((after.RowCount, after.BlocksFailed, after.BatchesFailed, after.IsIncomplete),
                 (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
-            Assert.Equal((2L, 0, 0, false), (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
+            Assert.Equal((2L, 1, 0, true), (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
         }
 
         [Fact]
@@ -327,6 +327,119 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.True(empty.IsOk, empty.Error);
             Assert.Equal(0, empty.Value.RowCount);
             Assert.Empty(empty.Value.Columns);
+        }
+
+
+        // === Placements and retention (#1850 part 4b) ===
+
+        [Fact]
+        public async Task A_block_kept_unreadable_is_a_failed_block_before_and_after_its_hour_is_merged()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            var damaged = _producerSequence + 1;
+            Put(Block(("a", [Row(Hour0.AddMinutes(2).Ticks, 2, 2)])));
+            var damagedSequence = _blocks.GetBlocks(_product).Single(e => e.ProducerSequence == damaged).Sequence;
+
+            _blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == damagedSequence)
+                    throw new Exception("Corruption: block checksum mismatch: 000005.ldb");
+            };
+
+            var before = Reduce(a, 100);
+            var beforeRead = _service.Read(a.Id, From, To).Value;
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            Assert.Equal(new[] { damagedSequence }, _batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+            var after = Reduce(a, 100);
+            var afterRead = _service.Read(a.Id, From, To).Value;
+            _blocks.BeforeBlockGet = null;
+
+            Assert.Equal((1L, 1, true), (before.RowCount, before.BlocksFailed, before.IsIncomplete));
+            Assert.Equal((1L, 1, true), (after.RowCount, after.BlocksFailed, after.IsIncomplete));
+            Assert.Equal((1, 1), (beforeRead.RowCount, beforeRead.BlocksFailed));
+            Assert.Equal((1, 1), (afterRead.RowCount, afterRead.BlocksFailed));
+
+            // Counted for a range that holds the block only: a range after it does not count it.
+            var later = _service.Reduce(a.Id, Hour0.AddMinutes(30), To, Columns, 10).Value;
+            Assert.Equal(0, later.BlocksFailed);
+        }
+
+        [Fact]
+        public async Task Both_readers_see_the_rows_merged_under_a_period_before_its_change()
+        {
+            var a = await RegisterAsync("a");
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+            _now = Hour0.AddMinutes(70);
+            Put(Block(("a", [Row(Hour0.AddMinutes(61).Ticks, 2, 2)])));
+            Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+            _now = Hour0.AddMinutes(130);
+            Put(Block(("a", [Row(Hour0.AddMinutes(121).Ticks, 3, 3)])));
+            Assert.Null(Pass(Hour0.AddHours(3).AddMinutes(3)).Fault);
+
+            // Hours 0 and 1 in P1 (before the cut-off), hour 2 in P5: one database each, the reads take each from its own.
+            Assert.Equal([1], _batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal([5], _batches.GetHour(_product, Hour0.AddHours(2).Ticks).Classes.Select(c => c.PeriodWeeks));
+
+            var read = _service.Read(a.Id, From, To).Value;
+            Assert.Equal(new[] { Hour0.AddMinutes(1).Ticks, Hour0.AddMinutes(61).Ticks, Hour0.AddMinutes(121).Ticks }, read.Time.Take(read.RowCount));
+            Assert.Equal((0, 0), (read.BlocksFailed, read.BatchesFailed));
+
+            var chart = Reduce(a, 100);
+            Assert.Equal((3L, false), (chart.RowCount, chart.IsIncomplete));
+            Assert.Equal(3, chart.BatchesRead);
+        }
+
+        [Fact]
+        public async Task A_week_dropped_after_the_chart_planned_it_is_planned_again_and_left_out_whole()
+        {
+            var a = await RegisterAsync("a");
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            _now = Hour0.AddMinutes(70);
+            Put(Block(("a", [Row(Hour0.AddMinutes(61).Ticks, 2, 2)])));
+            Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+            var week = new HSMDatabase.AccessManager.TableBatches.TableBatchWeek(HSMDatabase.AccessManager.StorageWeek.GetStartTicks(Hour0.Ticks), 1);
+
+            var replans = new List<long>();
+            _service.BeforeChartReplan = replans.Add;
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan == 1)
+                    _batches.DropWeek(_product, week);
+            };
+
+            var chart = Reduce(a, 100);
+            Assert.Equal([Hour0.Ticks], replans);
+            Assert.Equal((0L, 0, false), (chart.RowCount, chart.BatchesRead, chart.IsIncomplete));
+        }
+
+        [Fact]
+        public async Task A_batch_whose_record_survives_without_its_bytes_is_a_failed_batch_for_both_readers()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+
+            // The index record of the hour's batch is there, its bytes are not.
+            _batches.BatchMissing = (hour, ordinal) => hour == Hour0.Ticks && ordinal == 0;
+
+            var read = _service.Read(a.Id, From, To).Value;
+            var chart = Reduce(a, 100);
+            _batches.BatchMissing = null;
+
+            Assert.Equal((0, 0, 1), (read.RowCount, read.BlocksFailed, read.BatchesFailed));
+            Assert.Equal((0L, 1, true), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
         }
 
 

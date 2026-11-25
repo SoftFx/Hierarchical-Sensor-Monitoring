@@ -243,6 +243,9 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(1, _server.Batches.MergeStatistics.UnreadableBlocksKept);
             Assert.Equal([1.0, 3.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
 
+            // The kept block is still a failed block of the answer (#1850 part 4b), as it was before the merge.
+            Assert.Equal(1, _server.Service.Read(a.Id, From, To).Value.BlocksFailed);
+
             // Past the delay the other blocks go; the damaged one stays.
             Pass(Hour0.AddHours(30));
             Assert.Equal([damaged], _server.Blocks.GetBlocks(_product).Select(e => e.Sequence));
@@ -1118,6 +1121,8 @@ namespace HSMServer.Core.Tests.TableSensors
 
             _now = Hour0.AddMinutes(10);
             AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]), ("b", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+            var before = All(a, b);
+
             // The first run writes the P0 part and stops before the P1 part.
             _server.Batches.Checkpoint = p =>
             {
@@ -1135,6 +1140,7 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal([0, 1], _server.Batches.GetHour(_product, Hour0.Ticks).Classes.Select(c => c.PeriodWeeks));
             Assert.Equal(5, _server.Batches.GetPlacement(_product, b.Id).Target);
             Assert.Equal(1, _server.Batches.GetPlacement(_product, b.Id).ClassOf(Hour0.Ticks));
+            Assert.Equal(before, All(a, b));
         }
 
         [Fact]
