@@ -60,6 +60,8 @@ public sealed class TableBlockOperationsTests : IDisposable
         Assert.Equal(8 * 1024 * 1024, options.Limits.MaxRows);
         Assert.Equal(64, options.Limits.MaxColumnsPerTable);
         Assert.Equal(1024, options.Limits.MaxTableIdLength);
+        Assert.Equal(32, options.MaxOpenBatchDatabases);
+        Assert.Equal(24, options.DeleteMergedBlocksAfterHours);
     }
 
     [Theory]
@@ -72,6 +74,9 @@ public sealed class TableBlockOperationsTests : IDisposable
     [InlineData(nameof(TableSensorsConfig.MaxReadRows), 0)]
     [InlineData(nameof(TableSensorsConfig.MaxReadRows), int.MaxValue)] // one row past the limit is collected to page
     [InlineData(nameof(TableSensorsConfig.MinFreeDiskMb), -1)]
+    [InlineData(nameof(TableSensorsConfig.MaxOpenBatchDatabases), 0)]
+    [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), -1)]
+    [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), 8761)]
     public void A_value_out_of_range_fails_the_validation_with_the_name_of_its_key(string key, long value)
     {
         var config = new TableSensorsConfig();
@@ -129,6 +134,25 @@ public sealed class TableBlockOperationsTests : IDisposable
         Assert.Equal((1, SensorStatus.Ok), Values<int>("Write failures")[^1] is var o ? (o.Value, o.Status) : default);
         sensors.SendInfo();
         Assert.Equal(3, Values<int>("Write failures").Count);
+    }
+
+    [Fact]
+    public void The_batch_store_sensors_appear_once_a_product_of_it_is_opened_and_count_the_open_databases()
+    {
+        using var batches = new HSMDatabase.LevelDB.TableBatches.TableBatchDatabase(_folder);
+        var sensors = new TableBlockSensors(_collector.Object, _store, batches);
+
+        sensors.SendInfo();
+        Assert.Empty(_sensors);
+
+        batches.WriteHour(Guid.NewGuid(), new HSMDatabase.AccessManager.TableBatches.TableBatchHourCommit { HourTicks = new DateTime(2026, 11, 2).Ticks },
+            [new HSMDatabase.AccessManager.TableBatches.TableBatchHourPart(4, [new(Guid.NewGuid(), 1, 2, 3, [1, 2, 3])])]);
+        sensors.SendInfo();
+
+        Assert.Equal(1, Single<int>("Batch databases open").Value);
+        Assert.Equal(1, Single<int>("Batch week databases").Value);
+        Assert.Equal(1, Single<int>("Merged hours").Value);
+        Assert.False(sensors.IsCreated);
     }
 
     [Fact]

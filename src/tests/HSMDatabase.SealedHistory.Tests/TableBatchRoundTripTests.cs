@@ -371,7 +371,7 @@ namespace HSMDatabase.SealedHistory.Tests
             {
                 v = kind switch
                 {
-                    0 => Math.Round(v + (g.Below(5) - 2) * Math.Pow(10, -decimals), decimals),
+                    0 => Math.Round(v + (g.Below(5) - 2) * Ticks[decimals], decimals),
                     1 => BitConverter.Int64BitsToDouble((long)g.Next()),
                     2 => g.Chance(1) ? SpecialDoubles[g.Below(SpecialDoubles.Length)] : Math.Round(v + 0.25, 2),
                     _ => v,

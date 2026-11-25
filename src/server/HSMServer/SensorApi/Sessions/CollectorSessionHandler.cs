@@ -123,6 +123,7 @@ namespace HSMServer.SensorApi.Sessions
         private long _offWarnedAtTicks;
         private long _tablesOffWarnedAtTicks;
         private long _budgetWarnedAtTicks;
+        private long _ownKeyWarnedAtTicks;
 
         // Refused upgrades, one throttle per kind of refusal.
         private readonly RefusalThrottle _badUpgradeRefusals = new();
@@ -462,7 +463,7 @@ namespace HSMServer.SensorApi.Sessions
                 : null;
 
             using var memory = session.IsTable
-                ? new TableFrameMemory(_tableBudget, maxFrameBytes, session.KeyId, token => WaitForTableBudgetAsync(session, silence, token), frameDeadline.Arm)
+                ? new TableFrameMemory(_tableBudget, maxFrameBytes, session.KeyId, (reservation, token) => WaitForTableBudgetAsync(session, silence, reservation, token), frameDeadline.Arm)
                 : null;
 
             if (session.IsTable)
@@ -669,11 +670,11 @@ namespace HSMServer.SensorApi.Sessions
         // as while a frame is handled, the silence watch does not run: the wait is the server's,
         // not the collector's silence. It has a bound of its own, and ends when the server ends
         // the connection (shutdown, a replacement, the end of its session).
-        private async Task WaitForTableBudgetAsync(CollectorSession session, SilenceWatch silence, CancellationToken token)
+        private async Task WaitForTableBudgetAsync(CollectorSession session, SilenceWatch silence, long reservation, CancellationToken token)
         {
             // Said only when the bytes are spent: a second large frame of a key that holds one may wait
             // for that one alone.
-            if (_tableBudget.InUse + _config.TableFrameReservation > _tableBudget.Capacity && IsTimeToWarn(ref _budgetWarnedAtTicks))
+            if (_tableBudget.InUse + reservation > _tableBudget.Capacity && IsTimeToWarn(ref _budgetWarnedAtTicks))
                 _logger.Warn($"The table frame budget is spent (CollectorSessions.{nameof(CollectorSessionsConfig.MaxTableBytesInFlight)} = {_config.MaxTableBytesInFlight}, " +
                              $"{_tableBudget.InUse} bytes held, {_tableBudget.Waiting} connection(s) waiting): table connection {session.ShortId} from {session.RemoteIP} " +
                              "stops reading its frame until frames being stored are done. Raise the budget if this is steady.");
@@ -687,10 +688,18 @@ namespace HSMServer.SensorApi.Sessions
             {
                 try
                 {
-                    await _tableBudget.TakeAsync(_config.TableFrameReservation, session.KeyId, wait.Token);
+                    await _tableBudget.TakeAsync(reservation, session.KeyId, wait.Token);
                 }
                 catch (OperationCanceledException) when (Volatile.Read(ref timedOut) == 1)
                 {
+                    // One reservation per access key: with the budget not spent, the wait was for
+                    // another large frame of the same key (several collectors sharing a key).
+                    if (_tableBudget.IsHeldBackOnlyByItsKey(reservation, session.KeyId) && IsTimeToWarn(ref _ownKeyWarnedAtTicks))
+                        _logger.Warn($"Table connection {session.ShortId} from {session.RemoteIP} (client \"{CollectorSession.Printable(session.ClientName)}\") waited {BudgetWaitBound} " +
+                                     "for a table frame reservation and is closed with 1013, held back only by its own access key: another connection of the same key " +
+                                     "holds the key's one reservation for frames over 64 KiB, and the budget had room. Collectors sharing a key send such frames one at a time; " +
+                                     "give them keys of their own if this is steady.");
+
                     throw new TableFrameBudgetTimeoutException();
                 }
             }

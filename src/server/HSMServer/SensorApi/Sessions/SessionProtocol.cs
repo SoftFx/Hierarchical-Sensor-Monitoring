@@ -146,8 +146,8 @@ namespace HSMServer.SensorApi.Sessions
 
         // The answer to a block the store took, found stored before, or refused as a whole by its
         // tables (#1845): 200, the outcome and the refused tables by name and reason. `refused` is
-        // null when they are not known (a duplicate whose first put cannot be read back, or, after
-        // the merge of #1850, was merged and deleted): the list is then left out and
+        // null when they are not known (a duplicate whose first put cannot be read back, or whose
+        // hour the batch store has merged, #1850): the list is then left out and
         // "refusedKnown":false says so.
         // At most the first MaxAckedRefusals refused tables, each identifier cut for printing, and the exact count in
         // refusedCount: a block of tens of thousands of refused tables must not make an ack of tens of megabytes.

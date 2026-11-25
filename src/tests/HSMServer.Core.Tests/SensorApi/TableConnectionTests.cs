@@ -857,6 +857,43 @@ namespace HSMServer.Core.Tests.SensorApi
             await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
         }
 
+        // The waiter of a key that holds a reservation waits for its own key only: a large frame of
+        // another key, with room in the budget, is taken at once and stored while the first key's
+        // frame is still arriving.
+        [Fact]
+        public async Task AWaiterOfAKeyThatHoldsAReservation_DoesNotHoldBackAnotherKey()
+        {
+            await using var host = await StartHost(sessions => { sessions.MaxTableFrameBytes = BudgetFrameBytes; sessions.MaxTableBytesInFlight = 2 * BudgetReservation; });
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+            using var other = await OpenTableAsync(host, AddKey());
+
+            var frame = TableConnectionTestClient.Frame(1, 1, _producer, 1, LargeBlock("q", 1));
+
+            await first.Socket.SendAsync(frame.AsMemory(0, frame.Length - 1), WebSocketMessageType.Binary, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => budget.InUse == BudgetReservation, "the first frame to reserve its bytes");
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame of the key to wait");
+
+            await other.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 3));
+
+            await TestWait.UntilAsync(() => budget.InUse == 2 * BudgetReservation || _tables.Puts > 0, "the other key's frame to be taken at once");
+            Assert.Equal("stored", (await other.ReceiveAckAsync()).Outcome);
+            Assert.Equal(1, budget.Waiting);
+
+            await first.Socket.SendAsync(frame.AsMemory(frame.Length - 1), WebSocketMessageType.Binary, endOfMessage: true, Deadline());
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+            await sending;
+
+            await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
+        }
+
 
         // === The table frame budget ===
 
@@ -1056,11 +1093,50 @@ namespace HSMServer.Core.Tests.SensorApi
 
             Assert.Equal((WebSocketCloseStatus)1013, await second.ExpectCloseAsync());
             Assert.Equal(0, budget.Waiting);
+            Assert.Empty(host.Log.Matching("held back only by its own access key"));
 
             hold.Release.SetResult();
 
             Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
             await TestWait.UntilAsync(() => budget.InUse == 0, "the budget to be whole again");
+            await IgnoreAsync(sending);
+        }
+
+        // The same 1013 for a wait that had room in the budget and waited only for another large
+        // frame of its own key says so (collectors sharing a key send such frames one at a time).
+        [Fact]
+        public async Task AWaitPastItsBound_HeldBackOnlyByItsOwnKey_SaysSo()
+        {
+            await using var host = await StartHost(sessions => { sessions.MaxTableFrameBytes = BudgetFrameBytes; sessions.MaxTableBytesInFlight = 2 * BudgetReservation; });
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            var hold = _tables.HoldNextPut();
+
+            await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+            await hold.Entered.Task.WaitAsync(Patience);
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame of the key to wait");
+
+            var bound = new CollectorSessionsConfig().SilenceLimit * 2;
+            ManualTimer timer = null;
+
+            await TestWait.UntilAsync(() => (timer = host.Time.Timers.FirstOrDefault(t => t.DueTime == bound)) is not null, "the bound of the wait to be set");
+
+            timer.Fire();
+
+            Assert.Equal((WebSocketCloseStatus)1013, await second.ExpectCloseAsync());
+            Assert.Single(host.Log.Matching("held back only by its own access key"));
+            Assert.Empty(host.Log.Matching("The table frame budget is spent"));
+
+            hold.Release.SetResult();
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
             await IgnoreAsync(sending);
         }
 
@@ -1162,11 +1238,15 @@ namespace HSMServer.Core.Tests.SensorApi
 
         // A session of its own and its table connection. The client keeps the session's socket: one
         // left to the garbage collector is closed by its finalizer, and its table connection with it.
-        private async Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host)
-        {
-            var (session, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, _key);
+        private Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host) => OpenTableAsync(host, _key);
 
-            var table = await TableConnectionTestClient.OpenAsync(host.SessionUri, _key, sessionId);
+        private Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host, Guid key) => OpenTableAsync(host, key.ToString());
+
+        private async Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host, string key)
+        {
+            var (session, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, key);
+
+            var table = await TableConnectionTestClient.OpenAsync(host.SessionUri, key, sessionId);
 
             table.Session = session;
             return table;

@@ -50,8 +50,24 @@ namespace HSMDatabase.AccessManager.TableBlocks
     }
 
 
-    /// <summary>What <see cref="ITableBlockStore.Append"/> did. For a duplicate, the stored block's index entry and envelope.</summary>
-    public sealed record TableBlockAppendResult(TableBlockAppendOutcome Outcome, TableBlockIndexEntry Entry, TableBlockEnvelope Envelope);
+    /// <summary>
+    /// What <see cref="ITableBlockStore.Append"/> did. For a duplicate, the stored block's index entry and envelope; for a
+    /// duplicate recognised by the watermark of a merged hour (<see cref="Merged"/>), neither: the block was merged and its
+    /// blocks deleted, so its sequence and its refusals are not known any more (#1850).
+    /// </summary>
+    public sealed record TableBlockAppendResult(TableBlockAppendOutcome Outcome, TableBlockIndexEntry Entry, TableBlockEnvelope Envelope)
+    {
+        /// <summary>A duplicate whose producer sequence is at or below the producer's watermark: its hour was merged.</summary>
+        public bool Merged { get; init; }
+    }
+
+
+    /// <summary>
+    /// The highest producer sequence merged for a product and a producer (#1850): every block of that producer at or below it
+    /// was stored and merged, so a block sent again at or below it is a duplicate after its blocks are deleted. It relies on
+    /// a producer delivering its blocks in order (#1845).
+    /// </summary>
+    public readonly record struct TableBlockWatermark(Guid ProductId, Guid ProducerId, long ProducerSequence);
 
 
     /// <summary>A stored value read back: its envelope and the block bytes, unchanged.</summary>
@@ -156,6 +172,32 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// the databases are closed and cannot be opened now (a reopen that failed, inside its backoff; disposed).
         /// </summary>
         IReadOnlyList<TableBlockIndexEntry> GetBlocks(Guid productId);
+
+        /// <summary>
+        /// Closes an arrival hour for the merge (#1850): no block is appended to <paramref name="hourTicks"/> or an earlier
+        /// hour after this returns, also when the clock is behind. Opens nothing; held in memory, so the merge closes the
+        /// newest merged hour again after a restart.
+        /// </summary>
+        void CloseHour(long hourTicks);
+
+        /// <summary>
+        /// Raises the producers' watermarks (never lowers one): a block at or below its producer's watermark is answered as a
+        /// <see cref="TableBlockAppendOutcome.Duplicate"/> with <see cref="TableBlockAppendResult.Merged"/>. Held in memory;
+        /// the merge loads the durable ones from the batch store before the first put after a start.
+        /// </summary>
+        void RaiseWatermarks(IEnumerable<TableBlockWatermark> watermarks);
+
+        /// <summary>The watermark of a product and producer, or null when none was raised.</summary>
+        long? GetWatermark(Guid productId, Guid producerId);
+
+        /// <summary>
+        /// Deletes the blocks of a merged arrival hour (#1850), except the sequences in <paramref name="keep"/> (blocks the
+        /// merge could not read stay, counted and reported), from both databases and from the in-memory index and the
+        /// duplicate map, after raising <paramref name="watermarks"/> under the same lock, so a block sent again is a
+        /// duplicate at every moment. The deleted range is compacted afterwards, outside the lock appends take. Returns the
+        /// number of blocks deleted. Throws <see cref="TableBlockStoreException"/> when the store cannot be used.
+        /// </summary>
+        int DeleteMergedHour(long hourTicks, IReadOnlyCollection<long> keep, IEnumerable<TableBlockWatermark> watermarks);
 
         /// <summary>
         /// The stored value of a block, or null when it is not there or cannot be read (damage, counted as a read failure).
