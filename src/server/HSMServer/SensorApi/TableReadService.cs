@@ -53,10 +53,17 @@ namespace HSMServer.SensorApi
         private readonly ITableBlockService _blocks;
         private readonly int _maxReadRows;
         private readonly int _maxTextReadRows;
-        private readonly SemaphoreSlim _reads;
+        private readonly TableReadGate _reads;
 
 
+        // Without a shared gate (a host that registers none): the route counts its own reads.
         public TableReadService(ITreeValuesCache cache, ITableBlockService blocks, IServerConfig config)
+            : this(cache, blocks, config, null)
+        {
+        }
+
+        // The server's gate is shared with the table pages of the web UI (#1847).
+        public TableReadService(ITreeValuesCache cache, ITableBlockService blocks, IServerConfig config, TableReadGate reads)
         {
             var tables = config.TableSensors ?? new TableSensorsConfig();
 
@@ -64,7 +71,7 @@ namespace HSMServer.SensorApi
             _blocks = blocks;
             _maxReadRows = tables.MaxReadRows;
             _maxTextReadRows = Math.Min(tables.MaxTextReadRows, tables.MaxReadRows);
-            _reads = new SemaphoreSlim(tables.MaxConcurrentReads, tables.MaxConcurrentReads);
+            _reads = reads ?? new TableReadGate(tables.MaxConcurrentReads);
         }
 
 
