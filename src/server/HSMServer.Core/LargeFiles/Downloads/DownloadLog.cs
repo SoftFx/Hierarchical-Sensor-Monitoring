@@ -40,6 +40,13 @@ namespace HSMServer.Core.LargeFiles.Downloads
         private long _failedWrites;
 
 
+        /// <summary>
+        /// The newest records a read of one file looks at: a page view never walks the whole log while recording waits for it.
+        /// At the expected volumes (one record per caller and archive) this covers the whole retention.
+        /// </summary>
+        public const int MaxScannedPerFileRead = 20_000;
+
+
         public long FailedWrites => Interlocked.Read(ref _failedWrites);
 
         internal int WindowCount
@@ -123,7 +130,7 @@ namespace HSMServer.Core.LargeFiles.Downloads
             if (limit <= 0)
                 return [];
 
-            return _store.Read(DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks, productId, limit, fileId).Select(ToRecord).ToList();
+            return _store.Read(DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks, productId, limit, fileId, MaxScannedPerFileRead).Select(ToRecord).ToList();
         }
 
         public int RemoveOlderThan(DateTime utc) => _store.RemoveOlderThan(utc.Ticks);

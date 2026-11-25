@@ -55,7 +55,7 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
-        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null)
+        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null, int maxScanned = int.MaxValue)
         {
             var records = new List<DownloadRecordEntity>();
 
@@ -65,10 +65,15 @@ namespace HSMDatabase.DatabaseWorkCore
             var from = BuildBound(fromTicks, 0x00);
             var to = BuildBound(toTicks, 0xFF);
 
+            var scanned = 0;
+
             lock (_sync)
             {
                 foreach (var (key, value) in GetDatabase().GetValueKeyPairToFrom(from, to))
                 {
+                    if (scanned++ >= maxScanned)
+                        break;
+
                     DownloadRecordEntity entity;
 
                     try

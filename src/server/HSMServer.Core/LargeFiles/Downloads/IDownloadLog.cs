@@ -76,8 +76,8 @@ namespace HSMServer.Core.LargeFiles.Downloads
         IReadOnlyList<DownloadRecord> Read(Guid productId, DateTime fromUtc, DateTime toUtc, int limit);
 
         /// <summary>
-        /// Records of one file of a product (every archive of it), newest first, at most <paramref name="limit"/>, over the
-        /// whole retention.
+        /// Records of one file of a product (every archive of it), newest first, at most <paramref name="limit"/>, found
+        /// among the newest records of the log (a bounded scan, see <c>DownloadLog.MaxScannedPerFileRead</c>).
         /// </summary>
         IReadOnlyList<DownloadRecord> ReadFile(Guid productId, Guid fileId, int limit);
 

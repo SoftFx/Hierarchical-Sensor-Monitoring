@@ -43,12 +43,13 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             }
         }
 
-        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null)
+        public List<DownloadRecordEntity> Read(long fromTicks, long toTicks, Guid? productId, int limit, Guid? fileId = null, int maxScanned = int.MaxValue)
         {
             lock (_lock)
-                return _rows.Where(r => r.TimeTicks >= fromTicks && r.TimeTicks <= toTicks && (productId is null || r.ProductId == productId) &&
-                                        (fileId is null || r.FileId == fileId))
-                            .OrderByDescending(r => r.TimeTicks).Take(limit).ToList();
+                return _rows.Where(r => r.TimeTicks >= fromTicks && r.TimeTicks <= toTicks)
+                            .OrderByDescending(r => r.TimeTicks).Take(maxScanned)
+                            .Where(r => (productId is null || r.ProductId == productId) && (fileId is null || r.FileId == fileId))
+                            .Take(limit).ToList();
         }
 
         public int RemoveOlderThan(long ticksExclusive)
@@ -298,6 +299,23 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             Assert.Equal([Start.AddHours(3), Start.AddHours(2)], _log.ReadFile(_archive.ProductId, _archive.FileId, 2).Select(r => r.TimeUtc));
             Assert.Empty(_log.ReadFile(_archive.ProductId, _archive.FileId, 0));
             Assert.Empty(_log.ReadFile(_archive.ProductId, Guid.NewGuid(), 10));
+        }
+
+        [Fact]
+        public void ReadFile_Looks_Only_At_The_Newest_Records_Of_The_Log()
+        {
+            _log.Record(_user, _archive, Start);
+
+            var other = Target(_archive.ProductId);
+            for (var i = 1; i <= DownloadLog.MaxScannedPerFileRead; i++)
+                _log.Record(_user with { UserId = Guid.NewGuid() }, other, Start.AddSeconds(i));
+
+            // The file's one record is older than the bounded scan reaches.
+            Assert.Empty(_log.ReadFile(_archive.ProductId, _archive.FileId, 10));
+
+            _log.Record(_user with { UserId = Guid.NewGuid() }, _archive, Start.AddDays(1));
+
+            Assert.Single(_log.ReadFile(_archive.ProductId, _archive.FileId, 10));
         }
 
         [Fact]

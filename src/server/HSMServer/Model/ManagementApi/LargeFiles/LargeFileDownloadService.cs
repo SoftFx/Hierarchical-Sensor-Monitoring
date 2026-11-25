@@ -266,6 +266,8 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
         /// The description of a large file without any caller check, for a surface that has already decided who may see
         /// it (the sensor page). Null where the described file is not a value: the store does not know it, it is still
         /// being uploaded, or its sensor is gone or now belongs to another product than the one it was uploaded to.
+        /// The caller also checks that <c>SensorId</c> of the answer is the sensor it shows, and links a signed-in user to
+        /// <see cref="WebDownloadPath"/>: <c>DownloadUrl</c> is the API route, which takes a token, not a cookie.
         /// </summary>
         public LargeFileDto DescribeFile(Guid fileId, string baseUrl)
         {
