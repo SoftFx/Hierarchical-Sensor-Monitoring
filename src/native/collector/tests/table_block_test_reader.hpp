@@ -10,6 +10,7 @@
 #include "../src/tables/hsm_table_block_writer.hpp"
 
 #include <zstd.h>
+#include <zstd_errors.h>
 
 #include <algorithm>
 #include <cstdint>
