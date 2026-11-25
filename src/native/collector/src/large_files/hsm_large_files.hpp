@@ -150,7 +150,12 @@ namespace hsm::collector::large_files
 
         /// Says why this collector cannot send large files at all (a build without them): every watch
         /// and file is UNAVAILABLE at once.
+        /// Where lines go while no run has a context (before the first Start, after a stop).
+        void SetReporter(std::function<void(bool error, const std::string& message)> report);
         void SetBuildUnavailable(const std::string& reason);
+        /// The transport the collector chose: not empty, why it cannot carry large files (the HTTP transport);
+        /// empty, it may (the session). Watches and pending files follow at once; the run decides again at Start.
+        void SetTransportUnavailable(const std::string& reason);
 
 #if defined(HSM_COLLECTOR_LARGE_FILES)
         /// Starts a run: the uploader thread when there is anything to upload.

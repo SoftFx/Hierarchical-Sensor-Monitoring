@@ -232,7 +232,11 @@ namespace
                 if (what != "nothing to upload" || recorded->idle_advances.load())
                     hsm_collector_test_advance_clock_ms(self, ms);
             });
-            lf::test::AdjustConnection(collector, [](lf::FileConnectionOptions& connection) { connection.request_timeout_ms = 5000; });
+            // A request the script leaves unanswered ends when the script has decided so, never by a timeout.
+            FileServerScript* scripted = script.get();
+            lf::test::AdjustConnection(collector, [scripted](lf::FileConnectionOptions& connection) {
+                connection.ack_abandoned_for_tests = [scripted](std::int64_t id) { return scripted->Unanswered(id); };
+            });
         }
 
         ~Rig() { Destroy(); }

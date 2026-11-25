@@ -206,24 +206,32 @@ namespace hsm::collector::large_files
         {
         }
 
-        bool unavailable_said_ = false;
+        // The reason "cannot be sent" was said for last; said again only for another reason.
+        std::string unavailable_said_;
         bool thread_make_failed_ = false;
 
-        // Under shared_.mutex: why nothing can be sent now (the build, or the run's transport).
+        // Under shared_.mutex: why nothing can be sent now (the build, the transport the collector chose,
+        // or the run's).
         std::string UnavailableReason() const
         {
             if (!build_unavailable_.empty())
                 return build_unavailable_;
+            if (!transport_unavailable_.empty())
+                return transport_unavailable_;
             return running_ ? context_.unavailable_reason : std::string();
         }
+
+        std::string transport_unavailable_;
+        std::function<void(bool, const std::string&)> reporter_;
 
         // Under shared_.mutex: the line that says it, once per run.
         std::string TakeUnavailableLine()
         {
-            if (unavailable_said_ || !running_)
+            const std::string reason = UnavailableReason();
+            if (reason.empty() || reason == unavailable_said_)
                 return std::string();
-            unavailable_said_ = true;
-            return "Large files cannot be sent: " + UnavailableReason() + ".";
+            unavailable_said_ = reason;
+            return "Large files cannot be sent: " + reason + ".";
         }
 
         // ---- Small helpers ----
@@ -236,6 +244,8 @@ namespace hsm::collector::large_files
             {
                 if (context_.report)
                     context_.report(error, message);
+                else if (reporter_)
+                    reporter_(error, message);
             }
             catch (...)
             {
@@ -372,12 +382,13 @@ namespace hsm::collector::large_files
             if (session.session_id.empty())
             {
                 Say("no-session-id", true, "Large files cannot be sent: the server's session has no id (a server before table and file connections).");
-                outcome = Outcome{ Result::Later, "the server has no file connections", Now() + kFeatureAbsentRetryMs };
+                outcome = Outcome{ Result::Later, "the server has no file connections", Now() + 1000 };
                 return false;
             }
             if (absent_generation_ == session.generation && Now() < absent_until_)
             {
-                outcome = Outcome{ Result::Later, "the server has no large files", absent_until_ };
+                // Looked at again every second: a new session lifts it at once.
+                outcome = Outcome{ Result::Later, "the server has no large files", Now() + 1000 };
                 return false;
             }
             if (Now() < connection_retry_at_)
@@ -407,7 +418,7 @@ namespace hsm::collector::large_files
                 absent_generation_ = session.generation;
                 absent_until_ = Now() + kFeatureAbsentRetryMs;
                 Say("absent", true, "Large files cannot be sent: the server has no file connections (the upgrade was answered " + std::to_string(opened.status) + "); files wait and the server is asked again with the next session and every 30 minutes.");
-                outcome = Outcome{ Result::Later, "the server has no large files", absent_until_ };
+                outcome = Outcome{ Result::Later, "the server has no large files", Now() + 1000 };
                 return false;
             }
             const std::int64_t wait = opened.status == 409 ? 1000 : Backoff();
@@ -1728,19 +1739,67 @@ namespace hsm::collector::large_files
         impl_->build_unavailable_ = reason;
     }
 
+    void LargeFiles::SetReporter(std::function<void(bool error, const std::string& message)> report)
+    {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        std::lock_guard<std::mutex> guard(shared_->mutex);
+        impl_->reporter_ = std::move(report);
+#else
+        (void)report;
+#endif
+    }
+
+    void LargeFiles::SetTransportUnavailable(const std::string& reason)
+    {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        std::vector<std::shared_ptr<FileState>> unavailable;
+        std::string say;
+        {
+            std::lock_guard<std::mutex> guard(shared_->mutex);
+            impl_->transport_unavailable_ = reason;
+            const std::string now = impl_->UnavailableReason();
+            for (const auto& watch : impl_->watches_)
+            {
+                if (!now.empty())
+                {
+                    watch->state.store(HSM_LARGE_FILE_WATCH_UNAVAILABLE);
+                    watch->SetReason(now);
+                }
+                else if (watch->state.load() == HSM_LARGE_FILE_WATCH_UNAVAILABLE)
+                {
+                    watch->state.store(HSM_LARGE_FILE_WATCH_ACTIVE);
+                    watch->SetReason(std::string());
+                }
+            }
+            if (!now.empty())
+            {
+                unavailable.assign(impl_->files_.begin(), impl_->files_.end());
+                impl_->files_.clear();
+                if (!unavailable.empty() || !impl_->watches_.empty())
+                    say = impl_->TakeUnavailableLine();
+            }
+        }
+        for (const auto& file : unavailable)
+            file->Settle(HSM_LARGE_FILE_UNAVAILABLE, reason);
+        if (!say.empty())
+            impl_->Report(true, say);
+#else
+        (void)reason;
+#endif
+    }
+
 #if defined(HSM_COLLECTOR_LARGE_FILES)
     void LargeFiles::Start(RunContext context)
     {
         std::vector<std::shared_ptr<FileState>> unavailable;
         bool make_thread = false;
-        bool say_unavailable = false;
+        std::string line;
         {
             std::lock_guard<std::mutex> guard(shared_->mutex);
             if (impl_->thread_.joinable())
                 return;
             impl_->context_ = std::move(context);
             impl_->running_ = true;
-            impl_->unavailable_said_ = false;
             impl_->stop_.store(false);
             // A new run: final refusals and the registrations of the last run are forgotten.
             impl_->registered_.clear();
@@ -1762,16 +1821,16 @@ namespace hsm::collector::large_files
             {
                 unavailable.assign(impl_->files_.begin(), impl_->files_.end());
                 impl_->files_.clear();
-                say_unavailable = !impl_->watches_.empty() || !unavailable.empty();
-                impl_->unavailable_said_ = say_unavailable;
+                if (!impl_->watches_.empty() || !unavailable.empty())
+                    line = impl_->TakeUnavailableLine();
             }
             else
                 make_thread = !impl_->watches_.empty() || !impl_->files_.empty();
         }
         for (const auto& file : unavailable)
             file->Settle(HSM_LARGE_FILE_UNAVAILABLE, impl_->context_.unavailable_reason);
-        if (say_unavailable)
-            impl_->Report(true, "Large files cannot be sent: " + impl_->context_.unavailable_reason + ".");
+        if (!line.empty())
+            impl_->Report(true, line);
         if (make_thread)
             MakeThread();
     }

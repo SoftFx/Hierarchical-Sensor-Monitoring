@@ -2724,6 +2724,10 @@ namespace
             sender_ = [this](std::vector<std::string>& batch) { return HttpSendBatch(batch); };
             send_wire_ = true;
             use_session_ = false;
+            // Large files (#1887) need the session: known from now on, so watches and files say so at once.
+            if (auto* files = LargeFilesFor(false))
+                files->SetTransportUnavailable("large files need the collector session transport, and this collector sends over HTTP "
+                                               "(hsm_collector_use_session_transport)");
         }
 
         // The collector session as the transport (#1668): value batches and registrations travel as
@@ -2738,6 +2742,8 @@ namespace
             sender_ = [this](std::vector<std::string>& batch) { return SessionSendBatch(batch); };
             send_wire_ = true;
             use_session_ = true;
+            if (auto* files = LargeFilesFor(false))
+                files->SetTransportUnavailable(std::string());
         }
 
         // Called by Start, before anything is sent. A new transport object for every run: the
@@ -4962,8 +4968,20 @@ namespace
             if (!large_files_ && create)
             {
                 large_files_ = std::make_unique<large_files::LargeFiles>();
+                // Lines said outside a run (before the first Start): written with no lock of large files held.
+                large_files_->SetReporter([this](bool error, const std::string& message) {
+                    if (error)
+                        LogError(message);
+                    else
+                        LogMessage(HSM_LOG_LEVEL_INFO, message);
+                });
 #if !defined(HSM_COLLECTOR_LARGE_FILES)
                 large_files_->SetBuildUnavailable("this build of the native collector has no large files (it needs HSM_COLLECTOR_HTTP and HSM_COLLECTOR_TABLES)");
+#else
+                // A transport chosen before the first watch or file (the choice is made before Start).
+                if (!use_session_ && http_transport_)
+                    large_files_->SetTransportUnavailable("large files need the collector session transport, and this collector sends over HTTP "
+                                                          "(hsm_collector_use_session_transport)");
 #endif
             }
             return large_files_.get();
