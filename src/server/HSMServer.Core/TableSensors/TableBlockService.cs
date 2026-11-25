@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.AccessManager.TableBlocks;
@@ -41,8 +42,11 @@ namespace HSMServer.Core.TableSensors
         /// a <see cref="DateTimeKind.Local"/> one is converted.</para>
         /// <para>Throws <see cref="TableBlockStoreException"/> when the store cannot be used: a fault, the caller answers
         /// 5xx. It is not turned into an error result, which says the request is wrong.</para>
+        /// <para>A truncated result ends at a time boundary and says where the next page starts
+        /// (<see cref="TableRows.NextFromTicks"/>, #1845). <paramref name="token"/> is checked before every block: a
+        /// cancelled read throws <see cref="OperationCanceledException"/>.</para>
         /// </summary>
-        TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null);
+        TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null, CancellationToken token = default);
     }
 
 
@@ -106,6 +110,9 @@ namespace HSMServer.Core.TableSensors
 
         // Called with the reserved sequence before the tables are matched. Test seam for a sensor created during a put.
         internal Action<long> AfterReserve { get; set; }
+
+        // Called before a read decompresses a block. Test seam for a read that is cancelled between blocks.
+        internal Action<TableBlockIndexEntry> BeforeBlockRead { get; set; }
 
 
         public TableBlockPutResult Put(Guid productId, Guid producerId, long producerSequence, byte[] block)
@@ -201,7 +208,7 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        public TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null)
+        public TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null, CancellationToken token = default)
         {
             if (_cache.GetSensor(sensorId) is not { } sensor)
                 return TaskResult<TableRows>.FromError($"Sensor {sensorId} was not found.");
@@ -216,7 +223,7 @@ namespace HSMServer.Core.TableSensors
             try
             {
                 using (_gate.Read())
-                    return TaskResult<TableRows>.FromValue(ReadRows(table, fromTicks, toTicks, limit));
+                    return TaskResult<TableRows>.FromValue(ReadRows(table, fromTicks, toTicks, limit, token));
             }
             catch (TableBatchStoreException ex)
             {
@@ -237,7 +244,10 @@ namespace HSMServer.Core.TableSensors
         // Sources (the blocks of one arrival hour, or one merged hour) are visited in the order of their earliest row in the
         // range, and the read stops once it holds the limit, has dropped a row past it, and no source left can start before
         // the latest row it keeps.
-        private TableRows ReadRows(TableSensorModel table, long fromTicks, long toTicks, int limit)
+        //
+        // The token is checked before every block and every merged hour (#1845): a read whose caller went away stops
+        // decompressing.
+        private TableRows ReadRows(TableSensorModel table, long fromTicks, long toTicks, int limit, CancellationToken token)
         {
             var product = table.Root.Id;
             var store = Store;
@@ -312,10 +322,18 @@ namespace HSMServer.Core.TableSensors
                 if (source.Blocks is not null)
                 {
                     foreach (var entry in source.Blocks)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        BeforeBlockRead?.Invoke(entry);
+
                         collector.AddBlock(store, entry, tableId);
+                    }
                 }
                 else
+                {
+                    token.ThrowIfCancellationRequested();
                     ReadBatches(batches, collector, product, table.Id, period, source.Hour, fromTicks, toTicks);
+                }
             }
 
             return collector.Build();

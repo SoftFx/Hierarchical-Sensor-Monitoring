@@ -1,5 +1,6 @@
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
+using HSMServer.SensorApi;
 using HSMServer.SensorApi.Sessions;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -33,6 +34,15 @@ namespace HSMServer.Middleware.Telemetry
 
                 await context.Response.WriteAsync(error);
             }
+            else if (context.HasPublicApiFault() && IsTableReadRoute(context.Request))
+            {
+                // The same fault on the read route of table sensors (#1845): a reader takes a 406 as
+                // a key that may not read; a 503 with Retry-After says to ask again later.
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                context.Response.Headers.RetryAfter = TableReadService.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                await context.Response.WriteAsync(TableReadService.KeyLookupFault);
+            }
             else
                 await context.SetAccessError(error);
 
@@ -47,6 +57,10 @@ namespace HSMServer.Middleware.Telemetry
         private static bool IsRegistrationRoute(HttpRequest request) =>
             HttpMethods.IsPost(request.Method) &&
             (IsRoute(request.Path, "/api/sensors/commands") || IsRoute(request.Path, "/api/sensors/addOrUpdate"));
+
+        // POST /api/sensors/tableHistory, the read route of table sensors (#1845).
+        private static bool IsTableReadRoute(HttpRequest request) =>
+            HttpMethods.IsPost(request.Method) && IsRoute(request.Path, "/api/sensors/tableHistory");
 
         private static bool IsRoute(PathString path, string route) =>
             path.StartsWithSegments(route, StringComparison.OrdinalIgnoreCase, out var rest) && (!rest.HasValue || rest.Value == "/");

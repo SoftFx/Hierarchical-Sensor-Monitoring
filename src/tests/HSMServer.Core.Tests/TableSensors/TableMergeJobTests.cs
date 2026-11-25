@@ -645,11 +645,25 @@ namespace HSMServer.Core.Tests.TableSensors
             var all = Rows(a);
             Assert.Equal(24, all.Count);
 
+            // Cut at the limit, then back to a time boundary (#1845): the rows of the time of the first row left out are left
+            // out too, and the next page starts at that time; one time with more rows than the limit is cut at the limit.
             for (int limit = 1; limit <= 25; limit++)
             {
                 var limited = _server.Service.Read(a.Id, From, To, limit).Value;
-                Assert.Equal(all.Take(limit), Snapshot(limited));
+                long? next = limit < all.Count ? all[limit].Item1 : null;
+                var keep = limit;
+
+                while (next is not null && keep > 0 && all[keep - 1].Item1 == next)
+                    keep--;
+
+                if (keep == 0)
+                    keep = limit;
+
+                Assert.Equal(all.Take(keep), Snapshot(limited));
                 Assert.Equal(limit < 24, limited.Truncated);
+
+                if (next is not null && keep < limit)
+                    Assert.Equal(next, limited.NextFromTicks);
             }
         }
 

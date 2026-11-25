@@ -32,6 +32,18 @@ namespace HSMServer.ServerConfiguration
 
         public const int DefaultMaxConcurrentPuts = 4;
 
+        // The most rows one CSV or JSON answer of the read route holds (#1845): text is several times the size of the
+        // rows, and a client without the library reads it whole. The blocks answer is capped by MaxReadRows.
+        public int MaxTextReadRows { get; set; } = DefaultMaxTextReadRows;
+
+        public const int DefaultMaxTextReadRows = 100_000;
+
+        // How many reads of the read route run at once (#1845); a read of rows not merged yet decompresses every block of
+        // its range. A request beyond them waits for a turn.
+        public int MaxConcurrentReads { get; set; } = DefaultMaxConcurrentReads;
+
+        public const int DefaultMaxConcurrentReads = 2;
+
         // The most week databases of the batch store open at once (#1850): a read of a long range opens and closes them in turn.
         public int MaxOpenBatchDatabases { get; set; } = TableBlockOptions.DefaultMaxOpenBatchDatabases;
 
@@ -51,8 +63,11 @@ namespace HSMServer.ServerConfiguration
             Check(MaxRows, int.MaxValue, nameof(MaxRows));
             Check(MaxColumnsPerTable, TableBlockLimits.FormatMaxColumnsPerTable, nameof(MaxColumnsPerTable));
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
-            Check(MaxReadRows, int.MaxValue, nameof(MaxReadRows));
+            // A read collects one row past its limit to know where the next page starts.
+            Check(MaxReadRows, int.MaxValue - 1, nameof(MaxReadRows));
             Check(MaxConcurrentPuts, 1024, nameof(MaxConcurrentPuts));
+            Check(MaxTextReadRows, int.MaxValue, nameof(MaxTextReadRows));
+            Check(MaxConcurrentReads, 1024, nameof(MaxConcurrentReads));
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
             Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
 

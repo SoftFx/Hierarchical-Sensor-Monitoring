@@ -910,6 +910,13 @@
             Get history [from, to] or [from - count] for some sensor
             </summary>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.TableHistory(HSMSensorDataObjects.HistoryRequests.TableHistoryRequest)">
+            <summary>
+            The rows of a table sensor in [From, To) (#1845): JSON, CSV or a sequence of table blocks, cut at a row limit
+            and at a time boundary. The headers X-Hsm-Row-Count, X-Hsm-Truncated, X-Hsm-Next-From (where the next page
+            starts) and X-Hsm-Blocks-Failed describe the answer. The contract: aicontext/features/api/wire-contract/feature.md.
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.FileHistoryRequest)">
             <summary>
             Get file (csv or txt) history [from, to] or [from - count] for some sensor

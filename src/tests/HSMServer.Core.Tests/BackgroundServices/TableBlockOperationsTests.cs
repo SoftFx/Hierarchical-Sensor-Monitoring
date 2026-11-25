@@ -73,6 +73,7 @@ public sealed class TableBlockOperationsTests : IDisposable
     [InlineData(nameof(TableSensorsConfig.MaxColumnsPerTable), 256)]
     [InlineData(nameof(TableSensorsConfig.MaxTableIdLength), 65_536)]
     [InlineData(nameof(TableSensorsConfig.MaxReadRows), 0)]
+    [InlineData(nameof(TableSensorsConfig.MaxReadRows), int.MaxValue)] // one row past the limit is collected to page
     [InlineData(nameof(TableSensorsConfig.MinFreeDiskMb), -1)]
     [InlineData(nameof(TableSensorsConfig.MaxOpenBatchDatabases), 0)]
     [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), -1)]

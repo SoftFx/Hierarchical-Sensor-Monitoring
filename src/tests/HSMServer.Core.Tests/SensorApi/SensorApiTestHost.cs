@@ -330,6 +330,7 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton(provider => new SensorIngestionService(provider.GetRequiredService<ITreeValuesCache>(),
                 provider.GetRequiredService<ISensorApiTelemetry>(), config.Object.TableSensors.ToOptions().Limits));
             builder.Services.AddSingleton<AgentDirectives>();
+            builder.Services.AddSingleton<TableReadService>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
             builder.Services.AddSingleton(tables ?? new Mock<ITableBlockService>(MockBehavior.Strict).Object);

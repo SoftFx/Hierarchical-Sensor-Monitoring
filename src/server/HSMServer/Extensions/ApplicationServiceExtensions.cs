@@ -233,6 +233,7 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton(provider => new SensorIngestionService(provider.GetRequiredService<ITreeValuesCache>(),
                         provider.GetRequiredService<ISensorApiTelemetry>(), config.TableSensors.ToOptions().Limits))
                     .AddSingleton<AgentDirectives>()
+                    .AddSingleton<TableReadService>()
                     .AddSingleton<CollectorSessionRegistry>()
                     .AddSingleton<CollectorSessionHandler>()
                     // The clock of the session's silence limit, replaceable in tests.

@@ -147,8 +147,10 @@ So a block numbered before a sensor existed is never read for it: its tables wer
 - **Rows.** Each candidate is read (one LevelDB get), its table read out by identifier (`TableBlockReader.ReadTable`, which decompresses the block), skipped when the envelope marks it refused, and its rows filtered to the range.
 - **Order.** By time, then by arrival hour, then by block sequence, then by the row's position in its block: a stable sort of the rows in the order they arrived (an hour from batches keeps the same order).
 - **Limit.** At most `maxRows` rows (capped by `TableSensors.MaxReadRows`, default 1,000,000), the earliest ones, `Truncated` when more matched. Memory stays within about twice the limit: past it, the rows collected so far are sorted and the latest dropped.
+- **Where the next page starts (#1845).** The collector keeps one row more than the limit (blocks and batches alike; the early stop of the joined read counts that row too). When more rows matched, the result is cut at a time boundary: the rows of the time of the first row left out are left out too, and `NextFromTicks` is that time, so a read from it returns every row exactly once. When all the kept rows share that one time (a single time with more rows than the limit), the rows are cut at the limit, `RowsAtTimeOmitted` is set and `NextFromTicks` is one tick later.
+- **Cancellation (#1845).** `Read` takes a `CancellationToken`, checked before every block and every merged hour read from its batches: a read whose caller went away stops decompressing and throws `OperationCanceledException`. `TableBlockService.BeforeBlockRead` is the test seam inside that loop.
 - **Null cells (#1859).** Every column of `TableRows` but the time may have rows without a value: `TableRowsColumn.NullMap` (the bit order of `TableNullMap`, `ceil(RowCount / 8)` bytes), `HasNulls`, `IsNull(row)`; the value array holds 0 at a null row. The collector keeps, per value column, one flag per collected row, created at the first null row of that column (nothing for a column without one), and moves it with its row through the range filter, the stable sort, the trims and the limit, so a column with a map in one block and none in another is right. `NullMap` is null when no returned row of the column is null, also when a block had a map whose null rows fell outside `[from, to)` or past the limit. A row whose every value is null is returned like any other. The put needs nothing new: `ReadDirectory` gives the plain column types, which pass the schema check, and it refuses a malformed map (`Invalid`, `CorruptNullMap`).
-- **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped.
+- **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped. A batch of a merged hour that cannot be decoded, or whose columns are not the sensor's, is counted the same way on the batch side (`Batch read failures`, `BatchesFailed` in the result) and logged as an Error; the read route passes both figures on (`X-Hsm-Blocks-Failed`, `X-Hsm-Batches-Failed`).
 - **A store that cannot be used.** `GetBlocks` is lock-free while the databases are open, also after a failed write, once the first open of the process has finished: during that open it waits for it on the store's lock (the index in memory is still the empty initial one), never answering no blocks. When they are closed (a reopen that failed, disposed) it goes through the same open as a put: inside the backoff it throws the fault, past it the read reopens the store (so a server that only reads recovers too), disposed it throws. It never answers the in-memory index of closed databases, whose blocks would all read as missing. `ReadBlock` tells a closed store (it throws `TableBlockStoreException`) from a missing block (damage, counted). `TableRowCollector` and `Read` do not catch the exception, so a read whose store closed under it ends as the fault, and the caller answers 5xx, not 200 with no rows.
 
 ## The identifier is the registered path, byte for byte
@@ -157,7 +159,7 @@ Registration normalizes a sensor path (`BaseUpdateRequest`: a leading separator,
 
 ## Configuration
 
-Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read once at startup, written back with its defaults, validated with an error that names the key (`TableSensors.MaxReadRows = 0 is invalid: expected 1..2147483647.`):
+Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read once at startup, written back with its defaults, validated with an error that names the key (`TableSensors.MaxReadRows = 0 is invalid: expected 1..2147483646.`):
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -166,7 +168,7 @@ Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read
 | `MaxRows` | 8,388,608 | |
 | `MaxColumnsPerTable` | 64 | |
 | `MaxTableIdLength` | 1,024 | |
-| `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request). |
+| `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request); at most 2,147,483,646, since a read collects one row past its limit to know where the next page starts. |
 | `MinFreeDiskMb` | 1,024 | Puts are refused (a fault) while the store's disk has less free; 0 turns the check off. The merge does not write batches below it either (#1850). |
 | `MaxOpenBatchDatabases`, `DeleteMergedBlocksAfterHours`, `MergeMemoryBudgetMb` | 32, 24, 256 | The batch store and the merge (#1850): `aicontext/features/storage/table-batches/feature.md`. |
 
