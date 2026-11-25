@@ -1692,6 +1692,56 @@ namespace
         Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
+    // The stop's final pack observes the stop budget before every compression pass (the managed drain
+    // budget): when it runs out, what is not packed yet is dropped and counted as not delivered at stop,
+    // in one report, and nothing is packed after it.
+    void FinalPackObservesTheStopBudget()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::TableBlockLimits limits;
+        limits.max_tables = 1; // a block per sensor: a pass per sensor
+        channel->SetLimits(limits);
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        std::vector<std::string> lines;
+        hsm_collector_set_logger(
+            collector.value, [](hsm_log_level_t, const char* message, void* user) { static_cast<std::vector<std::string>*>(user)->push_back(message); }, &lines);
+        std::vector<Table> sensors;
+        for (const char* name : { "a", "b", "c" })
+            sensors.push_back(CreateTable(collector.value, name, { { "v", HSM_TABLE_COLUMN_DOUBLE } }));
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+        for (auto& sensor : sensors)
+            for (int r = 0; r < 5; ++r)
+                Check(AddDouble(sensor, r, r) == HSM_RESULT_OK, "add");
+
+        auto& pipeline = *tables::test::Pipeline(collector.value);
+        pipeline.IgnoreStopClockForTests();
+        int passes = 0;
+        // The budget runs out during the second pass.
+        pipeline.on_pack_pass_for_tests = [&] {
+            if (++passes == 2)
+                pipeline.ExpireStopBudgetForTests();
+        };
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        pipeline.on_pack_pass_for_tests = nullptr;
+
+        CheckEqual(2, passes, "passes of the final pack");
+        CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "reserved bytes");
+        // Two blocks were packed and not delivered (the budget is spent), the third sensor never packed.
+        CheckEqual(std::size_t{ 0 }, channel->Puts().size(), "puts after the budget");
+        std::uint64_t dropped = 0;
+        for (auto& sensor : sensors)
+            dropped += Stats(sensor).rows_dropped;
+        CheckEqual(std::uint64_t{ 15 }, dropped, "dropped");
+        CheckEqual(std::int64_t{ 15 }, pipeline.Ledger().Total(tables::TableDropReason::NotDeliveredAtStop), "not delivered at stop");
+        bool cut = false;
+        for (const auto& line : lines)
+            cut = cut || line.find("cut short by the stop budget (5 row(s)") != std::string::npos;
+        Check(cut, "no report of the rows the final pack did not pack");
+    }
+
     // A row count that cannot be a real array (its rows would take more than INT64_MAX bytes) is a wrong
     // shape on a sensor that accepts rows: refused, counted nowhere (not as a full buffer).
     void ImpossibleRowCountIsAWrongShape()
@@ -2024,7 +2074,7 @@ namespace
                            what + ": the ledger has every dropped row");
                 if (!failed)
                 {
-                    CheckEqual(std::uint64_t{ 0 }, dropped, what + ": nothing failed, nothing dropped");
+                    CheckEqual(std::int64_t{ 0 }, ledger.Total(tables::TableDropReason::PackingFailed), what + ": nothing failed, nothing failed to pack");
                     break;
                 }
                 ++failures;
@@ -2225,6 +2275,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
         { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
         { "native_table_over_connection_limits", [](const std::string&) { TableOverConnectionLimits(); } },
+        { "native_table_final_pack_observes_the_stop_budget", [](const std::string&) { FinalPackObservesTheStopBudget(); } },
         { "native_table_impossible_row_count_is_a_wrong_shape", [](const std::string&) { ImpossibleRowCountIsAWrongShape(); } },
         { "native_table_start_failure_rolls_back", [](const std::string&) { StartFailureRollsBack(); } },
         { "native_table_stop_failure_completes", [](const std::string&) { StopFailureCompletes(); } },

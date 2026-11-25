@@ -342,9 +342,12 @@ table connection is the next PR of #1848, then the legacy wrapper.
 context, no thread, no tick and no log line of this feature. From Start to Stop the pipeline has a tick thread (a
 second `ScheduledTask` on the collector's clock) and, when a channel exists, a delivery thread (registrations, then
 the backlog, stop and wait). Stop, on the caller's thread: rows are refused from now on; the tick is stopped and
-joined; every sensor's mutex is taken once for the final take, and the rows are packed (Registered sensors) or
-dropped (the others); the losses so far go to the `Queue overflow` sensor before its last bar; the delivery thread
-drains the backlog within the stop budget beside the value drain, is cancelled if the budget runs out and is joined;
+joined; one stop budget starts here and covers the final pack and the delivery, as the managed drain budget; every
+sensor's mutex is taken once for the final take, and the rows are packed (Registered sensors) or dropped (the
+others), the budget observed before every compression pass, so what is not packed by its deadline is dropped and
+counted as not delivered at stop in one report (`native_table_final_pack_observes_the_stop_budget`); the losses so far
+go to the `Queue overflow` sensor before its last bar; the delivery thread drains the backlog within what is left of
+the budget beside the value drain, is cancelled if the budget runs out and is joined;
 what is left is dropped and counted; the session stops as before; the one stop line names the rows the overflow sensor
 did not get. **When Stop returns no thread of the run exists**, so no tick, registration answer or acknowledgement of
 one run can reach the next: the managed run object, its generation checks and the races its three review rounds fixed
@@ -395,7 +398,6 @@ for every lifecycle report).
   an `Unavailable` sensor). A create that races the dispose is ordered with it under the lock of the table state: it
   is either before the dispose (its sensor is disposed with the rest) or refused, with nothing made
   (`native_table_create_racing_dispose_is_refused`).
-- The final pack at stop is not cut by the drain budget (it runs before the value drain); only the delivery is.
 - A `TooLarge` answer (a frame limit that shrank after packing; only a real connection gives it) is final: the
   block's rows are dropped and counted once as "row too large", and the block is never packed or sent again (the
   pipeline keeps no rows after packing). Its sequence was on the wire, so it is never given to other rows: sequences

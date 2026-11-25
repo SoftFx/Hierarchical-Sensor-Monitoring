@@ -329,10 +329,13 @@ namespace hsm::collector::tables
         void Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason) noexcept;
         /// The first half of a stop, before the collector's final Queue overflow report: rows are
         /// refused from now on, the tick is joined, every buffer is taken (each sensor's mutex once) and
-        /// packed, and the losses so far are reported.
-        void BeginStop() noexcept;
-        /// Delivery drains the backlog within `budget_ms`, beside the collector's value drain.
-        void StartDrain(std::int64_t budget_ms) noexcept;
+        /// packed, and the losses so far are reported. The stop budget of `budget_ms` starts here and
+        /// covers the final pack and the delivery (the managed drain budget): the rows not packed by its
+        /// deadline are dropped and counted as not delivered at stop.
+        void BeginStop(std::int64_t budget_ms) noexcept;
+        /// Delivery drains the backlog until the stop budget's deadline, beside the collector's value
+        /// drain.
+        void StartDrain() noexcept;
         /// Waits for the drain until its deadline, cancels and joins the delivery thread, drops and
         /// counts what is left, reports the losses. When it returns no thread of the run exists.
         void FinishDrain() noexcept;
@@ -367,6 +370,12 @@ namespace hsm::collector::tables
         std::function<void()> on_ack_for_tests;
         /// For tests: runs before every allocation of a pack (a test makes it throw std::bad_alloc).
         std::function<void()> on_pack_allocation_for_tests;
+        /// For tests: runs before every compression pass of a pack.
+        std::function<void()> on_pack_pass_for_tests;
+        /// For tests: the stop budget is spent from now on (until the next Start).
+        void ExpireStopBudgetForTests() noexcept { budget_expired_for_tests_.store(true); }
+        /// For tests: the clock never spends the stop budget; only ExpireStopBudgetForTests does.
+        void IgnoreStopClockForTests() noexcept { stop_clock_ignored_for_tests_.store(true); }
         /// For tests: runs before a thread of a run is made (a test makes it throw std::system_error).
         std::function<void()> before_thread_start_for_tests;
         /// For tests: runs in the stop's FinishDrain before what is left is counted (a test throws).
@@ -381,7 +390,8 @@ namespace hsm::collector::tables
         void Note(std::string message) noexcept;
         std::vector<std::shared_ptr<TableSensor>> SnapshotSensors() const;
         void RegisterPending();
-        void Pack(bool final_pack) noexcept;
+        void Pack(bool final_pack, std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max()) noexcept;
+        bool StopBudgetSpent(std::chrono::steady_clock::time_point deadline) const noexcept;
         void PackTaken(std::vector<Taken>& taken, PackPass& pass);
         void PackAllocation();
         void StartThreads();
@@ -427,6 +437,8 @@ namespace hsm::collector::tables
         std::shared_ptr<ITableChannel> channel_;
         std::string channel_reason_;
         std::chrono::steady_clock::time_point drain_deadline_{};
+        std::atomic<bool> budget_expired_for_tests_{ false };
+        std::atomic<bool> stop_clock_ignored_for_tests_{ false };
         std::unique_ptr<detail::ScheduledTask> tick_;
         std::atomic<std::int64_t> last_tick_ms_{ 0 };
         std::atomic<std::int64_t> run_count_{ 0 };

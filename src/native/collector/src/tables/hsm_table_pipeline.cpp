@@ -779,6 +779,7 @@ namespace hsm::collector::tables
                 }
                 retry_not_before_ms_.store(0);
                 stop_delivery_.store(false);
+                budget_expired_for_tests_.store(false);
                 {
                     std::lock_guard<std::mutex> delivery(delivery_mutex_);
                     register_due_ = false;
@@ -908,9 +909,10 @@ namespace hsm::collector::tables
         }
     }
 
-    void TablePipeline::BeginStop() noexcept
+    void TablePipeline::BeginStop(std::int64_t budget_ms) noexcept
     {
         std::unique_ptr<detail::ScheduledTask> tick;
+        std::chrono::steady_clock::time_point deadline;
         {
             std::lock_guard<std::mutex> guard(lifecycle_mutex_);
             if (!running_)
@@ -918,6 +920,9 @@ namespace hsm::collector::tables
 
             shared_->accepting.store(false, std::memory_order_release);
             tick = std::move(tick_);
+            // One budget for the final pack and the delivery, as the managed drain budget.
+            drain_deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds((std::max)(std::int64_t{ 0 }, budget_ms));
+            deadline = drain_deadline_;
         }
         // Joined with no lock of the pipeline held: a tick in progress may still report.
         if (tick)
@@ -933,17 +938,23 @@ namespace hsm::collector::tables
         }
 
         // The final take: each sensor's mutex once. A writer that got in before is packed; one after
-        // sees `accepting` false under the same mutex and is counted.
-        Pack(/*final_pack=*/true);
+        // sees `accepting` false under the same mutex and is counted. It stops packing at the deadline.
+        Pack(/*final_pack=*/true, deadline);
         ReportLosses();
     }
 
-    void TablePipeline::StartDrain(std::int64_t budget_ms) noexcept
+    bool TablePipeline::StopBudgetSpent(std::chrono::steady_clock::time_point deadline) const noexcept
+    {
+        if (budget_expired_for_tests_.load())
+            return true;
+        return !stop_clock_ignored_for_tests_.load() && std::chrono::steady_clock::now() >= deadline;
+    }
+
+    void TablePipeline::StartDrain() noexcept
     {
         std::lock_guard<std::mutex> guard(lifecycle_mutex_);
         if (!running_)
             return;
-        drain_deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(budget_ms);
         if (delivery_thread_.joinable())
         {
             std::lock_guard<std::mutex> delivery(delivery_mutex_);
@@ -1288,6 +1299,9 @@ namespace hsm::collector::tables
     // What one pack reports once, after its passes.
     struct TablePipeline::PackPass
     {
+        /// The stop's deadline for the final pack; time_point::max() for a tick.
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
+        std::int64_t abandoned = 0;
         std::size_t max_block = 0;
         std::int64_t too_large = 0;
         const TableSensor* too_large_sensor = nullptr;
@@ -1301,7 +1315,7 @@ namespace hsm::collector::tables
             on_pack_allocation_for_tests();
     }
 
-    void TablePipeline::Pack(bool final_pack) noexcept
+    void TablePipeline::Pack(bool final_pack, std::chrono::steady_clock::time_point deadline) noexcept
     {
         std::vector<Taken> taken;
         bool failed = false;
@@ -1334,6 +1348,7 @@ namespace hsm::collector::tables
                 if (!taken.empty())
                 {
                     PackPass pass;
+                    pass.deadline = deadline;
                     PackTaken(taken, pass);
                 }
             }
@@ -1446,6 +1461,13 @@ namespace hsm::collector::tables
         for (const auto& each : groups)
             EncodeAndQueue(each, pass.max_block, pass);
 
+        if (pass.abandoned > 0)
+        {
+            PackAllocation();
+            Note("Packing table rows was cut short by the stop budget (" + std::to_string(pass.abandoned) +
+                 " row(s) not packed in time); they are dropped and counted as not delivered at stop.");
+        }
+
         // One report per pack, whatever the number of rows: a split never writes a line per row.
         if (pass.too_large > 0)
         {
@@ -1480,6 +1502,21 @@ namespace hsm::collector::tables
     // (a split that cannot allocate), the rows it has not settled are counted by Pack.
     void TablePipeline::EncodeAndQueue(const std::vector<Piece>& group, std::size_t max_block, PackPass& pass)
     {
+        // The stop's budget is observed before every compression pass (the managed token): what is not
+        // packed when it runs out is dropped and counted as not delivered at stop.
+        if (pass.deadline != std::chrono::steady_clock::time_point::max() && StopBudgetSpent(pass.deadline))
+        {
+            for (const Piece& piece : group)
+            {
+                piece.sensor->Drop(static_cast<std::int64_t>(piece.count), TableDropReason::NotDeliveredAtStop);
+                *piece.settled += static_cast<std::int64_t>(piece.count);
+                pass.abandoned += static_cast<std::int64_t>(piece.count);
+            }
+            return;
+        }
+        if (on_pack_pass_for_tests)
+            on_pack_pass_for_tests();
+
         std::vector<std::uint8_t> frame;
         const char* error = nullptr;
         int status = 0;
@@ -1682,7 +1719,7 @@ namespace hsm::collector::tables
             {
                 if (stop_delivery_.load())
                     break;
-                if (at_stop && std::chrono::steady_clock::now() >= deadline)
+                if (at_stop && StopBudgetSpent(deadline))
                     break;
                 if (!at_stop && host_.TableSteadyNowMs() < retry_not_before_ms_.load())
                     break;

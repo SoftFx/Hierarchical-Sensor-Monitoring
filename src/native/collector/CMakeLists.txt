@@ -385,6 +385,7 @@ if(HSM_COLLECTOR_TABLES)
             native_table_pack_failure_settles_every_row
             native_table_reports_reach_the_host_with_no_lock_held
             native_table_over_connection_limits
+            native_table_final_pack_observes_the_stop_budget
             native_table_impossible_row_count_is_a_wrong_shape
             native_table_start_failure_rolls_back
             native_table_stop_failure_completes

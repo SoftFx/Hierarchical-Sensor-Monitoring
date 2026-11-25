@@ -3405,8 +3405,9 @@ namespace
 
             // The table sensors (#1848): rows are refused from now on, the tick is joined, every buffer
             // is taken and packed, and the losses so far go to the overflow sensor through the fold
-            // below. Their delivery drains beside the value drain further down.
-            tables::TablePipeline* const tables = BeginTableStop();
+            // below. Their delivery drains beside the value drain further down. One stop budget, from
+            // here, covers their final pack and their delivery.
+            tables::TablePipeline* const tables = BeginTableStop(StopDrainBudgetMs(terminal));
 
             // The self-monitor loop folds overflow once per collect cycle; drops counted since its
             // last pass would otherwise vanish with it. Fold them now, so the flush below carries
@@ -3464,7 +3465,7 @@ namespace
             // the C# stop flush.
             StopWorker();
             if (tables != nullptr)
-                tables->StartDrain(StopDrainBudgetMs(terminal));
+                tables->StartDrain();
             DrainQueueOnStop(terminal);
             // When it returns, no thread of the table run exists.
             if (tables != nullptr)
@@ -4833,7 +4834,7 @@ namespace
         }
 
         // The first half of the table stop; null when the collector has no table sensor.
-        tables::TablePipeline* BeginTableStop() noexcept
+        tables::TablePipeline* BeginTableStop(std::int64_t budget_ms) noexcept
         {
             tables::TablePipeline* pipeline = nullptr;
             {
@@ -4842,7 +4843,7 @@ namespace
                 pipeline = tables_.get();
             }
             if (pipeline != nullptr)
-                pipeline->BeginStop();
+                pipeline->BeginStop(budget_ms);
             return pipeline;
         }
 
