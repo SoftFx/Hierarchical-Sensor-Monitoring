@@ -470,6 +470,31 @@ namespace
         CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(hsm_collector_set_table_options(fresh.value, &table_options)), "options after a sensor");
     }
 
+    // A create that races a dispose is ordered with it under the lock of the table state: a dispose
+    // between the create's first check and that lock refuses the create, and nothing is made (no
+    // pipeline when there was none, no sensor in one that existed).
+    void CreateRacingDisposeIsRefused()
+    {
+        const hsm_table_column_t column{ "v", HSM_TABLE_COLUMN_DOUBLE };
+        for (const bool with_pipeline : { false, true })
+        {
+            const std::string what = with_pipeline ? "with a pipeline" : "first table sensor";
+            Collector collector;
+            std::unique_ptr<Table> first;
+            if (with_pipeline)
+                first = std::make_unique<Table>(CreateTable(collector.value, "first", { column }));
+            tables::test::SetBeforeCreateLock(collector.value, [&] {
+                tables::test::SetBeforeCreateLock(collector.value, nullptr);
+                hsm_collector_dispose(collector.value);
+            });
+            hsm_table_sensor_t* sensor = reinterpret_cast<hsm_table_sensor_t*>(1);
+            CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE),
+                       static_cast<int>(hsm_collector_create_table_sensor(collector.value, "raced", &column, 1, nullptr, &sensor)), what + ": create");
+            Check(sensor == nullptr, what + ": a handle was returned");
+            Check((tables::test::Pipeline(collector.value) != nullptr) == with_pipeline, what + ": a pipeline was made after the dispose");
+        }
+    }
+
     // Without a channel a sensor is Unavailable and says why; its rows are dropped and counted, and the
     // losses of the run are reported (logger and the stop line).
     void UnavailableSaysWhy()
@@ -2186,6 +2211,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_ledger_counts_by_reason", [](const std::string&) { LedgerCountsByReason(); } },
         { "native_table_backlog_keeps_block_in_flight", [](const std::string&) { BacklogKeepsBlockInFlight(); } },
         { "native_table_abi_rejects_wrong_shapes", [](const std::string&) { AbiRejectsWrongShapes(); } },
+        { "native_table_create_racing_dispose_is_refused", [](const std::string&) { CreateRacingDisposeIsRefused(); } },
         { "native_table_unavailable_says_why", [](const std::string&) { UnavailableSaysWhy(); } },
         { "native_table_host_without_table_sensors", [](const std::string&) { HostWithoutTableSensors(); } },
         { "native_table_handle_outlives_collector", [](const std::string&) { HandleOutlivesCollector(); } },

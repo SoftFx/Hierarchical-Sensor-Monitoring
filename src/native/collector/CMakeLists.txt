@@ -577,6 +577,7 @@ foreach(name
         native_table_ledger_counts_by_reason
         native_table_backlog_keeps_block_in_flight
         native_table_abi_rejects_wrong_shapes
+        native_table_create_racing_dispose_is_refused
         native_table_unavailable_says_why
         native_table_host_without_table_sensors
         native_table_handle_outlives_collector

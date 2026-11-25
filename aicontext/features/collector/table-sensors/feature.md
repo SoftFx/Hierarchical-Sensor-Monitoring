@@ -392,7 +392,9 @@ for every lifecycle report).
 - A cell is a raw 8-byte union read by the column's type, so a double given to an int64 column is not detected (the
   managed `TableCell` knows its kind and throws). The C++ wrapper's `TableCell` does detect it and throws.
 - A create on a disposed collector is refused with `HSM_RESULT_INVALID_STATE`, like every native create (managed gives
-  an `Unavailable` sensor).
+  an `Unavailable` sensor). A create that races the dispose is ordered with it under the lock of the table state: it
+  is either before the dispose (its sensor is disposed with the rest) or refused, with nothing made
+  (`native_table_create_racing_dispose_is_refused`).
 - The final pack at stop is not cut by the drain budget (it runs before the value drain); only the delivery is.
 - A `TooLarge` answer (a frame limit that shrank after packing; only a real connection gives it) is final: the
   block's rows are dropped and counted once as "row too large", and the block is never packed or sent again (the

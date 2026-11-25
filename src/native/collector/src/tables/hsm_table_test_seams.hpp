@@ -9,6 +9,7 @@
 
 #include "hsm_table_channel.hpp"
 
+#include <functional>
 #include <memory>
 
 namespace hsm::collector::tables
@@ -35,5 +36,9 @@ namespace hsm::collector::tables
 
         /// The sensor behind a handle.
         TableSensor* Sensor(hsm_table_sensor_t* sensor);
+
+        /// Runs inside hsm_collector_create_table_sensor after its first check of the collector's state
+        /// and before it takes the lock of the table state (a test disposes the collector there).
+        void SetBeforeCreateLock(hsm_collector_t* collector, std::function<void()> hook);
     } // namespace test
 } // namespace hsm::collector::tables

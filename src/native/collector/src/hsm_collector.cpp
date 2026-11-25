@@ -3142,9 +3142,16 @@ namespace
                     return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
             }
 
+            if (before_table_create_lock_for_tests_)
+                before_table_create_lock_for_tests_();
+
             tables::TablePipeline* pipeline = nullptr;
             {
                 std::lock_guard<std::mutex> guard(tables_mutex_);
+                // Decided under the lock Dispose takes too: a create racing a dispose is either before it
+                // (and its sensor is disposed with the rest) or after it, refused with nothing made.
+                if (tables_disposed_)
+                    return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
                 // The first table sensor makes the pipeline: a collector without one pays nothing.
                 if (!tables_)
                     tables_ = std::make_unique<tables::TablePipeline>(static_cast<tables::TablePipelineHost&>(*this), table_options_);
@@ -3183,6 +3190,11 @@ namespace
         {
             std::lock_guard<std::mutex> guard(tables_mutex_);
             table_options_.manual_tick = manual;
+        }
+
+        void TestSetBeforeTableCreateLock(std::function<void()> hook)
+        {
+            before_table_create_lock_for_tests_ = std::move(hook);
         }
 
         tables::TablePipeline* TablePipelineForTests()
@@ -3535,12 +3547,16 @@ namespace
                 state_ = CollectorState::Disposed;
             }
 
-            // Every later call of a table sensor handle is refused from here on.
+            // Every later call of a table sensor handle is refused from here on, and every later create.
+            // The pipeline is disposed after the lock: it joins threads, and nothing it does needs the lock.
+            tables::TablePipeline* pipeline = nullptr;
             {
                 std::lock_guard<std::mutex> guard(tables_mutex_);
-                if (tables_)
-                    tables_->Dispose();
+                tables_disposed_ = true;
+                pipeline = tables_.get();
             }
+            if (pipeline != nullptr)
+                pipeline->Dispose();
             // No listener notification for Disposed — mirrors the managed collector, which
             // fires only ToStopping/ToStopped on dispose-from-active and nothing once stopped.
         }
@@ -6664,7 +6680,9 @@ namespace
         // op_mutex_: a lifecycle listener runs under op_mutex_ and may create a table sensor.
         std::mutex tables_mutex_;
         std::unique_ptr<tables::TablePipeline> tables_;
-        bool tables_may_run_ = false; // from Start until a stop begins, under tables_mutex_
+        bool tables_may_run_ = false;  // from Start until a stop begins, under tables_mutex_
+        bool tables_disposed_ = false; // set by Dispose under tables_mutex_; a later create is refused
+        std::function<void()> before_table_create_lock_for_tests_;
         tables::TablePipelineOptions table_options_;
         std::shared_ptr<tables::ITableChannel> test_table_channel_;
         // Set when the stop has folded the run's last Queue overflow bar; cleared by Start.
@@ -9835,5 +9853,10 @@ namespace hsm::collector::tables::test
     TableSensor* Sensor(hsm_table_sensor_t* sensor)
     {
         return sensor == nullptr ? nullptr : sensor->impl.get();
+    }
+
+    void SetBeforeCreateLock(hsm_collector_t* collector, std::function<void()> hook)
+    {
+        collector->impl->TestSetBeforeTableCreateLock(std::move(hook));
     }
 } // namespace hsm::collector::tables::test
