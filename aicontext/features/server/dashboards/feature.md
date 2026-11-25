@@ -49,12 +49,15 @@ This document covers the subscriptions only. Panel layout, chart data and the da
 
 A dashboard is stored whole, with its panels, sources and subscriptions, in the `ServerDashboards` collection. A failed database write is logged by the collection and does not throw.
 
+A dashboard has two kinds of writers: request threads (a user's edit) and the cache's thread (an automatic add). `DashboardManager.TryUpdate` takes the snapshot and writes it under one lock, so the store always ends with the newest snapshot. Nothing under that lock may call into the cache: the cache's thread takes it while holding the tree-structure lock.
+
 For a new sensor the write runs on the cache's thread under the tree-structure lock, next to the write of the sensor's own row: the whole dashboard is serialized and written once per panel that gained a source. A collector that registers many sensors a subscription covers causes as many dashboard writes.
 
 ## Tests
 
 - `src/tests/HSMServer.Core.Tests/Dashboards/PanelSubscriptionSourcesTests.cs`: automatic adds over a real cache and a real `DashboardManager` (stored and read back by a second manager, one write per sensor), the folder filter for a product in no folder, rejected candidates for a new sensor and for a scan.
 - `src/tests/HSMServer.Core.Tests/Dashboards/PanelSubscriptionTests.cs`: match rules of a single subscription (malformed template, folder filter).
+- `src/tests/HSMServer.Core.Tests/Dashboards/DashboardStoreOrderTests.cs`: a store that is still writing is not overtaken by a later one.
 
 ## Known Issues / Limitations
 
