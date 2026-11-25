@@ -104,6 +104,8 @@ First byte = mode.
 
 Encoder choice (encoder revision 1): constant if all bits are equal. Otherwise the decimal candidate exists when for the smallest e in 0..15 every value is finite, `m = round(value * 10^e)` (the double product rounded to an integer half to even, `Math.Round`'s default) has `|m| <= 2^53`, and `(double)m / 10^e` gives the original bits. Mode 1, 2 (if it exists) and 3 are built and the smallest is written; ties go to the lower mode.
 
+The integer and double coders are shared with the stored batch of table sensors (#1850, `aicontext/features/storage/table-batches/feature.md`), which needs a fixed choice instead of the one above: `IntColumn.WriteVarint` (mode 1 with a given order), `DoubleColumn.WriteDecimal` (mode 2 with given mantissas, as one constant or varints of their first difference) and `DoubleColumn.TryFindDecimalExponent` with a bound of values left out. They write the layouts above, so the readers here decode them; the sealed encoder never calls them, and its output (pinned by the golden chunks) is unchanged.
+
 ### String column (n >= 1 nullable strings)
 
 First byte = mode.

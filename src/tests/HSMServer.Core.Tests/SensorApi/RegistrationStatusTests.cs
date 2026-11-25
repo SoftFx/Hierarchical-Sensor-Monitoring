@@ -309,7 +309,7 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             Assert.True(_valuesCache.TryGetKey(Guid.Parse(_key), out var key, out _));
 
-            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry());
+            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry(), HSMTableBlocks.TableBlockLimits.Default);
             var caller = new PublicApiRequestInfo { Product = null, Key = key, CollectorName = ClientName, RemoteIP = "127.0.0.1" };
             var registration = new AddOrUpdateSensorRequest { Path = "service/fault/registration", SensorType = SensorType.IntSensor };
 
