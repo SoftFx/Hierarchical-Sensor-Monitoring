@@ -59,6 +59,14 @@ namespace HSMServer.ServerConfiguration
 
         public const long MaxChartScanRowsLimit = 1_000_000_000_000;
 
+        // The most rows one download of a table sensor's range from the web UI writes (#1847): past them the download
+        // is refused before its first byte, or cut off (a failed download in the browser) when it is found while writing.
+        public long MaxDownloadRows { get; set; } = DefaultMaxDownloadRows;
+
+        public const long DefaultMaxDownloadRows = 10_000_000;
+
+        public const long MaxDownloadRowsLimit = 1_000_000_000_000;
+
         // The period of the feed sensors of a product (#1847): .tables/Rows, Stored, Delivery lag, Tables refused, Blocks the
         // merge could not read, each the count (or the maximum) of one period.
         public int FeedProductPeriodMinutes { get; set; } = DefaultFeedProductPeriodMinutes;
@@ -92,6 +100,7 @@ namespace HSMServer.ServerConfiguration
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
             Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
             Check(MaxChartScanRows, MaxChartScanRowsLimit, nameof(MaxChartScanRows));
+            Check(MaxDownloadRows, MaxDownloadRowsLimit, nameof(MaxDownloadRows));
             Check(FeedProductPeriodMinutes, 1440, nameof(FeedProductPeriodMinutes));
             Check(FeedTablePeriodMinutes, 1440, nameof(FeedTablePeriodMinutes));
 
