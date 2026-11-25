@@ -97,7 +97,7 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// Called at the points a test stands a crash or a pause at: "part-written", "before-commit", "committed" (the hour
         /// write); "flush" (before a week's memtable is written out); "read-holding" (a read holds a database and its iterator);
         /// "drop-waiting" (a drop waits for the leases of the week, under the cache lock), "drop-deleting" (before the folder
-        /// is deleted); "dispose-waiting" (a dispose waits for leases, under the cache lock), "dispose-product" (before a
+        /// is deleted), "drop-hours" (before the hours left without a class are removed from Hours);"dispose-waiting" (a dispose waits for leases, under the cache lock), "dispose-product" (before a
         /// dispose takes a product's lock).
         /// </summary>
         internal Action<string> Checkpoint { get; set; }
@@ -181,6 +181,10 @@ namespace HSMDatabase.LevelDB.TableBatches
                     PinWeek(product, week);
                     record = EncodeCommit(commit, classes, commitTicks);
 
+                    // A run that did not reach the commit may have left a part of this hour in a class this record no longer
+                    // names (a sensor's period changed in between): its batches and its mark go before anything is written.
+                    RemoveStaleParts(product, week, hour, ordered.Select(p => p.PeriodWeeks).ToHashSet());
+
                     foreach (var part in ordered)
                     {
                         var key = (productId, week, part.PeriodWeeks);
@@ -190,12 +194,23 @@ namespace HSMDatabase.LevelDB.TableBatches
                         {
                             product.Weeks.Add(new TableBatchWeek(week, part.PeriodWeeks));
 
-                            // Written before, by a run that did not reach the commit: the same hour, the same batches.
-                            if (handle.Db.Get(HourKey(hour, TagMark)) is not null)
+                            // Written before, by a run that did not reach the commit. Skipped only when its mark is the record
+                            // being committed (the commit time aside): then the part is the same batches. Otherwise the run
+                            // differed (another batch split, other unreadable blocks, a sensor in another class) and the part is
+                            // rewritten: the hour's keys of this database deleted and the new ones and the mark written in one
+                            // write, so every mark of a committed hour is its record.
+                            var mark = handle.Db.Get(HourKey(hour, TagMark));
+                            if (mark is not null && SameRecord(mark, record))
                                 continue;
 
                             long bytes = 0;
                             using var batch = new WriteBatch();
+
+                            if (mark is not null)
+                            {
+                                DeleteHourKeys(handle.Db, hour, batch);
+                                Statistics.Add(ref Statistics.PartsRewritten);
+                            }
 
                             for (int i = 0; i < part.Batches.Count; i++)
                             {
@@ -208,6 +223,10 @@ namespace HSMDatabase.LevelDB.TableBatches
                             batch.Put(HourKey(hour, TagMark), record);
                             handle.Db.Write(batch, _syncWrite);
                             handle.Dirty = true;
+
+                            if (mark is not null)
+                                _logger.Warn($"The table batches of hour {new DateTime(hour, DateTimeKind.Utc):O} in class P{part.PeriodWeeks} of product {productId}, " +
+                                             "left by a merge that did not commit and not what the repeat merged, were written again");
 
                             Statistics.Add(ref Statistics.BatchesWritten, part.Batches.Count);
                             Statistics.Add(ref Statistics.BytesWritten, bytes);
@@ -238,6 +257,52 @@ namespace HSMDatabase.LevelDB.TableBatches
                 Checkpoint?.Invoke("committed");
             }
         }
+
+        // Under the product's lock. Deletes the part of the hour (index records, batches, mark) from every week database of the
+        // product's week whose class is not among the given ones and that holds a mark of the hour. One synced write each.
+        private void RemoveStaleParts(ProductState product, long week, long hour, HashSet<int> classes)
+        {
+            foreach (var stale in product.Weeks.Where(w => w.WeekStartTicks == week && !classes.Contains(w.PeriodWeeks)).ToList())
+            {
+                var handle = Acquire((product.Id, week, stale.PeriodWeeks), create: false, pin: false);
+                if (handle is null)
+                    continue;
+
+                try
+                {
+                    if (handle.Db.Get(HourKey(hour, TagMark)) is null)
+                        continue;
+
+                    using var batch = new WriteBatch();
+                    DeleteHourKeys(handle.Db, hour, batch);
+                    handle.Db.Write(batch, _syncWrite);
+                    handle.Dirty = true;
+                    Statistics.Add(ref Statistics.PartsRewritten);
+                    _logger.Warn($"The table batches of hour {new DateTime(hour, DateTimeKind.Utc):O} in class P{stale.PeriodWeeks} of product {product.Id}, " +
+                                 "left by a merge that did not commit and not in the class list of the repeat, were deleted");
+                }
+                finally
+                {
+                    Release(handle);
+                }
+            }
+        }
+
+        // Adds to the batch a delete of every key of the hour region of one hour (index records, batches, the mark). The region
+        // of moved batches starts with 0xFF and is not touched.
+        private static void DeleteHourKeys(DB db, long hour, WriteBatch batch)
+        {
+            var prefix = HourKey(hour, TagIndex)[..8];
+
+            using var iterator = db.CreateIterator();
+            for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
+                batch.Delete(iterator.Key());
+        }
+
+        // Two records of one hour are the same record when every byte but the commit time (the last 8) is equal: a part written
+        // by an earlier run of the same merge carries that run's time.
+        internal static bool SameRecord(byte[] a, byte[] b) =>
+            a.Length == b.Length && a.Length >= 8 && a.AsSpan(0, a.Length - 8).SequenceEqual(b.AsSpan(0, b.Length - 8));
 
         /// <summary>
         /// Writes batches of one sensor and merge hour into the region of moved batches of a week database (the move of a
@@ -567,6 +632,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                     // Dropped by the record, whether the folder went or not: a folder left is deleted at the next open.
                     product.Weeks.Remove(week);
+                    product.Snapshot = null;
 
                     // Hours of the week left without any database are removed from the hours database.
                     var weekEnd = week.WeekStartTicks + 7 * TimeSpan.TicksPerDay;
@@ -581,12 +647,23 @@ namespace HSMDatabase.LevelDB.TableBatches
                         }
 
                     if (removed.Count > 0)
-                        product.HoursDb.Write(batch, _syncWrite);
+                    {
+                        try
+                        {
+                            Checkpoint?.Invoke("drop-hours");
+                            product.HoursDb.Write(batch, _syncWrite);
+                        }
+                        catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
+                        {
+                            // The drop is recorded and the week out of the lists: the hours stay in memory and in Hours with no
+                            // class left, hidden by Visible, and the next open loads them the same way.
+                            Statistics.Add(ref Statistics.WriteFailures);
+                            throw new TableBatchStoreException($"The hours of the dropped table batch database {path} could not be removed from the merged hours: {ex.Message}", ex);
+                        }
+                    }
 
                     foreach (var hour in removed)
                         product.Hours.Remove(hour);
-
-                    product.Snapshot = null;
 
                     if (failure is not null)
                     {
@@ -797,9 +874,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         // (a write into a dropped database is refused, so its absence is never a part that was not written).
         private void Rebuild(ProductState product)
         {
-            var marks = new Dictionary<long, (byte[] Record, HashSet<int> Found)>();
+            var marks = new Dictionary<long, (byte[] Record, HashSet<int> Found, bool Agree)>();
 
-            foreach (var week in product.Weeks.OrderBy(w => w.WeekStartTicks).ToList())
+            foreach (var week in product.Weeks.OrderBy(w => w.WeekStartTicks).ThenBy(w => w.PeriodWeeks).ToList())
             {
                 var handle = Acquire((product.Id, week.WeekStartTicks, week.PeriodWeeks), create: false, pin: false);
                 if (handle is null)
@@ -815,7 +892,10 @@ namespace HSMDatabase.LevelDB.TableBatches
                             continue;
 
                         if (!marks.TryGetValue(hour, out var entry))
-                            marks[hour] = entry = (mark, []);
+                            marks[hour] = entry = (mark, [], true);
+                        else if (!SameRecord(entry.Record, mark))
+                            marks[hour] = entry = (entry.Record, entry.Found, false);
+
                         entry.Found.Add(week.PeriodWeeks);
                     }
                 }
@@ -832,8 +912,16 @@ namespace HSMDatabase.LevelDB.TableBatches
             // did not commit). The rebuilt commit takes the time of the rebuild: the safe side, the blocks live a little longer.
             long rebuildTicks = Clock().Ticks;
 
-            foreach (var (hour, (record, found)) in marks.OrderBy(m => m.Key))
+            // Every mark of a committed hour is its record (a repeat rewrites a part whose mark differs and removes the parts of
+            // classes it no longer names, before the commit). So an hour is rebuilt when its marks agree (the commit time aside)
+            // and every class the record names has its mark or was dropped; marks that disagree are a run that did not commit
+            // (it crashed while it rewrote the parts), and the hour stays on its blocks until the merge repeats it. The record is
+            // the same whichever database it is read from (the weeks are visited by start, then class, for a fixed order).
+            foreach (var (hour, (record, found, agree)) in marks.OrderBy(m => m.Key))
             {
+                if (!agree)
+                    continue;
+
                 var (decoded, _) = DecodeCommit(hour, record);
                 var week = StorageWeek.GetStartTicks(hour);
                 if (!decoded.Classes.All(c => found.Contains(c.PeriodWeeks) || product.Dropped.Contains(new TableBatchWeek(week, c.PeriodWeeks))))

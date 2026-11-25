@@ -79,6 +79,12 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long HoursRebuilt;
         public long ReadFailures;
         public long WriteFailures;
+        /// <summary>
+        /// Parts of a merged hour, left by a run that did not commit, that the repeat wrote again (their mark is not the record
+        /// being committed) or deleted (their class is not in that record). Not posted to self-monitoring, like the other
+        /// recovery counters (<see cref="HoursRebuilt"/>, <see cref="WeeksDropped"/>): each case is logged as a warning.
+        /// </summary>
+        public long PartsRewritten;
 
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
     }
@@ -154,8 +160,9 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>
         /// Writes one merged hour of a product: each part into the week database of its period class (index records,
         /// batches and the hour's mark in one synced write per database), then the commit in the product's hours database.
-        /// A part whose database already holds the hour's mark is skipped, and an hour already committed is not written again,
-        /// so a repeat after a crash completes the hour. Throws <see cref="TableBatchStoreException"/> on a fault: the hour is
+        /// A part left by a run that did not commit is skipped when its mark is the record being committed (the commit time
+        /// aside), written again in one write otherwise, and deleted when its class is not in that record; an hour already
+        /// committed is not written again. So a repeat after a crash completes the hour, every mark of it its record. Throws <see cref="TableBatchStoreException"/> on a fault: the hour is
         /// then not committed.
         /// </summary>
         void WriteHour(Guid productId, TableBatchHourCommit commit, IReadOnlyList<TableBatchHourPart> parts);
