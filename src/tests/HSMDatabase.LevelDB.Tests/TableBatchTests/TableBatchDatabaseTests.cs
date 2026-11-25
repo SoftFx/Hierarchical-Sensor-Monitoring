@@ -1184,6 +1184,34 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
+        public void An_open_whose_rebuild_fails_at_a_later_week_leaves_no_week_database_open()
+        {
+            var first = Open();
+            first.WriteHour(_product, Commit(Week0, 1), [Part(4, (_sensorA, 0, 1))]);
+            first.WriteHour(_product, Commit(Week0 + 7 * 24 * Hour, 2), [Part(4, (_sensorA, 0, 1))]);
+            first.Dispose();
+            DeleteHours();
+
+            // The rebuild of Hours scans the first week and fails to open the second.
+            var secondWeek = TableBatchDatabase.WeekName(Week0 + 7 * 24 * Hour, 4);
+            var fail = true;
+            var store = Open(open: (path, options) =>
+            {
+                if (fail && path.EndsWith(secondWeek))
+                    throw new Exception("IO error: the disk is not there for a moment");
+                return new DB(path, options);
+            });
+
+            Assert.Throws<TableBatchStoreException>(() => store.GetHours(_product));
+            Assert.False(store.IsOpened);
+            Assert.Equal(0, store.OpenDatabases);
+
+            // The next call opens the product again and rebuilds both hours.
+            fail = false;
+            Assert.Equal([Week0, Week0 + 7 * 24 * Hour], store.GetHours(_product).Select(h => h.HourTicks));
+        }
+
+        [Fact]
         public void A_dispose_during_an_open_waits_for_it_and_leaves_nothing_of_it_open()
         {
             var first = Open();

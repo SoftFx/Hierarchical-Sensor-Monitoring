@@ -880,7 +880,11 @@ namespace HSMDatabase.LevelDB.TableBatches
             catch
             {
                 // Nothing of a product that failed to open stays open: the next call opens it again over the same folder.
+                // That includes the week databases a rebuild of its Hours or Placements opened through the cache and let go
+                // (a first week scanned, a second one that failed to open): the cache would keep them for a product the
+                // store does not have.
                 CloseProductDatabases(product);
+                CloseWeekDatabases(productId);
                 throw;
             }
         }
@@ -955,6 +959,19 @@ namespace HSMDatabase.LevelDB.TableBatches
             product.HoursDb = null;
             product.PlacementsDb?.Dispose();
             product.PlacementsDb = null;
+        }
+
+        // Closes every week database of a product that the cache holds and nothing uses. Called for a product whose open
+        // failed, under its slot's gate: no other call can hold one of its databases (each waits on the gate first).
+        private void CloseWeekDatabases(Guid productId)
+        {
+            lock (_cacheLock)
+            {
+                foreach (var handle in _handles.Values.Where(h => h.Key.Product == productId && h.Leases == 0).ToList())
+                    Close(handle);
+
+                Monitor.PulseAll(_cacheLock);
+            }
         }
 
 
