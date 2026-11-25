@@ -12,7 +12,7 @@ endif()
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.14.1 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.14.2 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -436,6 +436,20 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_refuses_binary_and_oversized_messages
         COMMAND hsm_collector_tests native_ws_refuses_binary_and_oversized_messages
     )
+    # #1848: binary frames (up to 16 MiB), the receive cap per connection, and a second WebSocket
+    # to the session route beside the session (the table connection's lower half).
+    add_test(NAME native_ws_sends_binary_frames_intact
+        COMMAND hsm_collector_tests native_ws_sends_binary_frames_intact
+    )
+    add_test(NAME native_ws_receive_cap_is_set_per_connection
+        COMMAND hsm_collector_tests native_ws_receive_cap_is_set_per_connection
+    )
+    add_test(NAME native_ws_second_connection_opens_beside_the_session
+        COMMAND hsm_collector_tests native_ws_second_connection_opens_beside_the_session
+    )
+    add_test(NAME native_ws_second_connection_refusal_reports_its_status
+        COMMAND hsm_collector_tests native_ws_second_connection_refusal_reports_its_status
+    )
     # #1668: the collector session as the transport. Like the native_ws_* tests above they need a
     # libcurl with WebSocket and skip, saying so, on one without.
     add_test(NAME native_session_delivers_registrations_and_values
@@ -484,6 +498,13 @@ if(HSM_COLLECTOR_HTTP)
     set_tests_properties(native_session_value_at_the_frame_limit_does_not_stall_the_sender PROPERTIES TIMEOUT 90)
     add_test(NAME native_session_transport_request_contract
         COMMAND hsm_collector_tests native_session_transport_request_contract
+    )
+    # #1848: the hello's sessionId, the session generation, and the shared reconnect backoff.
+    add_test(NAME native_session_reports_session_id_and_generation
+        COMMAND hsm_collector_tests native_session_reports_session_id_and_generation
+    )
+    add_test(NAME native_session_reconnect_backoff_keeps_its_formula
+        COMMAND hsm_collector_tests native_session_reconnect_backoff_keeps_its_formula
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
