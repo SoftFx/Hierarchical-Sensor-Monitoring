@@ -66,6 +66,8 @@ namespace HSMCommon.Model
     [MemoryPackUnion(9, typeof(EnumValue))]
     [MemoryPackUnion(10, typeof(IntegerBarValue))]
     [MemoryPackUnion(11, typeof(DoubleBarValue))]
+    // A large file value (#1883): a FileValue under a tag of its own, so ordinary file rows keep their bytes.
+    [MemoryPackUnion(12, typeof(LargeFileValue))]
     public abstract partial record BaseValue
     {
         private DateTime _time;
