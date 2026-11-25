@@ -251,6 +251,7 @@ namespace HSMDataCollector.Tables
             }
 
             Interlocked.Add(ref _rowsAccepted, rows);
+            OnAcceptedForTests?.Invoke(run);
             return rows;
         }
 
@@ -269,6 +270,9 @@ namespace HSMDataCollector.Tables
             return TableDropReason.None;
         }
 
+
+        /// <summary>For tests: runs on the writer's thread once a call was accepted, with the run that accepted it.</summary>
+        internal Action<TableRun> OnAcceptedForTests { get; set; }
 
         /// <summary>For tests: runs between the reservation of a row and its append under the sensor's lock.</summary>
         internal Action BeforeAppendForTests { get; set; }

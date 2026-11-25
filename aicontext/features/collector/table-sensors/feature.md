@@ -274,7 +274,12 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   `TableRunLifecycleTests`: the run as one object (a tick, a registration answer, a reservation of an earlier run never
   reach the next; an answer is applied after a cancellation), no pipeline without table sensors, a compressor that cannot
   be made, a failed buffer growth, the ledger and its one stop line, a logger that disposes the collector from a report,
-  and a stress test of Start/Stop/Start/Stop with writers on every boundary.
+  the rows of an `Unavailable` sensor in the overflow sensor or the stop line, a table sensor created during a start
+  rollback, and a stress test of Start/Stop/Start/Stop/Start/Stop: the writers start after the first Start and write
+  through every boundary (each stop is held by hooks until every writer has written more), every run accepts a minimum
+  from every writer, and every delivered row is checked against the run that accepted it (recorded at `AddRow`).
+  `QueueOverflowFinalBarTests`: a loss the overflow sensor took after the snapshot of a periodic send in flight is in
+  the bar its stop publishes.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver; the native driver
   marks the table verbs `CONFORMANCE-UNSUPPORTED (#1848)` and does not run the fixture until step 6.
 

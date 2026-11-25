@@ -614,56 +614,139 @@ namespace HSMDataCollector.Tests.Tables
             }
         }
 
-        // Start, Stop, Start, Stop with writers on every boundary: every row offered is accepted or dropped, every
-        // accepted row is delivered by a run or in a run's ledger, and no row goes out under another run's producer.
+        // Start, Stop, Start, Stop, Start, Stop with writers that write through every boundary. Barriers make the overlap,
+        // never time: the writers start after the first Start and do not pause until the last stop is over; a run
+        // goes on until every writer had rows accepted in it; every stop is held, once its run stopped taking rows and
+        // again before each pass of its final pack, until every writer has written more; and a Start comes only once
+        // every writer was refused by the stopped collector. Each accepted call records the run that accepted it, and a
+        // delivered row must come in a block of that run's producer: a row of one run sent under the producer of the
+        // next is caught, which uniqueness, totals and order would not catch.
         [Fact]
-        public async Task Rows_written_across_starts_and_stops_are_accounted_for_by_their_own_run()
+        public async Task Rows_written_across_starts_and_stops_are_delivered_by_the_run_that_accepted_them()
         {
-            var sender = new FakeTableSender();
             const int Writers = 4;
-            const int RowsPerWriter = 20_000;
             const int Runs = 3;
+            const int MinAcceptedPerWriterPerRun = 200;
+            const int CallsThroughABoundary = 50;
 
-            using (var collector = new DataCollector(Options(sender)))
+            var sender = new FakeTableSender();
+
+            // Room for 2,000 rows (time and two integers, 24 bytes): a full buffer refuses rows, counted, so the writers
+            // never wait and the rows to check stay few.
+            using (var collector = new DataCollector(Options(sender, o => o.MaxTableBufferBytes = 2_000 * 24)))
             {
                 var tables = Enumerable.Range(0, Writers).Select(i => collector.CreateTableSensor($"w{i}", Quotes(TableColumn.Int64("writer"), TableColumn.Int64("n")))).ToList();
-                var runs = new List<TableRun>();
-                var accepted = new long[Writers];
+                var pipeline = collector.TablePipeline;
 
-                var go = new ManualResetEventSlim();
-                var writers = Enumerable.Range(0, Writers).Select(w => Task.Run(() =>
+                var calls = new long[Writers];
+                var offered = new long[Writers];
+                var refusedInEpoch = new long[Writers];
+                var acceptedInRun = Enumerable.Range(0, Writers).Select(_ => new long[Runs + 1]).ToArray();
+                var acceptedBy = Enumerable.Range(0, Writers).Select(_ => new Dictionary<long, TableRun>()).ToArray();
+                var lastAccepting = new TableRun[Writers];
+                long stopEpoch = 0;
+                var writersStop = 0;
+
+                bool AllWriters(Func<int, bool> condition) => Enumerable.Range(0, Writers).All(condition);
+
+                void WaitFor(Func<bool> condition, string what) =>
+                    Assert.True(SpinWait.SpinUntil(condition, Patience), what);
+
+                // Blocks its caller (a stop, a pack) until every writer has made more calls: the writers write through it.
+                void LetTheWritersWrite()
                 {
-                    go.Wait();
+                    var before = Enumerable.Range(0, Writers).Select(w => Interlocked.Read(ref calls[w])).ToArray();
 
-                    for (var n = 0; n < RowsPerWriter; n++)
-                        if (tables[w].AddRow(T0, w, n))
-                            accepted[w]++;
-                })).ToArray();
-
-                go.Set();
-
-                for (var run = 0; run < Runs; run++)
-                {
-                    await collector.Start();
-                    runs.Add(collector.TablePipeline.CurrentRun);
-
-                    for (var tick = 0; tick < 5; tick++)
-                        await collector.TickTablesAsync();
-
-                    await collector.Stop();
+                    WaitFor(() => AllWriters(w => Interlocked.Read(ref calls[w]) >= before[w] + CallsThroughABoundary), "a writer stopped writing");
                 }
 
-                await Task.WhenAll(writers);
+                for (var w = 0; w < Writers; w++)
+                {
+                    var writer = w;
 
-                var producers = runs.Select(r => r.Producer).ToList();
-                var delivered = 0L;
-                var lastRun = new int[Writers];
-                var seen = new HashSet<long>();
+                    // On the writer's own thread, inside its AddRow: the run that took the row.
+                    ((TableSensor)tables[w]).OnAcceptedForTests = run => lastAccepting[writer] = run;
+                }
+
+                var writersStart = new ManualResetEventSlim();
+                var writers = Enumerable.Range(0, Writers).Select(w => Task.Run(() =>
+                {
+                    writersStart.Wait();
+
+                    long n = 0;
+
+                    for (; Volatile.Read(ref writersStop) == 0; n++)
+                    {
+                        var epoch = Interlocked.Read(ref stopEpoch);
+
+                        if (tables[w].AddRow(T0, w, n))
+                        {
+                            var run = lastAccepting[w];
+
+                            acceptedBy[w].Add(n, run);
+                            Interlocked.Increment(ref acceptedInRun[w][run.Number]);
+                        }
+                        else
+                        {
+                            // A call that began after a stop was over and was refused: the writer wrote while stopped.
+                            Interlocked.Exchange(ref refusedInEpoch[w], epoch);
+                        }
+
+                        Interlocked.Increment(ref calls[w]);
+                    }
+
+                    offered[w] = n;
+                })).ToArray();
+
+                // A stop that has ended its run's tick and loop (the run refuses rows now), and every pass of a pack,
+                // a tick's or a stop's final one: held until the writers have written more.
+                pipeline.OnStopWaitsForPackForTests = LetTheWritersWrite;
+                pipeline.OnPackPassForTests = LetTheWritersWrite;
+
+                var runs = new List<TableRun>();
+
+                for (var number = 1; number <= Runs; number++)
+                {
+                    await collector.Start();
+
+                    var run = pipeline.CurrentRun;
+
+                    Assert.Equal(number, run.Number);
+                    runs.Add(run);
+
+                    // The writers start after the first Start: nothing is written before a run exists.
+                    writersStart.Set();
+
+                    // The run goes on, tick after tick, until every writer had rows accepted in it.
+                    var ticks = 0;
+
+                    do
+                    {
+                        await collector.TickTablesAsync();
+                        Assert.True(++ticks < 100_000, $"run {number} did not accept {MinAcceptedPerWriterPerRun} rows of every writer");
+                    }
+                    while (!AllWriters(w => Interlocked.Read(ref acceptedInRun[w][number]) >= MinAcceptedPerWriterPerRun));
+
+                    await collector.Stop();
+
+                    Assert.Equal(CollectorStatus.Stopped, collector.Status);
+
+                    // Every writer is refused by the stopped collector before the next Start (or the end).
+                    var epoch = Interlocked.Increment(ref stopEpoch);
+
+                    WaitFor(() => AllWriters(w => Interlocked.Read(ref refusedInEpoch[w]) >= epoch), "a writer did not write while the collector was stopped");
+                }
+
+                Volatile.Write(ref writersStop, 1);
+                await Within(Task.WhenAll(writers), "the writers did not end");
+
+                var runOfProducer = runs.ToDictionary(r => r.Producer);
+                var deliveredByRun = new long[Runs + 1];
+                var seen = Enumerable.Range(0, Writers).Select(_ => new HashSet<long>()).ToArray();
 
                 foreach (var block in sender.Stored)
                 {
-                    var runIndex = producers.IndexOf(block.Producer);
-                    Assert.True(runIndex >= 0, "a block of an unknown producer");
+                    Assert.True(runOfProducer.TryGetValue(block.Producer, out var carrier), "a block of an unknown producer");
 
                     for (var w = 0; w < Writers; w++)
                         foreach (var row in block.RowsOf(tables[w].Path))
@@ -671,29 +754,39 @@ namespace HSMDataCollector.Tests.Tables
                             Assert.Equal(w, (long)row.Values[0].Value);
 
                             var n = (long)row.Values[1].Value;
-                            Assert.True(seen.Add(w * (long)RowsPerWriter + n), "a row was delivered twice");
 
-                            // A writer's rows come in order; a later run never delivers an earlier row than a run
-                            // before it did, and an earlier run never a later one.
-                            Assert.True(runIndex >= lastRun[w], $"row {n} of writer {w} went out under run {runIndex} after a row under run {lastRun[w]}");
-                            lastRun[w] = runIndex;
-                            delivered++;
+                            Assert.True(seen[w].Add(n), $"row {n} of writer {w} was delivered twice");
+                            Assert.True(acceptedBy[w].TryGetValue(n, out var accepting), $"row {n} of writer {w} was delivered and never accepted");
+                            Assert.True(ReferenceEquals(accepting, carrier),
+                                        $"row {n} of writer {w} was accepted by run {accepting.Number} and delivered under the producer of run {carrier.Number}");
+
+                            deliveredByRun[carrier.Number]++;
                         }
                 }
 
                 for (var w = 0; w < Writers; w++)
-                    Assert.Equal(RowsPerWriter, tables[w].RowsAccepted + tables[w].RowsDropped);
+                {
+                    Assert.Equal(offered[w], tables[w].RowsAccepted + tables[w].RowsDropped);
+                    Assert.Equal(acceptedBy[w].Count, tables[w].RowsAccepted);
 
-                Assert.Equal(accepted.Sum(), tables.Sum(t => t.RowsAccepted));
+                    for (var number = 1; number <= Runs; number++)
+                        Assert.True(acceptedInRun[w][number] >= MinAcceptedPerWriterPerRun, $"run {number} accepted {acceptedInRun[w][number]} row(s) of writer {w}");
+                }
 
-                // Accepted rows that were lost later are in the ledger of the run that accepted them.
-                var lostAfterAcceptance = runs.Sum(r => r.Ledger.TotalOf(TableDropReason.NotDeliveredAtStop) + r.Ledger.TotalOf(TableDropReason.BacklogFull)
-                                                      + r.Ledger.TotalOf(TableDropReason.RefusedByServer) + r.Ledger.TotalOf(TableDropReason.PackingFailed)
-                                                      + r.Ledger.TotalOf(TableDropReason.RowTooLarge));
+                // Run by run: every row a run accepted was delivered under its producer, or is in its ledger as lost
+                // after acceptance.
+                foreach (var run in runs)
+                {
+                    var accepted = Enumerable.Range(0, Writers).Sum(w => acceptedInRun[w][run.Number]);
+                    var lostAfterAcceptance = run.Ledger.TotalOf(TableDropReason.NotDeliveredAtStop) + run.Ledger.TotalOf(TableDropReason.BacklogFull)
+                                            + run.Ledger.TotalOf(TableDropReason.RefusedByServer) + run.Ledger.TotalOf(TableDropReason.PackingFailed)
+                                            + run.Ledger.TotalOf(TableDropReason.RowTooLarge);
 
-                Assert.Equal(accepted.Sum(), delivered + lostAfterAcceptance);
+                    Assert.Equal(accepted, deliveredByRun[run.Number] + lostAfterAcceptance);
+                }
+
                 // Every loss a run counted is on a sensor too; the sensors count more only for rows refused while no
-                // run took them (before the first Start, and after a run's stop line).
+                // run took them (after a run's stop line).
                 Assert.True(tables.Sum(t => t.RowsDropped) >= runs.Sum(r => r.Ledger.Total));
             }
         }
