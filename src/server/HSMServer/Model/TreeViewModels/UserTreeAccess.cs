@@ -74,8 +74,8 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsVisible(User user, NodeViewModel node) => IsVisibleTo(user, node);
 
         /// <summary>
-        /// The visibility rule for a node or sensor the caller already holds. Static for the controllers
-        /// outside the tree page that keep the tree itself (the product and access key pages).
+        /// The visibility rule for a node or sensor the caller already holds. Static for a controller
+        /// outside the tree page that keeps the tree itself (the key list of the access key page).
         /// </summary>
         public static bool IsVisibleTo(User user, NodeViewModel node) =>
             user is not null && RootOf(node) is { } root && HasProduct(user, root.Id);

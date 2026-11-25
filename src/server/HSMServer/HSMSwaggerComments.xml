@@ -4225,8 +4225,8 @@
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsVisibleTo(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.NodeViewModel)">
             <summary>
-            The visibility rule for a node or sensor the caller already holds. Static for the controllers
-            outside the tree page that keep the tree itself (the product and access key pages).
+            The visibility rule for a node or sensor the caller already holds. Static for a controller
+            outside the tree page that keeps the tree itself (the key list of the access key page).
             </summary>
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)">

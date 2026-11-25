@@ -87,6 +87,7 @@ namespace HSMServer.Core.Tests.Controllers
             var result = await controller.Registrate(new RegistrationViewModel { Username = "taken", Password = "password1", SecondPassword = "password1" });
 
             Assert.Equal("Registration", Assert.IsType<ViewResult>(result).ViewName);
+            Assert.Single(users.Invocations, i => i.Method.Name == nameof(IUserManager.AddUser));
             Assert.Empty(SignedIn(signIn));
         }
 

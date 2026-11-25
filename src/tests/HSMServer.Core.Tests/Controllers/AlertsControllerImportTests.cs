@@ -35,7 +35,9 @@ namespace HSMServer.Core.Tests.Controllers
             // The paths of a file are relative to the node the import was started on.
             var tree = new WebAccessFixture();
 
-            var answer = await tree.Alerts(tree.Admin).ImportAlerts(Import(tree.ServiceAlive.Parent.Id, File(sensors: ["Service alive"])));
+            // "Service alive" is a boolean sensor: the alert compares it with a boolean.
+            var answer = await tree.Alerts(tree.Admin).ImportAlerts(
+                Import(tree.ServiceAlive.Parent.Id, File(sensors: ["Service alive"], operation: "Equal", target: "false")));
 
             Assert.Equal(string.Empty, answer);
             Assert.Equal([tree.ServiceAlive.Id], ImportedPolicies(tree).Select(u => u.Id));
@@ -70,14 +72,14 @@ namespace HSMServer.Core.Tests.Controllers
         internal static AlertImportViewModel Import(Guid nodeId, string file) => new() { NodeId = nodeId, FileContent = file };
 
         /// <summary>An exported alerts file with one alert for the given relative sensor paths.</summary>
-        internal static string File(string[] sensors, string[] products = null) =>
+        internal static string File(string[] sensors, string[] products = null, string operation = "GreaterThan", string target = "10") =>
             JsonSerializer.Serialize(new[]
             {
                 new
                 {
                     Products = products,
                     Sensors = sensors,
-                    Conditions = new[] { new { Property = "Value", Operation = "GreaterThan", Target = "10" } },
+                    Conditions = new[] { new { Property = "Value", Operation = operation, Target = target } },
                     Template = "imported",
                     Icon = "!",
                     Chats = new[] { "#empty" },

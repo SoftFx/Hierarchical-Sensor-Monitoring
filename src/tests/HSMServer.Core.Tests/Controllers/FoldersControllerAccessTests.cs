@@ -20,8 +20,14 @@ namespace HSMServer.Core.Tests.Controllers
             {
                 var list = Assert.IsType<PartialViewResult>(tree.FolderPage(user).ResetUsers(tree.Folder.Id));
 
+                var users = Assert.IsType<FolderUsersViewModel>(list.Model);
+
                 Assert.Equal("_Users", list.ViewName);
-                Assert.Equal(tree.Folder.Name, Assert.IsType<FolderUsersViewModel>(list.Model).FolderName);
+                Assert.Equal(tree.Folder.Name, users.FolderName);
+
+                // The users who can be added: everyone who is not an admin.
+                Assert.Contains(tree.Member, users.NotAdminUsers);
+                Assert.DoesNotContain(tree.Admin, users.NotAdminUsers);
             }
         }
 

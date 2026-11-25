@@ -183,7 +183,8 @@ namespace HSMServer.Core.Tests.Controllers
             }
 
             // The tree hooks each user's own (visible) tree to itself when it is built.
-            Users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns([Member, Manager, Outsider, Admin]);
+            Users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>()))
+                .Returns((Func<User, bool> filter) => new[] { Member, Manager, Outsider, Admin }.Where(filter ?? (_ => true)).ToList());
             Schedules.Setup(p => p.GetAllSchedules()).Returns([]);
             Chats.Setup(s => s.GetValues()).Returns([]);
 

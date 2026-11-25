@@ -234,8 +234,11 @@ namespace HSMServer.Core.Tests.Controllers
             var unknown = await Ask(tree, tree.Member, action, Guid.NewGuid());
             var served = await Ask(tree, tree.Member, action, target);
 
-            Assert.NotEqual(unknown, served);
+            Assert.NotEqual(unknown.Answer, served.Answer);
             Assert.DoesNotContain("throws:", served.Answer);
+
+            // Whatever a Viewer is shown (a "no rights" line of the bulk actions included), nothing is written.
+            Assert.Equal(0, served.Writes);
         }
 
         [Theory]
@@ -250,6 +253,7 @@ namespace HSMServer.Core.Tests.Controllers
             var unknown = await Ask(tree, tree.Member, action, Guid.NewGuid());
 
             Assert.Equal(unknown.Answer, refused.Answer);
+            Assert.DoesNotContain("throws:", refused.Answer);
             Assert.Equal(0, refused.Writes);
         }
 
@@ -416,6 +420,31 @@ namespace HSMServer.Core.Tests.Controllers
             await tree.Home(tree.Manager).EnableGrafana(module.Id.ToString());
 
             Assert.Equal([tree.ServiceAlive.Id], SensorUpdates(tree));
+        }
+
+        [Fact]
+        public async Task SensorSettings_AreTheManagersToChange()
+        {
+            // A valid form: the save writes the policy lists and the settings.
+            var tree = new WebAccessFixture();
+
+            SensorInfoViewModel Form() => new(tree.Tree.Sensors[tree.Cpu.Id]) { Description = "changed" };
+
+            foreach (var refused in new[] { tree.Outsider, tree.Member })
+                Assert.IsType<EmptyResult>(await tree.Home(refused).UpdateSensorInfo(Form()));
+
+            Assert.Empty(SensorUpdates(tree));
+
+            Assert.IsType<PartialViewResult>(await tree.Home(tree.Manager).UpdateSensorInfo(Form()));
+
+            var updates = tree.Cache.Invocations
+                .Where(i => i.Method.Name == nameof(HSMServer.Core.Cache.ITreeValuesCache.UpdateSensorAsync))
+                .Select(i => (HSMServer.Core.Cache.UpdateEntities.SensorUpdate)i.Arguments[0])
+                .ToList();
+
+            Assert.All(updates, u => Assert.Equal(tree.Cpu.Id, u.Id));
+            Assert.Contains(updates, u => u.Policies is not null);
+            Assert.Contains(updates, u => u.Description == "changed");
         }
 
         [Fact]
