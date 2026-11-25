@@ -62,6 +62,21 @@ jobs:
           if ($v -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
               throw "Refusing to build: version '$v' is not a clean semver (tag must be wrapper-v<semver>)."
           }
+          # A tag must carry the wrapper's own version, project(HSMCppWrapper VERSION x.y.z) in
+          # src/wrapper/CMakeLists.txt (a pre-release suffix is allowed: wrapper-v2.0.0-rc1 for 2.0.0),
+          # so a bundle is never labelled with a version whose behaviour it does not have. As in
+          # agent-release.yml. A dispatch dry run keeps its free-form version.
+          $cmake = Get-Content src/wrapper/CMakeLists.txt -Raw
+          if ($cmake -notmatch 'project\(HSMCppWrapper VERSION ([0-9]+\.[0-9]+\.[0-9]+)') {
+              throw "Cannot read project(HSMCppWrapper VERSION x.y.z) from src/wrapper/CMakeLists.txt."
+          }
+          $cmakeVersion = $Matches[1]
+          $core = ($v -split '[-.]')[0..2] -join '.'
+          Write-Host "tag version: $v (core $core), CMakeLists.txt: $cmakeVersion"
+          if ($env:REF -like 'refs/tags/wrapper-v*' -and $core -ne $cmakeVersion) {
+              Write-Host "::error::tag wrapper-v$v does not match project(HSMCppWrapper VERSION $cmakeVersion) - bump src/wrapper/CMakeLists.txt or fix the tag"
+              exit 1
+          }
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Bundle version: $v"
 

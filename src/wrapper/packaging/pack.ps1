@@ -10,10 +10,11 @@
   Called by .github/workflows/hsm-wrapper-release.yml on a `wrapper-v*` tag push (cuts a GitHub
   Release) or a manual dispatch (uploads the zip as a workflow artifact). Run it locally the same way:
 
-    pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -VcpkgRoot $env:VCPKG_INSTALLATION_ROOT -Version 1.0.0
+    pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 2.0.0
 
-  Expects the wrapper to have been CMake-built for BOTH configs first:
-    cmake -S src/wrapper -B build/wrapper -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+  Expects the wrapper to have been CMake-built for BOTH configs first, with a vcpkg checkout at the
+  builtin-baseline of src/wrapper/vcpkg.json (see packaging/README.md, "Building the bundle locally"):
+    cmake -S src/wrapper -B build/wrapper -DCMAKE_TOOLCHAIN_FILE=<pinned vcpkg>/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
     cmake --build build/wrapper --config Release
     cmake --build build/wrapper --config Debug
 #>
@@ -120,8 +121,9 @@ Copy-Item (Join-Path $SourceRoot 'src\native\collector\include\hsm_collector\*')
 $manifestTemplate = @'
 # HSMCppWrapper __VER__ - native drop-in bundle
 
-Pure-native `HSMCppWrapper.dll` built over `hsm::collector` (no CLR). **Same public ABI** as the old
-C++/CLI wrapper: relink only, zero source changes in the consumer.
+Pure-native `HSMCppWrapper.dll` built over `hsm::collector` (no CLR). The public ABI of the old
+C++/CLI wrapper, grown by one method in 2.0.0: replace the headers and relink, zero source changes in
+the consumer.
 
 | | |
 |---|---|
@@ -130,7 +132,8 @@ C++/CLI wrapper: relink only, zero source changes in the consumer.
 | Built | __DATE__ |
 | Platform | x64, MSVC, Release + Debug |
 | Transport | the collector session (WebSocket, libcurl 8.14+ with schannel TLS) by default; HTTP after `UseHttpTransport()` - libcurl shipped next to the DLL |
-| Server | HSMServer 3.43.0 or later (collector sessions); for an older server call `DataCollectorProxy::UseHttpTransport()` before `Start` |
+| Server | HSMServer 3.43.0 or later (collector sessions); for an older server call `DataCollectorProxy::UseHttpTransport()` before `Start`. Table sensors: the first HSMServer release with the table connection (#1845), later than 3.44.0 |
+| Files | on the session a file must fit one server frame as JSON: about 1 MiB with the default 4 MiB `CollectorSessions.MaxFrameBytes` (see Transport below) |
 
 ## Layout
 
@@ -148,14 +151,15 @@ lib/hsm_collector/x64/{Release,Debug}/
 
 Two ways to consume this bundle:
 - **Option A - drop-in relink:** keep the `hsm_wrapper::DataCollectorProxy` API, relink against the new
-  `HSMCppWrapper.dll` (same ABI, zero source changes). Recipe below.
+  `HSMCppWrapper.dll` (the ABI only grew, zero source changes). Recipe below.
 - **Option B - your own native adapter:** write directly against `hsm::collector` and link
   `hsm_collector_core.lib`, dropping the wrapper entirely.
 
 ## Option A - drop-in relink (tt-aggregator2)
 
 1. Copy `include/`, `dll/`, `lib/` over your vendored tree (`aggregator/{include,dll,lib}/...`).
-   The headers are **byte-identical** to what you already vendor - overwriting them is a no-op.
+   **Replace the headers**: 2.0.0 adds `DataCollectorProxy::UseHttpTransport()` (and comments) to
+   `DataCollector.h` and removes or changes nothing, so your code compiles against them unchanged.
 2. Copy the new runtime DLLs next to the wrapper (your PostBuild xcopy of `dll/.../*.dll` -> OutDir
    already picks them up): `libcurl.dll` + `z.dll` + `zstd.dll` (Release), `libcurl-d.dll` + `zd.dll` +
    `zstd.dll` (Debug). `zstd.dll` is new in 2.0.0 (table sensors).
@@ -167,11 +171,24 @@ Two ways to consume this bundle:
 
 **Transport (2.0.0).** The wrapper talks to the server over the collector session, one WebSocket on
 `/api/sensors/session`, which needs **HSMServer 3.43.0 or later**. Update the server first; a host that
-must keep talking to an older server calls `proxy.UseHttpTransport()` before `Start`. There is no
-automatic fallback: against a server without sessions a host on the default sends nothing.
+must keep talking to an older server calls `proxy.UseHttpTransport()` before `Start` (from `Start` or
+`StartAsync` until `Stop` the call throws `hsm::collector::Error`). There is no automatic fallback:
+against a server without sessions a host on the default sends nothing.
+
+**Files on the session.** `SendFileAsync` sends a file as one element of a session frame, each file byte
+written as a decimal number and a comma (2 to 4 JSON bytes per byte). With the server's default
+`CollectorSessions.MaxFrameBytes` of 4 MiB the largest file is about **1 MiB** (1.0 MiB worst case),
+although the wrapper accepts up to 10 MiB. A larger file is dropped: logged as "Dropped a value of N
+bytes: it is larger than a collector session frame (M bytes)." (in `.module/Collector errors`) and
+counted in `Queue overflow`. Over HTTP files up to 10 MiB are posted. If your host sends larger files,
+raise `CollectorSessions.MaxFrameBytes` on the server (up to 64 MiB; 42 MiB covers 10 MiB files) or call
+`proxy.UseHttpTransport()`. Large files as a feature: HSM epic #1882.
 
 **Table sensors** come through `proxy.Native()`: `#include <hsm_collector/tables.hpp>` and call
-`proxy.Native().CreateTableSensor(path, options)`. They need the session; on HTTP they are Unavailable.
+`proxy.Native().CreateTableSensor(path, options)`. They need the session and a server with the table
+connection (the first HSMServer release with it, later than 3.44.0); on HTTP they are Unavailable.
+Against a server with sessions but without the table connection, values flow and table sensors deliver
+nothing (Refused, Pending, or Registered with their rows dropped and counted).
 
 ## Option B - your own native adapter (no wrapper)
 
