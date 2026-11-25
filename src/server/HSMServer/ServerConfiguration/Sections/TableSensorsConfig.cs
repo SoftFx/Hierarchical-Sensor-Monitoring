@@ -59,6 +59,14 @@ namespace HSMServer.ServerConfiguration
 
         public const long MaxChartScanRowsLimit = 1_000_000_000_000;
 
+        // The most rows one download of a table sensor's range from the web UI writes (#1847): past them the download
+        // is refused before its first byte, or cut off (a failed download in the browser) when it is found while writing.
+        public long MaxDownloadRows { get; set; } = DefaultMaxDownloadRows;
+
+        public const long DefaultMaxDownloadRows = 10_000_000;
+
+        public const long MaxDownloadRowsLimit = 1_000_000_000_000;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -77,6 +85,7 @@ namespace HSMServer.ServerConfiguration
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
             Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
             Check(MaxChartScanRows, MaxChartScanRowsLimit, nameof(MaxChartScanRows));
+            Check(MaxDownloadRows, MaxDownloadRowsLimit, nameof(MaxDownloadRows));
 
             if (DeleteMergedBlocksAfterHours < 0 || DeleteMergedBlocksAfterHours > 8760)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(DeleteMergedBlocksAfterHours)} = {DeleteMergedBlocksAfterHours} is invalid: expected 0..8760 hours.");

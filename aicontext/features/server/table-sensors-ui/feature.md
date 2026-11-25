@@ -9,7 +9,7 @@
 
 A table sensor can hold tens of thousands of rows an hour and years of them. A chart of a range does not send those rows to the browser: the server reads the range and reduces it to a minimum and a maximum per bucket of time and column, a few thousand numbers whatever the range holds. A short range (at most twice as many rows as buckets) is answered with its exact rows as well, so a zoom into a few seconds draws the real line.
 
-Part 1 (this part) is the reduction in Core. The web endpoints, the page and the download follow in parts 2 and 3.
+Part 1 is the reduction in Core; part 2 the web routes of the chart and the download (`TableSensorsController`, `TablePageService`); part 3 the page.
 
 ## The chart reduction (`ITableChartReader.Reduce`)
 
@@ -58,12 +58,65 @@ Pinned by `TableChartReadTests`: `An_hour_committed_and_deleted_between_the_plan
 
 The number of table reads running at once (`TableSensors.MaxConcurrentReads`, default 2) is a Core singleton, `TableReadGate`, shared by the read route of the Sensor API (`TableReadService`) and the table pages of the web UI (part 2). A read beyond them waits for a turn. The route's answers are unchanged (it has no 429: it waits). A host that registers no gate (the Sensor API test host) gets a gate of the route's own.
 
+## The web routes (part 2)
+
+`TableSensorsController` (`[Authorize]`, a cookie user) hands every request to `TablePageService` (`src/server/HSMServer/TablePages/TablePageService.cs`), which holds the logic: access, bounds, the shared read gate, the answers.
+
+### Access
+
+The sensor is looked up by id in the tree (`ITreeValuesCache.GetSensor`), before anything is read. Its root product must be one the user may see: `User.IsProductAvailable(sensor.Root.Id)`, so a Viewer or a Manager of the product, or an admin. **An id the user may not see is answered exactly as an unknown or malformed id**: `404`, `text/plain`, `No table sensor with this id.`, so the routes do not tell an outsider that a sensor exists. A visible sensor that is not a table sensor is a `400`. No access key takes part, and none appears in any answer.
+
+Antiforgery: neither action takes a token. Both only read, like the other chart reads of the UI (`SensorHistoryController.ChartHistory`, `NodeChartHistory` are POSTs without `[ValidateAntiForgeryToken]`); the app puts `[ValidateAntiForgeryToken]` on the actions that change something (`HomeController`, `AlertTemplatesController`, `ApiTokensAdminController`).
+
+### `POST /TableSensors/Chart`
+
+Body (`TableChartRequest`, JSON, names case-insensitive):
+
+```json
+{"id":"6f1c…","from":"2026-11-25T09:00:00Z","to":"2026-11-25T10:00:00Z","columns":[1,2],"buckets":1200}
+```
+
+- `columns`: ordinals of value columns; omitted or null: every double column (bid and ask of a quote sensor); empty: the row counts only. Checked by the reducer: a column that is not a value column, or named twice, is a `400` with the reason.
+- `buckets`: the width of the plot in pixels, clamped to 100..2000 (`TablePageService.MinBuckets`, `MaxBuckets`).
+- A time without a kind is UTC, a local one is converted.
+
+Answer `200`, `application/json`:
+
+```json
+{"mode":"buckets","from":"2026-11-25T09:00:00Z","to":"2026-11-25T10:00:00Z","bucketTicks":30000000,"bucketCount":1200,
+ "times":["2026-11-25T09:00:00Z","2026-11-25T09:00:03Z","…"],"bucketRows":[41,38,"…"],"rowCount":43120,"completeTo":null,
+ "blocksFailed":0,"batchesFailed":0,
+ "columns":[{"ordinal":1,"name":"bid","type":"double","approximate":false,"min":[1.08412,null,"…"],"max":[1.0843,null,"…"],
+             "values":null,"nullCount":12,"nonFinite":0}]}
+```
+
+- **`mode`**: `buckets`, with `times` the start of each bucket and per column `min` and `max` per bucket (`null` for a bucket without a value: no row, or every cell null or non-finite); or `rows` when the range holds at most twice as many rows as buckets and the answer is complete, with `times` the row times and per column `values` per row (`null` for a null cell, and for NaN or an infinity, counted in `nonFinite`), and `bucketRows` null.
+- **Times** are UTC `DateTime`s serialized by System.Text.Json: ISO 8601 with a `Z`, fraction digits only as many as needed (`2026-11-25T09:00:00.25Z`), the form `NodeChartHistory` writes for the node Chart tab.
+- **int64**: a minimum, a maximum or a value within ±2^53 is a JSON number; beyond it a string with the exact digits, and the column's `approximate` is true (a JavaScript number cannot hold it; the page says the axis is approximate).
+- **Incomplete**: `completeTo` (the answer is complete only before it; null when complete), `blocksFailed`, `batchesFailed`; per column `nullCount` and `nonFinite` for the range.
+
+Statuses: `400` a body that cannot be read, `from` not before `to`, a sensor that is not a table sensor, a request the reducer refuses; `404` an unknown, malformed or not visible id (one answer); `503` with `Retry-After: 60` when the block store cannot be read now; `503` with `Retry-After: 1` and `The table store changed during the read (hours were merged meanwhile); try again.` when the read met a merge on every plan (`TableReadChangedException`).
+
+### `GET /TableSensors/Download?id=…&from=…&to=…`
+
+The rows of `[from, to)` as CSV, in the form of the read route's CSV (`TableRowsText.WriteCsvAsync`: RFC 4180, CRLF, the column names once, a null cell empty, times ISO with seven fraction digits). `Content-Disposition: attachment` with the file name `ExportHistory` builds (`{full path with / as _}_from_{from:s}_to{to:s}.csv`, the times UTC), every character unsafe in a file name (`\ / : * ? " < > |` and controls) replaced by `_`.
+
+- **Paging**: the rows are read a page at a time (`TableSensors.MaxTextReadRows`, 100,000), from the next page's time (`NextFromTicks`) until there is none: one page in memory, each written as soon as it is read. A page in which one time has more rows than the page (`RowsAtTimeOmitted`) is read again at `TableSensors.MaxReadRows`, so no row of that time is skipped.
+- **Before the first byte** the first page is read, and what it shows is answered with a status and a text the page can show: `500` when blocks or batches of it cannot be read (`The range cannot be downloaded whole: …`), `400` when it holds more than `TableSensors.MaxDownloadRows` rows or one time holds more rows than a read returns, `503` (`Retry-After: 60`) when the store cannot be read now, `404`/`400` as for the chart.
+- **Past the first byte** the same findings in a later page (failed blocks or batches, the row limit, one time too large, a store fault, the sensor removed) **abort the connection** (`HttpContext.Abort`), logged as a `Warn` with the rows written: the browser shows a failed download, never a file that looks complete without being so.
+- The row limit is known before the first byte only when the range fits in the first page; otherwise it is checked page by page while writing.
+
+### The read gate and cancellation
+
+Every read takes a turn of the shared `TableReadGate`: the chart for its reduction, the download for each page (so a browser that downloads slowly holds no turn between pages). `HttpContext.RequestAborted` goes down to the read, which stops before its next block or merged hour: a client that goes away frees its turn, and one that goes away while it waits for a turn takes none. Its answer is empty.
+
 ## Configuration
 
 | Key (`TableSensors`) | Default | Meaning |
 |---|---|---|
 | `MaxChartScanRows` | 10,000,000 | The rows of its range a chart reads before it stops before the next hour and answers the part it read in full. Validated 1..1,000,000,000,000 with an error that names the key. It bounds the time of a chart request; its memory does not grow with it. |
 | `MaxConcurrentReads` | 2 | Shared by the read route and the web UI (`TableReadGate`). |
+| `MaxDownloadRows` | 10,000,000 | The most rows one download writes (about 0.5 GB of CSV for time, bid, ask): refused before the first byte when the first page shows more, cut off past it. Validated 1..1,000,000,000,000. |
 
 ## Measured (2026-11-25, `TableChartBenchmark`, Release, Windows, 24 logical CPUs, machine shared with other work)
 
@@ -92,11 +145,14 @@ Synthetic random-walk data (time, bid, ask, no nulls), two runs each; the first 
 | `src/server/HSMServer.Core/TableSensors/ITableRowSink.cs` | What a read hands rows to |
 | `src/server/HSMServer.Core/TableSensors/TableBlockService.cs` | `Reduce`, the plan and the visit of a source, the per-source gate hold |
 | `src/server/HSMServer.Core/TableSensors/TableReadGate.cs` | The count of reads running at once |
+| `src/server/HSMServer/Controllers/TableSensorsController.cs` | The web routes |
+| `src/server/HSMServer/TablePages/TablePageService.cs` | Access, bounds, the chart's JSON, the paged CSV download |
 
 ## Tests
 
 - `HSMServer.Core.Tests/TableSensors/TableChartReducerTests.cs`: the reduction against a brute-force reference (rows out of order, equal times, nulls, NaN, infinities, int64 and double, several batch and bucket counts); an empty range; the bucket edges (first tick, last tick, the end outside, a one-tick range, a range not divisible by the bucket count, more buckets than ticks, the widest `DateTime` range); nulls, NaN and infinities counted; int64 beyond 2^53 exact; the columns asked for in their order; rows mode and its end; no rows in an answer with a failed batch; the scan limit (complete up to a bucket boundary, everything after it empty); a damaged batch; the configuration's default and its validation.
 - `HSMServer.Core.Tests/TableSensors/TableChartReadTests.cs`: a range over hours not merged and merged, the same before and after the merge; an hour committed and deleted between the plan and its read; a short range carries the rows exactly as `Read` returns them; the scan limit across arrival hours; cancellation between blocks and after waiting for the gate; a new plan after a commit (the review's sequence, a block kept unreadable, three commits in a row); the refusals of a request.
+- `HSMServer.Core.Tests/Controllers/TableSensorsControllerTests.cs` (part 2): for each action a viewer of the product, an admin, a user of another product (the same answer as an unknown and a malformed id), a sensor that is not a table sensor, a store fault (503, `Retry-After`, the turn given back); the chart's JSON (UTC times, null buckets, counts, int64 beyond 2^53 as a string with `approximate`, rows mode with a NaN as null, the default columns), the bucket clamp, a refused column; the store changed under every plan (503, `Retry-After: 1`); a client that goes away during the read frees its turn, and one that goes away while waiting takes none; the download pages past the text limit into the read route's CSV with one header, reads a time larger than a page whole, refuses more rows than the limit before the first byte, aborts when the limit is passed while writing, completes at exactly the limit, answers failed blocks before the first byte with a 500 and aborts on failed batches after it; the file name; the setting's default and validation.
 - `HSMServer.Core.Tests/TableSensors/TableChartBenchmark.cs`: the measurement above (skipped unless `HSM_TABLE_STORE_BENCH=1`).
 
 ## Known Issues / Limitations

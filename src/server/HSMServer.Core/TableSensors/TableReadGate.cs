@@ -27,5 +27,8 @@ namespace HSMServer.Core.TableSensors
         public Task WaitAsync(CancellationToken token) => _turns.WaitAsync(token);
 
         public void Release() => _turns.Release();
+
+        /// <summary>The turns free now. For tests.</summary>
+        internal int FreeTurns => _turns.CurrentCount;
     }
 }

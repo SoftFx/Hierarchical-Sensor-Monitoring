@@ -173,6 +173,7 @@ Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read
 | `MinFreeDiskMb` | 1,024 | Puts are refused (a fault) while the store's disk has less free; 0 turns the check off. The merge does not write batches below it either (#1850). |
 | `MaxOpenBatchDatabases`, `DeleteMergedBlocksAfterHours`, `MergeMemoryBudgetMb` | 32, 24, 256 | The batch store and the merge (#1850): `aicontext/features/storage/table-batches/feature.md`. |
 | `MaxChartScanRows` | 10,000,000 | The rows of its range a chart reads before it stops (#1847): `aicontext/features/server/table-sensors-ui/feature.md`. |
+| `MaxDownloadRows` | 10,000,000 | The most rows one download of the web UI writes (#1847): the same doc. |
 
 There is no switch: the feature does nothing until a table sensor exists.
 
