@@ -201,6 +201,12 @@ namespace HSMServer.Core.Tests.Controllers
         public SensorHistoryController History(User user) =>
             new(Cache.Object, Access, Users.Object) { ControllerContext = Context(user) };
 
+        public AccessKeysController AccessKeys(User user) =>
+            new(Cache.Object, Users.Object, Tree) { ControllerContext = Context(user) };
+
+        public FoldersController FolderPage(User user) =>
+            new(Folders.Object, Users.Object, Tree, Chats.Object) { ControllerContext = Context(user) };
+
         public JournalController JournalFeed(User user) =>
             new(Users.Object, new JournalAdministrationService(ChangeSetTestHelpers.JournalService(), Cache.Object, Folders.Object,
                     TokenAuthorization.Object, Users.Object, Mock.Of<IChangeSetAdministrationService>(), ChangeSetTestHelpers.Journal()),
