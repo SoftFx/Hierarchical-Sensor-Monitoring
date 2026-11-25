@@ -33,6 +33,10 @@ namespace HSMServer.Core.TableSensors
         private readonly int _rowsLimit;
 
         private readonly long[] _bucketRows;
+
+        // The earliest and the latest row time of each bucket (valid where _bucketRows is above 0): the first and the last
+        // row the answer counts, also after a stop has emptied the later buckets.
+        private readonly long[] _bucketFirst, _bucketLast;
         private readonly ColumnState[] _columns;
 
         // The arrays of the source being added, per selected column.
@@ -62,6 +66,8 @@ namespace HSMServer.Core.TableSensors
             _bucketTicks = (span - 1) / buckets + 1;
             _bucketCount = (int)((span - 1) / _bucketTicks + 1);
             _bucketRows = new long[_bucketCount];
+            _bucketFirst = new long[_bucketCount];
+            _bucketLast = new long[_bucketCount];
 
             _columns = new ColumnState[columns.Count];
             for (int k = 0; k < _columns.Length; k++)
@@ -169,7 +175,15 @@ namespace HSMServer.Core.TableSensors
                 _scanned++;
 
                 var bucket = (int)((t - _from) / _bucketTicks);
-                _bucketRows[bucket]++;
+                if (_bucketRows[bucket]++ == 0)
+                {
+                    _bucketFirst[bucket] = t;
+                    _bucketLast[bucket] = t;
+                }
+                else if (t < _bucketFirst[bucket])
+                    _bucketFirst[bucket] = t;
+                else if (t > _bucketLast[bucket])
+                    _bucketLast[bucket] = t;
 
                 for (int k = 0; k < columns.Length; k++)
                 {
@@ -243,8 +257,17 @@ namespace HSMServer.Core.TableSensors
             }
 
             long rows = 0;
-            foreach (var count in _bucketRows)
-                rows += count;
+            int firstBucket = -1, lastBucket = -1;
+            for (int b = 0; b < _bucketCount; b++)
+            {
+                if (_bucketRows[b] == 0)
+                    continue;
+
+                rows += _bucketRows[b];
+                if (firstBucket < 0)
+                    firstBucket = b;
+                lastBucket = b;
+            }
 
             var columns = new TableChartColumn[_columns.Length];
             for (int k = 0; k < columns.Length; k++)
@@ -258,6 +281,8 @@ namespace HSMServer.Core.TableSensors
                 BucketCount = _bucketCount,
                 BucketRows = _bucketRows,
                 RowCount = rows,
+                FirstRowTicks = firstBucket < 0 ? null : _bucketFirst[firstBucket],
+                LastRowTicks = lastBucket < 0 ? null : _bucketLast[lastBucket],
                 CompleteToTicks = completeTo,
                 ScannedRows = _scanned,
                 BlocksRead = BlocksRead,
