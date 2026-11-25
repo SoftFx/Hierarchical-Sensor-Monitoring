@@ -1,8 +1,14 @@
 using HSMServer.BackgroundServices;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Journal;
 using HSMServer.Core.LargeFiles.Archives;
+using HSMServer.Core.LargeFiles.DumpPasswords;
+using HSMServer.Core.LargeFiles.Downloads;
 using HSMServer.Model.ManagementApi.LargeFiles;
 using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 
 namespace HSMServer.ServiceExtensions
 {
@@ -19,23 +25,28 @@ namespace HSMServer.ServiceExtensions
             // The self-monitoring sensors live inside the server's collector wrapper, like the other self-monitoring nodes.
             services.AddSingleton<ILargeFilesMonitor>(provider => provider.GetRequiredService<DataCollectorWrapper>().LargeFileSensors);
 
-            // ---- ENABLE WHEN MERGING #1885 -----------------------------------------------------------------------------
-            // The implementations of the archive builder, the zip writer, the dump passwords and the download log are on
-            // their own branches. Until they are merged, nothing below can be resolved, so it stays commented out: the web
-            // and API download routes, the dump password section of the product settings and the MCP tool are inert (the
-            // routes answer 500 on activation, the settings section is not shown), and no hosted service runs.
-            //
-            // services.AddSingleton<HSMServer.Core.LargeFiles.Archives.IArchiveWriter, HSMServer.Core.LargeFiles.Archives.SharpZipArchiveWriter>();
-            // services.AddSingleton<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService, HSMServer.Core.LargeFiles.DumpPasswords.DumpPasswordService>();
-            // services.AddSingleton<HSMServer.Core.LargeFiles.Downloads.IDownloadLog, HSMServer.Core.LargeFiles.Downloads.DownloadLog>();
-            // services.AddSingleton<HSMServer.Core.LargeFiles.Archives.IArchiveBuilder, HSMServer.Core.LargeFiles.Archives.ArchiveBuilder>();
-            //
-            // // Stateless over singletons; scoped like the other management read services (controllers and MCP tools).
-            // services.AddScoped<LargeFileDownloadService>();
-            // services.AddScoped<HSMServer.Model.LargeFiles.DumpPasswordPageService>();
-            //
-            // services.AddHostedService<LargeFileArchiveBackgroundService>();
-            // ---- END ENABLE WHEN MERGING #1885 -------------------------------------------------------------------------
+            var archives = config.LargeFileArchives ?? new LargeFileArchivesConfig();
+
+            services.AddSingleton<IArchiveWriter, SharpZipArchiveWriter>();
+
+            services.AddSingleton<IDumpPasswordService>(provider => new DumpPasswordService(
+                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<IJournalService>(),
+                provider.GetRequiredService<ITreeValuesCache>(), archives.PasswordRetention));
+
+            services.AddSingleton<IDownloadLog>(provider => new DownloadLog(
+                provider.GetRequiredService<IDatabaseCore>().DownloadLog,
+                new DownloadLogOptions { Window = archives.DownloadLogWindow, MaxWindows = archives.DownloadLogMaxCallers }));
+
+            services.AddSingleton<IArchiveBuilder>(provider => new ArchiveBuilder(
+                provider.GetRequiredService<ILargeFileArchiveStore>(), provider.GetRequiredService<IArchiveWriter>(),
+                provider.GetRequiredService<IDumpPasswordService>(), () => DateTime.UtcNow,
+                new ArchiveBuilderOptions { DeflateLevel = archives.DeflateLevel }));
+
+            // Stateless over singletons; scoped like the other management read services (controllers and MCP tools).
+            services.AddScoped<LargeFileDownloadService>();
+            services.AddScoped<HSMServer.Model.LargeFiles.DumpPasswordPageService>();
+
+            services.AddHostedService<LargeFileArchiveBackgroundService>();
 
             return services;
         }

@@ -61,8 +61,8 @@ namespace HSMServer.ServerConfiguration
             if (PasswordRetentionDays is < 0 or > MaxPasswordRetentionDays)
                 throw new InvalidOperationException($"{section}.{nameof(PasswordRetentionDays)} = {PasswordRetentionDays} is invalid: expected 0..{MaxPasswordRetentionDays}.");
 
-            if (DownloadLogWindowMinutes is < 0 or > MaxDownloadLogWindowMinutes)
-                throw new InvalidOperationException($"{section}.{nameof(DownloadLogWindowMinutes)} = {DownloadLogWindowMinutes} is invalid: expected 0..{MaxDownloadLogWindowMinutes}.");
+            if (DownloadLogWindowMinutes is < 1 or > MaxDownloadLogWindowMinutes)
+                throw new InvalidOperationException($"{section}.{nameof(DownloadLogWindowMinutes)} = {DownloadLogWindowMinutes} is invalid: expected 1..{MaxDownloadLogWindowMinutes}.");
 
             if (DownloadLogRetentionDays is < 1 or > MaxDownloadLogRetentionDays)
                 throw new InvalidOperationException($"{section}.{nameof(DownloadLogRetentionDays)} = {DownloadLogRetentionDays} is invalid: expected 1..{MaxDownloadLogRetentionDays}.");
