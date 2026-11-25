@@ -109,18 +109,17 @@ TypeScript 5.3 + Webpack 5:
   nothing. The six are the product edit form (`EditProduct` POST: name, description, default
   chats), the Members table (`AddUserRight`, `EditUserRole`, `RemoveUserRole`), the move between
   folders (`MoveProduct`) and the removal. `UpdateSensorGroups` is guarded separately, by
-  `ProductRoleFilterBySensorGroups`, which compares the posted id as it is and so refuses a nested
-  node id; `CreateProduct` names no product and is open to every signed-in user. Past the gate the
-  role actions answer 400 for a JSON body that cannot be read and 404 for an unknown user (an empty
-  user id on `AddUserRight` is answered 200 with the validation message the page shows after its
-  reload), and they look the user up only after the caller has passed, so a refused caller cannot
-  probe user ids. `MoveProduct` is POST only: a move changes roles (the users of the folder the
-  product leaves lose their folder role on it; the users of the folder it enters who hold no role
-  on the product yet receive theirs). Antiforgery is validated on `EditProduct`, `MoveProduct` and
-  `RemoveProduct`, whose callers send the token; the role actions take a JSON body, which a
-  cross-site form cannot send, and their callers send none. `ProductControllerTests` covers admin,
-  Manager, Viewer, a user with no role, a Manager of another product, an unknown id and a nested id
-  for each action.
+  `ProductRoleFilterBySensorGroups`, which compares the posted id with the caller's roles as it
+  is, without resolving the root. Past the gate the role actions answer 400 for a JSON body that
+  cannot be read and 404 for an unknown user (an empty user id on `AddUserRight` is answered 200
+  after a validation message is put into `TempData`), and they look the user up only after the
+  caller has passed, so a refused caller cannot probe user ids. `MoveProduct` is POST only: a move
+  changes roles (the users of the folder the product leaves lose the folder role they hold on it;
+  the users of the folder it enters who hold no role on the product yet receive theirs).
+  Antiforgery is validated on `EditProduct`, `MoveProduct` and `RemoveProduct`, whose callers send
+  the token; the role actions take a JSON body, which a cross-site form cannot send, and their
+  callers send none. `ProductControllerTests` covers admin, Manager, Viewer, a user with no role, a
+  Manager of another product, an unknown id, and a node one and two levels below the root.
 - A folder's Chats tab (`FoldersController.UpdateChats`) requires Manager of that folder or admin,
   like the other writes of the folder edit page; an unknown folder id is answered 404
   (`FoldersControllerUpdateChatsTests`). It validates no antiforgery token: the page replaces the

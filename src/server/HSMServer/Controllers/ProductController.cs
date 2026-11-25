@@ -126,10 +126,10 @@ namespace HSMServer.Controllers
         [ValidateAntiForgeryToken]
         // The RemoveProduct shape below, for the same reason: "Move to ..." is offered to the product's
         // Managers only, but the action checked no role and answered GET. A move is a change of roles —
-        // FolderManager takes the product's roles from the users of the folder it leaves and gives the
-        // users of the folder it enters, those who hold no role on the product yet, their folder role
-        // on it — so anyone who held a role in a folder could move a product they had no role on
-        // there and receive that role on it.
+        // FolderManager takes from the users of the folder the product leaves the folder role they
+        // hold on it, and gives the users of the folder it enters, those who hold no role on the
+        // product yet, their folder role on it — so anyone who held a role in a folder could move a
+        // product they had no role on there and receive that role on it.
         public async Task<IActionResult> MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (DenyUnlessManager(productId, out _) is { } denied)
@@ -189,8 +189,8 @@ namespace HSMServer.Controllers
         // The edit page (the GET above) is open to Managers only, but the four actions it posts to
         // checked no role: any signed-in user, a Viewer included, could post them for any product id
         // and rename the product, change its description and default chats, or hand out, change and
-        // take away product roles (their own included). Now each of them requires what the page
-        // requires, judged as RemoveProduct judges it: Manager of the id's root product, or admin.
+        // take away product roles (their own included). Now each of them is judged as RemoveProduct
+        // is: Manager of the id's root product, or admin.
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -336,7 +336,7 @@ namespace HSMServer.Controllers
 
         #endregion
 
-        // The gate of every action that changes a product: null when the caller is an admin or a
+        // The gate of the edit, role, move and remove actions: null when the caller is an admin or a
         // Manager of the root product of nodeId, otherwise the answer to return: 404 for an id that is
         // not in the tree, 403 for everyone else. Roles are held per root product, so a node below the
         // root is judged by its root and a role entry on the node's own id counts for nothing.

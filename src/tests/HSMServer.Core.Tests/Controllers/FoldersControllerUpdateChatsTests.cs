@@ -16,6 +16,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Moq;
 using Xunit;
 
@@ -107,7 +108,7 @@ namespace HSMServer.Core.Tests.Controllers
             var method = typeof(FoldersController).GetMethod(nameof(FoldersController.UpdateChats), BindingFlags.Public | BindingFlags.Instance);
 
             Assert.NotNull(method);
-            Assert.True(method.IsDefined(typeof(HttpPostAttribute), inherit: false));
+            Assert.IsType<HttpPostAttribute>(Assert.Single(method.GetCustomAttributes<HttpMethodAttribute>(inherit: false)));
 
             // Pinned on purpose: _Chats.cshtml replaces the content of the form with the saved
             // partial, which drops the token the form was rendered with, so with the attribute the

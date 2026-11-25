@@ -22,6 +22,7 @@ using HSMServer.Model.ViewModel;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
@@ -48,20 +49,27 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly ProductModel _root = new(EntitiesFactory.BuildProductEntity(name: "root") with { Id = Guid.NewGuid().ToString() });
         private readonly ProductModel _nested = new(EntitiesFactory.BuildProductEntity(name: "nested") with { Id = Guid.NewGuid().ToString() });
 
+        // Two levels below the root: here the root and the parent are different nodes, so a gate that
+        // looked at the parent instead of the root would be caught.
+        private readonly ProductModel _leaf = new(EntitiesFactory.BuildProductEntity(name: "leaf") with { Id = Guid.NewGuid().ToString() });
+
         // The user the role actions are aimed at: a Viewer of the root and, as stale data may have it,
-        // of the nested node too, so that every role action has an entry to change.
+        // of the nodes below it too, so that every role action has an entry to change.
         private readonly User _target = new("target");
 
 
         public ProductControllerTests()
         {
             _root.AddSubProduct(_nested);
+            _nested.AddSubProduct(_leaf);
 
             SetupProduct(_root);
             SetupProduct(_nested);
+            SetupProduct(_leaf);
 
             _target.ProductsRoles.Add((_root.Id, ProductRoleEnum.ProductViewer));
             _target.ProductsRoles.Add((_nested.Id, ProductRoleEnum.ProductViewer));
+            _target.ProductsRoles.Add((_leaf.Id, ProductRoleEnum.ProductViewer));
 
             // The view-model tree is built from the cache: the root brings its nested node along.
             _cache.Setup(c => c.GetProducts()).Returns(new List<ProductModel> { _root });
@@ -136,6 +144,15 @@ namespace HSMServer.Core.Tests.Controllers
         public async Task UserWithoutAnyRole_Gets403_AndNothingIsRemoved()
         {
             var result = await CreateController(new User("stranger")).RemoveProduct(_root.Id);
+
+            Assert.Equal(StatusCodes.Status403Forbidden, StatusCodeOf(result));
+            VerifyNothingRemoved();
+        }
+
+        [Fact]
+        public async Task ManagerOfAnotherProduct_Gets403_AndNothingIsRemoved()
+        {
+            var result = await CreateController(UserWith(Guid.NewGuid(), ProductRoleEnum.ProductManager)).RemoveProduct(_root.Id);
 
             Assert.Equal(StatusCodes.Status403Forbidden, StatusCodeOf(result));
             VerifyNothingRemoved();
@@ -247,7 +264,9 @@ namespace HSMServer.Core.Tests.Controllers
             _userManager.Verify(u => u.UpdateUser(It.IsAny<User>()), Times.Never);
             _folderManager.Verify(f => f.MoveProduct(It.IsAny<ProductNodeViewModel>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<InitiatorInfo>()), Times.Never);
 
-            Assert.Equal([(_root.Id, ProductRoleEnum.ProductViewer), (_nested.Id, ProductRoleEnum.ProductViewer)], _target.ProductsRoles);
+            Assert.Equal(
+                [(_root.Id, ProductRoleEnum.ProductViewer), (_nested.Id, ProductRoleEnum.ProductViewer), (_leaf.Id, ProductRoleEnum.ProductViewer)],
+                _target.ProductsRoles);
         }
 
         // What the action writes when it is let through, for the product id it was posted with.
@@ -293,6 +312,9 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var overloads = typeof(ProductController).GetMethods(BindingFlags.Public | BindingFlags.Instance).Where(m => m.Name == action).ToList();
             var post = Assert.Single(overloads, m => m.IsDefined(typeof(HttpPostAttribute), inherit: false));
+
+            // POST and no second verb next to it: MVC would answer both.
+            Assert.IsType<HttpPostAttribute>(Assert.Single(post.GetCustomAttributes<HttpMethodAttribute>(inherit: false)));
 
             // EditProduct also has the GET of the page, which carries the role filter; nothing else
             // may answer under the name of a write.
@@ -415,6 +437,27 @@ namespace HSMServer.Core.Tests.Controllers
             VerifyChanged(action, _nested.Id);
         }
 
+        [Theory]
+        [MemberData(nameof(GatedActions))]
+        public async Task GatedAction_NodeTwoLevelsDown_ManagerOfTheRoot_IsLetThrough(string action)
+        {
+            await Post(action, UserWith(_root.Id, ProductRoleEnum.ProductManager), _leaf.Id);
+
+            VerifyChanged(action, _leaf.Id);
+        }
+
+        [Theory]
+        [MemberData(nameof(GatedActions))]
+        public async Task GatedAction_NodeTwoLevelsDown_RoleOnItsParent_CountsForNothing(string action)
+        {
+            // The role is read on the root, not on the node above: a Manager entry on the node in
+            // between opens nothing below it.
+            var result = await Post(action, UserWith(_nested.Id, ProductRoleEnum.ProductManager), _leaf.Id);
+
+            Assert.Equal(StatusCodes.Status403Forbidden, StatusCodeOf(result));
+            VerifyNothingChanged();
+        }
+
         [Fact]
         public async Task EditProduct_WritesAsTheCaller_AndAnswersWithTheForm()
         {
@@ -425,7 +468,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             var result = await Post(Edit, UserWith(_root.Id, ProductRoleEnum.ProductManager), _root.Id);
 
-            Assert.IsType<PartialViewResult>(result);
+            // The fragment the page puts back in place of the form.
+            Assert.Equal("_EditProductGeneralInfo", Assert.IsType<PartialViewResult>(result).ViewName);
             Assert.Equal(InitiatorInfo.AsUser("someone"), update?.Initiator);
         }
 
