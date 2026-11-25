@@ -5,6 +5,7 @@ using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -120,9 +121,23 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        [ProductRoleFilterByKey(nameof(key), ProductRoleEnum.ProductManager)]
+        // The form posts two ids, the key's and the product's. The role used to be checked on the posted
+        // product id (ProductRoleFilterByKey) while the write goes by the key id, so a Manager of one
+        // product who posted their own product id next to another key's id changed that key: a key of
+        // another product or a master key. The role is judged here on the product the STORED key
+        // belongs to, and the posted product id is replaced with it, so that the answer (the key list
+        // of a product, or the dialog again) is built for the key's own product too.
         public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
+            var storedKey = TreeValuesCache.GetAccessKey(key.Id);
+            if (storedKey is null)
+                return NotFound();
+
+            if (!CanManage(storedKey))
+                return StatusCode(StatusCodes.Status403Forbidden);
+
+            key.SelectedProductId = storedKey.ProductId;
+
             if (!ModelState.IsValid)
             {
                 if (key.IsMaster)
@@ -168,6 +183,13 @@ namespace HSMServer.Controllers
 
             return PartialView("_AllAccessKeys", GenerateShortViewModel(key.ProductId));
         }
+
+        // Who may change a stored key: an admin, or a Manager of the root product of the node the key
+        // was issued for (roles are held per root product). A master key belongs to no product, and a
+        // key whose product is gone has nobody to answer for it: both are the admins' alone.
+        private bool CanManage(AccessKeyModel key) =>
+            CurrentUser.IsAdmin ||
+            (!key.IsMaster && TreeValuesCache.TryGetProduct(key.ProductId, out var product) && CurrentUser.IsManager(product.Root.Id));
 
         private PartialViewResult GetPartialProductAccessKeys(Guid productId)
         {

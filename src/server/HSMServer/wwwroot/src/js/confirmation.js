@@ -25,15 +25,18 @@ window.hideConfirmationModal = function () {
 
 function setConfirmationModalTitle(title) {
     $(`#${modalTitleId}`).empty();
-    $(`#${modalTitleId}`).append(title);
+    $(`#${modalTitleId}`).append(typeof title === 'string' ? sanitizeHtml(title) : title);
 }
 
 function setConfirmationModalBody(viewData) {
-    $(`#${modalBodyId}`).html(viewData);
+    // A string body is HTML built by the caller, who escapes the names and paths it puts in
+    // (escapeHtml); sanitizing here keeps a caller that forgot from turning a name into markup that
+    // runs. A body passed as elements (a jQuery object built with .text()) is appended as it is.
+    $(`#${modalBodyId}`).html(typeof viewData === 'string' ? sanitizeHtml(viewData) : viewData);
 }
 
 function setConfirmationModalOkButton(okButtonAction, name) {
-    $(`#${modalOkButton}`).html(name);
+    $(`#${modalOkButton}`).text(name);
     $(`#${modalOkButton}`).off('click').on('click', () => {
         hideConfirmationModal();
         okButtonAction();
@@ -54,7 +57,7 @@ function setConfirmationModalCancelButton(cancelButtonAction, name) {
     }
 
     $cancelButton.removeClass('d-none');
-    $cancelButton.html(name);
+    $cancelButton.text(name);
     $cancelButton.on('click', () => {
         hideConfirmationModal();
 

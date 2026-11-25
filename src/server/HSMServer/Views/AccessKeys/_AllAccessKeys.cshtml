@@ -53,7 +53,7 @@
                             @if (isParentEditAvailable)
                             {
                                 <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-Product="@key.ParentProduct.EncodedId">
-                                    @Html.Raw(key.NodePath)
+                                    @key.NodePath
                                 </a>
                             }
                             else if (user.IsAdmin)
@@ -62,10 +62,10 @@
                             }
                             else
                             {
-                                @Html.Raw(key.NodePath)
+                                @key.NodePath
                             }
                         </td>
-                        <td class="displayName text-break">@Html.Raw(key.DisplayName)</td>
+                        <td class="displayName text-break">@key.DisplayName</td>
                         <td nowrap>
                             <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary fw-normal">copy</a>
                         </td>
@@ -98,7 +98,7 @@
                     }
                     else
                     {
-                        <td class="displayName text-break" id="displayName_@key.DisplayName">@Html.Raw(key.DisplayName)</td>
+                        <td class="displayName text-break" id="displayName_@key.DisplayName">@key.DisplayName</td>
                         @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
                         {
                             <td class="text-nowrap" style="width: 1%;white-space: nowrap">
