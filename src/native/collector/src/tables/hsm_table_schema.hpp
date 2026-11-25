@@ -1,15 +1,15 @@
 #pragma once
 
 /// @file
-/// @brief The schema of a table sensor and its id (#1848). Internal: compiled only with
-/// HSM_COLLECTOR_TABLES.
+/// @brief The schema of a table sensor and its id (#1848). Internal. Compiled in every build: without
+/// HSM_COLLECTOR_TABLES it checks the rules only and every id is 0 (no zlib to compute it).
 ///
 /// The id is the CRC-32 of the schema's canonical bytes (aicontext/features/api/table-block/feature.md,
 /// section "Table schema"; reference: the managed HSMTableBlocks.TableSchema). A collector and the server
 /// compute it independently and never exchange it, so the rules and the bytes here must be exactly the
 /// managed ones.
 
-#include "hsm_table_block_writer.hpp"
+#include "hsm_table_format.hpp"
 
 #include <cstdint>
 #include <string>

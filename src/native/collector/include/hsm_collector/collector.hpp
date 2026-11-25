@@ -11,6 +11,7 @@
 #include "hsm_collector/hsm_collector.h"
 #include "hsm_collector/options.hpp"
 #include "hsm_collector/sensors.hpp"
+#include "hsm_collector/tables.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -579,6 +580,45 @@ namespace hsm::collector
             hsm_sensor_t* sensor = nullptr;
             Check(hsm_collector_create_service_commands_sensor(handle_, &sensor), "Failed to create service-commands sensor.");
             return ServiceCommandsSensor(sensor);
+        }
+
+        // ---- Table sensors (since 0.15.0) ---------------------------------------------------
+
+        /// Collector-wide table settings; before the first table sensor is created.
+        void SetTableOptions(const TableOptions& options)
+        {
+            hsm_table_options_t native{};
+            native.struct_size = sizeof native;
+            native.tick_period_ms = static_cast<int32_t>(options.tick_period.count());
+            native.max_buffer_bytes = options.max_buffer_bytes;
+            native.max_backlog_bytes = options.max_backlog_bytes;
+            Check(hsm_collector_set_table_options(handle_, &native), "Failed to set table options.");
+        }
+
+        /// Creates a table sensor (or a new handle to the one with this path and these columns).
+        /// Throws Error for a mistake of the call; a collector that cannot send tables gives a sensor
+        /// in state Unavailable instead.
+        TableSensor CreateTableSensor(const std::string& path, const TableSensorOptions& options)
+        {
+            std::vector<hsm_table_column_t> columns;
+            std::vector<TableColumnType> types;
+            columns.reserve(options.columns.size());
+            types.reserve(options.columns.size());
+            for (const auto& column : options.columns)
+            {
+                columns.push_back(hsm_table_column_t{ column.name.c_str(), static_cast<hsm_table_column_type_t>(column.type) });
+                types.push_back(column.type);
+            }
+
+            hsm_table_sensor_options_t native = hsm_table_sensor_options_default();
+            native.description = options.description.empty() ? nullptr : options.description.c_str();
+            native.keep_history_ms = static_cast<int64_t>(options.keep_history.count());
+            native.sensor_location = static_cast<int32_t>(options.location);
+
+            hsm_table_sensor_t* sensor = nullptr;
+            Check(hsm_collector_create_table_sensor(handle_, path.c_str(), columns.data(), columns.size(), &native, &sensor),
+                  "Failed to create table sensor.");
+            return TableSensor(sensor, std::move(types));
         }
 
         // ---- Alerts -------------------------------------------------------------------------

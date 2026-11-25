@@ -18,3 +18,4 @@
 #include "hsm_collector/error.hpp"
 #include "hsm_collector/options.hpp"
 #include "hsm_collector/sensors.hpp"
+#include "hsm_collector/tables.hpp"

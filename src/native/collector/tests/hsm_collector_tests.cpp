@@ -141,6 +141,13 @@ extern "C" const char* hsm_collector_test_merge_registration_json(
     int custom_has_description,
     const char* path);
 
+// The table sensor verbs of the conformance corpus and the table tests live in hsm_table_pipeline_tests.cpp (#1848).
+struct TableConformanceState;
+std::shared_ptr<TableConformanceState> NewTableConformanceState();
+void PrepareTableConformanceCollector(TableConformanceState& state, hsm_collector_t* collector, bool with_channel);
+bool ExecuteTableConformanceStep(TableConformanceState& state, hsm_collector_t* collector, const std::vector<std::string>& step);
+const std::map<std::string, std::function<void(const std::string&)>>& TablePipelineTests();
+
 namespace
 {
     void Require(bool condition, const char* message)
@@ -724,6 +731,10 @@ namespace
         std::unique_ptr<DirectiveLog> directives;
 #endif
 
+        // The table sensors of the case and the recording table channel (#1848). Declared before the
+        // collector, so its handles are released after the collector is destroyed: a handle may outlive it.
+        std::shared_ptr<TableConformanceState> tables = NewTableConformanceState();
+
         CollectorHandle collector;
     };
 
@@ -1119,6 +1130,15 @@ namespace
         if (action == "create_collector")
         {
             state.collector = CreateCollector();
+            PrepareTableConformanceCollector(*state.tables, state.collector.value, /*with_channel=*/true);
+            return;
+        }
+
+        if (action == "create_collector_without_table_transport")
+        {
+            // A collector whose sender cannot carry tables: no table channel (#1846).
+            state.collector = CreateCollector();
+            PrepareTableConformanceCollector(*state.tables, state.collector.value, /*with_channel=*/false);
             return;
         }
 
@@ -3684,42 +3704,13 @@ namespace
 #endif
         }
 
-        // Table sensors (#1846, tests/conformance/collector/table_sensor_contract.hsmtest) come to the native
-        // collector with step 6 of epic #1842. Until then the fixture is not registered in CMakeLists.txt, and the
-        // verbs fail by name instead of as unknown ones, so the port backlog stays visible:
-        // CONFORMANCE-UNSUPPORTED: create_collector_without_table_transport (#1848)
-        // CONFORMANCE-UNSUPPORTED: create_table_sensor (#1848)
-        // CONFORMANCE-UNSUPPORTED: create_table_sensor_at_product (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_create_table_sensor_rejected (#1848)
-        // CONFORMANCE-UNSUPPORTED: add_table_row (#1848)
-        // CONFORMANCE-UNSUPPORTED: add_table_rows (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_tick (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_refuse_registration (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_fail_registrations (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_down (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_up (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_frame_limit (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_answer_next (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_refuse_table_next (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_add_results (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_path (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_state (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_rows_accepted (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_rows_dropped (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_registration_count (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_registration_size (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_registration (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_blocks (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_block_attempts (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_block_tables (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_blocks_within (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_sequences (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_sequences_increasing (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_rows (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_row (#1848)
-        //
+        // Table sensors (#1846, #1848): tests/conformance/collector/table_sensor_contract.hsmtest.
+        if (ExecuteTableConformanceStep(*state.tables, state.collector.value, step))
+            return;
+
         // The table connection of the session (tests/conformance/collector/table_connection_contract.hsmtest)
-        // comes with the same step; its fixture is not registered either:
+        // comes with the next part of step 6 (#1848). Until then the fixture is not registered in CMakeLists.txt,
+        // and its verbs fail by name instead of as unknown ones, so the port backlog stays visible:
         // CONFORMANCE-UNSUPPORTED: table_register (#1848)
         // CONFORMANCE-UNSUPPORTED: table_server_refuse_upgrades (#1848)
         // CONFORMANCE-UNSUPPORTED: table_server_accept_upgrades (#1848)
@@ -3731,37 +3722,7 @@ namespace
         // CONFORMANCE-UNSUPPORTED: expect_table_close_code (#1848)
         // CONFORMANCE-UNSUPPORTED: expect_table_closed_before_session (#1848)
         // CONFORMANCE-UNSUPPORTED: table_wait_connection_up (#1848)
-        static const char* const kTableVerbs[] = {
-            "create_collector_without_table_transport",
-            "create_table_sensor",
-            "create_table_sensor_at_product",
-            "expect_create_table_sensor_rejected",
-            "add_table_row",
-            "add_table_rows",
-            "table_tick",
-            "table_server_refuse_registration",
-            "table_server_fail_registrations",
-            "table_server_down",
-            "table_server_up",
-            "table_server_frame_limit",
-            "table_server_answer_next",
-            "table_server_refuse_table_next",
-            "expect_table_add_results",
-            "expect_table_path",
-            "expect_table_state",
-            "expect_table_rows_accepted",
-            "expect_table_rows_dropped",
-            "expect_table_registration_count",
-            "expect_table_registration_size",
-            "expect_table_registration",
-            "expect_table_blocks",
-            "expect_table_block_attempts",
-            "expect_table_block_tables",
-            "expect_table_blocks_within",
-            "expect_table_sequences",
-            "expect_table_sequences_increasing",
-            "expect_table_rows",
-            "expect_table_row",
+        static const char* const kTableConnectionVerbs[] = {
             "table_register",
             "table_server_refuse_upgrades",
             "table_server_accept_upgrades",
@@ -3775,7 +3736,7 @@ namespace
             "table_wait_connection_up",
         };
 
-        for (const char* verb : kTableVerbs)
+        for (const char* verb : kTableConnectionVerbs)
             if (action == verb)
                 throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1848)");
 
@@ -11594,6 +11555,7 @@ namespace
             { "conformance_metric_source_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_endpoint_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_tcp_failure_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_table_sensor_contract", [](const std::string& path) { RunConformanceContract(path); } },
 #if defined(HSM_COLLECTOR_HTTP)
             // (#1751) Needs the HTTP transport, not WebSocket: it runs wherever this build does.
             { "conformance_stop_drain_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
@@ -11637,6 +11599,14 @@ int main(int argc, char** argv)
             const auto test = tests.find(argv[1]);
             if (test == tests.end())
             {
+                // The table sensor tests live in hsm_table_pipeline_tests.cpp (#1848).
+                const auto& pipeline_tests = TablePipelineTests();
+                const auto pipeline_test = pipeline_tests.find(argv[1]);
+                if (pipeline_test != pipeline_tests.end())
+                {
+                    pipeline_test->second(argument);
+                    return 0;
+                }
 #if defined(HSM_COLLECTOR_TABLES)
                 // The table block tests live in hsm_table_block_tests.cpp (#1848).
                 const auto& table_tests = TableBlockTests();

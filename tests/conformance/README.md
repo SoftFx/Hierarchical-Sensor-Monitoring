@@ -411,11 +411,12 @@ collector does not compute a bar StdDev by owner decision); only the native-only
 fixture `collector/native/bar_stddev_contract.hsmtest` uses it. (The previous one,
 `set_sensor_description`, gained its managed counterpart in #1482.)
 
-The table sensor verbs (`collector/table_sensor_contract.hsmtest`, #1846; listed in its header) are in that state
-in the native driver until the native collector has table sensors (#1848, step 6 of epic #1842): each is marked
-`CONFORMANCE-UNSUPPORTED: <verb> (#1848)` and fails by name, and the fixture is not registered in the native
-`CMakeLists.txt` until then. The managed driver runs it like every shared fixture; its table side is a scripted
-table channel of the recording sender, and the table tick runs only through `table_tick`.
+The table sensor verbs (`collector/table_sensor_contract.hsmtest`, #1846; listed in its header) run in both drivers
+(native since #1848). In each, the table side is a scripted table channel (managed: the recording sender's; native: a
+recording channel installed through an internal test seam, `src/tables/hsm_table_test_seams.hpp`), and the table
+tick runs only through `table_tick`, which also does the tick's registration and delivery on the driver's thread. The
+native driver registers the fixture and its must-fail `meta/meta_table_rows_wrong_count.hsmtest` in the tables build
+only (`HSM_COLLECTOR_TABLES`): the rows are decoded with the test block reader, which needs libzstd.
 
 The table connection verbs (`collector/table_connection_contract.hsmtest`, #1846 part 2; listed in its header) are in
 the same state in the native driver, under the same issue. In the managed driver the collector of those cases is on

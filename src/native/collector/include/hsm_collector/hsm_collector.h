@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 14
-#define HSM_COLLECTOR_VERSION_PATCH 2
+#define HSM_COLLECTOR_VERSION_MINOR 15
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -1173,6 +1173,139 @@ hsm_result_t hsm_collector_enable_service_status_monitoring(
     hsm_collector_t* collector,
     const char* service_name,
     int32_t scan_period_ms);
+
+/* ---- Table sensors (since 0.15.0, #1848, ADR-0021) ------------------------------------------
+   A table sensor holds rows of a fixed schema: the time first (implicit, named "time"), then value
+   columns of 64-bit integers or doubles, every value column nullable. Rows are added from any thread;
+   the collector keeps them in memory and once per table tick (10 s by default) packs the rows of all
+   its table sensors into one block of the table block format and hands it to delivery, one block in
+   flight at a time, in sequence order.
+
+   The functions exist in every build. Whether a sensor can send is decided when it is created and
+   again at every Start: a sensor that cannot is in state UNAVAILABLE with the reason in
+   hsm_table_sensor_state_reason, and its rows are dropped and counted. The reasons: the library was
+   built without table support (HSM_COLLECTOR_TABLES=OFF); the collector does not use the session
+   transport (hsm_collector_use_session_transport); and, in this version, the table connection that
+   carries blocks over the session is not implemented yet, so EVERY table sensor of a real host is
+   UNAVAILABLE in 0.15.0 and counts its rows as dropped.
+
+   Every dropped row is counted on its sensor (rows_dropped) and, while the collector runs, reported
+   once per tick through the error channel (".module/Collector errors" and the logger) and the
+   ".module/Collector queue stats/Queue overflow" sensor. The add calls never set the collector's
+   last-error string: a refusal costs two counters.
+
+   Every struct below starts with struct_size: the caller sets it to sizeof as it knows the struct,
+   and the library never reads or writes past it. Strings are borrowed for the call and copied. */
+typedef struct hsm_table_sensor_t hsm_table_sensor_t;
+
+/* The type of a value column; the numbers are those of the block format. */
+typedef enum hsm_table_column_type_t HSM_ENUM_INT32
+{
+    HSM_TABLE_COLUMN_INT64 = 2,
+    HSM_TABLE_COLUMN_DOUBLE = 3
+} hsm_table_column_type_t;
+
+/* A value column: a name (UTF-8, 1..255 bytes, no control character, unique, not "time") and a type. */
+typedef struct hsm_table_column_t
+{
+    const char* name;
+    hsm_table_column_type_t type;
+} hsm_table_column_t;
+
+/* One cell: the column's type says which member is read. A double travels bit for bit (NaN, the
+   infinities, -0.0). A cell without a value is marked in the `nulls` bit map of the add call. */
+typedef union hsm_table_cell_t {
+    int64_t i64;
+    double f64;
+} hsm_table_cell_t;
+
+typedef struct hsm_table_sensor_options_t
+{
+    size_t struct_size;
+    const char* description; /* NULL => "" */
+    int64_t keep_history_ms; /* 0 => the server's default */
+    int32_t sensor_location; /* 0 = Module (ComputerName/Module/path), 1 = Product (path at the root) */
+} hsm_table_sensor_options_t;
+
+/* struct_size set, description NULL, keep_history_ms 0, sensor_location Module. */
+hsm_table_sensor_options_t hsm_table_sensor_options_default(void);
+
+/* Collector-wide table settings. 0 in a field takes the default in [brackets]. */
+typedef struct hsm_table_options_t
+{
+    size_t struct_size;
+    int32_t tick_period_ms;    /* [10000], at least 1000 */
+    int64_t max_buffer_bytes;  /* [64 MiB] rows waiting for the tick, 8 bytes per column per row, time included */
+    int64_t max_backlog_bytes; /* [64 MiB] packed blocks waiting for delivery */
+} hsm_table_options_t;
+
+/* Sets the table settings. Call before the first table sensor is created: afterwards
+   HSM_RESULT_INVALID_STATE. HSM_RESULT_INVALID_ARGUMENT for a NULL argument, a struct_size of 0, a
+   tick period below 1000 ms, or a negative value. */
+hsm_result_t hsm_collector_set_table_options(hsm_collector_t* collector, const hsm_table_options_t* options);
+
+/* Creates a table sensor, or returns a new handle to the one created before under the same path with
+   the same columns. The path is the server's normalized form: the location prefix as for every sensor,
+   then no empty segments and no white space around a segment. `options` may be NULL (the defaults).
+   HSM_RESULT_INVALID_ARGUMENT, with the reason in hsm_collector_last_error, for a mistake of the call:
+   a NULL path or out, no column, a column named "time", an invalid or duplicate column name, an
+   unknown column type, a path with no segment, with a backslash or a tab, or longer than 1,024 UTF-8
+   bytes in its normalized form, a path created before with other columns, a struct_size of 0, a
+   sensor_location other than 0 or 1, a negative keep_history_ms. HSM_RESULT_INVALID_STATE once the
+   collector is disposed. It never fails because the collector cannot send tables: that sensor is
+   UNAVAILABLE. Release the handle with hsm_table_sensor_release. */
+hsm_result_t hsm_collector_create_table_sensor(hsm_collector_t* collector, const char* path, const hsm_table_column_t* columns, size_t column_count, const hsm_table_sensor_options_t* options, hsm_table_sensor_t** out_sensor);
+
+/* Frees the handle. The sensor stays in the collector (its buffered rows still go out). Safe before
+   or after the collector is destroyed; NULL is ignored. */
+void hsm_table_sensor_release(hsm_table_sensor_t* sensor);
+
+/* Adds one row. `time_unix_ns` is the row's time in nanoseconds since 1970-01-01 UTC, kept to 100 ns
+   (rounded down). `cells` holds one cell per value column, in column order; `nulls` is NULL (every
+   cell has a value) or a bit map in which bit c (byte c / 8, bit c % 8) marks column c as without a
+   value. Rows keep the order given; times may repeat and go backwards. Any thread.
+   HSM_RESULT_OK: taken. HSM_RESULT_INVALID_ARGUMENT: a wrong shape (NULL sensor, a cell count other
+   than the column count, NULL cells); nothing is counted. Every other refusal drops the row and counts
+   it: HSM_RESULT_INVALID_STATE (the collector is not running or is destroyed, or the sensor is
+   REFUSED or UNAVAILABLE), HSM_RESULT_LIMIT_EXCEEDED (max_buffer_bytes is reached, or the buffer
+   could not grow). */
+hsm_result_t hsm_table_sensor_add_row(hsm_table_sensor_t* sensor, int64_t time_unix_ns, const hsm_table_cell_t* cells, size_t cell_count, const uint8_t* nulls);
+
+/* Adds `row_count` rows at once, all or nothing. `cells` is row-major (row_count x column count);
+   `nulls` is NULL or a bit map in which bit r * column count + c marks row r, column c. The result
+   codes are those of hsm_table_sensor_add_row. `out_rows_taken` (may be NULL) receives row_count or 0.
+   A row_count of 0 takes nothing and returns HSM_RESULT_OK. A row_count no array can have (its rows
+   would take more than INT64_MAX bytes, for example SIZE_MAX from an n - 1 below zero) is a wrong
+   shape: HSM_RESULT_INVALID_ARGUMENT, nothing counted. */
+hsm_result_t hsm_table_sensor_add_rows(hsm_table_sensor_t* sensor, const int64_t* times_unix_ns, const hsm_table_cell_t* cells, const uint8_t* nulls, size_t row_count, size_t* out_rows_taken);
+
+typedef enum hsm_table_sensor_state_t HSM_ENUM_INT32
+{
+    HSM_TABLE_SENSOR_PENDING = 0,    /* not registered yet in this run; rows are kept within the buffer bound */
+    HSM_TABLE_SENSOR_REGISTERED = 1, /* its rows go into the next block */
+    HSM_TABLE_SENSOR_REFUSED = 2,    /* the server said no; final for the life of the collector */
+    HSM_TABLE_SENSOR_UNAVAILABLE = 3 /* this collector cannot send tables now (see the reason) */
+} hsm_table_sensor_state_t;
+
+typedef struct hsm_table_sensor_stats_t
+{
+    size_t struct_size;
+    hsm_table_sensor_state_t state;
+    uint64_t rows_accepted; /* rows taken into the buffer */
+    uint64_t rows_dropped;  /* rows refused by an add call, and rows taken but lost later */
+} hsm_table_sensor_stats_t;
+
+/* Reads the sensor's state and counters (no lock). The caller sets out->struct_size. Valid also after
+   the collector is destroyed. */
+hsm_result_t hsm_table_sensor_get_stats(const hsm_table_sensor_t* sensor, hsm_table_sensor_stats_t* out);
+
+/* Copies why the sensor is REFUSED or UNAVAILABLE ("" otherwise) into `buffer` as a NUL-terminated
+   UTF-8 string cut to `size` bytes, and returns the length the whole text needs, NUL not included.
+   `buffer` may be NULL when `size` is 0. */
+size_t hsm_table_sensor_state_reason(const hsm_table_sensor_t* sensor, char* buffer, size_t size);
+
+/* The sensor's normalized full path; valid until the handle is released. NULL for a NULL sensor. */
+const char* hsm_table_sensor_path(const hsm_table_sensor_t* sensor);
 
 #ifdef __cplusplus
 }

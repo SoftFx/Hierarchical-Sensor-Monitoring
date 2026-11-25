@@ -12,7 +12,7 @@ endif()
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.14.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.15.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -117,6 +117,11 @@ add_library(hsm_collector_core STATIC
     src/proc_metrics.cpp                         # portable /proc parsers + delta math (#1414; no OS reads)
     src/platform/hsm_linux_metric_sources.cpp    # self-guarded #if __linux__ (#1414)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
+    # Table sensors (#1848): the C ABI, the sensors, their buffers and the pipeline exist in every
+    # build; without HSM_COLLECTOR_TABLES every table sensor is Unavailable (no block writer).
+    src/tables/hsm_table_pipeline.cpp
+    src/tables/hsm_table_row_buffer.cpp
+    src/tables/hsm_table_schema.cpp
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
@@ -212,7 +217,6 @@ if(HSM_COLLECTOR_TABLES)
 
     target_sources(hsm_collector_core PRIVATE
         src/tables/hsm_table_block_writer.cpp
-        src/tables/hsm_table_schema.cpp
     )
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_TABLES=1)
     target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
@@ -302,6 +306,10 @@ if(HSM_COLLECTOR_BUILD_BENCH)
     if(WIN32)
         target_link_libraries(hsm_collector_bench PRIVATE psapi)
     endif()
+    # The table add path (#1848) is measured in the tables build, through the internal test seams.
+    if(HSM_COLLECTOR_TABLES)
+        target_compile_definitions(hsm_collector_bench PRIVATE HSM_COLLECTOR_TABLES=1)
+    endif()
 endif()
 
 # The test/conformance binary and its ctest registrations (gated so package/consumer builds skip
@@ -310,6 +318,7 @@ if(HSM_COLLECTOR_BUILD_TESTS)
 
 add_executable(hsm_collector_tests
     tests/hsm_collector_tests.cpp
+    tests/hsm_table_pipeline_tests.cpp  # table sensors (#1848); the parts that need zstd are #if HSM_COLLECTOR_TABLES
 )
 
 target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
@@ -364,6 +373,28 @@ if(HSM_COLLECTOR_TABLES)
                     ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/HSMTableBlocks.Tests/Golden/format1/${golden}.htb
         )
     endforeach()
+    # The pipeline with threads and the recording channel (#1848).
+    foreach(name
+            native_table_threads_only_while_running
+            native_table_unavailable_decided_at_each_start
+            native_table_writer_across_stop_and_start
+            native_table_stop_drain_is_bounded
+            native_table_losses_at_stop_reach_the_stop_line
+            native_table_split_keeps_every_row
+            native_table_too_large_is_final_and_sequences_never_go_back
+            native_table_pack_failure_settles_every_row
+            native_table_reports_reach_the_host_with_no_lock_held
+            native_table_over_connection_limits
+            native_table_final_pack_observes_the_stop_budget
+            native_table_impossible_row_count_is_a_wrong_shape
+            native_table_start_failure_rolls_back
+            native_table_stop_failure_completes
+            native_table_stress_writers_ticks_and_restarts)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    set_tests_properties(native_table_stress_writers_ticks_and_restarts PROPERTIES TIMEOUT 600)
+    # A report written under a lock the host's callback takes again deadlocks: the timeout fails it.
+    set_tests_properties(native_table_reports_reach_the_host_with_no_lock_held PROPERTIES TIMEOUT 120)
     # Blocks and their rows as text, read by the managed reader in NativeBlockVectorTests
     # (HSM_NATIVE_TABLE_BLOCKS_DIR=<build>/table-block-vectors; the CI HTTP lane runs both).
     add_test(NAME native_table_write_vectors
@@ -555,6 +586,26 @@ if(HSM_COLLECTOR_HTTP)
         COMMAND hsm_collector_tests native_http_recovery_log_credits_only_retried_registrations
     )
 endif()
+
+# Table sensors in every build (#1848): the C ABI, the wrapper and the pipeline's parts. Without
+# HSM_COLLECTOR_TABLES every table sensor is Unavailable, and these say so.
+foreach(name
+        native_table_path_normalization
+        native_table_time_conversion
+        native_table_buffer_growth_and_swap
+        native_table_buffer_failed_growth
+        native_table_buffer_null_map_on_first_use
+        native_table_bound_never_overshoots
+        native_table_ledger_counts_by_reason
+        native_table_backlog_keeps_block_in_flight
+        native_table_abi_rejects_wrong_shapes
+        native_table_create_racing_dispose_is_refused
+        native_table_unavailable_says_why
+        native_table_host_without_table_sensors
+        native_table_handle_outlives_collector
+        native_table_wrapper_matches_abi)
+    add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+endforeach()
 
 add_test(NAME native_invalid_argument_clears_out_params
     COMMAND hsm_collector_tests native_invalid_argument_clears_out_params
@@ -892,6 +943,17 @@ if(HSM_COLLECTOR_HTTP)
         NAME meta_last_delivered_registration_wrong_description
         COMMAND hsm_collector_tests meta_must_fail
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_last_delivered_registration_wrong_description.hsmtest
+    )
+endif()
+
+# Table sensors (#1846, #1848): the shared fixture and its must-fail meta fixture need the block writer
+# and the test block reader, so the tables build only.
+if(HSM_COLLECTOR_TABLES)
+    add_conformance_test(conformance_table_sensor_contract table_sensor_contract.hsmtest)
+    add_test(
+        NAME meta_table_rows_wrong_count
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_table_rows_wrong_count.hsmtest
     )
 endif()
 

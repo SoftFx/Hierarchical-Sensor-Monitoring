@@ -1,6 +1,7 @@
 #include "hsm_table_schema.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <new>
 #include <set>
 #include <utility>
@@ -138,21 +139,28 @@ namespace hsm::collector::tables
             }
 
             // Canonical bytes: version, column count, then per column its type, its name length and its
-            // UTF-8 name.
-            std::vector<std::uint8_t> canonical;
-            canonical.reserve(length);
-            canonical.push_back(kCanonicalVersion);
-            canonical.push_back(static_cast<std::uint8_t>(columns.size()));
+            // UTF-8 name. The vector is sized once and written by index: GCC 15 misreads reserve followed by
+            // push_back after inlining as a free of an offset pointer (-Wfree-nonheap-object).
+            std::vector<std::uint8_t> canonical(length);
+            std::size_t at = 0;
+            canonical[at++] = kCanonicalVersion;
+            canonical[at++] = static_cast<std::uint8_t>(columns.size());
             for (const TableSchemaColumn& column : columns)
             {
-                canonical.push_back(static_cast<std::uint8_t>(column.type));
-                canonical.push_back(static_cast<std::uint8_t>(column.name.size()));
-                canonical.insert(canonical.end(), column.name.begin(), column.name.end());
+                canonical[at++] = static_cast<std::uint8_t>(column.type);
+                canonical[at++] = static_cast<std::uint8_t>(column.name.size());
+                std::copy(column.name.begin(), column.name.end(), canonical.begin() + static_cast<std::ptrdiff_t>(at));
+                at += column.name.size();
             }
 
             TableSchema schema;
             schema.columns_ = columns;
+#if defined(HSM_COLLECTOR_TABLES)
             schema.id_ = TableBlockCrc32(canonical.data(), canonical.size());
+#else
+            // No zlib in this build, and no block that would carry the id either.
+            schema.id_ = 0;
+#endif
             schema.canonical_ = std::move(canonical);
             out = std::move(schema);
             return true;
