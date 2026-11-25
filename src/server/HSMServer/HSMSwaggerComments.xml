@@ -1877,11 +1877,11 @@
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
         </member>
-        <member name="M:HSMServer.Model.Folders.ViewModels.FolderInfoViewModel.#ctor(HSMServer.Model.Folders.FolderModel,HSMServer.Model.Authentication.User)">
+        <member name="M:HSMServer.Model.Folders.ViewModels.FolderInfoViewModel.#ctor(HSMServer.Model.Folders.FolderModel,System.Collections.Generic.IEnumerable{HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
             <param name="folder">The folder.</param>
-            <param name="user">
-            The user the panel is rendered for: the product statistics count only the products this user has
-            a role on (an admin: all of them), so the panel says nothing about the others.
+            <param name="visibleProducts">
+            The products of the folder the panel is rendered over: the ones its reader sees
+            (<see cref="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)"/>), so the statistics say nothing about the others.
             </param>
         </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">

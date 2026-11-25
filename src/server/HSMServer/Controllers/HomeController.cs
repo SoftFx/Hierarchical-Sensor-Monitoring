@@ -597,7 +597,7 @@ namespace HSMServer.Controllers
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
 
             if (_tree.TryGetFolder(CurrentUser, id, out var folder))
-                return PartialView("_GeneralInfo", new FolderInfoViewModel(folder, CurrentUser));
+                return PartialView("_GeneralInfo", FolderInfo(folder));
 
             if (_tree.TryGetSensor(CurrentUser, id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
@@ -1101,7 +1101,7 @@ namespace HSMServer.Controllers
         public IActionResult GetFolderInfo(string id)
         {
             return _tree.TryGetFolder(CurrentUser, SensorPathHelper.DecodeGuid(id), out var folder)
-                ? PartialView("_MetaInfo", new FolderInfoViewModel(folder, CurrentUser))
+                ? PartialView("_MetaInfo", FolderInfo(folder))
                 : _emptyResult;
         }
 
@@ -1115,7 +1115,7 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new FolderInfoViewModel(folder, CurrentUser));
+                return PartialView("_MetaInfo", FolderInfo(folder));
 
             var update = new FolderUpdate
             {
@@ -1129,7 +1129,7 @@ namespace HSMServer.Controllers
             };
 
             return await _folderManager.TryUpdate(update)
-                ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id], CurrentUser))
+                ? PartialView("_MetaInfo", FolderInfo(_folderManager[update.Id]))
                 : _emptyResult;
         }
 
@@ -1171,6 +1171,10 @@ namespace HSMServer.Controllers
 
             return Json(JsonSerializer.Serialize(new { Status = "Ok" }));
         }
+
+        // The folder panel for the current user: its statistics cover the products this user sees.
+        private FolderInfoViewModel FolderInfo(FolderModel folder) =>
+            new(folder, _tree.GetVisibleProducts(CurrentUser, folder).Values);
 
         private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor) =>
             _tree.TryGetSensor(CurrentUser, SensorPathHelper.DecodeGuid(encodedId), out sensor);

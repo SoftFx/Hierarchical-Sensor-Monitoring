@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Extensions;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using System;
@@ -21,15 +20,13 @@ namespace HSMServer.Model.Folders.ViewModels
         public FolderInfoViewModel() : base() { }
 
         /// <param name="folder">The folder.</param>
-        /// <param name="user">
-        /// The user the panel is rendered for: the product statistics count only the products this user has
-        /// a role on (an admin: all of them), so the panel says nothing about the others.
+        /// <param name="visibleProducts">
+        /// The products of the folder the panel is rendered over: the ones its reader sees
+        /// (<see cref="UserTreeAccess.GetVisibleProducts"/>), so the statistics say nothing about the others.
         /// </param>
-        internal FolderInfoViewModel(FolderModel folder, User user) : base(folder)
+        internal FolderInfoViewModel(FolderModel folder, IEnumerable<ProductNodeViewModel> visibleProducts) : base(folder)
         {
-            var products = folder.Products.Values
-                .Where(p => user is not null && (user.IsAdmin || (user.ProductsRoles is not null && user.IsProductAvailable(p.Id))))
-                .ToList();
+            var products = visibleProducts.ToList();
 
             ProductStatuses = products.ToGroupedList(x => x.Status);
 

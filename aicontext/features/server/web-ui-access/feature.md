@@ -88,5 +88,6 @@ A refused id looks like a missing one: the node panel shows "No Data", tables an
 
 - Visibility is not the Manager role: `UserTreeAccess` never answers whether a user may change an entity. A write action carries its own role check.
 - A folder's journal is loaded when the folder is selected, for the products visible then. Records of a product that stops being visible are left out from the next page on; a product that becomes visible later shows its records after the folder is selected again.
+- The per-node journal pages the records of the sensors and nodes that are in the tree now. When a sensor or a node below the selected one is removed while its journal is open, its records (the removal record among them) leave the open table with it; before, they stayed until the next selection. The global Journal page still lists them.
 - Comments are stored sanitized (HTML with the text already encoded). Where one is written through a text-only path (the recent files list, a journal record of a manual status change), `<` and `&` typed in the comment show as entities.
 - Dashboards, the alert template pages and the product, folder and access key administration pages have their own controllers and are outside this feature.

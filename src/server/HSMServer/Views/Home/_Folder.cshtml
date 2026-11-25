@@ -4,9 +4,11 @@
 
 @model FolderModel
 
+@inject HSMServer.Model.TreeViewModel.UserTreeAccess TreeAccess
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-@await Html.PartialAsync("_MetaInfo", new FolderInfoViewModel(Model, User as User))
+@await Html.PartialAsync("_MetaInfo", new FolderInfoViewModel(Model, TreeAccess.GetVisibleProducts(User as User, Model).Values))
 
 @await Html.PartialAsync("_ChildrenPanel", (User as User).SelectedNode)
