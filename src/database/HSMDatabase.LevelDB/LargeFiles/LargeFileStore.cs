@@ -56,6 +56,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         private static readonly TimeSpan NoRoomRetry = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan TooManyRetry = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan TooManyPartsRetry = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan CheckingRetry = TimeSpan.FromSeconds(10);
 
         private static readonly Logger _logger = LogManager.GetLogger("LargeFiles");
@@ -65,10 +66,17 @@ namespace HSMDatabase.LevelDB.LargeFiles
         private readonly Dictionary<Guid, Entry> _files = [];
         private readonly Dictionary<LargeFileUploadKey, Guid> _byKey = [];
 
-        // Archives being built in this process (their temporary files are not leftovers), and records that could not be
-        // read at open (their files are kept, never taken for orphans).
-        private readonly HashSet<Guid> _building = [];
+        // Archives being built in this process with the space each reserves (their temporary files are not leftovers), and
+        // records that could not be read at open with their product folders (their files are kept, never taken for orphans).
+        private readonly Dictionary<Guid, long> _building = [];
         private readonly HashSet<Guid> _unreadable = [];
+        private readonly HashSet<Guid> _unreadableProducts = [];
+
+        // What an archive may need beyond the size of the file it holds (headers, a file that does not compress).
+        public const long ArchiveSlack = 1024 * 1024;
+
+        // An archive file no record names is removed once it is this old (a crash between its rename and its record).
+        private static readonly TimeSpan OrphanArchiveAge = TimeSpan.FromHours(24);
 
         private bool _opened, _disposed;
         private LargeFileStoreLimits _limits = new();
@@ -150,6 +158,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
         {
             key = key with { SourceModifiedUtc = AsUtc(key.SourceModifiedUtc), Name = key.Name ?? string.Empty };
 
+            RemoveEmptyPartsWithoutLease();
+
             // At most two rounds: a part with another piece size is removed outside the lock, then the begin runs again.
             for (var round = 0; ; round++)
             {
@@ -207,10 +217,17 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         if (LiveLeases(now, limits) >= limits.MaxUploadsInProgress)
                             return Refused(LargeFileBeginOutcome.TooManyUploads, TooManyMessage(limits), TooManyRetry);
 
+                        var parts = _files.Values.Count(e => !e.Removed && e.Record.ProductId == key.ProductId && e.Record.State == LargeFileState.Uploading);
+
+                        if (parts >= limits.MaxUploadingPartsPerProduct)
+                            return Refused(LargeFileBeginOutcome.TooManyParts,
+                                $"Product {key.ProductId} has {parts} uploads in parts already (LargeFiles.MaxUploadingPartsPerProduct).", TooManyPartsRetry);
+
                         var free = GetFreeBytes();
                         var reserved = Reserved();
 
-                        if (free - limits.MinFreeBytes - reserved < key.Size)
+                        // Its own reservation: the part and the archive.
+                        if (free - limits.MinFreeBytes - reserved < 2 * key.Size + ArchiveSlack)
                         {
                             Statistics.Add(ref Statistics.RefusedForSpace);
                             _logger.Warn($"A large file of {key.Size} bytes was refused: {free} bytes free on the volume of {_folder}, " +
@@ -224,7 +241,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 }
 
                 // Another piece size: the old part cannot be continued; its pieces never mix into a new file id.
-                RemoveEntry(stale, $"a begin with another piece size ({pieceSize}) replaced it", force: false);
+                RemoveEntry(stale, $"a begin with another piece size ({pieceSize}) replaced it", force: false,
+                    still: e => e.Record.State == LargeFileState.Uploading && !IsLive(e, Clock(), Limits));
             }
         }
 
@@ -430,11 +448,44 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         public void Release(UploadLease lease)
         {
+            Entry empty = null;
+
             lock (_lock)
             {
-                if (_files.TryGetValue(lease.FileId, out var entry) && entry.HasLease && entry.LeaseId == lease.LeaseId && !entry.Checking)
-                    entry.HasLease = false;
+                if (!_files.TryGetValue(lease.FileId, out var entry) || !entry.HasLease || entry.LeaseId != lease.LeaseId)
+                    return;
+
+                entry.HasLease = false;
+
+                if (IsEmptyPart(entry))
+                    empty = entry;
             }
+
+            // A part that received no piece holds nothing worth keeping: it goes with its lease.
+            if (empty is not null)
+                RemoveEntry(empty, "its lease ended before its first piece", force: false, still: IsEmptyPartWithoutLease, quiet: true);
+        }
+
+        // Under _lock.
+        private static bool IsEmptyPart(Entry entry) =>
+            !entry.Removed && !entry.Checking && entry.Record.State == LargeFileState.Uploading && entry.Record.PieceCount == 0;
+
+        // Under _lock.
+        private bool IsEmptyPartWithoutLease(Entry entry) => IsEmptyPart(entry) && !IsLive(entry, Clock(), Limits);
+
+        // Parts that received no piece and whose lease expired.
+        private void RemoveEmptyPartsWithoutLease()
+        {
+            List<Entry> empty;
+
+            lock (_lock)
+            {
+                EnsureOpen();
+                empty = [.. _files.Values.Where(IsEmptyPartWithoutLease)];
+            }
+
+            foreach (var entry in empty)
+                RemoveEntry(entry, "its lease expired before its first piece", force: false, still: IsEmptyPartWithoutLease, quiet: true);
         }
 
         public LargeFileFinishTicket StartFinish(UploadLease lease)
@@ -470,7 +521,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 if (_files.TryGetValue(lease.FileId, out var entry) && entry.LeaseId == lease.LeaseId)
                 {
                     entry.Checking = false;
-                    entry.LeaseTouched = Clock();
+
+                    // A finish ends its lease whatever came of it: a cancelled or faulted check never leaves the part busy.
+                    entry.HasLease = false;
                 }
             }
         }
@@ -509,7 +562,12 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 }
 
                 lock (_lock)
+                {
                     entry.Record = verified;
+
+                    // A lease never outlives its upload's Uploading state.
+                    entry.HasLease = false;
+                }
 
                 _logger.Info($"Large file {fileId:N} verified: sensor {verified.SensorId}, {verified.Size} bytes, value time {verified.ValueTimeUtc:O}");
 
@@ -547,8 +605,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
         }
 
         // Removes the files of an entry, then its record. With force (a discard by the holder of the lease) also while it is
-        // being checked. False when it was removed already or is being checked.
-        private bool RemoveEntry(Entry entry, string reason, bool force)
+        // being checked. False when it was removed already, is being checked, or no longer meets `still` (asked under the
+        // locks: a decision taken before them, as the pass's, may be out of date).
+        private bool RemoveEntry(Entry entry, string reason, bool force, Func<Entry, bool> still = null, bool quiet = false)
         {
             lock (entry.Gate)
             {
@@ -556,7 +615,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                 lock (_lock)
                 {
-                    if (entry.Removed || (entry.Checking && !force))
+                    if (entry.Removed || (entry.Checking && !force) || (still is not null && !still(entry)))
                         return false;
 
                     record = entry.Record;
@@ -570,7 +629,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     if (record.ArchiveId is { } archive)
                         DeleteDurably(ArchivePath(record.ProductId, archive));
 
-                    if (record.PreviousArchiveId is { } previous)
+                    foreach (var previous in record.PreviousArchiveIds)
                         DeleteDurably(ArchivePath(record.ProductId, previous));
 
                     DeleteDurably(RecordPath(record));
@@ -590,7 +649,12 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         _byKey.Remove(record.Key);
                 }
 
-                if (record.State == LargeFileState.Uploading)
+                if (record.State == LargeFileState.Uploading && quiet)
+                {
+                    Statistics.Add(ref Statistics.PartsRemoved);
+                    _logger.Info($"The empty part of large file {record.FileId:N} was removed ({reason}): sensor {record.SensorId}, product {record.ProductId}");
+                }
+                else if (record.State == LargeFileState.Uploading)
                 {
                     Statistics.Add(ref Statistics.PartsRemoved);
                     _logger.Warn($"The part of large file {record.FileId:N} was removed ({reason}): sensor {record.SensorId}, product {record.ProductId}, " +
@@ -676,51 +740,80 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         // === Archives (#1885) ===
 
-        public ArchiveTarget BeginArchive(Guid fileId)
+        public ArchiveBeginResult BeginArchive(Guid fileId)
         {
             lock (_lock)
             {
                 EnsureOpen();
 
                 if (!_files.TryGetValue(fileId, out var entry) || entry.Removed)
-                    throw new LargeFileStoreException($"Large file {fileId:N} is not in the store.");
+                    return new ArchiveBeginResult(ArchiveBeginOutcome.NotFound, null, null);
 
                 var record = entry.Record;
 
                 if (record.State is not (LargeFileState.Verified or LargeFileState.Packed))
-                    throw new LargeFileStoreException($"Large file {fileId:N} is {record.State}: only a verified or packed file gets an archive.");
+                    return new ArchiveBeginResult(ArchiveBeginOutcome.WrongState, null, null);
+
+                long reservation = 0;
+
+                // A first pack is covered by the upload's reservation; a re-encryption needs room for a second archive.
+                if (record.State == LargeFileState.Packed)
+                {
+                    reservation = (record.ArchiveLength ?? record.Size) + ArchiveSlack;
+
+                    var free = GetFreeBytes();
+                    var reserved = Reserved();
+
+                    if (free - Limits.MinFreeBytes - reserved < reservation)
+                    {
+                        Statistics.Add(ref Statistics.RefusedForSpace);
+                        _logger.Warn($"The re-encryption of large file {fileId:N} was refused: {free} bytes free on the volume of {_folder}, {reserved} reserved, " +
+                                     $"{reservation} needed, the minimum is {Limits.MinFreeBytes} (LargeFiles.MinFreeDiskMb)");
+
+                        return new ArchiveBeginResult(ArchiveBeginOutcome.NoRoom, null, NoRoomRetry);
+                    }
+                }
 
                 var archiveId = Guid.NewGuid();
-                _building.Add(archiveId);
+                _building[archiveId] = reservation;
 
-                return new ArchiveTarget(fileId, archiveId, Path.Combine(UploadsFolder(record.ProductId), archiveId.ToString("N") + ArchiveTempSuffix));
+                var target = new ArchiveTarget(fileId, archiveId, record.ArchiveId, Path.Combine(UploadsFolder(record.ProductId), archiveId.ToString("N") + ArchiveTempSuffix));
+
+                return new ArchiveBeginResult(ArchiveBeginOutcome.Started, target, null);
             }
         }
 
-        public void CommitArchive(ArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveHash)
+        public ArchiveCommitOutcome CommitArchive(ArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveHash)
         {
-            var entry = GetEntry(target.FileId) ?? throw new LargeFileStoreException($"Large file {target.FileId:N} is not in the store.");
+            var entry = GetEntry(target.FileId);
+
+            if (entry is null)
+                return DropBuild(target, ArchiveCommitOutcome.Removed);
 
             lock (entry.Gate)
             {
-                LargeFileRecord record;
+                LargeFileRecord record = null;
 
                 lock (_lock)
                 {
-                    if (entry.Removed)
-                        throw new LargeFileStoreException($"Large file {target.FileId:N} was removed.");
-
-                    record = entry.Record;
+                    if (!entry.Removed)
+                        record = entry.Record;
                 }
 
-                if (record.State is not (LargeFileState.Verified or LargeFileState.Packed))
-                    throw new LargeFileStoreException($"Large file {target.FileId:N} is {record.State}: only a verified or packed file gets an archive.");
+                if (record is null)
+                    return DropBuild(target, ArchiveCommitOutcome.Removed);
+
+                // Compare and swap: another build that committed since this one began wins; this one changes nothing.
+                if (record.ArchiveId != target.ExpectedArchiveId || record.State is not (LargeFileState.Verified or LargeFileState.Packed))
+                    return DropBuild(target, ArchiveCommitOutcome.Superseded);
+
+                var replaced = record.ArchiveId is { } current ? [.. record.PreviousArchiveIds, current] : record.PreviousArchiveIds;
 
                 var packed = record with
                 {
                     State = LargeFileState.Packed,
                     ArchiveId = target.ArchiveId,
-                    PreviousArchiveId = record.ArchiveId ?? record.PreviousArchiveId,
+                    PreviousArchiveIds = replaced,
                     PasswordVersion = passwordVersion,
                     ArchiveLength = archiveLength,
                     ArchiveHash = archiveHash,
@@ -756,28 +849,90 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     _building.Remove(target.ArchiveId);
                 }
 
-                // What the archive replaces: the part (first pack) or the previous archive (a re-encryption). A file that cannot
-                // be deleted now (a reader without delete sharing) is left for the next pass.
+                // What the archive replaces: the part (first pack) and the replaced archives. A file that cannot be deleted now
+                // (a reader without delete sharing) stays named in the record and is left for the next pass.
                 if (record.State == LargeFileState.Verified)
                 {
                     TryDelete(PartPath(record));
                     TryDelete(IndexPath(record));
                 }
-                else if (record.ArchiveId is { } previous)
-                {
-                    TryDelete(ArchivePath(record.ProductId, previous));
-                }
+
+                DeleteReplacedArchives(entry);
 
                 _logger.Info($"Large file {target.FileId:N} packed into archive {target.ArchiveId:N} ({archiveLength} bytes, password version {passwordVersion})");
+
+                return ArchiveCommitOutcome.Committed;
             }
         }
 
-        public void AbandonArchive(ArchiveTarget target)
+        public void AbandonArchive(ArchiveTarget target) => DropBuild(target, ArchiveCommitOutcome.Removed);
+
+        private ArchiveCommitOutcome DropBuild(ArchiveTarget target, ArchiveCommitOutcome outcome)
         {
             TryDelete(target.TempPath);
 
             lock (_lock)
                 _building.Remove(target.ArchiveId);
+
+            if (outcome != ArchiveCommitOutcome.Removed)
+                _logger.Info($"The archive {target.ArchiveId:N} of large file {target.FileId:N} was not committed ({outcome}): another build committed first");
+
+            return outcome;
+        }
+
+        // Under the entry's gate: deletes the replaced archives and writes the record without the ones that are gone. Returns
+        // how many were deleted.
+        private int DeleteReplacedArchives(Entry entry)
+        {
+            LargeFileRecord record;
+
+            lock (_lock)
+            {
+                if (entry.Removed)
+                    return 0;
+
+                record = entry.Record;
+            }
+
+            if (record.PreviousArchiveIds.Count == 0)
+                return 0;
+
+            var left = new List<Guid>();
+            var deleted = 0;
+
+            foreach (var id in record.PreviousArchiveIds)
+            {
+                var path = ArchivePath(record.ProductId, id);
+
+                if (!File.Exists(path))
+                    continue;
+
+                if (TryDelete(path))
+                    deleted++;
+                else
+                    left.Add(id);
+            }
+
+            var updated = record with { PreviousArchiveIds = left };
+
+            try
+            {
+                WriteRecord(updated);
+            }
+            catch (Exception ex) when (IsFileError(ex))
+            {
+                // The record still names them: the next pass tries again.
+                _logger.Warn($"The record of large file {record.FileId:N} could not be written after its replaced archives were deleted: {ex.Message}");
+                return deleted;
+            }
+
+            lock (_lock)
+            {
+                if (!entry.Removed)
+                    entry.Record = updated;
+            }
+
+            return deleted;
         }
 
         // === The store's own pass ===
@@ -786,7 +941,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
         {
             List<Entry> abandoned;
             List<LargeFileRecord> records;
-            HashSet<Guid> building, unreadable;
+            HashSet<Guid> building, unreadable, unreadableProducts;
             DateTime now;
             LargeFileStoreLimits limits;
 
@@ -802,14 +957,18 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 abandoned = [.. _files.Values.Where(e => e.Record.State == LargeFileState.Uploading && !e.Checking && !IsLive(e, now, limits) &&
                                                          e.Record.LastPieceUtc < now - limits.AbandonedUploadAge)];
                 records = [.. _files.Values.Select(e => e.Record)];
-                building = [.. _building];
+                building = [.. _building.Keys];
                 unreadable = [.. _unreadable];
+                unreadableProducts = [.. _unreadableProducts];
             }
 
             var abandonedRemoved = 0;
 
+            RemoveEmptyPartsWithoutLease();
+
             foreach (var entry in abandoned)
-                if (RemoveEntry(entry, $"abandoned: no piece for {limits.AbandonedUploadAge.TotalDays:0.#} days", force: false))
+                if (RemoveEntry(entry, $"abandoned: no piece for {limits.AbandonedUploadAge.TotalDays:0.#} days", force: false,
+                        still: e => e.Record.State == LargeFileState.Uploading && !IsLive(e, now, limits) && e.Record.LastPieceUtc < now - limits.AbandonedUploadAge))
                     abandonedRemoved++;
 
             var known = records.Select(r => r.FileId).ToHashSet();
@@ -846,6 +1005,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     if (IdOf(temp, ArchiveTempSuffix) is { } archiveId && !building.Contains(archiveId) && TryDelete(temp))
                     {
                         leftovers++;
+                        Statistics.Add(ref Statistics.LeftoversRemoved);
                         _logger.Info($"The temporary archive {archiveId:N} of a build that is not running was removed ({temp})");
                     }
             }
@@ -863,13 +1023,57 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     if (entry.Removed)
                         continue;
 
-                    foreach (var path in new[] { PartPath(record), IndexPath(record) }
-                                 .Concat(record.PreviousArchiveId is { } previous ? [ArchivePath(record.ProductId, previous)] : []))
+                    foreach (var path in new[] { PartPath(record), IndexPath(record) })
                         if (File.Exists(path) && TryDelete(path))
                         {
                             leftovers++;
+                            Statistics.Add(ref Statistics.LeftoversRemoved);
                             _logger.Info($"A file left by the pack of large file {record.FileId:N} was removed: {path}");
                         }
+
+                    var replaced = DeleteReplacedArchives(entry);
+
+                    if (replaced > 0)
+                    {
+                        leftovers += replaced;
+                        Statistics.Add(ref Statistics.LeftoversRemoved, replaced);
+                        _logger.Info($"{replaced} archives a re-encryption of large file {record.FileId:N} replaced were removed");
+                    }
+                }
+            }
+
+            // Archive files no record names (a crash between the rename of an archive and its record): kept a day, then removed.
+            // Never in a product with a record that cannot be read, which may name them.
+            int orphanArchivesRemoved = 0, orphanArchivesKept = 0;
+            HashSet<Guid> named;
+
+            lock (_lock)
+                named = [.. _files.Values.SelectMany(e => e.Record.PreviousArchiveIds.Append(e.Record.ArchiveId ?? Guid.Empty)), .. _building.Keys];
+
+            foreach (var product in ProductFolders(ArchivesFolderName))
+            {
+                if (Guid.TryParseExact(Path.GetFileName(product), "N", out var productId) && unreadableProducts.Contains(productId))
+                    continue;
+
+                foreach (var archive in Directory.EnumerateFiles(product, "*" + ArchiveSuffix))
+                {
+                    if (IdOf(archive, ArchiveSuffix) is { } archiveId && named.Contains(archiveId))
+                        continue;
+
+                    var written = File.GetLastWriteTimeUtc(archive);
+
+                    if (written >= now - OrphanArchiveAge)
+                    {
+                        orphanArchivesKept++;
+                        continue;
+                    }
+
+                    if (TryDelete(archive))
+                    {
+                        orphanArchivesRemoved++;
+                        Statistics.Add(ref Statistics.LeftoversRemoved);
+                        _logger.Warn($"An archive no record names was removed: {archive}, last written {written:O}");
+                    }
                 }
             }
 
@@ -881,6 +1085,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 OrphanPartsRemoved = orphansRemoved,
                 OrphanPartsKept = orphansKept,
                 LeftoversRemoved = leftovers,
+                OrphanArchivesRemoved = orphanArchivesRemoved,
+                OrphanArchivesKept = orphanArchivesKept,
             };
         }
 
@@ -904,6 +1110,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 _files.Clear();
                 _byKey.Clear();
                 _unreadable.Clear();
+                _unreadableProducts.Clear();
 
                 throw Failed($"The large file store {_folder} could not be opened", ex);
             }
@@ -948,6 +1155,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         if (id is { } unreadable)
                             _unreadable.Add(unreadable);
 
+                        if (Guid.TryParseExact(Path.GetFileName(product), "N", out var unreadableProduct))
+                            _unreadableProducts.Add(unreadableProduct);
+
                         disagreements++;
                         continue;
                     }
@@ -971,7 +1181,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
             // Archives no record names: reported, never used, never removed here (the previous archive of a re-encryption
             // is named by its record and removed by the pass).
-            var named = _files.Values.SelectMany(e => new[] { e.Record.ArchiveId, e.Record.PreviousArchiveId }).OfType<Guid>().ToHashSet();
+            var named = _files.Values.SelectMany(e => e.Record.PreviousArchiveIds.Append(e.Record.ArchiveId ?? Guid.Empty)).ToHashSet();
 
             foreach (var product in ProductFolders(ArchivesFolderName))
                 foreach (var archive in Directory.EnumerateFiles(product, "*" + ArchiveSuffix))
@@ -1014,6 +1224,13 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     Statistics.Add(ref Statistics.PartsRemoved);
                     _logger.Warn($"The upload {record.FileId:N} has a record without its part or index; the upload is removed (sensor {record.SensorId}, " +
                                  $"{record.PieceCount} of {record.TotalPieces} pieces); its collector sends the file again");
+                    return null;
+
+                case LargeFileState.Uploading when record.PieceCount == 0:
+                    // No lease survives a restart: a part that received no piece goes with it, as at the end of its lease.
+                    DeleteFiles(record);
+                    Statistics.Add(ref Statistics.PartsRemoved);
+                    _logger.Info($"The empty part of large file {record.FileId:N} was removed at open: its lease ended with the restart before its first piece");
                     return null;
 
                 case LargeFileState.Uploading when part.Length >= record.PartLength && index.Length >= indexLength:
@@ -1131,11 +1348,17 @@ namespace HSMDatabase.LevelDB.LargeFiles
             entry.LeaseId == lease.LeaseId && IsLive(entry, now, limits);
 
         // Under _lock.
-        private int LiveLeases(DateTime now, LargeFileStoreLimits limits) => _files.Values.Count(e => !e.Removed && IsLive(e, now, limits));
+        private int LiveLeases(DateTime now, LargeFileStoreLimits limits) =>
+            _files.Values.Count(e => !e.Removed && e.Record.State == LargeFileState.Uploading && IsLive(e, now, limits));
 
         // Under _lock: every upload not packed holds its announced size minus what its part holds already.
+        // Under _lock: until its first pack an upload reserves what its part still needs plus room for its archive; a
+        // re-encryption reserves room for its second archive until it is committed or abandoned.
         private long Reserved() =>
-            _files.Values.Where(e => e.Record.State != LargeFileState.Packed).Sum(e => Math.Max(0, e.Record.Size - e.Record.PartLength));
+            _files.Values.Where(e => e.Record.State != LargeFileState.Packed).Sum(e => ReservationOf(e.Record)) + _building.Values.Sum();
+
+        private static long ReservationOf(LargeFileRecord record) =>
+            Math.Max(0, record.Size - record.PartLength) + record.Size + ArchiveSlack;
 
         private long GetFreeBytes()
         {

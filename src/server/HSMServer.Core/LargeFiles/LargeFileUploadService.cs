@@ -27,6 +27,8 @@ namespace HSMServer.Core.LargeFiles
 
         public int LeaseTimeoutSeconds { get; init; } = LargeFileStoreLimits.DefaultLeaseTimeoutSeconds;
 
+        public int MaxUploadingPartsPerProduct { get; init; } = LargeFileStoreLimits.DefaultMaxUploadingPartsPerProduct;
+
 
         public LargeFileStoreLimits ToLimits() => new()
         {
@@ -35,6 +37,7 @@ namespace HSMServer.Core.LargeFiles
             MinFreeBytes = MinFreeDiskMb * 1024 * 1024,
             AbandonedUploadAge = TimeSpan.FromDays(AbandonedUploadDays),
             LeaseTimeout = TimeSpan.FromSeconds(LeaseTimeoutSeconds),
+            MaxUploadingPartsPerProduct = MaxUploadingPartsPerProduct,
         };
     }
 
@@ -65,9 +68,17 @@ namespace HSMServer.Core.LargeFiles
     /// </summary>
     public interface ILargeFileUploads
     {
+        /// <summary>
+        /// Begins or continues an upload. The name has 1..1,024 characters and the source identity at most 256
+        /// (<see cref="ArgumentException"/> otherwise); the piece size is within 65,536 .. <c>MaxPieceSize</c> (a refusal).
+        /// </summary>
         Task<LargeFileBeginResult> BeginAsync(LargeFileBeginRequest request, CancellationToken ct);
 
-        /// <summary>Appends a piece; returns once it is on the disk. The call blocks for the durable write.</summary>
+        /// <summary>
+        /// Appends a piece; returns once it is on the disk (the call blocks for the durable write). The digest has 32 bytes
+        /// and the stored bytes 1 .. <c>LargeFileStore.MaxStoredPieceBytes(MaxPieceSize)</c> (the zstd bound of the maximum
+        /// piece size); <see cref="ArgumentException"/> otherwise.
+        /// </summary>
         Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct);
 
         /// <summary>Removes the upload (part, index, record), releases its lease and reservation; logged and counted. A stale lease is ignored.</summary>
@@ -77,10 +88,11 @@ namespace HSMServer.Core.LargeFiles
         void Release(UploadLease lease);
 
         /// <summary>
-        /// Checks the stored pieces with <paramref name="checker"/> and, when they match, records the file as Verified on the
-        /// disk and writes its value through the product's queue; answers Verified only after both. Runs on the caller's task
-        /// for as long as the check takes; a Begin or a second Finish of the file meanwhile answers Checking. A cancelled or
-        /// faulted check changes nothing on the disk.
+        /// Checks the stored pieces with <paramref name="checker"/> (<paramref name="wholeHash"/>, 32 bytes, is only its
+        /// input) and, when they match, records the file as Verified on the disk with the checker's content hash and writes
+        /// its value through the product's queue; answers Verified only after both. Runs on the caller's task for as long as
+        /// the check takes; a Begin or a second Finish of the file meanwhile answers Checking. A cancelled or faulted check
+        /// changes nothing on the disk. Once a check began, the finish ends the lease whatever its outcome.
         /// </summary>
         Task<LargeFileFinishResult> FinishAsync(UploadLease lease, byte[] wholeHash, ILargeFilePartChecker checker, CancellationToken ct);
     }
@@ -199,13 +211,22 @@ namespace HSMServer.Core.LargeFiles
                     return new LargeFileFinishResult(LargeFileFinishOutcome.SensorGone, record.FileId, null, ticket.NextPiece, why);
                 }
 
-                if (!await checker.CheckAsync(ticket.Reader, wholeHash, ct))
+                var check = await checker.CheckAsync(ticket.Reader, wholeHash, ct)
+                            ?? throw new InvalidOperationException("The end check answered nothing.");
+
+                if (!check.Matches)
                 {
-                    store.Discard(lease, "the end check did not match the hash of the whole file");
-                    return new LargeFileFinishResult(LargeFileFinishOutcome.Mismatch, record.FileId, null, 0, "The stored file does not match the hash.");
+                    var defect = string.IsNullOrEmpty(check.Defect) ? "The stored file does not match the hash." : check.Defect;
+
+                    store.Discard(lease, $"the end check failed{(check.FirstBadPiece is { } bad ? $" at piece {bad}" : string.Empty)}: {defect}");
+                    return new LargeFileFinishResult(LargeFileFinishOutcome.Mismatch, record.FileId, null, 0, defect);
                 }
 
-                var value = await _cache.AddLargeFileValueAsync(record, wholeHash, rollForward: false);
+                // What the record and the value keep is the hash of the original content, not the hash the collector sent.
+                if (check.ContentHash is not { Length: 32 })
+                    throw new InvalidOperationException("The end check matched without a 32-byte content hash.");
+
+                var value = await _cache.AddLargeFileValueAsync(record, check.ContentHash, rollForward: false);
 
                 switch (value.Outcome)
                 {

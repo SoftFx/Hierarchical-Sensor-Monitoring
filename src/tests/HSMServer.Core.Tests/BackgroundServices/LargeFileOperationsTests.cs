@@ -56,11 +56,13 @@ public sealed class LargeFileOperationsTests : IDisposable
         Assert.Equal(10_240, options.MinFreeDiskMb);
         Assert.Equal(7, options.AbandonedUploadDays);
         Assert.Equal(180, options.LeaseTimeoutSeconds);
+        Assert.Equal(16, options.MaxUploadingPartsPerProduct);
 
         var limits = options.ToLimits();
         Assert.Equal(10_240L * 1024 * 1024, limits.MinFreeBytes);
         Assert.Equal(TimeSpan.FromDays(7), limits.AbandonedUploadAge);
         Assert.Equal(TimeSpan.FromSeconds(180), limits.LeaseTimeout);
+        Assert.Equal(16, limits.MaxUploadingPartsPerProduct);
     }
 
     [Theory]
@@ -71,6 +73,7 @@ public sealed class LargeFileOperationsTests : IDisposable
     [InlineData(nameof(LargeFilesConfig.MinFreeDiskMb), -1)]
     [InlineData(nameof(LargeFilesConfig.AbandonedUploadDays), 0)]
     [InlineData(nameof(LargeFilesConfig.LeaseTimeoutSeconds), 9)]
+    [InlineData(nameof(LargeFilesConfig.MaxUploadingPartsPerProduct), 0)]
     public void A_value_out_of_range_fails_the_validation_with_the_name_of_its_key(string key, long value)
     {
         var config = new LargeFilesConfig();
@@ -106,7 +109,7 @@ public sealed class LargeFileOperationsTests : IDisposable
         sensors.SendInfo();
 
         Assert.True(sensors.IsCreated);
-        Assert.Equal(7, _sensors.Count);
+        Assert.Equal(8, _sensors.Count);
         Assert.All(_sensors.Keys, k => Assert.StartsWith("Database/Large files/", k));
         Assert.Equal((0, SensorStatus.Ok), Single("Refused for space"));
 

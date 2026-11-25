@@ -1384,6 +1384,9 @@ namespace HSMServer.Core.Cache
                 _database.RemoveSensorWithMetadata(sensorId);
                 removedFromDatabase = true;
 
+                // Its large files go with it (#1883), as with a clear; the store's pass is the backstop.
+                RemoveLargeFilesOfSensor(sensor);
+
                 // Inside a product deletion the sensor's id joins the
                 // subtree's single batch purge; a standalone sensor removal
                 // purges on its own.

@@ -279,8 +279,10 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Equal(LargeFileFinishStart.Checking, store.StartFinish(begin.Lease).Outcome);
             Assert.False(store.Remove(begin.FileId, "test"));
 
+            // The end of the check ends the lease too, whatever came of it: the part is never left busy.
             store.EndFinish(begin.Lease);
-            Assert.Equal(LargeFileBeginOutcome.Busy, Begin(store, key).Outcome);
+            Assert.Equal(LargeFileAppendOutcome.LeaseLost, Append(store, begin.Lease, 0, Content(Piece)).Outcome);
+            Assert.Equal(LargeFileBeginOutcome.Continue, Begin(store, key).Outcome);
         }
 
         [Fact]
@@ -308,7 +310,8 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open(new LargeFileStoreLimits { MaxUploadsInProgress = 2 });
 
-            var a = Begin(store, Key("a", Piece));
+            var a = Begin(store, Key("a", 2 * Piece));
+            Append(store, a.Lease, 0, Content(Piece));
             var b = Begin(store, Key("b", Piece));
             var refused = Begin(store, Key("c", Piece));
 
@@ -317,7 +320,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
 
             // A continue counts too.
             store.Release(a.Lease);
-            Assert.Equal(LargeFileBeginOutcome.Continue, Begin(store, Key("a", Piece)).Outcome);
+            Assert.Equal(LargeFileBeginOutcome.Continue, Begin(store, Key("a", 2 * Piece)).Outcome);
             Assert.Equal(LargeFileBeginOutcome.TooManyUploads, Begin(store, Key("c", Piece)).Outcome);
 
             // An expired lease does not.
@@ -344,35 +347,224 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         [Fact]
         public void A_begin_is_refused_for_space_counting_every_reservation_so_two_begins_cannot_share_free_bytes()
         {
+            const long Slack = LargeFileStore.ArchiveSlack;
             var limits = new LargeFileStoreLimits { MinFreeBytes = 1000 };
             var store = Open(limits);
-            _free = 1000 + 10 * Piece;
+
+            // An upload reserves its size for the part and its size + 1 MiB for its archive.
+            _free = 1000 + 20 * Piece + 2 * Slack;
 
             var first = Begin(store, Key("a", 6 * Piece));
             Assert.Equal(LargeFileBeginOutcome.Started, first.Outcome);
+            Assert.Equal(12 * Piece + Slack, store.ReservedBytes);
 
             // The same free bytes again: the first upload's reservation is counted.
             var second = Begin(store, Key("b", 6 * Piece));
             Assert.Equal(LargeFileBeginOutcome.NoRoom, second.Outcome);
             Assert.NotNull(second.RetryAfter);
             Assert.Equal(1, store.Statistics.RefusedForSpace);
-            Assert.Equal(LargeFileBeginOutcome.Started, Begin(store, Key("c", 4 * Piece)).Outcome);
 
-            // A piece on the disk takes its bytes from the reservation: the disk has that much less free.
+            var third = Begin(store, Key("c", 4 * Piece));
+            Assert.Equal(LargeFileBeginOutcome.Started, third.Outcome);
+            Append(store, third.Lease, 0, Content(Piece));
+            _free -= Piece;
+
+            // A piece on the disk takes its bytes from the part's reservation: the disk has that much less free.
             Append(store, first.Lease, 0, Content(Piece));
             _free -= Piece;
-            Assert.Equal(5 * Piece + 4 * Piece, store.ReservedBytes);
+            Assert.Equal(11 * Piece + 7 * Piece + 2 * Slack, store.ReservedBytes);
 
             // A restart restores the reservations from the records.
             store.Dispose();
             var reopened = Open(limits);
-            Assert.Equal(9 * Piece, reopened.ReservedBytes);
+            Assert.Equal(18 * Piece + 2 * Slack, reopened.ReservedBytes);
             Assert.Equal(LargeFileBeginOutcome.NoRoom, Begin(reopened, Key("d", Piece)).Outcome);
 
             // A discard releases it.
             var continued = Begin(reopened, Key("a", 6 * Piece));
             reopened.Discard(continued.Lease, "test");
             Assert.Equal(LargeFileBeginOutcome.Started, Begin(reopened, Key("d", Piece)).Outcome);
+        }
+
+        [Fact]
+        public void A_re_encryption_reserves_room_for_its_second_archive_and_is_refused_without_it()
+        {
+            var store = Open(new LargeFileStoreLimits { MinFreeBytes = 0 });
+            var id = Verify(store, "a", Content(Piece));
+            var pack = Started(store.BeginArchive(id));
+            File.WriteAllBytes(pack.TempPath, new byte[1000]);
+            Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(pack, 1, 1000, [1]));
+            Assert.Equal(0, store.ReservedBytes);
+
+            _free = 1000 + LargeFileStore.ArchiveSlack - 1;
+            var refused = store.BeginArchive(id);
+            Assert.Equal(ArchiveBeginOutcome.NoRoom, refused.Outcome);
+            Assert.NotNull(refused.RetryAfter);
+            Assert.Equal(1, store.Statistics.RefusedForSpace);
+
+            _free = 1000 + LargeFileStore.ArchiveSlack;
+            var again = Started(store.BeginArchive(id));
+            Assert.Equal(1000 + LargeFileStore.ArchiveSlack, store.ReservedBytes);
+
+            store.AbandonArchive(again);
+            Assert.Equal(0, store.ReservedBytes);
+        }
+
+        // === Leases end with their upload; parts per product ===
+
+        [Fact]
+        public void A_part_that_received_no_piece_goes_with_its_lease_when_released_expired_or_restarted()
+        {
+            var store = Open();
+
+            var released = Begin(store, Key("released", Piece));
+            store.Release(released.Lease);
+            Assert.Null(store.TryGetFile(released.FileId));
+            Assert.False(File.Exists(PathOf(released.FileId, ".part")));
+
+            // Expired: removed by the next begin (or the pass).
+            var expired = Begin(store, Key("expired", Piece));
+            _now = _now.AddMinutes(4);
+            Begin(store, Key("other", Piece));
+            Assert.Null(store.TryGetFile(expired.FileId));
+
+            // Not after its first piece.
+            var kept = Begin(store, Key("kept", 2 * Piece));
+            Append(store, kept.Lease, 0, Content(Piece));
+            store.Release(kept.Lease);
+            Assert.NotNull(store.TryGetFile(kept.FileId));
+
+            // A restart ends every lease.
+            var live = Begin(store, Key("live", Piece));
+            store.Dispose();
+            var reopened = Open();
+            Assert.Null(reopened.TryGetFile(live.FileId));
+            Assert.NotNull(reopened.TryGetFile(kept.FileId));
+            Assert.Equal(0, reopened.Statistics.StartDisagreements);
+        }
+
+        [Fact]
+        public void A_verified_upload_holds_no_lease_and_a_release_frees_a_lease_whatever_the_state()
+        {
+            var store = Open(new LargeFileStoreLimits { MaxUploadsInProgress = 1 });
+            var content = Content(Piece);
+            var begin = Begin(store, Key("a", content.Length));
+            Append(store, begin.Lease, 0, content);
+
+            Assert.Equal(LargeFileFinishStart.Ready, store.StartFinish(begin.Lease).Outcome);
+            store.MarkVerified(begin.FileId, SHA256.HashData(content), _now);
+
+            // Verified before the end of the finish: no place among the uploads in progress any more.
+            Assert.Equal(LargeFileBeginOutcome.Started, Begin(store, Key("b", Piece)).Outcome);
+            store.Release(begin.Lease);
+            store.EndFinish(begin.Lease);
+        }
+
+        [Fact]
+        public void A_new_upload_is_refused_while_its_product_has_the_most_uploading_parts_and_a_continue_is_not()
+        {
+            var store = Open(new LargeFileStoreLimits { MaxUploadingPartsPerProduct = 2 });
+            var a = Begin(store, Key("a", 2 * Piece));
+            var b = Begin(store, Key("b", 2 * Piece));
+            Append(store, a.Lease, 0, Content(Piece));
+            Append(store, b.Lease, 0, Content(Piece));
+            store.Release(a.Lease);
+
+            var refused = Begin(store, Key("c", Piece));
+            Assert.Equal(LargeFileBeginOutcome.TooManyParts, refused.Outcome);
+            Assert.NotNull(refused.RetryAfter);
+
+            Assert.Equal(LargeFileBeginOutcome.Continue, Begin(store, Key("a", 2 * Piece)).Outcome);
+
+            // Another product is not counted, and a verified file is not a part.
+            Assert.Equal(LargeFileBeginOutcome.Started, store.Begin(Key("c", Piece) with { ProductId = Guid.NewGuid() }, null, Piece, Piece).Outcome);
+        }
+
+        // === Commits that lost a race; orphans ===
+
+        [Fact]
+        public void A_commit_after_another_build_committed_is_superseded_and_one_after_a_removal_is_removed()
+        {
+            var store = Open();
+            var id = Verify(store, "a", Content(Piece));
+
+            var one = Started(store.BeginArchive(id));
+            var two = Started(store.BeginArchive(id));
+            File.WriteAllBytes(one.TempPath, [1]);
+            File.WriteAllBytes(two.TempPath, [2]);
+
+            Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(one, 1, 1, [1]));
+            Assert.Equal(ArchiveCommitOutcome.Superseded, store.CommitArchive(two, 2, 1, [2]));
+
+            var record = store.TryGetFile(id);
+            Assert.Equal(one.ArchiveId, record.ArchiveId);
+            Assert.Equal(1, record.PasswordVersion);
+            Assert.False(File.Exists(two.TempPath));
+            Assert.Equal(0, store.ReservedBytes);
+
+            var three = Started(store.BeginArchive(id));
+            File.WriteAllBytes(three.TempPath, [3]);
+            Assert.True(store.Remove(id, "test"));
+
+            Assert.Equal(ArchiveCommitOutcome.Removed, store.CommitArchive(three, 3, 1, [3]));
+            Assert.False(File.Exists(three.TempPath));
+            Assert.Equal(0, store.ReservedBytes);
+        }
+
+        [Fact]
+        public void A_replaced_archive_a_reader_held_is_named_by_the_record_until_the_pass_removes_it()
+        {
+            var store = Open();
+            var id = Verify(store, "a", Content(Piece));
+            var first = Started(store.BeginArchive(id));
+            File.WriteAllBytes(first.TempPath, [1]);
+            store.CommitArchive(first, 1, 1, [1]);
+            var oldPath = store.ArchivePath(store.TryGetFile(id));
+
+            var second = Started(store.BeginArchive(id));
+            File.WriteAllBytes(second.TempPath, [2]);
+
+            // A reader without delete sharing: the old archive cannot be deleted now.
+            using (File.Open(oldPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(second, 2, 1, [2]));
+
+            if (OperatingSystem.IsWindows())
+                Assert.Equal([first.ArchiveId], store.TryGetFile(id).PreviousArchiveIds);
+
+            store.Dispose();
+            var reopened = Open();
+            Assert.Equal(0, reopened.Statistics.StartDisagreements);
+
+            reopened.RunStorePass();
+
+            Assert.False(File.Exists(oldPath));
+            Assert.Empty(reopened.TryGetFile(id).PreviousArchiveIds);
+        }
+
+        [Fact]
+        public void An_archive_no_record_names_is_removed_by_the_pass_once_a_day_old()
+        {
+            var store = Open();
+            var id = Verify(store, "a", Content(Piece));
+            var pack = Started(store.BeginArchive(id));
+            File.WriteAllBytes(pack.TempPath, [1]);
+            store.CommitArchive(pack, 1, 1, [1]);
+
+            var stray = Path.Combine(Path.GetDirectoryName(store.ArchivePath(store.TryGetFile(id)))!, $"{Guid.NewGuid():N}.zip");
+            File.WriteAllBytes(stray, [1]);
+            File.SetLastWriteTimeUtc(stray, _now.AddHours(-23));
+
+            var kept = store.RunStorePass();
+            Assert.Equal(1, kept.OrphanArchivesKept);
+            Assert.True(File.Exists(stray));
+
+            _now = _now.AddHours(2);
+            var removed = store.RunStorePass();
+
+            Assert.Equal(1, removed.OrphanArchivesRemoved);
+            Assert.False(File.Exists(stray));
+            Assert.True(File.Exists(store.ArchivePath(store.TryGetFile(id))));
+            Assert.Equal(1, store.Statistics.LeftoversRemoved);
         }
 
         // === A cut at every point of an append, then a continue ===
@@ -469,7 +661,8 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         public void An_uploading_record_without_its_part_is_removed_and_a_verified_one_is_reported_and_kept()
         {
             var store = Open();
-            var uploading = Begin(store, Key("u", Piece));
+            var uploading = Begin(store, Key("u", 2 * Piece));
+            Append(store, uploading.Lease, 0, Content(Piece));
             var verified = Verify(store, "v", Content(Piece));
             store.Dispose();
 
@@ -508,6 +701,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
             var begin = Begin(store, Key("a", Piece));
+            Append(store, begin.Lease, 0, Content(Piece));
             store.Dispose();
 
             File.WriteAllText(PathOf(begin.FileId, ".rec.tmp"), "half");
@@ -598,15 +792,17 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
             var id = Verify(store, "a", Content(Piece));
-            Assert.Equal(0, store.ReservedBytes); // a verified file reserves what its part does not hold yet: here nothing
+            // Until its first pack a verified file reserves room for its archive (its part holds every byte already).
+            Assert.Equal(Piece + LargeFileStore.ArchiveSlack, store.ReservedBytes);
 
             Assert.Throws<LargeFileStoreException>(() => store.OpenArchive(id));
 
-            var target = store.BeginArchive(id);
+            var target = Started(store.BeginArchive(id));
+            Assert.Null(target.ExpectedArchiveId);
             Assert.Equal(Path.Combine(_root, "uploads", _product.ToString("N"), $"{target.ArchiveId:N}.zip.tmp"), target.TempPath);
             File.WriteAllBytes(target.TempPath, [1, 2, 3]);
 
-            store.CommitArchive(target, passwordVersion: 1, archiveLength: 3, archiveHash: [9]);
+            Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(target, passwordVersion: 1, archiveLength: 3, archiveHash: [9]));
 
             var record = store.TryGetFile(id);
             Assert.Equal(LargeFileState.Packed, record.State);
@@ -621,6 +817,8 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Throws<LargeFileStoreException>(() => store.OpenPart(id));
             Assert.Single(store.GetFiles(LargeFileState.Packed));
             Assert.Empty(store.GetFiles(LargeFileState.Verified));
+
+            Assert.Equal(0, store.ReservedBytes);
 
             using (var archive = store.OpenArchive(id))
             using (var copy = new MemoryStream())
@@ -638,21 +836,23 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
             var id = Verify(store, "a", Content(Piece));
-            var first = store.BeginArchive(id);
+            var first = Started(store.BeginArchive(id));
             File.WriteAllBytes(first.TempPath, [1, 1, 1]);
-            store.CommitArchive(first, 1, 3, [1]);
+            Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(first, 1, 3, [1]));
             var oldPath = store.ArchivePath(store.TryGetFile(id));
 
             using var reader = store.OpenArchive(id);
 
-            var second = store.BeginArchive(id);
+            var second = Started(store.BeginArchive(id));
+            Assert.Equal(first.ArchiveId, second.ExpectedArchiveId);
             Assert.NotEqual(first.ArchiveId, second.ArchiveId);
             File.WriteAllBytes(second.TempPath, [2, 2, 2, 2]);
-            store.CommitArchive(second, 2, 4, [2]);
+            Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(second, 2, 4, [2]));
 
             var record = store.TryGetFile(id);
             Assert.Equal(second.ArchiveId, record.ArchiveId);
-            Assert.Equal(first.ArchiveId, record.PreviousArchiveId);
+            // Deleted under the open reader (it shares delete): the record names no replaced archive any more.
+            Assert.Empty(record.PreviousArchiveIds);
             Assert.Equal(2, record.PasswordVersion);
 
             // The reader that opened the old archive reads it to its end.
@@ -671,7 +871,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
             var id = Verify(store, "a", Content(Piece));
-            var target = store.BeginArchive(id);
+            var target = Started(store.BeginArchive(id));
             File.WriteAllBytes(target.TempPath, [1]);
 
             store.AbandonArchive(target);
@@ -686,10 +886,12 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
             var uploading = Begin(store, Key("u", Piece));
-            Assert.Throws<LargeFileStoreException>(() => store.BeginArchive(uploading.FileId));
+            Append(store, uploading.Lease, 0, Content(Piece));
+            Assert.Equal(ArchiveBeginOutcome.WrongState, store.BeginArchive(uploading.FileId).Outcome);
+            Assert.Equal(ArchiveBeginOutcome.NotFound, store.BeginArchive(Guid.NewGuid()).Outcome);
 
             var id = Verify(store, "a", Content(Piece));
-            var target = store.BeginArchive(id);
+            var target = Started(store.BeginArchive(id));
             File.WriteAllBytes(target.TempPath, [1]);
 
             // A build running: the pass leaves its temporary file alone.
@@ -708,9 +910,9 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
             var id = Verify(store, "a", Content(Piece));
-            var target = store.BeginArchive(id);
+            var target = Started(store.BeginArchive(id));
             File.WriteAllBytes(target.TempPath, [1]);
-            store.CommitArchive(target, 1, 1, [1]);
+            Assert.Equal(ArchiveCommitOutcome.Committed, store.CommitArchive(target, 1, 1, [1]));
             var archive = store.ArchivePath(store.TryGetFile(id));
             store.Dispose();
 
@@ -809,6 +1011,12 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             }
 
             return pieces;
+        }
+
+        private static ArchiveTarget Started(ArchiveBeginResult result)
+        {
+            Assert.Equal(ArchiveBeginOutcome.Started, result.Outcome);
+            return result.Target;
         }
 
         private string PathOf(Guid fileId, string suffix) => Path.Combine(_root, "uploads", _product.ToString("N"), $"{fileId:N}{suffix}");

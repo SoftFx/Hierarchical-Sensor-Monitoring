@@ -59,6 +59,9 @@ namespace HSMServer.BackgroundServices
                 "Parts of uploads removed since the server started: abandoned for LargeFiles.AbandonedUploadDays, discarded, without a record, or of a removed sensor.");
             Add("Files removed", () => Interlocked.Read(ref stats.FilesRemoved), false,
                 "Verified or packed files removed since the server started because their value is gone: retention, a clear, a removed sensor or product.");
+            Add("Leftovers removed", () => Interlocked.Read(ref stats.LeftoversRemoved), false,
+                "Files left behind and removed by the store's pass since the server started: the part of a packed file, archives replaced by re-encryptions, " +
+                "temporary archives of builds that stopped, archives no record names (after a day).");
             Add("Refused for space", () => Interlocked.Read(ref stats.RefusedForSpace), true,
                 "Uploads refused since the server started because the store's volume had less free space than LargeFiles.MinFreeDiskMb, the reservations and the size.");
             Add("Rows written again", () => Interlocked.Read(ref stats.RollForwards), true,

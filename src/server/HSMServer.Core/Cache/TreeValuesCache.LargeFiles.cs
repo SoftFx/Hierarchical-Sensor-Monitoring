@@ -253,6 +253,27 @@ namespace HSMServer.Core.Cache
                 : new LargeFileVerdict(record, LargeFileVerdictKind.ReadFailed, $"its missing value at {time:O} could not be written again: {rolled.Error}");
         }
 
+        // A removed sensor (alone, with its product, by self-destroy): every file of it goes now, uploads included.
+        private void RemoveLargeFilesOfSensor(BaseSensorModel sensor)
+        {
+            if (sensor is not FileSensorModel || _database.LargeFiles is not { } store)
+                return;
+
+            try
+            {
+                if (!store.HasFiles(sensor.Id))
+                    return;
+
+                foreach (var record in store.GetFiles().Where(r => r.SensorId == sensor.Id))
+                    store.Remove(record.FileId, $"its sensor '{sensor.FullPath}' was removed");
+            }
+            catch (LargeFileStoreException ex)
+            {
+                // The store's pass removes them later: their sensor is gone.
+                _logger.Error(ex, $"The large files of the removed sensor '{sensor.FullPath}' could not be removed now");
+            }
+        }
+
         // A clear or a retention pass erased the rows of [from, to]: the files of the large values among them go now.
         private void RemoveLargeFilesOfClearedRange(BaseSensorModel sensor, DateTime from, DateTime to)
         {

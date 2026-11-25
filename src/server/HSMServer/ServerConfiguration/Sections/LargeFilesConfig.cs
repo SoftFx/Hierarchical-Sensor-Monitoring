@@ -29,6 +29,10 @@ namespace HSMServer.ServerConfiguration
         // A lease without an append for this long is no longer live (two session silence limits by default).
         public int LeaseTimeoutSeconds { get; set; } = LargeFileStoreLimits.DefaultLeaseTimeoutSeconds;
 
+        // A new upload is refused while its product has this many uploads in parts (verified files do not count), so one
+        // product cannot fill the folder with parts that never finish.
+        public int MaxUploadingPartsPerProduct { get; set; } = LargeFileStoreLimits.DefaultMaxUploadingPartsPerProduct;
+
 
         public const long MaxFileSizeLimit = 1L << 50;
 
@@ -45,6 +49,7 @@ namespace HSMServer.ServerConfiguration
             Check(MinFreeDiskMb, 0, long.MaxValue / (1024 * 1024), nameof(MinFreeDiskMb));
             Check(AbandonedUploadDays, 1, 3650, nameof(AbandonedUploadDays));
             Check(LeaseTimeoutSeconds, 10, 86_400, nameof(LeaseTimeoutSeconds));
+            Check(MaxUploadingPartsPerProduct, 1, 100_000, nameof(MaxUploadingPartsPerProduct));
 
             return new LargeFileOptions
             {
@@ -53,6 +58,7 @@ namespace HSMServer.ServerConfiguration
                 MinFreeDiskMb = MinFreeDiskMb,
                 AbandonedUploadDays = AbandonedUploadDays,
                 LeaseTimeoutSeconds = LeaseTimeoutSeconds,
+                MaxUploadingPartsPerProduct = MaxUploadingPartsPerProduct,
             };
         }
 

@@ -147,7 +147,7 @@ namespace HSMCommon.Model
         /// <summary>The id of the file in the large file store, made by the server.</summary>
         public Guid FileId { get; init; }
 
-        /// <summary>The 32-byte hash of the whole file the server checked at the end of the upload (the file connection defines it, #1884).</summary>
+        /// <summary>SHA-256 of the original content of the file, found by the server's end check of the upload (32 bytes).</summary>
         public byte[] Hash { get; init; }
 
         /// <summary>The modification time of the source file, UTC.</summary>

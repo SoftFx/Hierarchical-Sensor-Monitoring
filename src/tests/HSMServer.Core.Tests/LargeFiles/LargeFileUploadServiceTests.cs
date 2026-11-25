@@ -140,6 +140,7 @@ namespace HSMServer.Core.Tests.LargeFiles
             var finish = await _service.FinishAsync(begin.Lease, new byte[32], _checker, default);
 
             Assert.Equal(LargeFileFinishOutcome.Mismatch, finish.Outcome);
+            Assert.Equal("The SHA-256 of the stored bytes is not the hash sent.", finish.Error);
             Assert.Null(Store.TryGetFile(begin.FileId));
             Assert.Null(sensor.LastValue);
             Assert.Empty(await ReadRowsAsync(sensor));
@@ -177,7 +178,7 @@ namespace HSMServer.Core.Tests.LargeFiles
         }
 
         [Fact]
-        public async Task A_sensor_removed_during_the_upload_ends_its_finish_as_sensor_gone_and_its_part_is_removed()
+        public async Task A_sensor_removed_during_the_upload_takes_its_part_at_once_and_one_removed_during_the_check_ends_it_as_sensor_gone()
         {
             var sensor = await CreateFileSensorAsync("f");
             var content = Content(Piece);
@@ -186,10 +187,64 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             await _valuesCache.RemoveSensorAsync(sensor.Id);
 
-            var finish = await _service.FinishAsync(begin.Lease, SHA256.HashData(content), _checker, default);
-
-            Assert.Equal(LargeFileFinishOutcome.SensorGone, finish.Outcome);
+            // The part went with the sensor: the upload is gone, and a new begin is refused for the sensor.
             Assert.Null(Store.TryGetFile(begin.FileId));
+            Assert.Equal(LargeFileAppendOutcome.Discarded, (await _service.AppendAsync(begin.Lease, 0, content, SHA256.HashData(content), default)).Outcome);
+            Assert.Equal(LargeFileFinishOutcome.LeaseLost, (await _service.FinishAsync(begin.Lease, SHA256.HashData(content), _checker, default)).Outcome);
+            Assert.Equal(LargeFileBeginOutcome.SensorRefused, (await BeginAsync(sensor.Path, content.Length, raw: true)).Outcome);
+
+            // Removed while its check runs: the removal leaves the file being checked, the finish discards it.
+            var other = await CreateFileSensorAsync("g");
+            var second = await BeginAsync(other.Path, content.Length, raw: true);
+            await AppendAllAsync(second.Lease, content);
+
+            var gate = new BlockingChecker(_checker);
+            var finishing = _service.FinishAsync(second.Lease, SHA256.HashData(content), gate, default);
+            await gate.Entered.Task;
+
+            await _valuesCache.RemoveSensorAsync(other.Id);
+            gate.Release.SetResult();
+
+            Assert.Equal(LargeFileFinishOutcome.SensorGone, (await finishing).Outcome);
+            Assert.Null(Store.TryGetFile(second.FileId));
+        }
+
+        [Fact]
+        public async Task The_value_and_the_record_keep_the_checkers_content_hash_not_the_hash_the_collector_sent()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var content = Content(Piece);
+            var contentHash = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
+            var begin = await BeginAsync(sensor.Path, content.Length, raw: true);
+            await AppendAllAsync(begin.Lease, content);
+
+            var finish = await _service.FinishAsync(begin.Lease, new byte[32], new FixedChecker(new LargeFilePartCheck(true, contentHash, null, null)), default);
+
+            Assert.Equal(LargeFileFinishOutcome.Verified, finish.Outcome);
+            Assert.Equal(contentHash, Store.TryGetFile(begin.FileId).Hash);
+            Assert.Equal(contentHash, Assert.IsType<LargeFileValue>(sensor.LastValue).Hash);
+
+            // The lease ended with the finish.
+            Assert.Equal(LargeFileAppendOutcome.LeaseLost, (await _service.AppendAsync(begin.Lease, 0, content, SHA256.HashData(content), default)).Outcome);
+        }
+
+        [Fact]
+        public async Task A_check_that_fails_leaves_the_upload_as_it_was_and_not_busy()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var content = Content(Piece);
+            var begin = await BeginAsync(sensor.Path, content.Length, raw: true);
+            await AppendAllAsync(begin.Lease, content);
+
+            await Assert.ThrowsAsync<IOException>(() => _service.FinishAsync(begin.Lease, new byte[32], new ThrowingChecker(), default));
+
+            var record = Store.TryGetFile(begin.FileId);
+            Assert.Equal(LargeFileState.Uploading, record.State);
+            Assert.Equal(1, record.PieceCount);
+
+            var again = await BeginAsync(sensor.Path, content.Length, raw: true);
+            Assert.Equal(LargeFileBeginOutcome.Continue, again.Outcome);
+            Assert.Equal(1, again.NextPiece);
         }
 
         [Fact]
@@ -217,7 +272,7 @@ namespace HSMServer.Core.Tests.LargeFiles
         // === Removal: with the sensor, the product, a clear, retention; the pass ===
 
         [Fact]
-        public async Task Removing_the_sensor_removes_its_files_in_the_next_pass()
+        public async Task Removing_the_sensor_removes_its_files_at_once()
         {
             var sensor = await CreateFileSensorAsync("f");
             var verified = await UploadAsync(sensor, Content(Piece));
@@ -225,27 +280,29 @@ namespace HSMServer.Core.Tests.LargeFiles
             await _service.AppendAsync(uploading.Lease, 0, Content(Piece), SHA256.HashData(Content(Piece)), default);
 
             await _valuesCache.RemoveSensorAsync(sensor.Id);
-            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
 
-            Assert.Equal(1, report.FilesRemoved);
-            Assert.Equal(1, report.PartsRemoved);
+            // At once, with the sensor; the pass finds nothing left.
             Assert.Null(Store.TryGetFile(verified.FileId));
             Assert.Null(Store.TryGetFile(uploading.FileId));
-            Assert.Empty(Directory.EnumerateFiles(Store.Folder, "*", SearchOption.AllDirectories));
             Assert.Equal(1, Store.Statistics.FilesRemoved);
+            Assert.Equal(1, Store.Statistics.PartsRemoved);
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.Empty(Directory.EnumerateFiles(Store.Folder, "*", SearchOption.AllDirectories));
         }
 
         [Fact]
-        public async Task Removing_the_product_removes_its_files_in_the_next_pass()
+        public async Task Removing_the_product_removes_its_files_at_once()
         {
             var sensor = await CreateFileSensorAsync("f");
             var verified = await UploadAsync(sensor, Content(Piece));
 
             await _valuesCache.RemoveProductAsync(_product);
-            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
 
-            Assert.Equal(1, report.FilesRemoved);
             Assert.Null(Store.TryGetFile(verified.FileId));
+            Assert.Equal(1, Store.Statistics.FilesRemoved);
         }
 
         [Fact]
@@ -569,6 +626,39 @@ namespace HSMServer.Core.Tests.LargeFiles
         }
 
 
+        // A record whose sensor is gone and that nothing removed (a removal that failed, a sensor removed at boot): the pass.
+        [Fact]
+        public async Task The_pass_removes_the_files_of_a_sensor_that_is_gone_when_its_removal_left_them()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var verified = await UploadAsync(sensor, Content(Piece));
+
+            // The sensor goes without the cache's removal (as a sensor dropped at boot).
+            var settings = _databaseCoreManager.DatabaseCore.DatabaseSettings;
+            _databaseCoreManager.DatabaseCore.RemoveSensorWithMetadata(sensor.Id);
+            _databaseCoreManager.DatabaseCore.Dispose();
+
+            var (database, cache) = Restart(settings);
+            await using var _ = cache;
+            var service = new LargeFileUploadService(database, cache, new LargeFileOptions { MinFreeDiskMb = 0 });
+
+            var report = await service.RunPassAsync(DateTime.UtcNow, atStart: true);
+
+            Assert.Equal(1, report.FilesRemoved);
+            Assert.Null(database.LargeFiles.TryGetFile(verified.FileId));
+        }
+
+
+        private sealed class FixedChecker(LargeFilePartCheck answer) : ILargeFilePartChecker
+        {
+            public Task<LargeFilePartCheck> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct) => Task.FromResult(answer);
+        }
+
+        private sealed class ThrowingChecker : ILargeFilePartChecker
+        {
+            public Task<LargeFilePartCheck> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct) => throw new IOException("the part cannot be read");
+        }
+
         // Holds a check until the test releases it.
         private sealed class BlockingChecker(ILargeFilePartChecker inner) : ILargeFilePartChecker
         {
@@ -576,7 +666,7 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            public async Task<bool> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct)
+            public async Task<LargeFilePartCheck> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct)
             {
                 Entered.SetResult();
                 await Release.Task;

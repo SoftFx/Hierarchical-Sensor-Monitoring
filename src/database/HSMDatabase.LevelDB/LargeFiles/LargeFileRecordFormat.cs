@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HSMDatabase.AccessManager.LargeFiles;
@@ -42,7 +44,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             LastPieceUtc = Time(record.LastPieceUtc),
             ValueTimeUtc = record.ValueTimeUtc is { } value ? Time(value) : null,
             ArchiveId = record.ArchiveId?.ToString("N"),
-            PreviousArchiveId = record.PreviousArchiveId?.ToString("N"),
+            PreviousArchiveIds = record.PreviousArchiveIds is { Count: > 0 } previous ? [.. previous.Select(id => id.ToString("N"))] : null,
             PasswordVersion = record.PasswordVersion,
             ArchiveLength = record.ArchiveLength,
             ArchiveHash = Hex(record.ArchiveHash),
@@ -87,7 +89,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 LastPieceUtc = ParseTime(dto.LastPieceUtc, "lastPieceUtc"),
                 ValueTimeUtc = dto.ValueTimeUtc is null ? null : ParseTime(dto.ValueTimeUtc, "valueTimeUtc"),
                 ArchiveId = dto.ArchiveId is null ? null : Id(dto.ArchiveId, "archiveId"),
-                PreviousArchiveId = dto.PreviousArchiveId is null ? null : Id(dto.PreviousArchiveId, "previousArchiveId"),
+                PreviousArchiveIds = dto.PreviousArchiveIds is null ? [] : [.. dto.PreviousArchiveIds.Select(id => Id(id, "previousArchiveIds"))],
                 PasswordVersion = dto.PasswordVersion,
                 ArchiveLength = dto.ArchiveLength,
                 ArchiveHash = Bytes(dto.ArchiveHash, "archiveHash"),
@@ -143,7 +145,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             public string LastPieceUtc { get; set; }
             public string ValueTimeUtc { get; set; }
             public string ArchiveId { get; set; }
-            public string PreviousArchiveId { get; set; }
+            public List<string> PreviousArchiveIds { get; set; }
             public int? PasswordVersion { get; set; }
             public long? ArchiveLength { get; set; }
             public string ArchiveHash { get; set; }

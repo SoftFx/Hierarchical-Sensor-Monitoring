@@ -57,7 +57,7 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>Bytes of the part covered by the record (the stored pieces, as received).</summary>
         public long PartLength { get; init; }
 
-        /// <summary>The 32-byte hash of the whole file, set when it is verified.</summary>
+        /// <summary>SHA-256 of the original (decompressed) content, the checker's <c>ContentHash</c>; set when the file is verified.</summary>
         public byte[] Hash { get; init; }
 
         public LargeFileState State { get; init; }
@@ -72,8 +72,8 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>The current archive, set when packed (#1885).</summary>
         public Guid? ArchiveId { get; init; }
 
-        /// <summary>The archive a re-encryption replaced; its file is removed by the commit, or by the next pass.</summary>
-        public Guid? PreviousArchiveId { get; init; }
+        /// <summary>Every archive a re-encryption replaced whose file is not deleted yet; the commit deletes them, or the next pass.</summary>
+        public IReadOnlyList<Guid> PreviousArchiveIds { get; init; } = [];
 
         public int? PasswordVersion { get; init; }
 
@@ -125,6 +125,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
 
         /// <summary>Live leases = <c>LargeFiles.MaxUploadsInProgress</c>; RetryAfter set.</summary>
         TooManyUploads,
+
+        /// <summary>
+        /// Uploading parts of this product = <c>LargeFiles.MaxUploadingPartsPerProduct</c>: refused for a new upload only (a
+        /// continue is not); RetryAfter set.
+        /// </summary>
+        TooManyParts,
 
         /// <summary>This part has a live lease (another connection); RetryAfter set.</summary>
         Busy,
@@ -208,17 +214,61 @@ namespace HSMDatabase.AccessManager.LargeFiles
 
     /// <summary>
     /// The end check of an upload (ADR-0022 point 7), supplied by the caller of the finish: it reads every stored piece and
-    /// answers whether the whole file matches <paramref name="wholeHash"/>. The file connection (#1884) supplies the
-    /// production one.
+    /// answers whether the file matches <c>wholeHash</c> (the hash the collector sent at the end; only an input of the
+    /// check). Every defect of the content is <c>Matches = false</c> with a <c>Defect</c>; it throws only for an I/O fault.
+    /// The file connection (#1884) supplies the production one.
     /// </summary>
     public interface ILargeFilePartChecker
     {
-        Task<bool> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct);
+        Task<LargeFilePartCheck> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct);
     }
 
 
-    /// <summary>An archive being built (#1885): its new id and the temporary path to write it to (same volume as the archives).</summary>
-    public sealed record ArchiveTarget(Guid FileId, Guid ArchiveId, string TempPath);
+    /// <summary>
+    /// What an end check found. <paramref name="ContentHash"/> is SHA-256 of the original (decompressed) bytes: on a match it
+    /// is what the record and the value keep as the file's hash. <paramref name="FirstBadPiece"/> and
+    /// <paramref name="Defect"/> describe a mismatch.
+    /// </summary>
+    public sealed record LargeFilePartCheck(bool Matches, byte[] ContentHash, long? FirstBadPiece, string Defect);
+
+
+    /// <summary>
+    /// An archive being built (#1885): its new id, the archive the record named when the build began
+    /// (<paramref name="ExpectedArchiveId"/>, null for a first pack: the compare-and-swap value of the commit) and the
+    /// temporary path to write it to (same volume as the archives).
+    /// </summary>
+    public sealed record ArchiveTarget(Guid FileId, Guid ArchiveId, Guid? ExpectedArchiveId, string TempPath);
+
+
+    public enum ArchiveBeginOutcome : byte
+    {
+        Started,
+
+        /// <summary>A re-encryption: free − minimum − reservations is less than the current archive's length + 1 MiB.</summary>
+        NoRoom,
+
+        /// <summary>No such file, or it was removed.</summary>
+        NotFound,
+
+        /// <summary>The file is uploading: only a verified or packed file gets an archive.</summary>
+        WrongState,
+    }
+
+
+    public sealed record ArchiveBeginResult(ArchiveBeginOutcome Outcome, ArchiveTarget Target, TimeSpan? RetryAfter);
+
+
+    public enum ArchiveCommitOutcome : byte
+    {
+        /// <summary>The archive is in place and the record says Packed with it.</summary>
+        Committed,
+
+        /// <summary>The record named another archive than the build began with (another build committed first): the temporary file is deleted, nothing changes.</summary>
+        Superseded,
+
+        /// <summary>The file was removed during the build: the temporary file is deleted.</summary>
+        Removed,
+    }
 
 
     /// <summary>Where a finish stands after <see cref="ILargeFileStore.StartFinish"/>.</summary>
@@ -244,6 +294,7 @@ namespace HSMDatabase.AccessManager.LargeFiles
         public const long DefaultMinFreeDiskMb = 10_240;
         public const int DefaultAbandonedUploadDays = 7;
         public const int DefaultLeaseTimeoutSeconds = 180;
+        public const int DefaultMaxUploadingPartsPerProduct = 16;
 
         public long MaxFileSizeBytes { get; init; } = DefaultMaxFileSizeBytes;
 
@@ -257,6 +308,9 @@ namespace HSMDatabase.AccessManager.LargeFiles
 
         /// <summary>A lease without an append for this long is no longer live (not while the file is being checked).</summary>
         public TimeSpan LeaseTimeout { get; init; } = TimeSpan.FromSeconds(DefaultLeaseTimeoutSeconds);
+
+        /// <summary>A new upload is refused (TooManyParts) while its product has this many uploading parts.</summary>
+        public int MaxUploadingPartsPerProduct { get; init; } = DefaultMaxUploadingPartsPerProduct;
     }
 
 
@@ -276,8 +330,11 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>Verified or packed files removed because their value is gone (retention, clear, a removed sensor or product).</summary>
         public long FilesRemoved;
 
-        /// <summary>Begins refused because the disk had too little free space.</summary>
+        /// <summary>Begins (and re-encryptions) refused because the disk had too little free space.</summary>
         public long RefusedForSpace;
+
+        /// <summary>Files left behind and removed by a pass: the part of a packed file, replaced archives, temporary archives, archives no record names.</summary>
+        public long LeftoversRemoved;
 
         /// <summary>Value rows written again from a verified record whose row was missing inside the kept range.</summary>
         public long RollForwards;
@@ -308,6 +365,11 @@ namespace HSMDatabase.AccessManager.LargeFiles
         public int OrphanPartsKept { get; init; }
 
         public int LeftoversRemoved { get; init; }
+
+        /// <summary>Archive files no record names, removed once older than a day.</summary>
+        public int OrphanArchivesRemoved { get; init; }
+
+        public int OrphanArchivesKept { get; init; }
     }
 
 
@@ -345,8 +407,10 @@ namespace HSMDatabase.AccessManager.LargeFiles
         void EnsureOpened();
 
         /// <summary>
-        /// Begins or continues the upload of a file. The caller has checked the sensor. <paramref name="pieceSize"/> is the
-        /// original bytes per piece, within 65,536 .. <paramref name="maxPieceSize"/>.
+        /// Begins or continues the upload of a file. The caller has checked the sensor and the name (1..1,024 characters)
+        /// and the source identity (at most 256 characters). <paramref name="pieceSize"/> is the original bytes per piece,
+        /// within 65,536 .. <paramref name="maxPieceSize"/>. A new upload must find room for its whole reservation: the
+        /// announced size for the part and the announced size + 1 MiB for its archive.
         /// </summary>
         LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize);
 
@@ -360,16 +424,22 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>Removes an upload (part, index, record), releasing its lease and reservation; logged and counted. A stale lease is ignored.</summary>
         void Discard(UploadLease lease, string reason);
 
-        /// <summary>Ends a lease; idempotent; a stale lease is ignored.</summary>
+        /// <summary>
+        /// Ends a lease whatever the state; idempotent; a stale lease is ignored. A part that received no piece is removed
+        /// with it (as when its lease expires).
+        /// </summary>
         void Release(UploadLease lease);
 
         /// <summary>Starts the end check: when every piece is in, marks the file as being checked and returns a reader of its pieces.</summary>
         LargeFileFinishTicket StartFinish(UploadLease lease);
 
-        /// <summary>Ends the end check (whatever its result) and renews the lease.</summary>
+        /// <summary>Ends the end check, whatever its result, and with it the lease: a faulted or cancelled check never leaves the part busy.</summary>
         void EndFinish(UploadLease lease);
 
-        /// <summary>Writes the record as Verified with the hash and the value's time, durably, before the value row is written.</summary>
+        /// <summary>
+        /// Writes the record as Verified with the content hash and the value's time, durably, before the value row is written.
+        /// Frees the lease: a verified upload never holds a place among the uploads in progress.
+        /// </summary>
         LargeFileRecord MarkVerified(Guid fileId, byte[] hash, DateTime valueTimeUtc);
 
         /// <summary>Raises <see cref="FileVerified"/> for a verified file whose value row is written.</summary>
@@ -402,23 +472,30 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>The absolute path of the record's current archive under <c>archives/</c>.</summary>
         string ArchivePath(LargeFileRecord record);
 
-        /// <summary>A new archive id and its temporary path, for a verified (first pack) or packed (re-encryption) file.</summary>
-        ArchiveTarget BeginArchive(Guid fileId);
+        /// <summary>
+        /// A new archive id and its temporary path, for a verified (first pack, covered by the upload's reservation) or a
+        /// packed file (re-encryption: reserves the current archive's length + 1 MiB until the commit or abandon, and answers
+        /// NoRoom when that does not fit).
+        /// </summary>
+        ArchiveBeginResult BeginArchive(Guid fileId);
 
         /// <summary>
-        /// Registers a finished archive: syncs the temporary file, renames it into <c>archives/</c> durably, writes the record
-        /// as Packed, then removes the part (first pack) or the replaced archive (re-encryption).
+        /// Registers a finished archive, when the record still names <see cref="ArchiveTarget.ExpectedArchiveId"/>: syncs the
+        /// temporary file, renames it into <c>archives/</c> durably, writes the record as Packed with it, then removes the
+        /// part (first pack) or the replaced archives (re-encryption). Superseded or Removed delete the temporary file and
+        /// change nothing. Only an I/O fault throws.
         /// </summary>
-        void CommitArchive(ArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveHash);
+        ArchiveCommitOutcome CommitArchive(ArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveHash);
 
         /// <summary>Deletes the temporary file of a build; the record is unchanged.</summary>
         void AbandonArchive(ArchiveTarget target);
 
         /// <summary>
-        /// The pass of the store's own (no value is looked at): removes uploading parts whose last piece is older than
-        /// <see cref="LargeFileStoreLimits.AbandonedUploadAge"/>, parts without a record once their file is that old, the
-        /// part left by a pack and the archive left by a re-encryption, temporary files of builds no longer running, and
-        /// empty product folders. Each removal is logged and counted.
+        /// The pass of the store's own (no value is looked at): removes parts that received no piece and whose lease ended,
+        /// uploading parts whose last piece is older than <see cref="LargeFileStoreLimits.AbandonedUploadAge"/>, parts
+        /// without a record once their file is that old, the part left by a pack and the archives replaced by re-encryptions,
+        /// temporary files of builds no longer running, archive files no record names once older than a day, and empty
+        /// product folders. Each removal is logged and counted.
         /// </summary>
         LargeFileStorePassReport RunStorePass();
     }

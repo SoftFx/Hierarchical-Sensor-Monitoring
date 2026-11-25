@@ -67,7 +67,7 @@ namespace HSMServer.ServiceExtensions
 
             services.AddSingleton<IDatabaseCore, DatabaseCore>()
                     // The large file store's folder (#1883) is the one setting of the databases the configuration gives.
-                    .AddSingleton<IDatabaseSettings>(_ => new DatabaseSettings { LargeFilesFolder = config.LargeFiles.Folder })
+                    .AddSingleton<IDatabaseSettings>(_ => new DatabaseSettings { LargeFilesFolder = config.LargeFiles?.Folder ?? DatabaseSettings.DefaultLargeFilesFolder })
                     .AddSingleton<ChatMigrator>()
                     .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
@@ -91,7 +91,7 @@ namespace HSMServer.ServiceExtensions
             // The uploads of large files (#1883), for the file connection of step 2 (#1884), and the store's pass
             // (LargeFileMaintenanceService). The constructor opens and creates nothing.
             services.AddSingleton(provider => new HSMServer.Core.LargeFiles.LargeFileUploadService(
-                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.LargeFiles.ToOptions()));
+                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), (config.LargeFiles ?? new LargeFilesConfig()).ToOptions()));
             services.AddSingleton<HSMServer.Core.LargeFiles.ILargeFileUploads>(provider => provider.GetRequiredService<HSMServer.Core.LargeFiles.LargeFileUploadService>());
 
             // The undo journal of change sets (#1570): durable LevelDB table
