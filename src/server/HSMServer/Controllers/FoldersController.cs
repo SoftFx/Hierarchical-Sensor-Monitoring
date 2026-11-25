@@ -7,6 +7,7 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notifications.Chats;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -116,8 +117,18 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
+        // The Chats tab belongs to the edit page, which opens for the folder's Managers only, but this
+        // action was the one write of the page without a role filter: any signed-in user could rebind
+        // the alert chats of any folder. The check is made here, not by a filter, so that an unknown
+        // folder id is answered 404 before FolderManager.TryUpdate dereferences it.
         public async Task<IActionResult> UpdateChats(FolderChatsViewModel viewModel)
         {
+            if (!_folderManager.TryGetValue(viewModel.FolderId, out _))
+                return NotFound();
+
+            if (!CurrentUser.IsFolderManager(viewModel.FolderId))
+                return StatusCode(StatusCodes.Status403Forbidden);
+
             var connected = viewModel.ConnectedChatIds?.Where(id => id != Guid.Empty).ToList() ?? new();
             if (viewModel.NewChats is not null)
                 connected.AddRange(viewModel.NewChats);
