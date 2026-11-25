@@ -338,11 +338,13 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             var fresh = Open();
             using var entered = new ManualResetEventSlim();
             using var release = new ManualResetEventSlim();
+            using var readAtLock = new ManualResetEventSlim();
             fresh.OnOpen = () =>
             {
                 entered.Set();
                 release.Wait(TimeSpan.FromSeconds(60));
             };
+            fresh.BeforeReadLock = readAtLock.Set;
 
             var opening = Task.Run(() => fresh.Reserve());
             Task<List<TableBlockIndexEntry>> reading;
@@ -351,15 +353,14 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             {
                 Assert.True(entered.Wait(TimeSpan.FromSeconds(30)), "the first open never started");
 
-                // The read either answers at once (the defect) or waits on the store's lock, which the open holds: release
-                // the open only after one of the two, so the read surely came in during the open. The contention counter
-                // is process-wide, so another test may end the wait early; the read is then still in flight or not yet
-                // started, and the assertions below hold either way.
-                var contentions = Monitor.LockContentionCount;
+                // The read either answers without the store's lock (the defect: the empty initial index) or signals right
+                // before it takes the lock, which the blocked open holds. Wait for one of the two, then the read is either
+                // done (fail) or at the lock and cannot get past it until the open is released.
                 reading = Task.Run(() => fresh.GetBlocks(_product).ToList());
-                SpinWait.SpinUntil(() => reading.IsCompleted || Monitor.LockContentionCount > contentions, TimeSpan.FromSeconds(30));
+                SpinWait.SpinUntil(() => readAtLock.IsSet || reading.IsCompleted, TimeSpan.FromSeconds(30));
 
                 Assert.False(reading.IsCompleted, "the read answered while the first open was still loading the index");
+                Assert.True(readAtLock.IsSet, "the read never reached the store's lock");
             }
             finally
             {
@@ -485,6 +486,102 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             Assert.Equal(TableBlockDatabase.SequenceMarkStep.ToString(), File.ReadAllText(MarkPath));
             Assert.Equal(TableBlockDatabase.SequenceMarkStep, store.PeekNextSequence());
             Assert.Equal((2 * TableBlockDatabase.SequenceMarkStep).ToString(), File.ReadAllText(MarkPath));
+        }
+
+        [Fact]
+        public void An_open_retries_a_transient_failure_to_replace_CURRENT_and_opens()
+        {
+            // A full run of the server tests failed three opens with "IO error: ...\Blocks/000002.dbtmp: Unable to remove
+            // the file to be replaced.": another process held CURRENT for a moment while LevelDB replaced it.
+            var store = Open();
+            var pauses = new List<TimeSpan>();
+            var failures = 2;
+            store.RetryPause = pauses.Add;
+            store.DatabaseOpener = (path, options) => path.EndsWith(TableBlockDatabase.BlocksName) && failures-- > 0
+                ? throw new Exception($"IO error: {path}/000002.dbtmp: Unable to remove the file to be replaced.")
+                : new DB(path, options);
+
+            Assert.Equal(TableBlockAppendOutcome.Stored, Put(store, 0).Outcome);
+            Assert.Equal(2, store.OpenRetries);
+            Assert.Equal(TableBlockDatabase.OpenRetryPauses.Take(2), pauses);
+            Assert.Equal(0, store.Statistics.WriteFailures);
+        }
+
+        [Fact]
+        public void An_open_whose_transient_failure_outlasts_the_retries_fails_as_the_store_fault()
+        {
+            var store = Open();
+            var calls = 0;
+            store.RetryPause = _ => { };
+            store.DatabaseOpener = (path, options) =>
+            {
+                if (path.EndsWith(TableBlockDatabase.BlocksName))
+                {
+                    calls++;
+                    throw new Exception($"IO error: {path}/000002.dbtmp: Unable to remove the file to be replaced.");
+                }
+
+                return new DB(path, options);
+            };
+
+            var error = Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+            Assert.Contains(".dbtmp", error.Message);
+            Assert.Equal(TableBlockDatabase.OpenRetryPauses.Length + 1, calls);
+            Assert.Equal(TableBlockDatabase.OpenRetryPauses.Length, store.OpenRetries);
+            Assert.Equal(1, store.Statistics.WriteFailures);
+
+            // The store is in its failed state: the next use inside the backoff is the backoff's fault, with no open.
+            var again = Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+            Assert.Contains("reopens after", again.Message);
+            Assert.Equal(TableBlockDatabase.OpenRetryPauses.Length + 1, calls);
+        }
+
+        [Fact]
+        public void An_open_that_fails_for_another_reason_is_not_retried()
+        {
+            var store = Open();
+            var calls = 0;
+            store.RetryPause = _ => { };
+            store.DatabaseOpener = (path, options) =>
+            {
+                if (path.EndsWith(TableBlockDatabase.BlocksName))
+                {
+                    calls++;
+                    throw new Exception($"Corruption: {path}/MANIFEST-000005: missing start of fragmented record");
+                }
+
+                return new DB(path, options);
+            };
+
+            Assert.Throws<TableBlockStoreException>(() => store.Reserve());
+            Assert.Equal(1, calls);
+            Assert.Equal(0, store.OpenRetries);
+        }
+
+        [OnlyOnWindowsFact]
+        public void An_open_while_another_handle_holds_CURRENT_without_delete_sharing_is_cured_by_the_retry()
+        {
+            // The real error: CURRENT open elsewhere without delete sharing (as a scanner opens a new file) makes LevelDB's
+            // replacement of CURRENT fail at an open. The handle is let go at the first pause.
+            var store = Open();
+            var stored = Put(store, 0);
+            store.Dispose();
+
+            var fresh = Open();
+            var current = new FileStream(Path.Combine(_root, TableBlockDatabase.BlocksName, "CURRENT"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            fresh.RetryPause = _ => current.Dispose();
+
+            try
+            {
+                Assert.Equal([stored.Entry], fresh.GetBlocks(_product));
+            }
+            finally
+            {
+                current.Dispose();
+            }
+
+            Assert.True(fresh.OpenRetries >= 1, "the open did not meet the error it was meant to retry");
+            Assert.NotNull(fresh.ReadBlock(stored.Entry));
         }
 
         [Fact]
@@ -1070,6 +1167,16 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             }
 
             return text.ToString();
+        }
+
+        private sealed class OnlyOnWindowsFactAttribute : FactAttribute
+        {
+            public OnlyOnWindowsFactAttribute()
+            {
+                if (!OperatingSystem.IsWindows())
+                    Skip = "Windows only: a handle without delete sharing blocks LevelDB's replace of CURRENT there; on Linux rename(2) " +
+                           "replaces an open file and FileShare blocks nothing, so the error this retry cures cannot be made";
+            }
         }
     }
 }
