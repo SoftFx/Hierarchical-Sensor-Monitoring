@@ -7,7 +7,7 @@
 
 ## Overview
 
-A sensor can be moved to another path — inside its root product or into another one — and keeps its id. Everything keyed by the id follows it with no migration: history, journal records, policies (own and template-derived), TTL policies, mute state, dashboard panel sources, undo references. A dashboard panel subscription (a path template) that covers the new path adds the moved sensor, as it would add a new one. Its old path becomes a **sensor alias**: values and registrations sent there still land in the moved sensor, so a collector that has not been updated loses nothing and the old node does not come back empty.
+A sensor can be moved to another path — inside its root product or into another one — and keeps its id. Everything keyed by the id follows it with no migration: history, journal records, policies (own and template-derived), TTL policies, mute state, dashboard panel sources, undo references. A dashboard panel subscription (a path template) that covers the new path adds the moved sensor, as it would add a new one, and the dashboard is stored with the new source ([panel subscriptions](../dashboards/feature.md)). Its old path becomes a **sensor alias**: values and registrations sent there still land in the moved sensor, so a collector that has not been updated loses nothing and the old node does not come back empty.
 
 Decisions and their reasons: [ADR-0018](../../../../docs/decisions/0018-sensor-move-keeps-id.md); the owner's design decisions and the delivery plan: [initiative](../../../../docs/initiatives/sensor-move.md), epic #1718.
 
@@ -108,7 +108,7 @@ A collector that changes its layout declares, per sensor, the paths the sensor w
 | `src/server/HSMServer.Core/Model/BaseNodeModel.cs` | `MoveTo` — re-parent and rename without rebuilding policies |
 | `src/server/HSMServer.Core/Model/ProductModel.cs` | `DetachMovedSensor` / `AttachMovedSensor` — product policy groups |
 | `src/server/HSMServer/Model/TreeViewModels/TreeViewModel.cs` | Relocates the sensor's view model on `SensorMovedEvent` |
-| `src/server/HSMServer/Dashboards/Dashboard.cs` | Offers a moved sensor to the panel subscriptions on `SensorMovedEvent` |
+| `src/server/HSMServer/Dashboards/Dashboard.cs` | Offers a moved sensor to the panel subscriptions on `SensorMovedEvent`; a source they add is stored at once |
 
 ## Storage / Persistence
 
