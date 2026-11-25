@@ -111,38 +111,7 @@ namespace HSMServer.Controllers
             if (_oidc.IsActive)
                 return NotFound();
 
-            var model = new RegistrationViewModel();
-
-            //if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
-            //{
-            //    // var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
-            //    var key = "sadasda";
-            //    byte[] keyBytes = AESCypher.ToBytes(key);
-            //    var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
-            //    var ticketId = Guid.Parse(result);
-            //    var ticket = _ticketManager.GetTicket(ticketId);
-            //    if (ticket == null)
-            //    {
-            //        return RedirectToAction("Index", "Error", new ErrorViewModel()
-            //        {
-            //            ErrorText = "Link already used.",
-            //            StatusCode = "500"
-            //        });
-            //    }
-
-            //    if (ticket.ExpirationDate < DateTime.UtcNow)
-            //        return RedirectToAction("Index", "Error", new ErrorViewModel()
-            //        {
-            //            ErrorText = "Link expired.",
-            //            StatusCode = "500"
-            //        });
-
-            //    model.ProductKey = ticket.ProductKey;
-            //    model.Role = ticket.Role;
-            //    model.TicketId = ticket.Id.ToString();
-            //}
-
-            return View(model);
+            return View(new RegistrationViewModel());
         }
 
         [AllowAnonymous]
@@ -163,20 +132,11 @@ namespace HSMServer.Controllers
                 return View("Registration", model);
             }
 
-            List<(Guid, ProductRoleEnum)> products = null;
-            if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
-            {
-                products = new List<(Guid, ProductRoleEnum)>()
-                {
-                    (model.ProductKey.ToGuid(), (ProductRoleEnum)int.Parse(model.Role))
-                };
-            }
-
-            await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
+            // A self-registered user is not an admin and holds no role: the form carries a name and a
+            // password, nothing that grants access. Roles are given afterwards by a Manager of the
+            // product or folder, or by an admin.
+            await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), isAdmin: false);
             await Authenticate(model.Username, true);
-
-            //if (!string.IsNullOrEmpty(model.TicketId))
-            //    _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
 
             return Redirect("/Home");
         }
