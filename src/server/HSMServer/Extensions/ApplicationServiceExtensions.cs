@@ -83,6 +83,9 @@ namespace HSMServer.ServiceExtensions
 
             services.AddTableFeedSensors();
 
+            // The archive side of large files (#1885): archives, dump passwords, the download log and its routes.
+            services.AddLargeFileArchives(config);
+
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
             // Singleton like the cache and the presentation Journal it
