@@ -569,10 +569,26 @@ namespace hsm::http
         }
     }
 
+    WebSocketReceive WebSocketConnection::Refuse(int code, const char* why, std::string& error)
+    {
+        refusal_code_ = code;
+        error = why;
+        if (close_on_refusal_)
+        {
+            // The orderly close, for at most kRefusalLingerMs: what is still coming of the refused
+            // message is read and dropped until the peer's own close, so the socket is not closed on
+            // unread bytes (the OS would reset it and the close frame could be lost with them).
+            Close(kRefusalLingerMs, code, std::string());
+        }
+        Release();
+        return WebSocketReceive::Error;
+    }
+
     WebSocketReceive WebSocketConnection::Receive(std::string& text, int64_t timeout_ms, std::string& error)
     {
         try
         {
+            refusal_code_ = 0;
             text.clear();
             if (curl_ == nullptr)
             {
@@ -587,7 +603,7 @@ namespace hsm::http
                 if (cancelled_.load())
                 {
                     error = kCancelled;
-                    Release();
+                    CancelledRelease();
                     return WebSocketReceive::Error;
                 }
                 // Frames that complete no message (pings, fragments) must not hold the caller past
@@ -611,7 +627,10 @@ namespace hsm::http
                     if (waited == Wait::Cancelled || waited == Wait::Failed)
                     {
                         error = waited == Wait::Cancelled ? kCancelled : "waiting on the connection failed";
-                        Release();
+                        if (waited == Wait::Cancelled)
+                            CancelledRelease();
+                        else
+                            Release();
                         return WebSocketReceive::Error;
                     }
                     continue;
@@ -689,7 +708,9 @@ namespace hsm::http
                 }
                 if ((flags & CURLWS_TEXT) == 0)
                 {
-                    error = (flags & CURLWS_BINARY) != 0 ? "binary messages are not supported" : "unexpected frame type";
+                    if ((flags & CURLWS_BINARY) != 0)
+                        return Refuse(1003, "binary messages are not supported", error);
+                    error = "unexpected frame type";
                     Release();
                     return WebSocketReceive::Error;
                 }
@@ -698,11 +719,7 @@ namespace hsm::http
                 // refused on its first chunk, before the payload is read.
                 const uint64_t pending = meta->bytesleft > 0 ? static_cast<uint64_t>(meta->bytesleft) : 0;
                 if (static_cast<uint64_t>(message_.size()) + received + pending > max_message_bytes_)
-                {
-                    error = "message exceeds the size limit";
-                    Release();
-                    return WebSocketReceive::Error;
-                }
+                    return Refuse(1009, "message exceeds the size limit", error);
 
                 message_.append(buffer, received);
                 // CURLWS_CONT: this frame is not the last fragment of its message.
@@ -724,19 +741,37 @@ namespace hsm::http
 
     void WebSocketConnection::Close(int64_t linger_ms)
     {
+        Close(linger_ms, 1000, std::string());
+    }
+
+    // A Receive that was cancelled half-way wrote nothing of its own, so with SetCloseOnRefusal the
+    // peer still gets a close frame (1000, one non-blocking write) before the release.
+    void WebSocketConnection::CancelledRelease()
+    {
+        if (close_on_refusal_)
+            Close(0, 1000, "cancelled");
+        Release();
+    }
+
+    void WebSocketConnection::Close(int64_t linger_ms, int code, const std::string& reason)
+    {
         if (curl_ != nullptr)
         {
             try
             {
                 CURL* curl = static_cast<CURL*>(curl_);
-                // Status 1000 (normal closure), network byte order.
-                const char normal_closure[2] = { static_cast<char>(0x03), static_cast<char>(0xE8) };
+                // The status code in network byte order, then the reason (RFC 6455 5.5.1: a control
+                // frame carries at most 125 bytes, so the reason at most 123).
+                std::string payload;
+                payload.push_back(static_cast<char>((code >> 8) & 0xFF));
+                payload.push_back(static_cast<char>(code & 0xFF));
+                payload.append(reason, 0, (std::min)(reason.size(), kMaxControlBytes - 2));
 
                 if (linger_ms <= 0 || cancelled_.load())
                 {
                     // One non-blocking attempt: this path must never wait.
                     size_t sent = 0;
-                    (void)curl_ws_send(curl, normal_closure, sizeof(normal_closure), &sent, 0, CURLWS_CLOSE);
+                    (void)curl_ws_send(curl, payload.data(), payload.size(), &sent, 0, CURLWS_CLOSE);
                 }
                 else
                 {
@@ -747,7 +782,7 @@ namespace hsm::http
                     // the stream) arrives, within the linger budget.
                     const Deadline deadline = DeadlineIn(std::min<int64_t>(linger_ms, kMaxLingerMs));
                     std::string ignored;
-                    bool waiting = SendFrame(normal_closure, sizeof(normal_closure), CURLWS_CLOSE, deadline, ignored);
+                    bool waiting = SendFrame(payload.data(), payload.size(), CURLWS_CLOSE, deadline, ignored);
                     // The budget and a cancel are checked on every pass: a peer that keeps talking
                     // must not hold the stop past the linger.
                     while (waiting && !cancelled_.load() && RemainingMs(deadline) > 0)
@@ -840,6 +875,10 @@ namespace hsm::http
     }
 
     void WebSocketConnection::Close(int64_t)
+    {
+    }
+
+    void WebSocketConnection::Close(int64_t, int, const std::string&)
     {
     }
 } // namespace hsm::http
