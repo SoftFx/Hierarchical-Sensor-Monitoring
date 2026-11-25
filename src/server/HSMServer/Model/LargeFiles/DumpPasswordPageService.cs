@@ -60,7 +60,7 @@ namespace HSMServer.Model.LargeFiles
     /// </summary>
     public sealed class DumpPasswordPageService
     {
-        internal const string SavedMessage = "Saved: dump password version {0}. The kept archives of the product are re-encrypted with it in the background.";
+        internal const string SavedMessage = "Saved: dump password version {0}. The kept secure archives of the product are re-encrypted with it in the background.";
 
         internal static readonly string TooLongMessage = $"The password is too long: at most {DumpPasswordRules.MaxLength} characters.";
 
