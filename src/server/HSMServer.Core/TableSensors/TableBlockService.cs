@@ -128,7 +128,7 @@ namespace HSMServer.Core.TableSensors
             var header = directory.Header;
 
             EnsureSequenceFloor(store);
-            EnsureMergeState();
+            EnsureMergeState(productId);
             var ticket = store.Reserve();
 
             try
@@ -455,51 +455,46 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        // Set once the merge's state is in the block store after a start; guarded by _mergeStateLock.
+        // The products whose merge state is in the block store since the start; written under _mergeStateLock.
         private readonly object _mergeStateLock = new();
-        private volatile bool _mergeStateLoaded;
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, bool> _mergeStateLoaded = new();
 
-        // The merge's state after a start (#1850), loaded once, before the first put and before the first merge pass:
-        // - the producers' watermarks of every product from the batch store (durable there, in memory only in the block
-        //   store): a block sent again after its hour was merged and deleted is a duplicate;
-        // - the newest merged hour closed in the block store (CloseHour is in memory only): with the clock behind, a block
-        //   must never be appended to an hour already committed, whose blocks a read ignores.
-        // If it throws (a store cannot be opened), the flag stays unset: the put fails as the fault it is (a
-        // TableBlockStoreException), and the next put tries again.
-        internal void EnsureMergeState()
+        // The merge's state of one product after a start (#1850), loaded once per product, before its first put and before
+        // the merge of its first hour:
+        // - its producers' watermarks from the batch store (durable there, in memory only in the block store): a block sent
+        //   again after its hour was merged and deleted is a duplicate;
+        // - its newest merged hour closed in the block store (CloseHour is in memory only): with the clock behind, a block of
+        //   the product must never be appended to an hour already committed for it, whose blocks a read ignores. (A block of
+        //   another product in an hour committed for this one is that product's hour, merged for it on its own.)
+        // Per product: a product whose batches cannot be opened (a held LOCK, permissions) faults its own puts and merges
+        // only, and is tried again on its next use. If it throws, the product stays unloaded: the put fails as the fault it
+        // is (a TableBlockStoreException), and the next one tries again.
+        internal void EnsureMergeState(Guid productId)
         {
-            if (_mergeStateLoaded)
+            if (_mergeStateLoaded.ContainsKey(productId))
                 return;
 
             lock (_mergeStateLock)
             {
-                if (_mergeStateLoaded)
+                if (_mergeStateLoaded.ContainsKey(productId))
                     return;
 
                 if (_database.TableBatches is { } batches)
                 {
                     try
                     {
-                        long? newest = null;
+                        Store.RaiseWatermarks(batches.GetWatermarks(productId).Select(w => new TableBlockWatermark(productId, w.Key, w.Value)).ToList());
 
-                        foreach (var product in batches.GetProducts())
-                        {
-                            Store.RaiseWatermarks(batches.GetWatermarks(product).Select(w => new TableBlockWatermark(product, w.Key, w.Value)).ToList());
-
-                            if (batches.GetNewestHour(product) is { } hour && (newest is null || hour > newest))
-                                newest = hour;
-                        }
-
-                        if (newest is { } closed)
-                            Store.CloseHour(closed);
+                        if (batches.GetNewestHour(productId) is { } newest)
+                            Store.CloseHour(newest);
                     }
                     catch (TableBatchStoreException ex)
                     {
-                        throw new TableBlockStoreException($"The merged hours of table sensors could not be loaded: {ex.Message}", ex);
+                        throw new TableBlockStoreException($"The merged hours of product {productId} could not be loaded: {ex.Message}", ex);
                     }
                 }
 
-                _mergeStateLoaded = true;
+                _mergeStateLoaded[productId] = true;
             }
         }
 

@@ -128,6 +128,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         /// <summary>Called by an open before it loads the index. Test seam: what the open is under, what a reader sees meanwhile.</summary>
         internal Action OnOpen { get; set; }
 
+        /// <summary>Called with the block's sequence right before ReadBlock gets its value from LevelDB. Test seam for a read error.</summary>
+        internal Action<long> BeforeBlockGet { get; set; }
+
         /// <summary>Called by a read (GetBlocks) right before it takes the store's lock because the store is not open. Test seam.</summary>
         internal Action BeforeReadLock { get; set; }
 
@@ -393,7 +396,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
             return _maps.Products.Keys.OrderBy(id => id).ToArray();
         }
 
-        public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry)
+        public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry) => ReadBlock(entry, readErrorIsFault: false);
+
+        public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry, bool readErrorIsFault)
         {
             byte[] value;
 
@@ -403,7 +408,13 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 // Closed since the caller took the index (a reopen failed meanwhile, or Dispose): the fault, so that the
                 // read ends as one instead of answering the block as missing.
                 var blocks = _blocks ?? throw Closed();
+                BeforeBlockGet?.Invoke(entry.Sequence);
                 value = blocks.Get(Key(entry.ArrivalHourTicks, entry.Sequence));
+            }
+            catch (Exception ex) when (ex is not TableBlockStoreException && readErrorIsFault)
+            {
+                // The merge (#1850): an error of the read itself is not damage of the block; a later pass reads it again.
+                throw new TableBlockStoreException($"Table block {entry.Sequence} could not be read: {ex.Message}", ex);
             }
             catch (Exception ex) when (ex is not TableBlockStoreException)
             {

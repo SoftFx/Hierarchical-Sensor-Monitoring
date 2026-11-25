@@ -321,6 +321,130 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal([1.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
         }
 
+        [Fact]
+        public async Task With_too_little_disk_a_pass_still_deletes_the_merged_hours_past_their_delay_and_the_next_pass_merges()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+
+            // A block of a later hour; then the disk runs low.
+            _now = Hour0.AddHours(20);
+            AssertStored(Put(Block(("a", [(Hour0.AddHours(20), 2.0, 2)]))));
+
+            await RestartAsync(crash: false, options: new TableBlockOptions { MinFreeDiskMb = 10 });
+            _server.Job.FreeBytes = () => 5L << 20;
+
+            // The merge of hour 20 faults on the disk, and the blocks of hour 0, merged and past their delay, are deleted.
+            var low = Pass(Hour0.AddHours(26));
+            Assert.Contains("free disk", low.Fault);
+            Assert.Equal(1, low.HoursDeleted);
+            Assert.DoesNotContain(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.Ticks);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.AddHours(20).Ticks));
+
+            _server.Job.FreeBytes = () => 50L << 20;
+            Assert.Equal(1, Pass(Hour0.AddHours(26).AddMinutes(1)).HoursMerged);
+            Assert.Equal([1.0, 2.0], _server.Service.Read(a.Id, From, Hour0.AddDays(2)).Value.Columns[1].DoubleValues);
+        }
+
+        [Fact]
+        public async Task A_product_whose_merge_keeps_faulting_does_not_stop_the_merge_of_another()
+        {
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            var a = await RegisterAsync("a");
+            var o = await RegisterAsync("o", other);
+
+            foreach (var hour in new[] { Hour0, Hour0.AddHours(1) })
+            {
+                _now = hour.AddMinutes(10);
+                AssertStored(Put(Block(("a", [(hour.AddMinutes(1), 1.0, 1)]))));
+                AssertStored(_server.Service.Put(other, _producer, hour.Hour, Block(("o", [(hour.AddMinutes(2), 2.0, 2)]))));
+            }
+
+            var before = All(a, o);
+
+            // Every merge of the first product faults (an I/O error while its batches are built).
+            _server.Job.AfterDecode = (sensor, _) =>
+            {
+                if (sensor == a.Id)
+                    throw new IOException("its week database cannot be opened");
+            };
+
+            var first = Pass(Hour0.AddHours(2).AddMinutes(3));
+            Assert.NotNull(first.Fault);
+            Assert.True(_server.Batches.IsHourMerged(other, Hour0.Ticks));
+            Assert.True(_server.Batches.IsHourMerged(other, Hour0.AddHours(1).Ticks));
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // The fault repeats; nothing of the first product is committed and the reads are the same.
+            Assert.NotNull(Pass(Hour0.AddHours(2).AddMinutes(4)).Fault);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.Equal(before, All(a, o));
+
+            _server.Job.AfterDecode = null;
+            Assert.Equal(2, Pass(Hour0.AddHours(2).AddMinutes(5)).HoursMerged);
+            Assert.Equal(before, All(a, o));
+        }
+
+        [Fact]
+        public async Task An_error_while_the_merge_reads_a_block_is_a_fault_and_the_next_pass_merges_the_hour_whole()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            var failing = Put(Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)]))).Sequence.Value;
+            var before = Rows(a);
+
+            var thrown = 0;
+            _server.Blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == failing && thrown++ == 0)
+                    throw new IOException("the disk did not answer");
+            };
+
+            var faulted = Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.NotNull(faulted.Fault);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.Equal(0, _server.Batches.MergeStatistics.UnreadableBlocksKept);
+
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(4)).HoursMerged);
+            Assert.Empty(_server.Batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+            Assert.Equal(before, Rows(a));
+        }
+
+        [Fact]
+        public async Task A_product_whose_batches_cannot_be_opened_faults_its_own_puts_and_merges_only()
+        {
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            var a = await RegisterAsync("a");
+            var o = await RegisterAsync("o", other);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            AssertStored(_server.Service.Put(other, _producer, 1, Block(("o", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+
+            await RestartAsync(crash: false);
+
+            // The first product's merged hours are held open by another process (its LOCK file).
+            var hours = Path.Combine(_server.Database.DatabaseSettings.PathToTableBlocks, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName);
+            using (new global::LevelDB.DB(hours, new global::LevelDB.Options()))
+            {
+                _now = Hour0.AddHours(2).AddMinutes(10);
+                Assert.Throws<TableBlockStoreException>(() => Put(Block(("a", [(Hour0.AddHours(2), 3.0, 3)]))));
+                AssertStored(_server.Service.Put(other, _producer, 2, Block(("o", [(Hour0.AddHours(2), 4.0, 4)]))));
+
+                Assert.NotNull(Pass(Hour0.AddHours(3).AddMinutes(3)).Fault);
+                Assert.True(_server.Batches.IsHourMerged(other, Hour0.AddHours(2).Ticks));
+            }
+
+            // Released: the same service takes the first product's blocks again.
+            AssertStored(Put(Block(("a", [(Hour0.AddHours(2), 3.0, 3)]))));
+            Assert.Equal([2.0, 4.0], _server.Service.Read(o.Id, From, To).Value.Columns[1].DoubleValues);
+            Assert.Equal([1.0, 3.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+        }
+
         // === Sensors ===
 
         [Fact]

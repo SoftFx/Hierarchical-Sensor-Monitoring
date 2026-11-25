@@ -213,5 +213,12 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// failed meanwhile, or the store was disposed): a fault, not a missing block.
         /// </summary>
         TableBlockRecord ReadBlock(in TableBlockIndexEntry entry);
+
+        /// <summary>
+        /// <see cref="ReadBlock(in TableBlockIndexEntry)"/> for the merge (#1850): with <paramref name="readErrorIsFault"/>,
+        /// an error of the read itself (LevelDB's <c>Get</c> throws, an I/O error) is a <see cref="TableBlockStoreException"/>
+        /// instead of null, so that a block is listed as unreadable only when it is missing or damaged.
+        /// </summary>
+        TableBlockRecord ReadBlock(in TableBlockIndexEntry entry, bool readErrorIsFault);
     }
 }

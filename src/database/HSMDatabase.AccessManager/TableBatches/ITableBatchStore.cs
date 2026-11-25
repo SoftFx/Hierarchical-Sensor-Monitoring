@@ -103,7 +103,7 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long UnreadableBlocksKept;
         /// <summary>Rows of tables without a table sensor on their path, or of blocks numbered below the sensor's first sequence.</summary>
         public long RowsDropped;
-        /// <summary>Merge passes that stopped on a fault of a store (the hour is merged again by a later pass).</summary>
+        /// <summary>Faults of the merge: a product's hour not merged, an hour's blocks not deleted, a pass stopped (each tried again by a later pass).</summary>
         public long Faults;
 
         /// <summary>Gauge: closed hours due for the merge and not merged at the end of the last pass.</summary>

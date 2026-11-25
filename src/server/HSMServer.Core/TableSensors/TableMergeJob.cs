@@ -56,7 +56,8 @@ namespace HSMServer.Core.TableSensors
     /// </list>
     /// A batch that does not verify leaves that product's hour unwritten (its blocks serve it), counted as an Error, and it
     /// is not tried again until the next start. A block that cannot be read stays, is listed in the hour's record and
-    /// counted. A fault of a store ends the pass; a later pass merges the hour again, and a rerun of a committed hour or of
+    /// counted. A fault (a store, the disk, an error reading a block) leaves that product's hour for a later pass while the other
+    /// products and the deletions go on; a rerun of a committed hour or of
     /// parts already written changes nothing. Nothing holds a store's lock while blocks are read or batches encoded.
     /// </summary>
     public sealed class TableMergeJob
@@ -70,7 +71,7 @@ namespace HSMServer.Core.TableSensors
         private readonly ITreeValuesCache _cache;
         private readonly TableBlockOptions _options;
         private readonly TableHourGate _gate;
-        private readonly Action _ensureState;
+        private readonly Action<Guid> _ensureState;
 
         private readonly object _runLock = new();
 
@@ -79,7 +80,7 @@ namespace HSMServer.Core.TableSensors
         private readonly HashSet<(Guid Product, long Hour)> _failedVerification = [];
 
 
-        internal TableMergeJob(IDatabaseCore database, ITreeValuesCache cache, TableBlockOptions options, TableHourGate gate, Action ensureState)
+        internal TableMergeJob(IDatabaseCore database, ITreeValuesCache cache, TableBlockOptions options, TableHourGate gate, Action<Guid> ensureState)
         {
             _database = database;
             _cache = cache;
@@ -118,31 +119,37 @@ namespace HSMServer.Core.TableSensors
                 return new TableMergePassReport { Busy = true };
 
             int merged = 0, deleted = 0, mismatches = 0;
+            string fault = null;
 
             try
             {
                 if (Blocks is null || Batches is null)
                     return new TableMergePassReport();
 
-                _ensureState();
+                // First, and whatever the merge below does: deleting the blocks of merged hours past their delay is what
+                // gives disk back when the merge cannot write (too little free disk), so a fault of the merge never holds it off.
+                deleted = DeleteDue(utcNow, token, ref fault);
+
+                // Products whose merge faulted in this pass: their later hours wait for the next pass, so a product's hours
+                // are committed in order; the other products go on.
+                var faulted = new HashSet<Guid>();
 
                 foreach (var hour in DueHours(utcNow))
                 {
                     if (token.IsCancellationRequested)
-                        return new TableMergePassReport { HoursMerged = merged, Mismatches = mismatches, Stopped = true };
+                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true };
 
-                    var outcome = MergeHour(hour, utcNow, token, ref mismatches);
+                    var outcome = MergeHour(hour, utcNow, token, faulted, ref mismatches, ref fault);
                     if (outcome == HourOutcome.Stopped)
-                        return new TableMergePassReport { HoursMerged = merged, Mismatches = mismatches, Stopped = true };
+                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true };
 
                     if (outcome == HourOutcome.Merged)
                         merged++;
                 }
 
-                deleted = DeleteDue(utcNow, token);
                 Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
 
-                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches };
+                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault };
             }
             catch (Exception ex)
             {
@@ -155,6 +162,20 @@ namespace HSMServer.Core.TableSensors
             finally
             {
                 Monitor.Exit(_runLock);
+            }
+        }
+
+        // Whether a product's hour is committed; false when its batches cannot be opened now (its merge then faults on its
+        // own, and nothing of the hour is deleted).
+        private bool IsMerged(Guid product, long hour)
+        {
+            try
+            {
+                return Batches.IsHourMerged(product, hour);
+            }
+            catch (TableBatchStoreException)
+            {
+                return false;
             }
         }
 
@@ -191,7 +212,7 @@ namespace HSMServer.Core.TableSensors
                 if (hour + TimeSpan.TicksPerHour + _options.MergeGrace.Ticks > utcNow.Ticks)
                     break;
 
-                if (products.Keys.Any(p => !Batches.IsHourMerged(p, hour) && !_failedVerification.Contains((p, hour))))
+                if (products.Keys.Any(p => !IsMerged(p, hour) && !_failedVerification.Contains((p, hour))))
                     due.Add(hour);
             }
 
@@ -203,7 +224,11 @@ namespace HSMServer.Core.TableSensors
 
         private enum HourOutcome { Merged, NotComplete, Stopped }
 
-        private HourOutcome MergeHour(long hour, DateTime utcNow, CancellationToken token, ref int mismatches)
+        // A fault of one product's hour (a store, the disk, a block that could not be read) leaves that product's hour
+        // untouched or committed, is logged and counted, and the product's later hours wait for the next pass; the other
+        // products of the hour and of later hours go on. Blocks are deleted only once every product of their own hour is
+        // committed, so an hour left on its blocks keeps them, whatever later hours do.
+        private HourOutcome MergeHour(long hour, DateTime utcNow, CancellationToken token, HashSet<Guid> faulted, ref int mismatches, ref string fault)
         {
             var watch = Stopwatch.StartNew();
 
@@ -220,23 +245,39 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var (product, entries) in products)
             {
-                if (Batches.IsHourMerged(product, hour) || _failedVerification.Contains((product, hour)))
+                if (faulted.Contains(product) || _failedVerification.Contains((product, hour)))
                     continue;
 
                 if (token.IsCancellationRequested)
                     return HourOutcome.Stopped;
 
-                if (!MergeProduct(product, hour, entries, utcNow, token, out var stopped))
+                try
                 {
-                    if (stopped)
-                        return HourOutcome.Stopped;
+                    if (Batches.IsHourMerged(product, hour))
+                        continue;
 
-                    _failedVerification.Add((product, hour));
-                    mismatches++;
+                    _ensureState(product);
+
+                    if (!MergeProduct(product, hour, entries, utcNow, token, out var stopped))
+                    {
+                        if (stopped)
+                            return HourOutcome.Stopped;
+
+                        _failedVerification.Add((product, hour));
+                        mismatches++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    faulted.Add(product);
+                    fault = ex.Message;
+                    Stats.Add(ref Stats.Faults);
+                    _logger.Error(ex, $"Table hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} of product {product} was not merged; " +
+                                      $"a later pass merges it again: {ex.Message}");
                 }
             }
 
-            if (!products.All(p => Batches.IsHourMerged(p.Product, hour)))
+            if (!products.All(p => IsMerged(p.Product, hour)))
                 return HourOutcome.NotComplete;
 
             // Every product of the hour is committed: a resend of one of its blocks is a duplicate by the watermark from here
@@ -272,6 +313,9 @@ namespace HSMServer.Core.TableSensors
         private bool MergeProduct(Guid product, long hour, List<TableBlockIndexEntry> entries, DateTime utcNow, CancellationToken token, out bool stopped)
         {
             stopped = false;
+
+            // Before the work: nothing could be written anyway (checked again before the write).
+            CheckDisk();
 
             var budget = MemoryBudgetBytes ?? (long)_options.MergeMemoryBudgetMb * 1024 * 1024;
             var rows = entries.Sum(e => (long)e.RowCount);
@@ -420,7 +464,7 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var entry in entries)
             {
-                var record = Blocks.ReadBlock(entry);
+                var record = Blocks.ReadBlock(entry, readErrorIsFault: true);
                 TableBlockDirectory directory = null;
 
                 if (record is not null)
@@ -472,7 +516,8 @@ namespace HSMServer.Core.TableSensors
         // The envelope and every table of a stored block; null when it cannot be read (counted, logged).
         private (TableBlockEnvelope Envelope, TableBlock Block)? ReadBlock(in TableBlockIndexEntry entry)
         {
-            var record = Blocks.ReadBlock(entry);
+            // A read error is a fault (thrown), not damage: the hour is merged again later, never committed without the block.
+            var record = Blocks.ReadBlock(entry, readErrorIsFault: true);
             if (record is null)
                 return null;
 
@@ -707,31 +752,56 @@ namespace HSMServer.Core.TableSensors
 
         // The blocks of every hour committed for each product with blocks in it, except the blocks the merge could not read,
         // once the delay has passed since the latest of its commits.
-        private int DeleteDue(DateTime utcNow, CancellationToken token)
+        private int DeleteDue(DateTime utcNow, CancellationToken token, ref string fault)
         {
             int deleted = 0, holding = 0;
             var delay = TimeSpan.FromHours(_options.DeleteMergedBlocksAfterHours).Ticks;
+            SortedDictionary<long, Dictionary<Guid, List<TableBlockIndexEntry>>> byHour;
 
-            foreach (var (hour, products) in BlocksByHour())
+            try
             {
-                var records = products.Keys.Select(p => Batches.GetHour(p, hour)).ToList();
-                if (records.Any(r => r is null))
-                    continue;
+                byHour = BlocksByHour();
+            }
+            catch (Exception ex)
+            {
+                fault = ex.Message;
+                Stats.Add(ref Stats.Faults);
+                _logger.Error(ex, $"Table merge: the blocks to delete could not be listed: {ex.Message}");
+                return 0;
+            }
 
-                var keep = records.SelectMany(r => r.UnreadableBlocks).ToHashSet();
-                if (products.Values.All(list => list.All(e => keep.Contains(e.Sequence))))
-                    continue;
-
-                if (token.IsCancellationRequested || utcNow.Ticks < records.Max(r => r.CommitTicks) + delay)
+            foreach (var (hour, products) in byHour)
+            {
+                try
                 {
-                    holding++;
-                    continue;
+                    var records = products.Keys.Select(p => Batches.GetHour(p, hour)).ToList();
+                    if (records.Any(r => r is null))
+                        continue;
+
+                    var keep = records.SelectMany(r => r.UnreadableBlocks).ToHashSet();
+                    if (products.Values.All(list => list.All(e => keep.Contains(e.Sequence))))
+                        continue;
+
+                    if (token.IsCancellationRequested || utcNow.Ticks < records.Max(r => r.CommitTicks) + delay)
+                    {
+                        holding++;
+                        continue;
+                    }
+
+                    using (_gate.Delete())
+                        Blocks.DeleteMergedHour(hour, keep, Watermarks(products.Keys));
+
+                    deleted++;
                 }
-
-                using (_gate.Delete())
-                    Blocks.DeleteMergedHour(hour, keep, Watermarks(products.Keys));
-
-                deleted++;
+                catch (Exception ex)
+                {
+                    // One hour that cannot be deleted (a product's batches that cannot be opened, a store fault) does not hold
+                    // the others off; it is tried again by the next pass.
+                    fault = ex.Message;
+                    Stats.Add(ref Stats.Faults);
+                    _logger.Error(ex, $"Table merge: the blocks of the merged hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} were not deleted; " +
+                                      $"the next pass tries again: {ex.Message}");
+                }
             }
 
             Stats.Set(ref Stats.MergedHoursHoldingBlocks, holding);

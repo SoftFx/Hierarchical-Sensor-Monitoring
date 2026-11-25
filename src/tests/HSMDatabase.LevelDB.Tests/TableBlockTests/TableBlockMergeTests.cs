@@ -178,6 +178,25 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void An_error_of_the_read_is_a_fault_for_the_merge_and_a_failure_counted_for_a_reader()
+        {
+            var store = Open();
+            Put(store, 1);
+            var entry = store.GetBlocks(_product)[0];
+            store.BeforeBlockGet = _ => throw new IOException("the disk did not answer");
+
+            Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(entry, readErrorIsFault: true));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+
+            Assert.Null(store.ReadBlock(entry));
+            Assert.Equal(1, store.Statistics.ReadFailures);
+
+            // A block that is not there is damage for both.
+            store.BeforeBlockGet = null;
+            Assert.Null(store.ReadBlock(entry with { Sequence = 999 }, readErrorIsFault: true));
+        }
+
+        [Fact]
         public void Deleting_an_hour_of_a_store_never_opened_only_raises_the_watermarks()
         {
             var store = Open();
