@@ -57,6 +57,10 @@ namespace HSMServer.TablePages
 
         public const string NotFoundText = "No table sensor with this id.";
 
+        // No error body names the sensor: between the access check and the answer it could have moved to a product the
+        // user cannot see.
+        public const string NotATableText = "This sensor is not a table sensor.";
+
         // Retry-After of a 503: the block store cannot be read now (the read route's value).
         public const int RetryAfterSeconds = TableReadService.RetryAfterSeconds;
 
@@ -293,8 +297,14 @@ namespace HSMServer.TablePages
             try
             {
                 var (rows, error) = await ReadPageAsync(table.Id, fromUtc, toUtc, token);
+
+                // The sensor was removed since it was resolved: answered as an unknown id. The read's text names the
+                // sensor's path, which may by now be in a product the user cannot see; it is logged, never answered.
                 if (error is not null)
-                    return Refuse(StatusCodes.Status400BadRequest, error);
+                {
+                    _logger.Debug($"A download of table sensor {table.Id} is answered 404: {error}");
+                    return Refuse(StatusCodes.Status404NotFound, NotFoundText);
+                }
 
                 first = rows;
             }
@@ -396,7 +406,7 @@ namespace HSMServer.TablePages
                 return Refuse(StatusCodes.Status404NotFound, NotFoundText);
 
             if (sensor is not TableSensorModel model)
-                return Refuse(StatusCodes.Status400BadRequest, $"Sensor \"{sensor.FullPath}\" is not a table sensor.");
+                return Refuse(StatusCodes.Status400BadRequest, NotATableText);
 
             table = model;
             return null;

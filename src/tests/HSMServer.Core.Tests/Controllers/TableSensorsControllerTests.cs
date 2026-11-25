@@ -151,8 +151,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             var (status, text) = await CallAsync(action, Viewer(_product), plain.Id.ToString());
 
-            Assert.Equal(400, status);
-            Assert.Contains("is not a table sensor", text);
+            // Neither the path nor the name of the sensor: it could have moved to a product the user cannot see.
+            Assert.Equal((400, TablePageService.NotATableText), (status, text));
+            Assert.DoesNotContain(_root, text);
         }
 
         [Theory]
@@ -277,7 +278,44 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(400, status);
             Assert.Contains("is not a value column", text);
+            Assert.DoesNotContain(_root, text);
             Assert.Equal(400, rangeStatus);
+        }
+
+        [Theory]
+        [InlineData(10)] // rows mode
+        [InlineData(500)] // buckets mode
+        public async Task A_second_time_column_is_refused_as_not_a_value_column_and_is_not_charted_by_default(int rows)
+        {
+            var schema = new TableSchema([new TableSchemaColumn("time", TableColumnType.Time), new TableSchemaColumn("completed", TableColumnType.Time)]);
+            var path = $"{_root}/orders";
+            var registered = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty },
+                Type = SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = schema,
+            });
+            Assert.True(registered.IsOk, registered.Error);
+            Assert.True(_valuesCache.TryGetSensorByPath(_product, path, out var orders));
+
+            using (var writer = new TableBlockWriter())
+            {
+                var times = Enumerable.Range(0, rows).Select(i => Hour0.AddSeconds(i).Ticks).ToArray();
+                writer.BeginTable(Encoding.UTF8.GetBytes(path), schema.Id, rows);
+                writer.AddTimeColumn(times);
+                writer.AddTimeColumn(times.Select(t => t + TimeSpan.TicksPerMinute).ToArray());
+                Assert.Equal(TableBlockPutOutcome.Stored, _service.Put(_product, _producer, ++_producerSequence, writer.ToArray()).Outcome);
+            }
+
+            var (status, text) = await CallAsync("chart", Viewer(_product), orders.Id.ToString(), request: new TableChartRequest { Id = orders.Id.ToString(), From = From, To = To, Columns = [1], Buckets = 100 });
+
+            Assert.Equal((400, "Column 1 is not a value column: it is a time column."), (status, text));
+
+            // Not asked for: the default columns are the double columns, so none here, and the row counts are answered.
+            var json = await ChartJsonAsync(orders, Viewer(_product), new TableChartRequest { From = From, To = To, Buckets = 100 });
+            Assert.Empty(json.GetProperty("columns").EnumerateArray());
+            Assert.Equal(rows, json.GetProperty("rowCount").GetInt64());
         }
 
         // === The shared read gate ===
