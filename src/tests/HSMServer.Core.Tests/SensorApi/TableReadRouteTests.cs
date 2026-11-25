@@ -1,5 +1,6 @@
 using HSMCommon.Model;
 using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.AccessManager.TableBlocks;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
@@ -77,11 +78,12 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("6", answer.Header("X-Hsm-Row-Count"));
             Assert.Equal("false", answer.Header("X-Hsm-Truncated"));
             Assert.Equal("0", answer.Header("X-Hsm-Blocks-Failed"));
+            Assert.Equal("0", answer.Header("X-Hsm-Batches-Failed"));
             Assert.Null(answer.Header("X-Hsm-Next-From"));
 
             Assert.Equal(
                 $"{{\"path\":\"{_root}/q\",\"columns\":[{{\"name\":\"time\",\"type\":\"time\"}},{{\"name\":\"bid\",\"type\":\"double\"}},{{\"name\":\"size\",\"type\":\"int64\"}}]," +
-                "\"rowCount\":6,\"truncated\":false,\"nextFrom\":null,\"rowsAtTimeOmitted\":false,\"blocksFailed\":0,\"rows\":[" +
+                "\"rowCount\":6,\"truncated\":false,\"nextFrom\":null,\"rowsAtTimeOmitted\":false,\"blocksFailed\":0,\"batchesFailed\":0,\"rows\":[" +
                 "[\"2026-11-25T09:00:00.0000000Z\",1.5,-9223372036854775808]," +
                 "[\"2026-11-25T09:00:01.0000000Z\",null,2]," +
                 "[\"2026-11-25T09:00:02.0000000Z\",\"NaN\",null]," +
@@ -199,6 +201,37 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("time,bid,size\r\n", Encoding.UTF8.GetString(csv.Body));
             Assert.Empty(blocks.Body);
             Assert.All(new[] { json, csv, blocks }, answer => Assert.Equal("0", answer.Header("X-Hsm-Row-Count")));
+        }
+
+
+        // A batch of a merged hour that cannot be decoded (#1850): its rows are missing, and every format
+        // says so in X-Hsm-Batches-Failed (JSON in its body too), apart from the blocks' figure.
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        public async Task ADamagedBatch_IsReportedInEveryFormat_ApartFromTheBlocks(int format)
+        {
+            await using var host = await StartHost();
+            var sensor = (TableSensorModel)await RegisterAsync("q");
+
+            WriteDamagedBatch(sensor, T0, T0.AddSeconds(1));
+
+            var answer = await ReadAsync(host, "q", T0, T0.AddMinutes(1), format: format);
+
+            Assert.Equal(HttpStatusCode.OK, answer.Status);
+            Assert.Equal("0", answer.Header("X-Hsm-Row-Count"));
+            Assert.Equal("false", answer.Header("X-Hsm-Truncated"));
+            Assert.Equal("0", answer.Header("X-Hsm-Blocks-Failed"));
+            Assert.Equal("1", answer.Header("X-Hsm-Batches-Failed"));
+
+            if (format == 0)
+            {
+                var body = JsonNode.Parse(answer.Body);
+
+                Assert.Equal(0, (int)body["blocksFailed"]);
+                Assert.Equal(1, (int)body["batchesFailed"]);
+            }
         }
 
 
@@ -524,6 +557,21 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(TableBlockPutOutcome.Stored, result.Outcome);
             Assert.Empty(result.Refusals);
         }
+
+        // One merged hour of the product holding one batch of the sensor whose bytes are not a batch. The hour is one of its
+        // own (the store keeps a committed hour as it is), long before the rows' times: the arrival hour of a batch need
+        // not be near its rows.
+        private void WriteDamagedBatch(TableSensorModel sensor, DateTime first, DateTime last)
+        {
+            var hour = new DateTime(2025, 1, 6, 0, 0, 0, DateTimeKind.Utc).AddHours(Interlocked.Increment(ref _damagedHours)).Ticks;
+            var period = TablePeriodClass.Of(sensor, DateTime.UtcNow);
+
+            _databaseCoreManager.DatabaseCore.TableBatches.WriteHour(TestProductsManager.ProductId,
+                new TableBatchHourCommit { HourTicks = hour, FirstBlockSequence = sensor.FirstSequence, LastBlockSequence = sensor.FirstSequence, BlocksMerged = 1 },
+                [new TableBatchHourPart(period, [new TableBatchToWrite(sensor.Id, first.Ticks, last.Ticks, 2, [9, 9, 9])])]);
+        }
+
+        private static int _damagedHours;
 
         private TableRows Read(BaseSensorModel sensor) => _blocks.Read(sensor.Id, T0.AddDays(-1), T0.AddDays(1)).Value;
 

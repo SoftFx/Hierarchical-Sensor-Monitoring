@@ -37,6 +37,7 @@ namespace HSMServer.SensorApi
         public const string NextFromHeader = "X-Hsm-Next-From";
         public const string RowsAtTimeOmittedHeader = "X-Hsm-Rows-At-Time-Omitted";
         public const string BlocksFailedHeader = "X-Hsm-Blocks-Failed";
+        public const string BatchesFailedHeader = "X-Hsm-Batches-Failed";
         public const string TableColumnsHeader = "X-Hsm-Table-Columns";
 
         public const string BlocksContentType = "application/vnd.hsm.table-blocks";
@@ -182,7 +183,9 @@ namespace HSMServer.SensorApi
             response.StatusCode = StatusCodes.Status200OK;
             response.Headers[TableReadService.RowCountHeader] = rows.RowCount.ToString(CultureInfo.InvariantCulture);
             response.Headers[TableReadService.TruncatedHeader] = rows.Truncated ? "true" : "false";
+            // Rows missing from the answer, by the store that lost them: blocks not merged yet, batches of merged hours (#1850).
             response.Headers[TableReadService.BlocksFailedHeader] = rows.BlocksFailed.ToString(CultureInfo.InvariantCulture);
+            response.Headers[TableReadService.BatchesFailedHeader] = rows.BatchesFailed.ToString(CultureInfo.InvariantCulture);
 
             if (rows.NextFromTicks is { } next)
                 response.Headers[TableReadService.NextFromHeader] = TableRowsText.Time(next);
@@ -263,6 +266,7 @@ namespace HSMServer.SensorApi
 
                 writer.WriteBoolean("rowsAtTimeOmitted", rows.RowsAtTimeOmitted);
                 writer.WriteNumber("blocksFailed", rows.BlocksFailed);
+                writer.WriteNumber("batchesFailed", rows.BatchesFailed);
 
                 writer.WriteStartArray("rows");
 
