@@ -8730,9 +8730,9 @@ namespace
         // the length check lets them through, the digit check must not. A restart for each, so
         // the reconnect waits no backoff.
         const char* const not_hex[] = {
-            "0123456789abcdef0123456789abcd\\r\\n", // 30 hex digits, CR, LF
-            "0123456789abcdef0123456789abcdeg",     // 31 hex digits and a 'g'
-            "0123456789abcdef 123456789abcdef",     // a space
+            "0123456789abcdef0123456789abcd\\r\\n",  // 30 hex digits, CR, LF
+            "0123456789abcdef0123456789abcdeg",      // 31 hex digits and a 'g'
+            "0123456789abcdef 123456789abcdef",      // a space
             "0123456789abcdef0123456789abcde\\u0000" // 31 hex digits and a NUL
         };
         uint64_t generation = 5;

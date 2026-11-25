@@ -1135,7 +1135,7 @@ namespace hsm::test
                               (session_id.empty() ? std::string{} : ",\"sessionId\":\"" + session_id + "\"") + "}}");
             }
 
-            std::string binary;    // the binary message being assembled from fragments
+            std::string binary;     // the binary message being assembled from fragments
             bool in_binary = false; // a fragmented binary message is in progress
             Frame frame;
             while (ReadFrame(conn, drop_, frame))

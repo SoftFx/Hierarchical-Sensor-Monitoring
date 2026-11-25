@@ -202,8 +202,7 @@ namespace hsm::http
     }
 
     WebSocketConnection::WebSocketConnection(bool verify_peer, size_t max_message_bytes)
-        : verify_peer_(verify_peer)
-        , max_message_bytes_(max_message_bytes)
+        : verify_peer_(verify_peer), max_message_bytes_(max_message_bytes)
     {
         EnsureCurlGlobal();
     }
@@ -801,8 +800,7 @@ namespace hsm::http
     }
 
     WebSocketConnection::WebSocketConnection(bool verify_peer, size_t max_message_bytes)
-        : verify_peer_(verify_peer)
-        , max_message_bytes_(max_message_bytes)
+        : verify_peer_(verify_peer), max_message_bytes_(max_message_bytes)
     {
         (void)verify_peer_;
         (void)max_message_bytes_;
