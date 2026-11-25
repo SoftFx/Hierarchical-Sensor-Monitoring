@@ -69,6 +69,13 @@ namespace HSMServer.Core.Cache
 
         public const int MaxHistoryCount = 50000;
 
+        /// <summary>
+        /// "Keep sensor history" and "Remove sensor after inactivity" of a new root
+        /// product, and of a new folder (FolderModel). Three months since 2026-11-25;
+        /// one month before.
+        /// </summary>
+        public const TimeInterval DefaultRetention = TimeInterval.ThreeMonths;
+
         private readonly static MigrationManager _migrator = new();
 
         private readonly ConcurrentDictionary<Guid, CachedValue> _cache = new();
@@ -4044,12 +4051,15 @@ namespace HSMServer.Core.Cache
             {
                 if (product.IsRoot)
                 {
+                    // The periods of a new root product. Stored with it, so a
+                    // later change of these defaults never touches an existing
+                    // product.
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
                         TTL = new TimeIntervalModel(TimeInterval.None),
-                        KeepHistory = new TimeIntervalModel(TimeInterval.Month),
-                        SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
+                        KeepHistory = new TimeIntervalModel(DefaultRetention),
+                        SelfDestroy = new TimeIntervalModel(DefaultRetention),
 
                         DefaultChats = new PolicyDestinationSettings(DefaultChatsMode.FromParent),
                     };

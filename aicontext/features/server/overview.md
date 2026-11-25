@@ -78,7 +78,7 @@ Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for pro
 ### Background Services
 - Data collection (self-monitoring)
 - Database snapshots
-- Data cleanup/retention
+- Data cleanup/retention (hourly `ClearDatabaseService`: history older than `KeepHistory`, sensors idle for longer than `SelfDestroy`, old empty nodes). A new root product and a new folder get `KeepHistory` and `SelfDestroy` = 3 months (`TreeValuesCache.DefaultRetention`, 1 month before 2026-11-25); the value is stored with them, so the default never changes an existing product or folder. A stored folder with no period still reads as 1 month.
 - Notification delivery (Telegram, email)
 - Database backups (local + SFTP), self-monitored — see `database-backup-monitoring/`
 
