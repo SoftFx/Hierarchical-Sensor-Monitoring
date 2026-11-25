@@ -17,7 +17,7 @@ namespace HSMServer.Core.TableSensors
     /// about twice the row limit: past it the rows collected so far are sorted and the latest ones dropped. A null cell
     /// (#1859) stays with its row through all of it and comes out in the column's null map.
     /// </summary>
-    internal sealed class TableRowCollector
+    internal sealed class TableRowCollector : ITableRowSink
     {
         // Stored blocks passed the configured limits when they arrived; they are read back with the format's maxima, so a
         // lower limit configured later does not hide them.
@@ -97,23 +97,95 @@ namespace HSMServer.Core.TableSensors
         }
 
         /// <summary>Reads <paramref name="tableId"/> out of one stored block (a failure counted, a store fault thrown).</summary>
-        internal void AddBlock(ITableBlockStore store, in TableBlockIndexEntry entry, byte[] tableId)
+        public void AddBlock(ITableBlockStore store, in TableBlockIndexEntry entry, byte[] tableId)
         {
+            var read = ReadBlockTable(store, entry, tableId, _schema, out var table);
+
+            if (read.Read)
+                BlocksRead++;
+
+            if (read.Failed)
+                BlocksFailed++;
+
+            if (table is not null)
+                AddRows(entry, table);
+        }
+
+        /// <summary>What reading one table out of one stored block came to.</summary>
+        internal readonly record struct BlockTableRead(bool Read, bool Failed);
+
+        /// <summary>
+        /// Reads <paramref name="tableId"/> out of one stored block, for any reader of a table's rows. The table comes out
+        /// only when the block was read, holds the table, did not refuse it and has the sensor's column types. A block that
+        /// is missing, cannot be read or holds the table with other types is a failure (logged and counted in the store's
+        /// statistics here); a block that was read is <see cref="BlockTableRead.Read"/> even when it then fails the type
+        /// check. A store fault (<see cref="TableBlockStoreException"/>) is not caught.
+        /// </summary>
+        internal static BlockTableRead ReadBlockTable(ITableBlockStore store, in TableBlockIndexEntry entry, byte[] tableId, TableSchema schema,
+            out BlockTable result)
+        {
+            result = null;
+
             var record = store.ReadBlock(entry);
             if (record is null)
+                return new BlockTableRead(false, true);
+
+            BlockTable table;
+            int index;
+
+            try
             {
-                BlocksFailed++;
-                return;
+                table = TableBlockReader.ReadTable(record.Block.Span, tableId, out index, StoredBlockLimits);
+            }
+            catch (TableBlockFormatException ex)
+            {
+                store.Statistics.Add(ref store.Statistics.ReadFailures);
+                _logger.Error($"Stored table block {entry.Sequence} cannot be read ({ex.Error}): {ex.Message}");
+                return new BlockTableRead(false, true);
             }
 
-            Add(store, entry, record, tableId);
+            if (table is null || record.Envelope.IsRefused(index))
+                return new BlockTableRead(true, false);
+
+            // The put checked the types against the schema; a block that differs was refused there. A mismatch here is a
+            // damaged store, not a client's mistake.
+            var types = new TableColumnType[table.Columns.Count];
+            for (int c = 0; c < types.Length; c++)
+                types[c] = table.Columns[c].Type;
+
+            if (!schema.HasColumnTypes(types))
+            {
+                store.Statistics.Add(ref store.Statistics.ReadFailures);
+                _logger.Error($"Stored table block {entry.Sequence}: the table at index {index} does not have its sensor's column types");
+                return new BlockTableRead(true, true);
+            }
+
+            result = table;
+            return new BlockTableRead(true, false);
+        }
+
+        /// <summary>Adds the rows in range of one table read out of the stored block <paramref name="entry"/>.</summary>
+        internal void AddRows(in TableBlockIndexEntry entry, BlockTable table)
+        {
+            var time = table.Time;
+            for (int row = 0; row < time.Length; row++)
+            {
+                var t = time[row];
+                if (t < _from || t >= _to)
+                    continue;
+
+                Append(t, entry.ArrivalHourTicks, (entry.Sequence << 24) | (uint)row, table, row);
+            }
+
+            if (_count > 2 * _maxRows)
+                Trim();
         }
 
         /// <summary>
         /// Adds the rows of one decoded batch of the merged hour <paramref name="hourTicks"/>. False (counted) when its
         /// columns are not the sensor's: a damaged store.
         /// </summary>
-        internal bool AddBatch(TableBatch batch, long hourTicks, int ordinal, bool moved)
+        public bool AddBatch(TableBatch batch, long hourTicks, int ordinal, bool moved)
         {
             var columns = batch.Columns;
             var ok = columns.Count == _schema.Columns.Count;
@@ -168,14 +240,14 @@ namespace HSMServer.Core.TableSensors
         }
 
         /// <summary>Counts a batch that could not be read.</summary>
-        internal void BatchFailed() => BatchesFailed++;
+        public void BatchFailed() => BatchesFailed++;
 
         /// <summary>
         /// True when the read can stop before a source whose rows start at <paramref name="nextMinTime"/>: the collector holds
         /// the limit, has dropped rows past it, and its latest row kept is before that time, so nothing of that source (or of
         /// a later one, visited in the order of their earliest rows) can be among the rows returned.
         /// </summary>
-        internal bool CanStopBefore(long nextMinTime)
+        public bool CanStopBefore(long nextMinTime)
         {
             if (_count > _maxRows)
                 Trim();
@@ -183,56 +255,6 @@ namespace HSMServer.Core.TableSensors
             // Truncated: the last trim kept exactly _maxRows sorted rows, and nothing was added since (an addition makes the
             // count exceed the limit, which the line above trims again).
             return _truncated && _count == _maxRows && _time[_maxRows - 1] < nextMinTime;
-        }
-
-        private void Add(ITableBlockStore store, in TableBlockIndexEntry entry, TableBlockRecord record, byte[] tableId)
-        {
-            BlockTable table;
-            int index;
-
-            try
-            {
-                table = TableBlockReader.ReadTable(record.Block.Span, tableId, out index, StoredBlockLimits);
-            }
-            catch (TableBlockFormatException ex)
-            {
-                BlocksFailed++;
-                store.Statistics.Add(ref store.Statistics.ReadFailures);
-                _logger.Error($"Stored table block {entry.Sequence} cannot be read ({ex.Error}): {ex.Message}");
-                return;
-            }
-
-            BlocksRead++;
-
-            if (table is null || record.Envelope.IsRefused(index))
-                return;
-
-            // The put checked the types against the schema; a block that differs was refused there. A mismatch here is a
-            // damaged store, not a client's mistake.
-            var types = new TableColumnType[table.Columns.Count];
-            for (int c = 0; c < types.Length; c++)
-                types[c] = table.Columns[c].Type;
-
-            if (!_schema.HasColumnTypes(types))
-            {
-                BlocksFailed++;
-                store.Statistics.Add(ref store.Statistics.ReadFailures);
-                _logger.Error($"Stored table block {entry.Sequence}: the table at index {index} does not have its sensor's column types");
-                return;
-            }
-
-            var time = table.Time;
-            for (int row = 0; row < time.Length; row++)
-            {
-                var t = time[row];
-                if (t < _from || t >= _to)
-                    continue;
-
-                Append(t, entry.ArrivalHourTicks, (entry.Sequence << 24) | (uint)row, table, row);
-            }
-
-            if (_count > 2 * _maxRows)
-                Trim();
         }
 
         // row < 2^24 (8,388,608 rows per block at most by the default limit; the format maximum is int.MaxValue, so a

@@ -44,6 +44,15 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>How long after its end an arrival hour is merged: blocks of a put in flight at the boundary are in by then.</summary>
         public TimeSpan MergeGrace { get; init; } = TimeSpan.FromMinutes(2);
+
+        public const long DefaultMaxChartScanRows = 10_000_000;
+
+        /// <summary>
+        /// The rows of its range a chart reads before it stops (#1847): past them it stops before the next hour and answers
+        /// the part of the range it read in full (<see cref="TableChart.CompleteToTicks"/>). A chart keeps no rows, so this
+        /// bounds the time of a read, not its memory.
+        /// </summary>
+        public long MaxChartScanRows { get; init; } = DefaultMaxChartScanRows;
     }
 
 
