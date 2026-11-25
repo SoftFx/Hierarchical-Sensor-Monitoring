@@ -138,6 +138,70 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
+        public void A_crash_before_the_compaction_of_a_deleted_hour_leaves_the_deletes_and_a_repeat_compacts()
+        {
+            var store = Open();
+            for (int i = 0; i < 3; i++)
+                Put(store, i);
+            _now = T0.AddHours(1);
+            Put(store, 3);
+
+            store.FaultHook = point =>
+            {
+                if (point == "before-hour-compaction")
+                    throw new IOException("crash");
+            };
+
+            Assert.Throws<IOException>(() => store.DeleteMergedHour(Hour0, [], [new TableBlockWatermark(_product, _producer, 2)]));
+            store.Dispose();
+
+            var reopened = Open();
+            Assert.Equal([3L], reopened.GetBlocks(_product).Select(e => e.Sequence));
+            Assert.Equal(0, reopened.DeleteMergedHour(Hour0, [], []));
+        }
+
+        [Fact]
+        public void The_products_with_blocks_are_listed_and_a_store_without_a_folder_lists_none_and_creates_nothing()
+        {
+            var store = Open();
+            Assert.Empty(store.GetProducts());
+            Assert.False(Directory.Exists(_root));
+
+            var other = Guid.NewGuid();
+            Put(store, 1);
+            Append(store, 1, product: other);
+
+            Assert.Equal(new[] { _product, other }.OrderBy(p => p), store.GetProducts());
+            store.Dispose();
+
+            Assert.Equal(new[] { _product, other }.OrderBy(p => p), Open().GetProducts());
+        }
+
+        [Fact]
+        public void An_IO_error_of_the_read_is_a_fault_for_the_merge_and_a_corruption_is_damage_for_both()
+        {
+            var store = Open();
+            Put(store, 1);
+            var entry = store.GetBlocks(_product)[0];
+            store.BeforeBlockGet = _ => throw new Exception("IO error: 000005.ldb: the disk did not answer");
+
+            Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(entry, readErrorIsFault: true));
+            Assert.Equal(0, store.Statistics.ReadFailures);
+
+            Assert.Null(store.ReadBlock(entry));
+            Assert.Equal(1, store.Statistics.ReadFailures);
+
+            // Any other status is permanent: damage for the merge as for a reader.
+            store.BeforeBlockGet = _ => throw new Exception("Corruption: block checksum mismatch");
+            Assert.Null(store.ReadBlock(entry, readErrorIsFault: true));
+            Assert.Equal(2, store.Statistics.ReadFailures);
+
+            // A block that is not there is damage for both.
+            store.BeforeBlockGet = null;
+            Assert.Null(store.ReadBlock(entry with { Sequence = 999 }, readErrorIsFault: true));
+        }
+
+        [Fact]
         public void Deleting_an_hour_of_a_store_never_opened_only_raises_the_watermarks()
         {
             var store = Open();

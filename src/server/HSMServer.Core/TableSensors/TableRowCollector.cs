@@ -1,18 +1,20 @@
 using System;
 using System.Collections.Generic;
 using HSMDatabase.AccessManager.TableBlocks;
+using HSMDatabase.SealedHistory;
 using HSMTableBlocks;
 using NLog;
 
 namespace HSMServer.Core.TableSensors
 {
     /// <summary>
-    /// Collects the rows of one table out of stored blocks (#1844): the read of rows that are not merged yet. Blocks are
-    /// found by the time range of their header and decompressed one by one; a row is in the result when its time is in
-    /// <c>[from, to)</c>, and the result is sorted by time, then by block sequence, then by the row's position in its block
-    /// (a stable sort of the rows in the order they arrived). Memory stays within about twice the row limit: past it the
-    /// rows collected so far are sorted and the latest ones dropped. A null cell (#1859) stays with its row through all of
-    /// it and comes out in the column's null map.
+    /// Collects the rows of one table out of stored blocks (#1844) and batches of merged hours (#1850). A row is in the
+    /// result when its time is in <c>[from, to)</c>, and the result is sorted by time, then by arrival hour, then by the
+    /// row's rank within its hour: for a block (not merged) its sequence then the row's position in it, for a batch its
+    /// ordinal then the row's position in it. The merge sorts a sensor's rows of an hour by (time, block sequence, row) and
+    /// numbers its batches in that order, so the order is the same before and after an hour is merged. Memory stays within
+    /// about twice the row limit: past it the rows collected so far are sorted and the latest ones dropped. A null cell
+    /// (#1859) stays with its row through all of it and comes out in the column's null map.
     /// </summary>
     internal sealed class TableRowCollector
     {
@@ -28,6 +30,7 @@ namespace HSMServer.Core.TableSensors
         private readonly long _from, _to;
 
         private long[] _time = new long[256];
+        private long[] _hour = new long[256];
         private long[] _order = new long[256];
         private readonly object[] _columns;
         // Per value column, whether each collected row is null (#1859); created at the first null row of the column, so a
@@ -55,6 +58,10 @@ namespace HSMServer.Core.TableSensors
 
         internal int BlocksFailed { get; private set; }
 
+        internal int BatchesRead { get; private set; }
+
+        internal int BatchesFailed { get; private set; }
+
 
         /// <summary>
         /// Reads <paramref name="tableId"/> out of every candidate: the blocks with a sequence at or above
@@ -72,17 +79,99 @@ namespace HSMServer.Core.TableSensors
                 if (entry.Sequence < firstSequence || entry.FirstTime >= _to || entry.LastTime < _from)
                     continue;
 
-                var record = store.ReadBlock(entry);
-                if (record is null)
-                {
-                    BlocksFailed++;
-                    continue;
-                }
-
-                Add(store, entry, record, tableId);
+                AddBlock(store, entry, tableId);
             }
 
             return Build();
+        }
+
+        /// <summary>Reads <paramref name="tableId"/> out of one stored block (a failure counted, a store fault thrown).</summary>
+        internal void AddBlock(ITableBlockStore store, in TableBlockIndexEntry entry, byte[] tableId)
+        {
+            var record = store.ReadBlock(entry);
+            if (record is null)
+            {
+                BlocksFailed++;
+                return;
+            }
+
+            Add(store, entry, record, tableId);
+        }
+
+        /// <summary>
+        /// Adds the rows of one decoded batch of the merged hour <paramref name="hourTicks"/>. False (counted) when its
+        /// columns are not the sensor's: a damaged store.
+        /// </summary>
+        internal bool AddBatch(TableBatch batch, long hourTicks, int ordinal, bool moved)
+        {
+            var columns = batch.Columns;
+            var ok = columns.Count == _schema.Columns.Count;
+            for (int c = 0; ok && c < columns.Count; c++)
+                ok = columns[c].Type == _schema.Columns[c].Type;
+
+            if (!ok)
+            {
+                BatchesFailed++;
+                return false;
+            }
+
+            BatchesRead++;
+
+            // A rank within the hour: the moved region after the hour region, then the ordinal, then the row (< 4,096).
+            long rankBase = (moved ? 1L << 62 : 0) | ((long)ordinal << 12);
+            var time = batch.Time;
+
+            for (int row = 0; row < time.Length; row++)
+            {
+                var t = time[row];
+                if (t < _from || t >= _to)
+                    continue;
+
+                if (_count == _time.Length)
+                    Grow(_time.Length * 2);
+
+                _time[_count] = t;
+                _hour[_count] = hourTicks;
+                _order[_count] = rankBase | (uint)row;
+
+                // A null cell decodes as 0, as a null row of a block is returned.
+                for (int c = 1; c < _columns.Length; c++)
+                {
+                    var column = columns[c];
+                    if (column.Type == TableColumnType.Double)
+                        ((double[])_columns[c])[_count] = column.DoubleValues[row];
+                    else
+                        ((long[])_columns[c])[_count] = column.Int64Values[row];
+
+                    if (column.IsNull(row))
+                        (_nulls[c] ??= new bool[_time.Length])[_count] = true;
+                }
+
+                _count++;
+            }
+
+            if (_count > 2 * _maxRows)
+                Trim();
+
+            return true;
+        }
+
+        /// <summary>Counts a batch that could not be read.</summary>
+        internal void BatchFailed() => BatchesFailed++;
+
+        /// <summary>
+        /// True when the read can stop before a source whose rows start at <paramref name="nextMinTime"/>: the collector holds
+        /// the limit, has dropped rows past it, and its latest row kept is before that time, so nothing of that source (or of
+        /// a later one, visited in the order of their earliest rows) can be among the rows returned.
+        /// </summary>
+        internal bool CanStopBefore(long nextMinTime)
+        {
+            if (_count > _maxRows)
+                Trim();
+
+            // Truncated: the last trim kept exactly _maxRows sorted rows, and nothing was added since (an addition makes the
+            // count exceed the limit, which the line above trims again).
+            return _truncated && _count == _maxRows && _time[_maxRows - 1] < nextMinTime;
         }
 
         private void Add(ITableBlockStore store, in TableBlockIndexEntry entry, TableBlockRecord record, byte[] tableId)
@@ -128,7 +217,7 @@ namespace HSMServer.Core.TableSensors
                 if (t < _from || t >= _to)
                     continue;
 
-                Append(t, (entry.Sequence << 24) | (uint)row, table, row);
+                Append(t, entry.ArrivalHourTicks, (entry.Sequence << 24) | (uint)row, table, row);
             }
 
             if (_count > 2 * _maxRows)
@@ -137,12 +226,13 @@ namespace HSMServer.Core.TableSensors
 
         // row < 2^24 (8,388,608 rows per block at most by the default limit; the format maximum is int.MaxValue, so a
         // larger row index would share bits with the sequence: order key collisions only reorder equal times, never lose rows).
-        private void Append(long time, long order, BlockTable table, int row)
+        private void Append(long time, long hour, long order, BlockTable table, int row)
         {
             if (_count == _time.Length)
                 Grow(_time.Length * 2);
 
             _time[_count] = time;
+            _hour[_count] = hour;
             _order[_count] = order;
 
             for (int c = 1; c < _columns.Length; c++)
@@ -163,6 +253,7 @@ namespace HSMServer.Core.TableSensors
         private void Grow(int size)
         {
             Array.Resize(ref _time, size);
+            Array.Resize(ref _hour, size);
             Array.Resize(ref _order, size);
 
             for (int c = 1; c < _columns.Length; c++)
@@ -203,11 +294,16 @@ namespace HSMServer.Core.TableSensors
                 permutation[i] = i;
 
             var time = _time;
+            var hour = _hour;
             var order = _order;
             Array.Sort(permutation, (a, b) =>
             {
                 var byTime = time[a].CompareTo(time[b]);
-                return byTime != 0 ? byTime : order[a].CompareTo(order[b]);
+                if (byTime != 0)
+                    return byTime;
+
+                var byHour = hour[a].CompareTo(hour[b]);
+                return byHour != 0 ? byHour : order[a].CompareTo(order[b]);
             });
 
             return permutation;
@@ -218,6 +314,7 @@ namespace HSMServer.Core.TableSensors
             var size = Math.Max(256, keep);
 
             _time = Pick(_time, permutation, keep, size);
+            _hour = Pick(_hour, permutation, keep, size);
             _order = Pick(_order, permutation, keep, size);
 
             for (int c = 1; c < _columns.Length; c++)
@@ -241,7 +338,7 @@ namespace HSMServer.Core.TableSensors
             return result;
         }
 
-        private TableRows Build()
+        internal TableRows Build()
         {
             Trim();
 
@@ -265,6 +362,8 @@ namespace HSMServer.Core.TableSensors
                 Truncated = _truncated,
                 BlocksRead = BlocksRead,
                 BlocksFailed = BlocksFailed,
+                BatchesRead = BatchesRead,
+                BatchesFailed = BatchesFailed,
             };
         }
 

@@ -62,6 +62,7 @@ public sealed class TableBlockOperationsTests : IDisposable
         Assert.Equal(1024, options.Limits.MaxTableIdLength);
         Assert.Equal(32, options.MaxOpenBatchDatabases);
         Assert.Equal(24, options.DeleteMergedBlocksAfterHours);
+        Assert.Equal(256, options.MergeMemoryBudgetMb);
     }
 
     [Theory]
@@ -76,6 +77,7 @@ public sealed class TableBlockOperationsTests : IDisposable
     [InlineData(nameof(TableSensorsConfig.MaxOpenBatchDatabases), 0)]
     [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), -1)]
     [InlineData(nameof(TableSensorsConfig.DeleteMergedBlocksAfterHours), 8761)]
+    [InlineData(nameof(TableSensorsConfig.MergeMemoryBudgetMb), 0)]
     public void A_value_out_of_range_fails_the_validation_with_the_name_of_its_key(string key, long value)
     {
         var config = new TableSensorsConfig();
@@ -152,6 +154,48 @@ public sealed class TableBlockOperationsTests : IDisposable
         Assert.Equal(1, Single<int>("Batch week databases").Value);
         Assert.Equal(1, Single<int>("Merged hours").Value);
         Assert.False(sensors.IsCreated);
+    }
+
+    [Fact]
+    public void The_merge_sensors_appear_with_the_batch_store_and_a_verification_mismatch_stays_an_error()
+    {
+        using var batches = new HSMDatabase.LevelDB.TableBatches.TableBatchDatabase(_folder);
+        var sensors = new TableBlockSensors(_collector.Object, _store, batches);
+        var merge = batches.MergeStatistics;
+
+        merge.Add(ref merge.RowsMerged, 10);
+        sensors.SendInfo();
+        Assert.DoesNotContain(_sensors.Keys, k => k.EndsWith("/Rows merged"));
+
+        batches.WriteHour(Guid.NewGuid(), new HSMDatabase.AccessManager.TableBatches.TableBatchHourCommit { HourTicks = new DateTime(2026, 11, 2).Ticks },
+            [new HSMDatabase.AccessManager.TableBatches.TableBatchHourPart(4, [new(Guid.NewGuid(), 1, 2, 3, [1, 2, 3])])]);
+        sensors.SendInfo();
+
+        Assert.Equal(10, Single<int>("Rows merged").Value);
+        Assert.Equal((0, SensorStatus.Ok), Single<int>("Verification mismatches") is var v ? (v.Value, v.Status) : default);
+        foreach (var name in new[] { "Arrival hours merged", "Merge lag", "Last merge duration", "Unreadable blocks kept", "Rows of removed sensors dropped", "Rows expired before the merge", "Merged hours holding blocks" })
+            Assert.Equal(0, Single<int>(name).Value);
+        Assert.Equal(0.0, Single<double>("Merged blocks size").Value);
+        Assert.Equal(0.0, Single<double>("Merged batches size").Value);
+
+        // A mismatch is an error for as long as the count is above 0, not only in the sample in which it grew.
+        merge.Add(ref merge.VerificationMismatches);
+        merge.Set(ref merge.LagHours, 3);
+        sensors.SendInfo();
+        sensors.SendInfo();
+        Assert.Equal([(0, SensorStatus.Ok), (1, SensorStatus.Error)], Values<int>("Verification mismatches").Select(x => (x.Value, x.Status)));
+        Assert.Equal(3, Values<int>("Merge lag")[^1].Value);
+    }
+
+    [Fact]
+    public void Duplicates_recognised_by_a_watermark_are_posted_with_the_block_store_counters()
+    {
+        var sensors = new TableBlockSensors(_collector.Object, _store);
+        _ = _store.NextSequence;
+        _store.Statistics.Add(ref _store.Statistics.MergedDuplicateBlocks, 2);
+        sensors.SendInfo();
+
+        Assert.Equal(2, Single<int>("Duplicates by watermark").Value);
     }
 
     [Fact]
