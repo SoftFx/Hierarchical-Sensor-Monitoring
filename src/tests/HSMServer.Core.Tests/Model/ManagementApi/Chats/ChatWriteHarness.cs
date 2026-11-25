@@ -25,6 +25,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         public const string SlackUrl = "https://hooks.slack.com/services/T000/B000/XXXXXXXX";
         public const string MattermostUrl = "https://mattermost.example.com/hooks/yyyyyyyyyyyyyyy";
         public const string FolderNotManagedMessage = "Every folder must exist and be one the token's owner manages.";
+        public const string MakingGlobalDeniedMessage = "Only an administrator can make a chat global: leave it bound to at least one folder.";
 
         public static readonly Guid OwnerId = Guid.NewGuid();
 
@@ -159,7 +160,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             return folder;
         }
 
-        public Chat AddChat(string name, bool global = true)
+        public Chat AddChat(string name, bool global = true, string description = null)
         {
             var chat = new Chat(new ChatEntity
             {
@@ -167,6 +168,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 Author = OwnerId.ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
                 Name = name,
+                Description = description,
                 SendMessages = true,
                 MessagesAggregationTimeSec = 60,
             });

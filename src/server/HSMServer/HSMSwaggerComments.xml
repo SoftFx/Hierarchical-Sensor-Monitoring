@@ -3436,11 +3436,13 @@
             <summary>
             The complete list of folders to bind the chat to — a full replace among the
             folders the token's owner manages: a managed binding not listed is removed, a
-            binding to a folder the owner cannot manage stays, every listed id must be a
-            folder the owner manages. Null (omitted): the bindings stay as they are. When
-            the update leaves the chat bound only to folders the caller cannot see, the echo
-            shows an empty <c>folders</c> and the chat is no longer in the caller's sight (a
-            later read answers 404).
+            binding to a folder the owner cannot manage stays, and a new binding may only be
+            added to a folder the owner manages (a folder the chat is already bound to may be
+            listed whatever the owner's role there is — it stays bound). Null (omitted): the
+            bindings stay as they are. Only an administrator can leave the chat with no
+            folders — a chat without folders is global. When the update leaves the chat bound
+            only to folders the caller cannot see, the echo shows an empty <c>folders</c> and
+            the chat is no longer in the caller's sight (a later read answers 404).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDeletePreviewDto">

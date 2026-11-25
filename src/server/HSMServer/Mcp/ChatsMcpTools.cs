@@ -112,7 +112,7 @@ namespace HSMServer.Mcp
         // Idempotent=true: the retry-safe state-set write — re-sending the
         // same partial update converges on the same chat.
         [McpServerTool(Name = "update_chat", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Changes a notification chat — every argument is optional, an omitted one stays unchanged. A webhook or the Telegram binding is removed only by its clear flag; an empty webhook value changes nothing. `folders` is the complete list of bindings among the folders the token's owner manages: a managed binding not listed is removed, a binding to a folder the owner cannot manage stays, every listed id must be a folder the owner manages; omitted: the bindings stay as they are. Needs an admin token, or the manager of a folder the chat is bound to. Webhook URLs are write-only. The response echoes the stored chat.")]
+        [Description("Changes a notification chat — every argument is optional, an omitted one stays unchanged. A webhook or the Telegram binding is removed only by its clear flag; an empty webhook value changes nothing. `folders` is the complete list of bindings among the folders the token's owner manages: a managed binding not listed is removed, a binding to a folder the owner cannot manage stays, a new binding needs a folder the owner manages; omitted: the bindings stay as they are. Only an administrator can make a chat global (leave it with no folders). Needs an admin token, or the manager of a folder the chat is bound to. Webhook URLs are write-only. The response echoes the stored chat.")]
         public async Task<ChatDto> UpdateChat(
             [Description("Chat id.")] Guid chatId,
             [Description("Optional new display name (the rules of create_chat apply; the chat's own name in another letter case is allowed).")] string name = null,
@@ -124,7 +124,7 @@ namespace HSMServer.Mcp
             [Description("Remove the Slack webhook.")] bool? clearSlackWebhook = null,
             [Description("Remove the Mattermost webhook.")] bool? clearMattermostWebhook = null,
             [Description("Remove the Telegram binding (a new one is bound only by a person's /start against an invitation).")] bool? clearTelegramBinding = null,
-            [Description("Optional complete list of the folders to bind the chat to — see the tool description; omitted: unchanged.")] Guid[] folders = null) =>
+            [Description("Optional complete list of the folders to bind the chat to — see the tool description; omitted: unchanged. A folder the chat is already bound to may be listed whatever your role there is. Only an administrator can leave the chat with no folders (a chat without folders is global).")] Guid[] folders = null) =>
             McpToolWriteErrors.Unwrap(await _writer.UpdateChat(chatId, new UpdateChatRequestDto
             {
                 Name = name,

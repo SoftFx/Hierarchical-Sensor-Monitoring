@@ -28,6 +28,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         private const string SlackUrl = ChatWriteHarness.SlackUrl;
         private const string MattermostUrl = ChatWriteHarness.MattermostUrl;
         private const string FolderNotManagedMessage = ChatWriteHarness.FolderNotManagedMessage;
+        private const string MakingGlobalDeniedMessage = ChatWriteHarness.MakingGlobalDeniedMessage;
 
         private static readonly Guid OwnerId = ChatWriteHarness.OwnerId;
 
@@ -41,7 +42,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
         private FolderModel AddFolder(params Guid[] boundChats) => _world.AddFolder(boundChats);
 
-        private Chat AddChat(string name, bool global = true) => _world.AddChat(name, global);
+        private Chat AddChat(string name, bool global = true, string description = null) => _world.AddChat(name, global, description);
 
 
         [Fact]
@@ -412,22 +413,28 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
         [Fact]
-        public async Task UpdateChat_ThatLeavesTheChatOutsideTheCallersSight_EchoesNoBindings()
+        public async Task UpdateChat_ThatLeavesTheChatOutsideTheCallersSight_EchoesNoBindings_AndNoDetail()
         {
             // The caller unbinds their own folder; the chat stays bound to a folder they
             // cannot see. The echo cannot name that folder, so its `folders` is empty — and
             // the chat is out of the caller's sight from here on (a later read is a 404).
-            var chat = AddChat("Ops alerts");
+            // The echo is judged like that later read: no binding they cannot see, and no
+            // detail either — they manage none of the chat's folders any more.
+            var chat = AddChat("Ops alerts", description: "on-call");
             var ownFolder = AddFolder(chat.Id);
             var unseenFolder = AddFolder(chat.Id);
             _world.Unmanaged.Add(unseenFolder.Id);
             _world.Authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Id != unseenFolder.Id);
+            _world.Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(false);
 
             var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Folders = [] }, Token);
 
             Assert.True(result.Success, result.Failure?.Message);
             Assert.Empty(result.Value.Folders);
+            Assert.Null(result.Value.Description);
+            Assert.Null(result.Value.SendMessages);
             Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == unseenFolder.Id).Chats);
             Assert.DoesNotContain(chat.Id, _world.FolderStore.Single(f => f.Id == ownFolder.Id).Chats);
         }
@@ -500,6 +507,77 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Equal([FolderNotManagedMessage], result.Failure.Errors["folders"]);
             Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == folderA.Id).Chats);
             Assert.DoesNotContain(chat.Id, _world.FolderStore.Single(f => f.Id == folderB.Id).Chats);
+        }
+
+        // A read lists every bound folder the caller can SEE, the update accepts the ones
+        // they manage: a client doing read-modify-write sends the read list back unchanged
+        // and must not be refused for a binding that simply stays.
+        [Fact]
+        public async Task UpdateChat_ListingABoundFolderTheCallerDoesNotManage_KeepsIt_AndIsAccepted()
+        {
+            var chat = AddChat("Ops alerts");
+            var folderA = AddFolder(chat.Id);
+            var folderB = AddFolder(chat.Id);
+            _world.Unmanaged.Add(folderB.Id);
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "Ops", Folders = [folderA.Id, folderB.Id] }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal("Ops", result.Value.Name);
+            Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == folderA.Id).Chats);
+            Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == folderB.Id).Chats);
+        }
+
+        [Fact]
+        public async Task UpdateChat_BoundUnmanagedFolderBesideANewUnmanagedOne_IsRejectedUnderFolders()
+        {
+            // Listing a binding that stays is fine; the same list may not smuggle in a
+            // folder the owner cannot manage.
+            var chat = AddChat("Ops alerts");
+            var folderB = AddFolder(chat.Id);
+            var folderC = AddFolder();
+            _world.Unmanaged.Add(folderB.Id);
+            _world.Unmanaged.Add(folderC.Id);
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Folders = [folderB.Id, folderC.Id] }, Token);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([FolderNotManagedMessage], result.Failure.Errors["folders"]);
+            Assert.DoesNotContain(chat.Id, _world.FolderStore.Single(f => f.Id == folderC.Id).Chats);
+        }
+
+        // Making a chat global is an administrator's decision: unbound, a chat is offered
+        // from every node and only an admin can change it afterwards.
+        [Fact]
+        public async Task UpdateChat_ByANonAdministrator_EmptyFolders_IsRejected_AndTheChatStaysBound()
+        {
+            _world.Owner.IsAdmin = false;
+            var chat = AddChat("Ops alerts");
+            var folder = AddFolder(chat.Id);
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Folders = [] }, Token);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([MakingGlobalDeniedMessage], result.Failure.Errors["folders"]);
+            Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == folder.Id).Chats);
+        }
+
+        [Fact]
+        public async Task UpdateChat_ByANonAdministrator_UnbindingTheirFolder_WhileAnotherBindingStays_IsAccepted()
+        {
+            // The chat stays bound (to a folder they cannot manage), so it does not become
+            // global — only outside their sight from here on.
+            _world.Owner.IsAdmin = false;
+            var chat = AddChat("Ops alerts");
+            var ownFolder = AddFolder(chat.Id);
+            var otherFolder = AddFolder(chat.Id);
+            _world.Unmanaged.Add(otherFolder.Id);
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Folders = [] }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.DoesNotContain(chat.Id, _world.FolderStore.Single(f => f.Id == ownFolder.Id).Chats);
+            Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == otherFolder.Id).Chats);
         }
 
 

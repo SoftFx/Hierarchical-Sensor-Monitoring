@@ -6,6 +6,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.Model.ManagementApi.Journal;
 using HSMServer.Notifications.Chats;
 using HSMServer.Validation;
 using System;
@@ -34,7 +35,8 @@ namespace HSMServer.Model.ManagementApi.Chats
     //    rule, so a global chat is admin-only. The area's anti-enumeration split holds: an
     //    INVISIBLE chat (unknown, or bound only to folders the owner cannot see) answers
     //    the same 404 as an unknown one; only a visible chat the caller may not change
-    //    answers 403.
+    //    answers 403. A non-admin's update must leave the chat bound to at least one
+    //    folder: a chat without bindings is global, and global chats are the admin's.
     // Every write carries the token's owner: as the author of a new row, and as the
     // initiator the storage journals (the chat records of #1828).
     public sealed class ChatWriteService
@@ -43,6 +45,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         private const string NotUpdatedMessage = "The chat could not be updated.";
         private const string NotRemovedMessage = "The chat could not be removed.";
         private const string FolderNotManagedMessage = "Every folder must exist and be one the token's owner manages.";
+        private const string MakingGlobalDeniedMessage = "Only an administrator can make a chat global: leave it bound to at least one folder.";
 
         private readonly IChatsManager _chats;
         private readonly ChatAdministrationService _engine;
@@ -77,8 +80,9 @@ namespace HSMServer.Model.ManagementApi.Chats
             var chatId = Guid.NewGuid();
             var update = ToUpdate(chatId, request);
             var folders = request?.Folders ?? [];
+            var managed = ManagedFoldersOf(caller);
 
-            if (RequestProblems(update, nameRequired: true, currentName: null, folders, caller) is { } errors)
+            if (RequestProblems(update, nameRequired: true, currentName: null, folders, current: [], managed, caller) is { } errors)
                 return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             // A new chat has no binding to keep: the requested folders ARE its bindings. The
@@ -87,7 +91,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             // the evaluator already resolved.
             var authorId = Guid.TryParse(caller?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value, out var ownerId) ? ownerId : Guid.Empty;
 
-            var result = await _engine.CreateChatAsync(update, new ChatFolderBinding(Keep: folders, Add: folders, Managed: ManagedFoldersOf(caller)),
+            var result = await _engine.CreateChatAsync(update, new ChatFolderBinding(Keep: folders, Add: folders, Managed: managed),
                 authorId, InitiatorOf(caller));
 
             if (!result.Success)
@@ -116,15 +120,23 @@ namespace HSMServer.Model.ManagementApi.Chats
             var update = ToUpdate(chatId, request);
             var current = StableCopy.Of(() => chat.Folders);
             var listed = request?.Folders;
+            var managed = ManagedFoldersOf(caller);
 
-            if (RequestProblems(update, nameRequired: false, chat.Name, listed ?? [], caller) is { } errors)
+            if (RequestProblems(update, nameRequired: false, chat.Name, listed ?? [], current, managed, caller) is { } errors)
                 return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Invalid, errors);
+
+            // Making a chat global is an administrator's decision. A chat bound to no folder
+            // is offered from every node's policies and, from then on, only an admin can
+            // change it: a folder manager who could unbind the last folder would widen the
+            // chat's audience to the whole server and lock themselves out in one call.
+            if (listed is not null && !IsAdministrator(caller) && !BindingsAfter(current, listed, managed).Any())
+                return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { ["folders"] = [MakingGlobalDeniedMessage] });
 
             // Folders omitted: nothing is added and nothing removed. Listed: the list is the
             // whole desired set among the folders the owner manages — kept and added alike —
             // so a managed binding not listed goes and an unmanaged one is never touched.
-            var binding = new ChatFolderBinding(Keep: listed is { } desired ? desired : current, Add: listed ?? [],
-                Managed: ManagedFoldersOf(caller));
+            var binding = new ChatFolderBinding(Keep: listed is { } desired ? desired : current, Add: listed ?? [], Managed: managed);
 
             var result = await _engine.UpdateChatAsync(update, binding, InitiatorOf(caller));
 
@@ -245,7 +257,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         // rules that have no meaning for a cookie user — the #1705 character rule of a name,
         // on the API/MCP paths only, and the folder scope.
         private Dictionary<string, string[]> RequestProblems(ChatUpdate update, bool nameRequired, string currentName,
-            IReadOnlyCollection<Guid> folders, ClaimsPrincipal caller)
+            IReadOnlyCollection<Guid> folders, IReadOnlyCollection<Guid> current, HashSet<Guid> managed, ClaimsPrincipal caller)
         {
             var errors = new Dictionary<string, List<string>>();
 
@@ -255,9 +267,12 @@ namespace HSMServer.Model.ManagementApi.Chats
             if (TextFieldValidator.HasForbiddenCharacter(update.Name, out var found, allowLineBreaks: false))
                 Add("name", $"The name must not contain control or bidirectional-override characters (found {found}).");
 
-            // An unknown folder and a folder the owner cannot manage are the same refusal:
-            // the answer discloses nothing about folders outside the owner's reach.
-            if (folders.Any(folderId => !_folders.TryGetValue(folderId, out _) || !_authorization.CanSeeFolderDetail(caller, folderId)))
+            // A listed folder must be one the owner manages — unless the chat is bound to
+            // it already: that binding stays whoever manages it, so a client echoing back
+            // the list it read (which names every bound folder it can see) is not refused
+            // for it. An unknown folder and one the owner cannot manage are the same
+            // refusal: the answer discloses nothing about folders beyond the owner's reach.
+            if (folders.Any(folderId => !current.Contains(folderId) && !managed.Contains(folderId)))
                 Add("folders", FolderNotManagedMessage);
 
             if (_engine.Validate(update, nameRequired, currentName)?.Failure?.Errors is { } engineErrors)
@@ -272,8 +287,20 @@ namespace HSMServer.Model.ManagementApi.Chats
         private HashSet<Guid> ManagedFoldersOf(ClaimsPrincipal caller) =>
             [.. _folders.GetValues().Where(folder => _authorization.CanSeeFolderDetail(caller, folder.Id)).Select(folder => folder.Id)];
 
+        // The bindings an update leaves: the unmanaged ones stay, the managed ones are what
+        // the caller lists — the engine's own rule, answered before the write.
+        private static IEnumerable<Guid> BindingsAfter(IReadOnlyCollection<Guid> current, IReadOnlyCollection<Guid> listed, HashSet<Guid> managed) =>
+            current.Where(folderId => !managed.Contains(folderId)).Concat(listed.Where(managed.Contains));
+
+        private bool IsAdministrator(ClaimsPrincipal caller) => JournalAdministrationService.PrincipalIsAdmin(caller, _users);
+
+        // The read surface's two-tier body, judged on the stored chat AFTER the write: an
+        // update can take the chat out of the caller's detail rule (unbinding the last
+        // folder they manage), and the echo must not show what a read would now hide.
         private ChatDto Echo(Chat chat, ClaimsPrincipal caller) =>
-            ChatDtoMapper.ToDto(chat, folderId => _authorization.IsVisible(caller, ApiTokenResource.Folder(folderId)), includeDetail: true);
+            ChatDtoMapper.ToDto(chat,
+                folderId => _authorization.IsVisible(caller, ApiTokenResource.Folder(folderId)),
+                includeDetail: _authorization.CanSeeChatDetail(caller, StableCopy.Of(() => chat.Folders)));
 
         // The area's one rule for a journal author string: the token's owner, by name.
         private InitiatorInfo InitiatorOf(ClaimsPrincipal caller) => ChangeSetRecorder.InitiatorOf(caller, _users);
