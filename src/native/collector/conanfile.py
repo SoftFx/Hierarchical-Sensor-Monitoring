@@ -25,8 +25,8 @@ class HsmCollectorConan(ConanFile):
     topics = ("monitoring", "telemetry", "collector", "metrics", "hsm")
 
     settings = "os", "arch", "compiler", "build_type"
-    options = {"http": [True, False], "fPIC": [True, False]}
-    default_options = {"http": False, "fPIC": True}
+    options = {"http": [True, False], "tables": [True, False], "fPIC": [True, False]}
+    default_options = {"http": False, "tables": False, "fPIC": True}
 
     # Only the library sources — tests/examples are gated OFF for the package build.
     exports_sources = "CMakeLists.txt", "CMakePresets.json", "include/*", "src/*", "cmake/*"
@@ -43,6 +43,11 @@ class HsmCollectorConan(ConanFile):
             self.requires("libcurl/8.10.1")
             # The session transport reads the server's JSON frames with it. Header-only.
             self.requires("nlohmann_json/3.11.3")
+        # Table sensors (#1848): the block writer compresses with zstd and checksums with zlib's crc32_z.
+        # A Conan build has no collector session (libcurl 8.10.1 above), so it writes no block to a server.
+        if self.options.tables:
+            self.requires("zstd/1.5.7")
+            self.requires("zlib/[>=1.2.11 <2]")
 
     def layout(self):
         cmake_layout(self)
@@ -54,6 +59,7 @@ class HsmCollectorConan(ConanFile):
         tc.cache_variables["HSM_COLLECTOR_BUILD_EXAMPLES"] = False
         tc.cache_variables["HSM_COLLECTOR_INSTALL"] = True
         tc.cache_variables["HSM_COLLECTOR_HTTP"] = bool(self.options.http)
+        tc.cache_variables["HSM_COLLECTOR_TABLES"] = bool(self.options.tables)
         tc.generate()
 
     def build(self):
@@ -87,6 +93,9 @@ class HsmCollectorConan(ConanFile):
         if self.options.http:
             core.requires.append("libcurl::libcurl")
             core.requires.append("nlohmann_json::nlohmann_json")
+        if self.options.tables:
+            core.requires.append("zstd::zstd")
+            core.requires.append("zlib::zlib")
 
         # Header-only wrapper: no libs, just the include dir + a link to the core.
         cpp = self.cpp_info.components["cpp"]

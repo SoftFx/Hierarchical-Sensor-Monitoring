@@ -53,6 +53,9 @@ namespace HSMDataCollector.DefaultSensors
 
         public override ValueTask<bool> InitAsync()
         {
+            lock (_lockBar)
+                _lastBarTaken = false;
+
             _collectHandle.Start(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
 
             return base.InitAsync();
@@ -70,14 +73,27 @@ namespace HSMDataCollector.DefaultSensors
             {
                 await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
 
+                // From here no value of this run reaches a bar that will be published: TryWhileBarOpen says so to a
+                // caller that would otherwise lose what it adds (the table loss ledger).
+                lock (_lockBar)
+                    _lastBarTaken = true;
+
                 if (flushPartialBar)
                 {
+                    // A periodic send in flight goes first (#1846 review). It may have taken its snapshot
+                    // already: a value added after that snapshot is in the live bar only, and the final send
+                    // below, finding the send guard held, used to skip and leave that value in no published
+                    // bar. The send loop is stopped here, with the same bounded wait base.StopAsync would
+                    // spend on that send; with no send in flight this does nothing, and the final send is
+                    // what it always was.
+                    await StopSendLoopAsync().ConfigureAwait(false);
+
                     // Flush the in-progress partial bar before base.StopAsync bumps the lifecycle
                     // epoch and the data queues drain — otherwise everything accumulated since the
                     // last CloseTime is lost at shutdown. Same roll-on-successful-send contract as
-                    // CheckCurrentBar: if a periodic send is in flight (TrySendValue returns false),
-                    // that send publishes the snapshot itself and the bar intentionally stays
-                    // un-rolled (the server merges partial bars by OpenTime).
+                    // CheckCurrentBar: if a periodic send outlived the bounded wait above (TrySendValue
+                    // returns false), that send publishes its snapshot itself and the bar intentionally
+                    // stays un-rolled (the server merges partial bars by OpenTime).
                     lock (_lockBar)
                     {
                         if (_internalBar.Count > 0 && TrySendValue())
@@ -94,6 +110,25 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
+
+        // True from the stop's last bar (or a dispose) until the next InitAsync.
+        private bool _lastBarTaken;
+
+        /// <summary>
+        /// Runs <paramref name="add"/> under the bar's lock unless the sensor has taken its last bar of the run; false
+        /// then, and <paramref name="add"/> does not run. A value added here is in a bar that will be published.
+        /// </summary>
+        internal bool TryWhileBarOpen(Action add)
+        {
+            lock (_lockBar)
+            {
+                if (_lastBarTaken)
+                    return false;
+
+                add();
+                return true;
+            }
+        }
 
         protected virtual void CollectBar() => CheckCurrentBar();
 

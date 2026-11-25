@@ -26,6 +26,18 @@
         },
         "nlohmann-json"
       ]
+    },
+    "tables": {
+      "description": "Table sensors: the table block writer (zstd, zlib CRC-32); delivery travels on the collector session of feature http",
+      "dependencies": [
+        {
+          "name": "hsm-collector",
+          "default-features": false,
+          "features": ["http"]
+        },
+        "zstd",
+        "zlib"
+      ]
     }
   }
 }

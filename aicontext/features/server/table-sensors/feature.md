@@ -122,7 +122,7 @@ The schema is part of the sensor's row in the environment database (`SensorEntit
 
 ## UI / Operator Visibility
 
-- The sensor page of a table sensor shows its schema (columns, types, schema id) instead of the history, graph and table tabs (`_Sensor.cshtml`, `_SensorTableSchema.cshtml`); `SensorNodeViewModel.IsChartSupported` and `IsTableFormatSupported` are false, `IsTableSensor` true; `history.js` treats type 11 like File (no history request).
+- The sensor page of a table sensor shows its schema (columns, types, schema id) instead of the history, graph and table tabs (`_Sensor.cshtml`, `_SensorTableSchema.cshtml`); `SensorNodeViewModel.IsChartSupported` and `IsTableFormatSupported` are false, `IsTableSensor` true; `history.js` treats type 11 like File (no history request). Under the schema the page shows the rows: chart, notes and download (`_SensorTableChart.cshtml`, #1847; `aicontext/features/server/table-sensors-ui/feature.md`, "The page").
 - Hidden for a table sensor: the alerts block, the "Aggregate values" switch, the value block of the status edit.
 - The alert template form does not offer the type.
 
@@ -140,7 +140,6 @@ The schema is part of the sensor's row in the environment database (`SensorEntit
 
 ## Known Issues / Limitations
 
-- A table sensor's page does not show rows yet (#1845, #1847).
 - Alerts on a table feed are set on its feed sensors, ordinary sensors under `.tables` of the product: `aicontext/features/server/table-feed-sensors/feature.md` (#1847).
 - Moving a table sensor would need the stored blocks to know the sensor by more than one path; if moves are wanted later, the entity can carry a history of `(path, from sequence)` and no block has to change.
 - A template entity of type 11 written into the database by hand would fail to build (`Policy.BuildPolicy` has no table policy, so `AlertTemplateModel`'s constructor meets a null for each of its policies); every write path refuses the type.
