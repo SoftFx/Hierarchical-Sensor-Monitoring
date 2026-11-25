@@ -247,7 +247,8 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
             if (string.IsNullOrEmpty(password))
                 return DumpPasswordSetOutcome.TooShort;
 
-            if (generated)
+            // A value counts as generated only when it has the shape Generate gives; anything else is checked as typed.
+            if (generated && password.Length == DumpPasswordRules.GeneratedLength && password.All(DumpPasswordRules.GeneratedAlphabet.Contains))
                 return DumpPasswordSetOutcome.Set;
 
             if (password.Length < DumpPasswordRules.MinTypedLength)

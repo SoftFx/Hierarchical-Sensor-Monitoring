@@ -111,7 +111,7 @@ On an archive answer:
 - `X-Hsm-Password-Version: <N>` — the version of the product's dump password the archive opens with.
 - `Content-Type: application/zip`.
 - When HSM serves: `Accept-Ranges`, `Content-Range` on 206, `ETag: "<archiveId:N>"`, `Last-Modified` (the archive file's time), `If-Range` resumption, and `Cache-Control: private, no-store`. The management API controller is also marked `NoStore`.
-- When Caddy serves: Caddy's `file_server` gives the ranges and its own `ETag` and `Last-Modified`; of HSM's answer it copies `Content-Disposition`, `Repr-Digest` and `X-Hsm-Password-Version`.
+- When Caddy serves: Caddy's `file_server` gives the ranges and its own `ETag` and `Last-Modified`; of HSM's answer it copies `Content-Disposition`, `Repr-Digest`, `X-Hsm-Password-Version` and `Cache-Control`.
 
 ### The hand-over to the bundled Caddy
 

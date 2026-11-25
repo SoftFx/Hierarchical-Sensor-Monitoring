@@ -263,7 +263,9 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
         [InlineData("password-with-\t-tab", false, DumpPasswordSetOutcome.NotPrintableAscii)]
         [InlineData("password-with-\x7F-del", false, DumpPasswordSetOutcome.NotPrintableAscii)]
         [InlineData("password-with-é-accent", false, DumpPasswordSetOutcome.NotPrintableAscii)]
-        [InlineData("short", true, DumpPasswordSetOutcome.Set)]
+        [InlineData("short", true, DumpPasswordSetOutcome.TooShort)]
+        [InlineData("password-with-я-letter", true, DumpPasswordSetOutcome.NotPrintableAscii)]
+        [InlineData("abcdefghijklmnopqrstuvwx", true, DumpPasswordSetOutcome.Set)]
         public void SetPassword_Validates_Typed_Passwords(string password, bool generated, DumpPasswordSetOutcome expected)
         {
             var service = _context.CreateService();

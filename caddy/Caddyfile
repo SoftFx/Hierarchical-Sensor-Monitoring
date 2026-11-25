@@ -84,7 +84,7 @@
 		root * /srv/hsm-archives
 		rewrite * /{rp.header.X-Hsm-Archive}
 		copy_response_headers {
-			include Content-Disposition Repr-Digest X-Hsm-Password-Version
+			include Content-Disposition Repr-Digest X-Hsm-Password-Version Cache-Control
 		}
 		file_server
 	}

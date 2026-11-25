@@ -161,7 +161,7 @@ expect_count "$archives_json" 2 '"set":{"Host":["{http.request.hostport}"],"X-Hs
 expect_count "$archives_json" 2 '"handle_response":[{"match":{"headers":{"X-Hsm-Archive":["*"]}}'
 expect_count "$archives_json" 2 '"root":"/srv/hsm-archives"'
 expect_count "$archives_json" 2 '"uri":"/{http.reverse_proxy.header.X-Hsm-Archive}"'
-expect_count "$archives_json" 2 '"include":["Content-Disposition","Repr-Digest","X-Hsm-Password-Version"]'
+expect_count "$archives_json" 2 '"include":["Content-Disposition","Repr-Digest","X-Hsm-Password-Version","Cache-Control"]'
 expect_count "$archives_json" 2 '"handle_response"'
 expect_count "$archives_json" 2 '"handler":"file_server"'
 expect_count "$archives_json" 2 '"root":'
@@ -343,6 +343,7 @@ https://app:443, https://hsm.example.com:443, https://proxy:443 {
 		header Content-Disposition "attachment; filename=\"dump.dmp.zip\""
 		header Repr-Digest "$archive_digest"
 		header X-Hsm-Password-Version "3"
+		header Cache-Control "private, no-store"
 		respond "This answer is an instruction for the bundled Caddy." 503
 	}
 	handle /missing {
@@ -457,6 +458,7 @@ expect_header full Accept-Ranges bytes
 expect_header full Content-Disposition 'attachment; filename="dump.dmp.zip"'
 expect_header full Repr-Digest "$archive_digest"
 expect_header full X-Hsm-Password-Version 3
+expect_header full Cache-Control 'private, no-store'
 no_instruction full
 archive_etag="$(header_of full ETag)"
 [ -n "$archive_etag" ] || hand_over_fail 'full: no ETag'
