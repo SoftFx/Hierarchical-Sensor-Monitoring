@@ -381,9 +381,10 @@ namespace HSMServer.Core.Cache
         // moving its sensors (MoveSensorAsync, which leaves an alias at each
         // old path); nodes themselves are never moved (ADR-0018).
         //
-        // A root's name is no part of a sensor path, so a root is renamed
-        // freely; only an empty name is refused, which would leave the root
-        // in _productsByName under its old name.
+        // A root's name is no part of the root-relative paths the index and
+        // the aliases are keyed by, so a root rename leaves them valid; only
+        // an empty name is refused, which would leave the root in
+        // _productsByName under its old name.
         private static string RenameRefusal(ProductModel product, ProductUpdate update)
         {
             if (update.Name is null || update.Name == product.DisplayName)

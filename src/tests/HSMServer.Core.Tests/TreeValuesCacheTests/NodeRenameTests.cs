@@ -25,8 +25,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// it, so a node below the root is never renamed; a root's name is no part of a
     /// path and a root is renamed freely.
     /// </summary>
-    // The fixture database is shared by every test in the class, so each test
-    // works under its own unique node names.
     [Collection("Database collection")]
     public class NodeRenameTests : MonitoringCoreTestsBase<NodeRenameFixture>
     {
@@ -83,6 +81,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await AddIntAsync(_valuesCache, _fixture.Product, _fixture.Key, $"{m}/s", newPathTime);
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.Product, $"{m}/s", out var other));
             Assert.NotEqual(sensor.Id, other.Id);
+            Assert.Equal(newPathTime, other.LastValue.Time);
             Assert.NotEqual(node.Id, other.Parent.Id);
             Assert.Equal(m, other.Parent.DisplayName);
             Assert.Equal(oldPathTime, sensor.LastValue.Time);
@@ -113,7 +112,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Node rename")]
-        public async Task Rename_OfANestedNode_IsRefused_AtEveryDepth()
+        public async Task Rename_OfANestedNode_AndOfItsParent_IsRefused()
         {
             var top = Unique();
             var inner = Unique();
