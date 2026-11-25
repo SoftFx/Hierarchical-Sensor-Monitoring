@@ -27,10 +27,10 @@
 
 @if (Model is SensorInfoViewModel { SensorType: HSMCommon.Model.SensorType.Table })
 {
-    @* The retention of a table sensor's rows (#1850). When its deletion is applied, the second line goes. *@
+    @* A table sensor keeps its rows by whole weeks (#1850, ADR-0021 point 12): the period is rounded up to weeks. *@
     <div id="tableRetentionNote" class="ms-3 mt-1 text-muted small">
-        For a table sensor this period is counted in whole weeks of rows.
-        Rows are not deleted by it yet: the retention of table rows is in work (#1850).
+        Rows of a table sensor are kept by whole weeks: the period is rounded up to whole weeks (10 days are kept as 2 weeks),
+        and rows are deleted a week at a time, so they may stay up to a week longer than the period.
     </div>
 }
 

@@ -309,7 +309,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var sequence = NextProducerSequence();
 
             Assert.Equal(TableBlockPutOutcome.Stored, _service.Put(_product, _producer, sequence, block).Outcome);
-            Store.DeleteMergedHour(Store.GetBlocks(_product)[^1].ArrivalHourTicks, [], [new TableBlockWatermark(_product, _producer, sequence)]);
+            Store.DeleteMergedHour(Store.GetBlocks(_product)[^1].ArrivalHourTicks, new HashSet<long>(), [new TableBlockWatermark(_product, _producer, sequence)]);
 
             var resent = _service.Put(_product, _producer, sequence, block);
 

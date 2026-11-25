@@ -39,6 +39,8 @@ namespace HSMDataCollector.Tests.Transport
         private readonly ConcurrentQueue<string> _httpRequests = new ConcurrentQueue<string>();
         private readonly ConcurrentQueue<int> _closes = new ConcurrentQueue<int>();
         private readonly ConcurrentDictionary<int, WebSocket> _open = new ConcurrentDictionary<int, WebSocket>();
+        // The HTTP context of each open session: dropping a session also drops its TCP connection through it.
+        private readonly ConcurrentDictionary<int, HttpListenerContext> _openContexts = new ConcurrentDictionary<int, HttpListenerContext>();
         // The open sessions that have had their hello: what a push goes to.
         private readonly ConcurrentDictionary<int, WebSocket> _greeted = new ConcurrentDictionary<int, WebSocket>();
         // A WebSocket takes one send at a time; acks come from the session loops, pushes from the test.
@@ -217,7 +219,19 @@ namespace HSMDataCollector.Tests.Transport
             {
                 try { session.Value.Abort(); }
                 catch (Exception) { }
+
+                // Aborting the WebSocket alone leaves the TCP connection open under the managed HttpListener of
+                // .NET on Linux and macOS (http.sys on Windows closes it): the collector would see nothing until its
+                // heartbeat gave the session up. Aborting the response closes the connection on every platform.
+                if (_openContexts.TryGetValue(session.Key, out var context))
+                    DropConnection(context);
             }
+        }
+
+        private static void DropConnection(HttpListenerContext context)
+        {
+            try { context.Response.Abort(); }
+            catch (Exception) { }
         }
 
         // --- what the collector did ---
@@ -314,7 +328,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 var upgraded = await context.AcceptWebSocketAsync(Subprotocol).ConfigureAwait(false);
 
-                await ServeAsync(upgraded.WebSocket).ConfigureAwait(false);
+                await ServeAsync(upgraded.WebSocket, context).ConfigureAwait(false);
             }
             catch (Exception)
             {
@@ -322,10 +336,11 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
-        private async Task ServeAsync(WebSocket socket)
+        private async Task ServeAsync(WebSocket socket, HttpListenerContext context)
         {
             var index = Interlocked.Increment(ref _sessions);
             var sessionId = Guid.NewGuid().ToString("N");
+            _openContexts[index] = context;
             _open[index] = socket;
             _liveSessions[sessionId] = index;
             _sessionIds.Enqueue(sessionId);
@@ -381,6 +396,7 @@ namespace HSMDataCollector.Tests.Transport
             {
                 _greeted.TryRemove(index, out _);
                 _open.TryRemove(index, out _);
+                _openContexts.TryRemove(index, out _);
                 _liveSessions.TryRemove(sessionId, out _);
                 socket.Dispose();
 

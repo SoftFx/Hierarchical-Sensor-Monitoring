@@ -20,6 +20,12 @@ namespace HSMServer.Core.TableSensors
         /// <summary>Counts a batch that could not be read.</summary>
         void BatchFailed();
 
+        /// <summary>
+        /// Counts blocks of committed hours that the merge could not read and kept (listed in their hour's record, #1850 part
+        /// 4b): failed blocks, as they were before their hour was merged.
+        /// </summary>
+        void CountKeptUnreadableBlocks(int count);
+
         /// <summary>True when the read can stop before a source whose earliest row in the range is at <paramref name="nextMinTime"/>.</summary>
         bool CanStopBefore(long nextMinTime);
     }
