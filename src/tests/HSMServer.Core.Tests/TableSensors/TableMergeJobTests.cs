@@ -585,6 +585,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var resent = _server.Service.Put(_product, _producer, 2, Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)])));
             Assert.Equal(TableBlockPutOutcome.Duplicate, resent.Outcome);
             Assert.False(resent.RefusalsKnown);
+            Assert.Null(resent.AcceptedTables);
             Assert.Equal(1, _server.Blocks.Statistics.MergedDuplicateBlocks);
 
             // The same producer and sequence under another product is that product's block.

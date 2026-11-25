@@ -91,7 +91,13 @@ namespace HSMServer.Core.TableSensors
 
         public string Message { get; init; }
 
-        public int AcceptedTables => Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate ? TableCount - Refusals.Count : 0;
+        /// <summary>
+        /// The tables taken: for <see cref="TableBlockPutOutcome.Stored"/> and <see cref="TableBlockPutOutcome.Duplicate"/> the
+        /// tables not refused, 0 for a refusal; null when <see cref="RefusalsKnown"/> is false (a duplicate whose hour was
+        /// merged, or whose envelope cannot be read): which tables were taken is not known then.
+        /// </summary>
+        public int? AcceptedTables => !RefusalsKnown ? null
+            : Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate ? TableCount - Refusals.Count : 0;
     }
 
 

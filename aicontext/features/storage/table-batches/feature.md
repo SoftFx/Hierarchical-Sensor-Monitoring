@@ -362,7 +362,7 @@ The order of writes for one arrival hour H:
 ### Watermarks and duplicates
 
 - The watermark of a product and producer is the highest producer sequence merged. It is durable in the records of the merged hours (the highest per producer over all of them); in the block store it is in memory only (`RaiseWatermarks`, raised again by `DeleteMergedHour`). After a start the merge must raise it from `GetWatermarks` for every product before the first put, or a resend of a merged block would be stored again.
-- A put at or below the watermark is a duplicate with `RefusalsKnown` false. `TableBlockPutResult.AcceptedTables` still counts every table of such a duplicate (`TableCount` minus no refusals): callers must look at `RefusalsKnown` first (to settle with the wire step).
+- A put at or below the watermark is a duplicate with `RefusalsKnown` false. `AcceptedTables` is null then (and for a duplicate whose stored envelope cannot be read): which tables were taken is not known (#1850, after the review of #1867).
 - It relies on a producer delivering its blocks in order and never taking its sequence back (#1845: a collector that cannot read its producer state takes a new producer id).
 
 ### Memory and time of the merge
