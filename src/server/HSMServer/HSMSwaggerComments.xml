@@ -1917,6 +1917,17 @@
         <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Operation">
             <summary>The record's operation tag (create/update/delete/rollback, #1638); null when not derivable.</summary>
         </member>
+        <member name="P:HSMServer.Model.History.Personal.Journal.SelectedJournalViewModel.ConnectedId">
+            <summary>Id of the sensor, node or folder whose journal is loaded; null before the first selection.</summary>
+        </member>
+        <member name="M:HSMServer.Model.History.Personal.Journal.SelectedJournalViewModel.ConnectJournal(HSMServer.Model.TreeViewModel.BaseNodeViewModel,HSMServer.Core.Journal.IJournalService,System.Func{HSMServer.Model.TreeViewModel.ProductNodeViewModel,System.Boolean})">
+            <param name="baseNode">The selected sensor, node or folder.</param>
+            <param name="journal">The journal to read from.</param>
+            <param name="isProductVisible">
+            For a folder: which of its products the user can see. Records of the other products are not loaded
+            (a folder role does not imply a role on every product in it). Null loads every product.
+            </param>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto">
             <summary>
             A product access key — the credential an HSM agent sends in the Key
@@ -4173,11 +4184,58 @@
             <see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetComparableChildGroups(System.Guid)"/>.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.TreeViewModel.UserTreeAccess">
+            <summary>
+            The sensor tree as one web user may address it by id.
+            <para>
+            <see cref="T:HSMServer.Model.TreeViewModel.TreeViewModel"/> and the folder manager are process-wide singletons: an id resolved from
+            them proves nothing about the caller. Controllers that take a sensor, node or folder id from the
+            client hold this class INSTEAD of the tree, so every lookup answers "not found" for an entity the
+            user cannot see and a new action has no unchecked lookup to reach for.
+            </para>
+            <para>
+            The rule is the one the tree itself is built by (<see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetUserProducts(HSMServer.Model.Authentication.User)"/>): a
+            sensor or node is visible when the user is an admin or holds any role on its ROOT product; a folder
+            is visible when the user is an admin, holds a role on the folder, or sees one of its products.
+            Whether the user may CHANGE what they see (Manager role) is a separate question this class does
+            not answer.
+            </para>
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsVisible(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>True when <paramref name="id"/> is a sensor, node or folder the user can see.</summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)">
+            <summary>
+            The products of a folder the user can see. A folder role does not imply a role on every product
+            in it (a per-product role removal narrows the folder role), so the folder's own list is not it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetSensorIds(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>
+            Ids of the sensors under <paramref name="id"/> (a sensor itself, a node subtree, or the visible
+            products of a folder). Empty for an unknown id and for one the user cannot see.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.TryGetBackgroundSensor(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.SensorNodeViewModel,System.Boolean,HSMServer.Model.TreeViewModel.SensorNodeViewModel@)">
+            <summary>
+            The "Service alive" / "Service status" sensor drawn behind <paramref name="sensor"/>'s chart. It
+            is searched in the sensor's own root product, so it is visible whenever the sensor is; the lookup
+            goes through the same check all the same.
+            </summary>
+        </member>
         <member name="P:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.ShowChartTab">
             <summary>
             True when the selected node has at least one group of >= 2 comparable child sensors to overlay
             on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
             </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.ConnectFolder(HSMServer.Model.Folders.FolderModel,System.Collections.Generic.IDictionary{System.Guid,HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
+            <param name="newFolder">The selected folder.</param>
+            <param name="visibleProducts">
+            The products of the folder to page through: the ones the user can see, which is not always the whole
+            folder (<see cref="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)"/>).
+            </param>
         </member>
         <member name="T:HSMServer.Notifications.ChatDeliveryResult">
             <summary>

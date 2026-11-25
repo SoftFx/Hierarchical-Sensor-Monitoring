@@ -23,6 +23,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.Model.ManagementApi.Journal;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Chats;
@@ -180,7 +181,7 @@ namespace HSMServer.Core.Tests.Controllers
             var policyWriter = new PolicyAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object,
                 Chats.Object, Folders.Object, Schedules.Object, recorder);
 
-            return new HomeController(Cache.Object, Folders.Object, Tree, Users.Object, Journal, Chats.Object,
+            return new HomeController(Cache.Object, Folders.Object, Access, Users.Object, Journal, Chats.Object,
                 new Mock<IDatabaseCore>().Object, Schedules.Object, policyWriter,
                 new SensorMoveAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object))
             {
@@ -190,6 +191,15 @@ namespace HSMServer.Core.Tests.Controllers
 
         public SensorHistoryController History(User user) =>
             new(Cache.Object, Access, Users.Object) { ControllerContext = Context(user) };
+
+        public JournalController JournalFeed(User user) =>
+            new(Users.Object, new JournalAdministrationService(ChangeSetTestHelpers.JournalService(), Cache.Object, Folders.Object,
+                    TokenAuthorization.Object, Users.Object, Mock.Of<IChangeSetAdministrationService>(), ChangeSetTestHelpers.Journal()),
+                Cache.Object, Access)
+            {
+                ControllerContext = Context(user),
+            };
+
 
         /// <summary>Number of state-changing calls the cache and the folder storage have received so far.</summary>
         public int Writes() =>

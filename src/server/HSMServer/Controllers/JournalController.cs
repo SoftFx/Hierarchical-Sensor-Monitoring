@@ -5,6 +5,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Journal;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Journal;
+using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -30,12 +31,14 @@ public class JournalController : BaseController
 {
     private readonly JournalAdministrationService _journal;
     private readonly ITreeValuesCache _cache;
+    private readonly UserTreeAccess _tree;
 
     public JournalController(IUserManager userManager, JournalAdministrationService journal,
-        ITreeValuesCache cache) : base(userManager)
+        ITreeValuesCache cache, UserTreeAccess tree) : base(userManager)
     {
         _journal = journal;
         _cache = cache;
+        _tree = tree;
     }
 
 
@@ -44,6 +47,13 @@ public class JournalController : BaseController
     {
         var draw = parameters.Draw;
         var rows = new List<List<string>>(parameters.Length);
+
+        // The feed reads per-user state that HomeController.SelectNode connected to a sensor, node or
+        // folder. That state outlives a role change, so the selection is checked again on every page: no
+        // selection, or one the user can no longer see, answers an empty table.
+        if (StoredUser.Journal.ConnectedId is not { } connectedId || !_tree.IsVisible(CurrentUser, connectedId))
+            return Json(new DataTableResultSet(draw, 0, 0, rows));
+
         var (recordsFromDb, filteredRecords) = StoredUser.Journal.GetPage(parameters);
         foreach (var recordFromDb in recordsFromDb)
         {

@@ -24,13 +24,26 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
     private BaseNodeViewModel _node;
     private int _totalSize;
 
+    private Func<ProductNodeViewModel, bool> _isProductVisible;
+
     public int TotalSize => _totalSize;
 
+    /// <summary>Id of the sensor, node or folder whose journal is loaded; null before the first selection.</summary>
+    public Guid? ConnectedId => _node?.Id;
 
-    public Task ConnectJournal(BaseNodeViewModel baseNode, IJournalService journal)
+
+    /// <param name="baseNode">The selected sensor, node or folder.</param>
+    /// <param name="journal">The journal to read from.</param>
+    /// <param name="isProductVisible">
+    /// For a folder: which of its products the user can see. Records of the other products are not loaded
+    /// (a folder role does not imply a role on every product in it). Null loads every product.
+    /// </param>
+    public Task ConnectJournal(BaseNodeViewModel baseNode, IJournalService journal, Func<ProductNodeViewModel, bool> isProductVisible = null)
     {
         if (baseNode is null || _node?.Id == baseNode?.Id)
             return Task.CompletedTask;
+
+        _isProductVisible = isProductVisible;
 
         if (_journal is null)
         {
@@ -60,7 +73,8 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         if (node is FolderModel folder)
         {
             foreach (var (_, product) in folder.Products)
-                requests.Add(Task.Run(() => Subscribe(product)));
+                if (_isProductVisible?.Invoke(product) ?? true)
+                    requests.Add(Task.Run(() => Subscribe(product)));
         }
         else if (node is ProductNodeViewModel product)
         {

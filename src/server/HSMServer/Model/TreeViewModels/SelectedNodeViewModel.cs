@@ -1,4 +1,6 @@
 using HSMServer.Model.Folders;
+using System;
+using System.Collections.Generic;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 
@@ -32,11 +34,16 @@ public class SelectedNodeViewModel
         _sensors.Load(newNode.Sensors);
     }
 
-    public void ConnectFolder(FolderModel newFolder)
+    /// <param name="newFolder">The selected folder.</param>
+    /// <param name="visibleProducts">
+    /// The products of the folder to page through: the ones the user can see, which is not always the whole
+    /// folder (<see cref="UserTreeAccess.GetVisibleProducts"/>).
+    /// </param>
+    public void ConnectFolder(FolderModel newFolder, IDictionary<Guid, ProductNodeViewModel> visibleProducts)
     {
         Subscribe(newFolder);
 
-        _nodes.Load(newFolder.Products, "Products");
+        _nodes.Load(visibleProducts, "Products");
         _sensors.Reset();
     }
 
