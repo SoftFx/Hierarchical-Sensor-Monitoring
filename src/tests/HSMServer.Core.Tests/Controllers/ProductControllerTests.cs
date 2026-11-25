@@ -314,6 +314,19 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Theory]
+        [MemberData(nameof(RoleActions))]
+        public void RoleAction_ValidatesNoAntiforgeryToken(string action)
+        {
+            // Pinned on purpose: EditProduct.cshtml calls these with $.ajax and a JSON body and sends
+            // no token, so the attribute would turn every button of the Members table into a 400.
+            // Whoever adds it must add the header to the three callers in the same change.
+            var post = typeof(ProductController).GetMethod(action, BindingFlags.Public | BindingFlags.Instance);
+
+            Assert.NotNull(post);
+            Assert.False(post.IsDefined(typeof(ValidateAntiForgeryTokenAttribute), inherit: false));
+        }
+
+        [Theory]
         [MemberData(nameof(GatedActions))]
         public async Task GatedAction_Viewer_Gets403_AndNothingChanges(string action)
         {
@@ -413,7 +426,7 @@ namespace HSMServer.Core.Tests.Controllers
             var result = await Post(Edit, UserWith(_root.Id, ProductRoleEnum.ProductManager), _root.Id);
 
             Assert.IsType<PartialViewResult>(result);
-            Assert.NotNull(update?.Initiator);
+            Assert.Equal(InitiatorInfo.AsUser("someone"), update?.Initiator);
         }
 
         [Theory]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -99,6 +100,20 @@ namespace HSMServer.Core.Tests.Controllers
         private void VerifyChatsUpdated() =>
             _folderManager.Verify(f => f.TryUpdate(It.Is<FolderUpdate>(u => u.Id == _folder.Id && u.Chats.SetEquals(new[] { _chatId }))), Times.Once);
 
+
+        [Fact]
+        public void UpdateChats_IsPostOnly_AndValidatesNoAntiforgeryToken()
+        {
+            var method = typeof(FoldersController).GetMethod(nameof(FoldersController.UpdateChats), BindingFlags.Public | BindingFlags.Instance);
+
+            Assert.NotNull(method);
+            Assert.True(method.IsDefined(typeof(HttpPostAttribute), inherit: false));
+
+            // Pinned on purpose: _Chats.cshtml replaces the content of the form with the saved
+            // partial, which drops the token the form was rendered with, so with the attribute the
+            // second save of a page would be a 400. Whoever adds it must keep the token in the form.
+            Assert.False(method.IsDefined(typeof(ValidateAntiForgeryTokenAttribute), inherit: false));
+        }
 
         [Fact]
         public async Task Viewer_Gets403_AndNothingIsUpdated()

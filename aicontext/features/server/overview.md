@@ -103,16 +103,20 @@ TypeScript 5.3 + Webpack 5:
   `HomeController.RemoveNode`) requires Manager of the node's ROOT product or admin — the removal is
   recursive and irreversible (#1512; `ProductControllerTests`).
 - Product roles are held per ROOT product (`User.ProductsRoles`); a node below the root has no roles
-  of its own. Every write of `ProductController` that names a product goes through one gate
-  (`DenyUnlessManager`): the caller must be an admin or a Manager of the root product of the posted
-  id; an id that is not in the tree is answered 404, everyone else 403, and a role entry on a nested
-  node's own id counts for nothing. The gate covers the product edit form (`EditProduct` POST: name,
-  description, default chats), the Members table (`AddUserRight`, `EditUserRole`, `RemoveUserRole`),
-  the move between folders (`MoveProduct`) and the removal. The role actions answer 400 for a body
-  that cannot be read and 404 for an unknown user, and look the user up only after the caller has
-  passed, so a refused caller cannot probe user ids. `MoveProduct` is POST only: a move changes
-  roles (the users of the folder the product leaves lose their folder role on it, the users of the
-  folder it enters receive theirs). Antiforgery is validated on `EditProduct`, `MoveProduct` and
+  of its own. Six writes of `ProductController` go through one gate (`DenyUnlessManager`): the
+  caller must be an admin or a Manager of the root product of the posted id; an id that is not in
+  the tree is answered 404, everyone else 403, and a role entry on a nested node's own id counts for
+  nothing. The six are the product edit form (`EditProduct` POST: name, description, default
+  chats), the Members table (`AddUserRight`, `EditUserRole`, `RemoveUserRole`), the move between
+  folders (`MoveProduct`) and the removal. `UpdateSensorGroups` is guarded separately, by
+  `ProductRoleFilterBySensorGroups`, which compares the posted id as it is and so refuses a nested
+  node id; `CreateProduct` names no product and is open to every signed-in user. Past the gate the
+  role actions answer 400 for a JSON body that cannot be read and 404 for an unknown user (an empty
+  user id on `AddUserRight` is answered 200 with the validation message the page shows after its
+  reload), and they look the user up only after the caller has passed, so a refused caller cannot
+  probe user ids. `MoveProduct` is POST only: a move changes roles (the users of the folder the
+  product leaves lose their folder role on it; the users of the folder it enters who hold no role
+  on the product yet receive theirs). Antiforgery is validated on `EditProduct`, `MoveProduct` and
   `RemoveProduct`, whose callers send the token; the role actions take a JSON body, which a
   cross-site form cannot send, and their callers send none. `ProductControllerTests` covers admin,
   Manager, Viewer, a user with no role, a Manager of another product, an unknown id and a nested id

@@ -127,8 +127,9 @@ namespace HSMServer.Controllers
         // The RemoveProduct shape below, for the same reason: "Move to ..." is offered to the product's
         // Managers only, but the action checked no role and answered GET. A move is a change of roles —
         // FolderManager takes the product's roles from the users of the folder it leaves and gives the
-        // users of the folder it enters their folder role on it — so anyone who held a role in a folder
-        // could move any product there and receive that role on it.
+        // users of the folder it enters, those who hold no role on the product yet, their folder role
+        // on it — so anyone who held a role in a folder could move a product they had no role on
+        // there and receive that role on it.
         public async Task<IActionResult> MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (DenyUnlessManager(productId, out _) is { } denied)
