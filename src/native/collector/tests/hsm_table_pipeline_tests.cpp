@@ -35,6 +35,7 @@
 #include <system_error>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
@@ -483,9 +484,11 @@ namespace
             std::unique_ptr<Table> first;
             if (with_pipeline)
                 first = std::make_unique<Table>(CreateTable(collector.value, "first", { column }));
+            // Once: the hook may not reset itself (that would destroy it while it runs).
+            bool disposed = false;
             tables::test::SetBeforeCreateLock(collector.value, [&] {
-                tables::test::SetBeforeCreateLock(collector.value, nullptr);
-                hsm_collector_dispose(collector.value);
+                if (!std::exchange(disposed, true))
+                    hsm_collector_dispose(collector.value);
             });
             hsm_table_sensor_t* sensor = reinterpret_cast<hsm_table_sensor_t*>(1);
             CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE),
