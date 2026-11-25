@@ -747,14 +747,14 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             store.Dispose();
             DeleteHours();
 
-            // The rebuild stops in its scan: Hours exists, without a single hour.
+            // The rebuild stops in its scan: Hours exists, without a single hour and without its complete key.
             var crashed = Open();
             crashed.Checkpoint = p => { if (p == "rebuild-scanning") throw new CheckpointException(p); };
             Assert.Throws<TableBatchStoreException>(() => crashed.GetHours(_product));
             crashed.Dispose();
             Assert.True(Directory.Exists(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName)));
 
-            // The next open finds the unfinished rebuild, sets that Hours aside and rebuilds both hours.
+            // The next open finds an Hours without the key and rebuilds both hours.
             var reopened = Open();
             Assert.Equal([Week0, Week0 + Hour], reopened.GetHours(_product).Select(h => h.HourTicks));
             Assert.Equal(2L, reopened.GetWatermarks(_product)[_producer]);
@@ -765,6 +765,116 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             var third = Open();
             Assert.Equal(2, third.GetHours(_product).Count);
             Assert.Equal(0, third.Statistics.HoursRebuilt);
+        }
+
+        [Fact]
+        public void A_crash_right_after_the_hours_database_is_created_leaves_nothing_trusted_and_the_next_open_rebuilds()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, sequence: 1), TwoParts());
+            store.WriteHour(_product, Commit(Week0 + Hour, sequence: 2), TwoParts());
+            store.Dispose();
+            DeleteHours();
+
+            // The open creates the folder of Hours and stops before anything is written into it: a valid, empty database.
+            var crashed = Open();
+            crashed.Checkpoint = p => { if (p == "hours-opened") throw new CheckpointException(p); };
+            Assert.Throws<TableBatchStoreException>(() => crashed.GetHours(_product));
+            crashed.CloseWithoutFlush();
+            Assert.True(Directory.Exists(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName)));
+
+            // It has no complete key, so the next open does not take its emptiness for the truth: both hours are rebuilt.
+            var reopened = Open();
+            Assert.Equal([Week0, Week0 + Hour], reopened.GetHours(_product).Select(h => h.HourTicks));
+            Assert.Equal(2L, reopened.GetWatermarks(_product)[_producer]);
+            Assert.Equal(2, reopened.Statistics.HoursRebuilt);
+            reopened.Dispose();
+
+            // Rebuilt once: with its key it is the truth.
+            var third = Open();
+            Assert.Equal(2, third.GetHours(_product).Count);
+            Assert.Equal(0, third.Statistics.HoursRebuilt);
+        }
+
+        [Fact]
+        public void A_crash_right_after_the_placements_database_is_created_leaves_nothing_trusted_and_the_next_open_rebuilds()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, 1), [Part(1, (_sensorA, 0, 1)), Part(4, (_sensorB, 0, 1))]);
+            store.Dispose();
+
+            var placementsPath = Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.PlacementsName);
+            Directory.Delete(placementsPath, recursive: true);
+
+            var crashed = Open();
+            crashed.Checkpoint = p => { if (p == "placements-opened") throw new CheckpointException(p); };
+            Assert.Throws<TableBatchStoreException>(() => crashed.GetPlacements(_product));
+            crashed.CloseWithoutFlush();
+            Assert.True(Directory.Exists(placementsPath));
+
+            var reopened = Open();
+            Assert.Equal(1, reopened.GetPlacement(_product, _sensorA).Target);
+            Assert.Equal(4, reopened.GetPlacement(_product, _sensorB).Target);
+            Assert.Equal(1, reopened.Statistics.PlacementsRebuilt);
+            reopened.Dispose();
+
+            var third = Open();
+            Assert.Equal(2, third.GetPlacements(_product).Count);
+            Assert.Equal(0, third.Statistics.PlacementsRebuilt);
+        }
+
+        [Fact]
+        public void A_dispose_during_a_rebuild_of_the_hours_leaves_nothing_trusted_and_the_hours_are_back_after_a_reopen()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, sequence: 1), TwoParts());
+            store.WriteHour(_product, Commit(Week0 + Hour, sequence: 2), TwoParts());
+            store.Dispose();
+            DeleteHours();
+
+            // An orderly shutdown while the product opens: the open has created Hours and is about to scan the week
+            // databases when the dispose marks the store closed (it then waits for the open, which it says at
+            // "dispose-open-busy"). The scan's first week database is refused, and the open fails with nothing written.
+            var stopping = Open();
+            using var disposeArrived = new ManualResetEventSlim();
+            Task dispose = null;
+            var arrived = false;
+            stopping.Checkpoint = p =>
+            {
+                if (p == "rebuild-scanning")
+                {
+                    dispose = StartLong(stopping.Dispose);
+                    arrived = disposeArrived.Wait(Bound);
+                }
+                else if (p == "dispose-open-busy")
+                    disposeArrived.Set();
+            };
+
+            Assert.Throws<TableBatchStoreException>(() => stopping.GetHours(_product));
+            Assert.True(arrived, "the dispose never found the slot held by the open");
+            Assert.True(dispose.Wait(Bound));
+            Assert.True(Directory.Exists(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName)));
+
+            // After the restart the folder of Hours exists, and the hours are back all the same.
+            var reopened = Open();
+            Assert.Equal([Week0, Week0 + Hour], reopened.GetHours(_product).Select(h => h.HourTicks));
+            Assert.Equal(2, reopened.Statistics.HoursRebuilt);
+        }
+
+        [Fact]
+        public void A_new_product_is_marked_complete_at_its_creation_and_its_empty_hours_are_the_truth()
+        {
+            // A first hour whose commit was not written: its part is on disk, Hours is empty and has its complete key.
+            var store = Open();
+            store.Checkpoint = p => { if (p == "before-commit") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0), TwoParts()));
+            store.CloseWithoutFlush();
+
+            var reopened = Open();
+            Assert.Empty(reopened.GetHours(_product));
+            Assert.False(reopened.IsHourMerged(_product, Week0));
+            Assert.Equal(0, reopened.Statistics.HoursRebuilt);
+            Assert.Equal(0, reopened.Statistics.PlacementsRebuilt);
         }
 
         [Fact]

@@ -109,7 +109,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// class the record does not name is deleted), "before-commit", "committed" (the hour write); "flush" (before a week's
         /// memtable is written out); "read-holding" (a read holds a database and its iterator); "drop-waiting" (a drop waits
         /// for the leases of the week, under the cache lock), "drop-deleting" (before the folder is deleted); "forget-hours"
-        /// (before hours are removed from Hours); "dispose-waiting" (a dispose waits for leases,
+        /// (before hours are removed from Hours); "hours-opened" and "placements-opened" (right after a product's Hours or
+        /// Placements database is opened, created when it was missing, before its complete key is read); "rebuild-scanning"
+        /// and "placements-scanning" (before a rebuild scans the week databases); "dispose-waiting" (a dispose waits for leases,
         /// under the cache lock), "dispose-product" (before a dispose takes a product's lock); "product-opening" (a product's
         /// open, under its slot's gate and outside the store-wide lock); "product-busy" (a call found the product's slot held,
         /// by an open or a dispose, right before it waits for it), "dispose-open-busy" (a dispose found a slot held by an
@@ -944,28 +946,38 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             var hoursPath = Path.Combine(folder, HoursName);
             var existed = Directory.Exists(hoursPath);
+            var complete = false;
 
             try
             {
                 product.HoursDb = OpenDb(hoursPath, Options());
-                LoadCommits(product);
+                Checkpoint?.Invoke("hours-opened");
+
+                // Trusted only with its complete key (CompleteKey): a database without it is new, or what an open that
+                // stopped left (a crash or a dispose between the creation of the folder and the write of a rebuild's
+                // result), and nothing in it is read.
+                complete = product.HoursDb.Get(CompleteKey) is not null;
+                if (complete)
+                    LoadCommits(product);
             }
             catch (Exception ex) when (existed && (ex is FormatException || ex.Message?.Contains("Corruption", StringComparison.OrdinalIgnoreCase) == true))
             {
                 // Derived from the marks in the week databases: put aside and rebuilt.
                 product.HoursDb?.Dispose();
+                product.HoursDb = null;
                 var aside = $"{hoursPath}.damaged-{DateTime.UtcNow.Ticks}";
                 Directory.Move(hoursPath, aside);
                 _logger.Warn($"The merged hours of product {productId} could not be read ({ex.Message}); moved to {aside} and rebuilt from the week databases");
 
                 product.HoursDb = OpenDb(hoursPath, Options());
                 product.Hours.Clear();
-                existed = false;
+                complete = false;
             }
 
-            // Only a missing or damaged hours database is rebuilt; an empty one that exists is the truth (a first hour whose
-            // commit was not written is not merged, whatever its parts hold).
-            if (!existed && product.Weeks.Count > 0)
+            // A missing, damaged or incomplete hours database is rebuilt from the marks; for a product without a week
+            // database that is an empty scan. One with its complete key is the truth, also when it is empty (a first hour
+            // whose commit was not written is not merged, whatever its parts hold).
+            if (!complete)
                 Rebuild(product);
 
             OpenPlacements(product, folder);
@@ -1053,17 +1065,23 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
-        // The placements database of the product: opened, loaded, and rebuilt from the indexes of the week databases when it is
-        // missing (a store from before placements, or lost) or damaged (set aside first). An empty one that exists is the truth.
+        // The placements database of the product: opened, loaded when it has its complete key, and otherwise rebuilt from the
+        // indexes of the week databases: when it is missing (a store from before placements, or lost), damaged (set aside
+        // first) or incomplete (no complete key: what an open that stopped left). One with its complete key is the truth.
         private void OpenPlacements(ProductState product, string folder)
         {
             var path = Path.Combine(folder, PlacementsName);
             var existed = Directory.Exists(path);
+            var complete = false;
 
             try
             {
                 product.PlacementsDb = OpenDb(path, Options());
-                LoadPlacements(product);
+                Checkpoint?.Invoke("placements-opened");
+
+                complete = product.PlacementsDb.Get(CompleteKey) is not null;
+                if (complete)
+                    LoadPlacements(product);
             }
             catch (Exception ex) when (existed && (ex is FormatException || ex.Message?.Contains("Corruption", StringComparison.OrdinalIgnoreCase) == true))
             {
@@ -1075,10 +1093,10 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 product.PlacementsDb = OpenDb(path, Options());
                 product.Placements.Clear();
-                existed = false;
+                complete = false;
             }
 
-            if (!existed && product.Weeks.Count > 0)
+            if (!complete)
                 RebuildPlacements(product);
         }
 
@@ -1089,8 +1107,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
             {
                 var key = iterator.Key();
-                if (key.AsSpan().SequenceEqual(RebuildingKey))
-                    throw new FormatException("a rebuild of the placements that did not finish");
+                if (key.AsSpan().SequenceEqual(CompleteKey))
+                    continue;
                 if (key.Length != 16)
                     throw new FormatException($"a placement key of {key.Length} bytes");
 
@@ -1105,9 +1123,13 @@ namespace HSMDatabase.LevelDB.TableBatches
         // complete until it is deleted, which happens only after the switch. A sensor's target is the class of its newest
         // hour; its earlier runs in another class are its segments, each up to the start of the next run. Only the index
         // records are read (and the moved region's keys); no batch is decoded. Uncommitted hours are not looked at.
+        //
+        // Nothing is written before the scan has ended: the result and the complete key go in one synced write, which also
+        // deletes whatever the database held (it had no complete key, so nothing of it was trusted). A rebuild that stops
+        // (a crash, a dispose, a week database that does not open) leaves the database without the key, and the next open
+        // rebuilds again.
         private void RebuildPlacements(ProductState product)
         {
-            product.PlacementsDb.Put(RebuildingKey, [], _syncWrite);
             Checkpoint?.Invoke("placements-scanning");
 
             var found = new Dictionary<Guid, SortedDictionary<long, (int Class, bool Moved)>>();
@@ -1154,6 +1176,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 }
 
             using var batch = new WriteBatch();
+            DeleteEveryKey(product.PlacementsDb, batch);
             var rebuilt = new Dictionary<Guid, TablePlacement>();
 
             foreach (var (sensor, hours) in found)
@@ -1182,16 +1205,30 @@ namespace HSMDatabase.LevelDB.TableBatches
                 batch.Put(PlacementKey(sensor), EncodePlacement(placement));
             }
 
-            batch.Delete(RebuildingKey);
+            batch.Put(CompleteKey, CompleteValue);
             product.PlacementsDb.Write(batch, _syncWrite);
 
+            product.Placements.Clear();
             foreach (var (sensor, placement) in rebuilt)
                 product.Placements[sensor] = placement;
 
             product.Generation++;
 
+            // A product without a week database had nothing to rebuild from: its placements database was only created.
+            if (product.Weeks.Count == 0)
+                return;
+
             Statistics.Add(ref Statistics.PlacementsRebuilt);
             _logger.Warn($"The placements of the table batches of product {product.Id} were rebuilt from the indexes of {product.Weeks.Count} week databases: {rebuilt.Count} sensors");
+        }
+
+        // Adds to the batch a delete of every key of a small database (Hours, Placements): a rebuild replaces all of it.
+        private static void DeleteEveryKey(DB db, WriteBatch batch)
+        {
+            using var iterator = db.CreateIterator();
+
+            for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
+                batch.Delete(iterator.Key());
         }
 
         private static byte[] PlacementKey(Guid sensor)
@@ -1255,8 +1292,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
             {
                 var key = iterator.Key();
-                if (key.AsSpan().SequenceEqual(RebuildingKey))
-                    throw new FormatException("a rebuild of the merged hours that did not finish");
+                if (key.AsSpan().SequenceEqual(CompleteKey))
+                    continue;
                 if (key.Length != 8)
                     throw new FormatException($"a merged hour key of {key.Length} bytes");
 
@@ -1289,12 +1326,14 @@ namespace HSMDatabase.LevelDB.TableBatches
         // was committed (the parts are written before the commit, and each part holds the same record as its mark). A class
         // the record of dropped databases names for the hour's week counts as found: retention dropped it after the commit
         // (a write into a dropped database is refused, so its absence is never a part that was not written).
+        //
+        // Nothing is written before the scan has ended: the result and the complete key go in one synced write, which also
+        // deletes whatever this Hours held (it had no complete key, so nothing of it was trusted). A rebuild that stops (a
+        // crash, a dispose, a week database that does not open) leaves Hours without the key, and the next open rebuilds
+        // again, instead of trusting an Hours that holds only part of the hours, or none. For a product without a week
+        // database the scan is empty and the write only marks the new Hours complete.
         private void Rebuild(ProductState product)
         {
-            // Written before the scan and deleted in the write of its result: a crash during the scan leaves the key, and the
-            // next open takes this Hours as damaged (LoadCommits), sets it aside and rebuilds again, instead of trusting an
-            // Hours that holds only part of the hours, or none.
-            product.HoursDb.Put(RebuildingKey, [], _syncWrite);
             Checkpoint?.Invoke("rebuild-scanning");
 
             var marks = new Dictionary<long, (byte[] Record, HashSet<int> Found, bool Agree)>();
@@ -1329,6 +1368,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
 
             using var batch = new WriteBatch();
+            DeleteEveryKey(product.HoursDb, batch);
             int rebuilt = 0;
 
             // A mark holds the time its part was written, which may be earlier than the commit (a part written by a run that
@@ -1357,11 +1397,17 @@ namespace HSMDatabase.LevelDB.TableBatches
                 rebuilt++;
             }
 
-            batch.Delete(RebuildingKey);
+            batch.Put(CompleteKey, CompleteValue);
             product.HoursDb.Write(batch, _syncWrite);
 
+            product.Hours.Clear();
             LoadCommits(product);
             product.Generation++;
+
+            // A product without a week database had nothing to rebuild from: its hours database was only created.
+            if (product.Weeks.Count == 0)
+                return;
+
             Statistics.Add(ref Statistics.HoursRebuilt, rebuilt);
             _logger.Warn($"The merged hours of product {product.Id} were rebuilt from the marks of {product.Weeks.Count} week databases: {rebuilt} hours");
         }
@@ -1669,8 +1715,12 @@ namespace HSMDatabase.LevelDB.TableBatches
         // 0xFF | hour | sensor | 0x00: the index records of a sensor's moved batches of an hour.
         private static byte[] MovedIndexPrefix(long hour, Guid sensor) => MovedIndexKey(sensor, hour, 0, 0)[..26];
 
-        // A key of Hours that is no merged hour (one byte, never eight): present while a rebuild scans the week databases.
-        private static readonly byte[] RebuildingKey = [0xFF];
+        // The complete key of Hours and of Placements: two bytes, so never a merged hour (eight) or a sensor (sixteen), and
+        // not the one byte 0xFF an earlier build wrote while a rebuild scanned. A database is trusted only when it holds
+        // the key; it is written in the same synced write as a rebuild's result (an empty one for a new product), so no
+        // database is trusted without that write having happened.
+        private static readonly byte[] CompleteKey = [0xFF, (byte)'C'];
+        private static readonly byte[] CompleteValue = [1];
 
         private static byte[] CommitKey(long hour)
         {
