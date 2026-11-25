@@ -286,6 +286,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                     if (_watermarks.TryGetValue((envelope.ProductId, envelope.ProducerId), out var watermark) && envelope.ProducerSequence <= watermark)
                     {
                         Statistics.Add(ref Statistics.DuplicateBlocks);
+                        Statistics.Add(ref Statistics.MergedDuplicateBlocks);
                         return new TableBlockAppendResult(TableBlockAppendOutcome.Duplicate, default, null) { Merged = true };
                     }
 
@@ -372,6 +373,24 @@ namespace HSMDatabase.LevelDB.TableBlocks
             }
 
             return _maps.Products.TryGetValue(productId, out var blocks) ? blocks.Snapshot() : [];
+        }
+
+        // As GetBlocks: lock-free while open, an open (or nothing) otherwise. A product whose blocks were all deleted may
+        // still be listed with none.
+        public IReadOnlyList<Guid> GetProducts()
+        {
+            if (!_opened || Volatile.Read(ref _disposed) || Volatile.Read(ref _blocks) is null)
+            {
+                BeforeReadLock?.Invoke();
+
+                lock (_lock)
+                {
+                    if ((!_opened || _disposed || _blocks is null) && !EnsureOpen(create: false))
+                        return [];
+                }
+            }
+
+            return _maps.Products.Keys.OrderBy(id => id).ToArray();
         }
 
         public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry)
@@ -547,6 +566,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
                 Interlocked.Add(ref maps.Count, -deleted);
             }
+
+            // A crash here leaves the deletes durable and the range not compacted: a repeat deletes nothing and compacts.
+            FaultHook?.Invoke("before-hour-compaction");
 
             // The space back, outside the lock appends take (about 70 ms an hour measured, #1844). The databases cannot close
             // meanwhile: a reopen and Dispose take _dbLock for writing.

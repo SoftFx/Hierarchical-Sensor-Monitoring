@@ -91,6 +91,8 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         public TableBatchStoreStatistics Statistics { get; } = new();
 
+        public TableMergeStatistics MergeStatistics { get; } = new();
+
         public int MaxOpenDatabases
         {
             get => Volatile.Read(ref _maxOpen);
@@ -318,6 +320,26 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             lock (product.Lock)
                 return product.Hours.ContainsKey(hourTicks);
+        }
+
+        public TableBatchHour GetHour(Guid productId, long hourTicks)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return null;
+
+            lock (product.Lock)
+                return product.Hours.TryGetValue(hourTicks, out var hour) ? hour : null;
+        }
+
+        public long? GetNewestHour(Guid productId)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return null;
+
+            lock (product.Lock)
+                return product.Hours.Count == 0 ? null : product.Hours.Keys.Last();
         }
 
         public IReadOnlyDictionary<Guid, long> GetWatermarks(Guid productId)

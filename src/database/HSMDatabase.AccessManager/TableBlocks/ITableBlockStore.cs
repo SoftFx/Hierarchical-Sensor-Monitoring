@@ -85,6 +85,8 @@ namespace HSMDatabase.AccessManager.TableBlocks
         public long RowsStored;
         public long BytesStored;
         public long DuplicateBlocks;
+        /// <summary>The duplicates among <see cref="DuplicateBlocks"/> recognised by a producer's watermark (their hour merged, #1850).</summary>
+        public long MergedDuplicateBlocks;
         public long BlocksNotStored;
         public long TablesRefused;
         public long InvalidBlocks;
@@ -172,6 +174,12 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// the databases are closed and cannot be opened now (a reopen that failed, inside its backoff; disposed).
         /// </summary>
         IReadOnlyList<TableBlockIndexEntry> GetBlocks(Guid productId);
+
+        /// <summary>
+        /// The products the in-memory index knows, as <see cref="GetBlocks"/> reads it (lock-free while open; opening, or
+        /// answering none without a folder, otherwise). For the merge (#1850): a product may be listed with no block left.
+        /// </summary>
+        IReadOnlyList<Guid> GetProducts();
 
         /// <summary>
         /// Closes an arrival hour for the merge (#1850): no block is appended to <paramref name="hourTicks"/> or an earlier

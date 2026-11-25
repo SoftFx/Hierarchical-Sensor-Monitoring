@@ -85,6 +85,41 @@ namespace HSMDatabase.AccessManager.TableBatches
 
 
     /// <summary>
+    /// The counters and gauges of the merge job (#1850 part 3), kept with the store it writes so that self-monitoring finds
+    /// them where it finds the store's. Counters since the process started, written with <see cref="Interlocked"/>.
+    /// </summary>
+    public sealed class TableMergeStatistics
+    {
+        /// <summary>Arrival hours whose every product was committed by this process.</summary>
+        public long HoursMerged;
+        public long RowsMerged;
+        /// <summary>Stored bytes of the blocks merged (envelopes included).</summary>
+        public long BlockBytesMerged;
+        /// <summary>Bytes of the batches written for them.</summary>
+        public long BatchBytesWritten;
+        /// <summary>Product hours not written because a batch did not decode to its source rows bit for bit. Must stay 0.</summary>
+        public long VerificationMismatches;
+        /// <summary>Blocks the merge could not read: kept in the block store, listed in their hour's record.</summary>
+        public long UnreadableBlocksKept;
+        /// <summary>Rows of tables without a table sensor on their path, or of blocks numbered below the sensor's first sequence.</summary>
+        public long RowsDropped;
+        /// <summary>Merge passes that stopped on a fault of a store (the hour is merged again by a later pass).</summary>
+        public long Faults;
+
+        /// <summary>Gauge: closed hours due for the merge and not merged at the end of the last pass.</summary>
+        public long LagHours;
+        /// <summary>Gauge: milliseconds the last merged arrival hour took, all its products.</summary>
+        public long LastMergeMilliseconds;
+        /// <summary>Gauge: arrival hours committed for every product whose blocks wait for their deletion delay.</summary>
+        public long MergedHoursHoldingBlocks;
+
+        public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
+
+        public void Set(ref long gauge, long value) => Interlocked.Exchange(ref gauge, value);
+    }
+
+
+    /// <summary>
     /// The store of batches of table sensors (#1850, ADR-0021 points 10 and 12): per product, one LevelDB database per
     /// Monday-aligned week of the merge hour and per retention period class, and one small database of the product's merged
     /// hours. A merged hour is committed by its record in the hours database: before it, the hour is served from its
@@ -97,6 +132,9 @@ namespace HSMDatabase.AccessManager.TableBatches
         bool IsOpened { get; }
 
         TableBatchStoreStatistics Statistics { get; }
+
+        /// <summary>The merge job's counters (the job writes them; the store only holds them).</summary>
+        TableMergeStatistics MergeStatistics { get; }
 
         /// <summary>
         /// The most week databases open at once (default 32). A read that needs more opens and closes them in turn; the
@@ -124,6 +162,16 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableBatchHour> GetHours(Guid productId);
 
         bool IsHourMerged(Guid productId, long hourTicks);
+
+        /// <summary>
+        /// The record of a committed hour of a product, or null when the hour is not committed. Unlike <see cref="GetHours"/>
+        /// it also gives an hour without any batch (every table of its blocks refused or dropped) and an hour whose classes'
+        /// week databases were dropped.
+        /// </summary>
+        TableBatchHour GetHour(Guid productId, long hourTicks);
+
+        /// <summary>The newest committed hour of a product, or null when it has none. Opens the product's hours database once.</summary>
+        long? GetNewestHour(Guid productId);
 
         /// <summary>The product's producer watermarks of its newest merged hour (cumulative), from memory.</summary>
         IReadOnlyDictionary<Guid, long> GetWatermarks(Guid productId);
