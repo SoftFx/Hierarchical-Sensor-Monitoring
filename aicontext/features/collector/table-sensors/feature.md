@@ -314,12 +314,25 @@ put of it ended without an answer, or this put wrote its frame on a connection t
 says so with its `TooLarge`). The blocks behind it, which were never put, are numbered after them. So a sequence
 that was on the wire is never given to other rows, and the next sequence never goes back below one.
 
-**Stop.** The table drain ends by closing the table connection (`ITableBlockChannel.CloseAsync`), inside the drain
-budget and before the session is closed: a close frame `1000` (written even when the budget is spent; it is bounded
-by 250 ms on its own), then the server's answer for at most a second or what is left of the budget, then the socket
-is dropped. A block in flight when the budget ends stays in the backlog and the run's close counts its rows once, as
-not delivered at stop. `Dispose` drops the socket without a handshake and never throws, from any state. The next
-`Start` starts the loop again and opens nothing until a registration of the new run was accepted.
+**Stop.** The table drain ends by closing the table connection (`ITableBlockChannel.CloseAsync`, which is
+`TableConnection.StopAsync` with a linger of one second), before the session is closed: a close frame `1000` (written
+even when the budget is spent; it is bounded by 250 ms on its own), then the server's answer for at most a second or
+what is left of the budget, then the socket is aborted and the connection's loop is waited for, up to a second. That
+last wait is outside the drain budget: the loop ends as soon as its socket is aborted, so it is short in practice, and
+it is kept so that the table connection is down before the session's close is sent. A stop can so pass its drain
+budget by at most about 1.25 s (the close frame and the wait for the loop). A block in flight when the budget ends
+stays in the backlog and the run's close counts its rows once, as not delivered at stop. The next `Start` starts the
+loop again and opens nothing until a registration of the new run was accepted.
+
+**Dispose**, and the rollback of a failed start, close the run without delivering (`TablePipeline.StopWithoutFlushAsync`,
+also reached from `TablePipeline.Dispose` and from the terminal stop of `DataCollector.Dispose`): the run's tick and
+delivery loop are ended (the wait for the delivery loop is at most a second), the table connection is closed through
+the same `CloseAsync` with a budget already spent, so the close frame `1000` is still written (at most 250 ms) and no
+answer is waited for, the socket is aborted and the connection's loop is waited for up to a second; then everything
+the run holds is dropped and counted. So the table part of a dispose blocks the host for at most about 2.25 s (in
+practice milliseconds: both loops end on their cancellation) and never throws, from any state.
+`TableConnection.Dispose` itself (the session sender's dispose, after that) only cancels and aborts: no handshake, no
+wait.
 
 **.NET Framework.** The code is the same on both targets: `ClientWebSocket` takes the subprotocol, the request
 headers (`Key`, `ClientName`, `X-Hsm-Session`, the collector headers) and fragmented binary messages on net472 as

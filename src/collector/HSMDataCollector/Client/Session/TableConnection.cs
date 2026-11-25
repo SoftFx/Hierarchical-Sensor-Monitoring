@@ -160,7 +160,10 @@ namespace HSMDataCollector.Client.Session
 
         /// <summary>
         /// Closes the table connection and ends its loop: a close handshake (1000) of at most <paramref name="linger"/>,
-        /// cut short by <paramref name="budget"/>, then the socket is aborted. Bounded, idempotent, never throws.
+        /// cut short by <paramref name="budget"/> (the close frame itself is written even when the budget is spent, within
+        /// 250 ms), then the socket is aborted and the loop is waited for up to a second, outside the budget, so the
+        /// connection is down when this returns. At most linger + 1.25 s; with a spent budget at most 1.25 s (a dispose
+        /// comes this way). Idempotent, never throws.
         /// </summary>
         internal async Task StopAsync(TimeSpan linger, CancellationToken budget = default)
         {
