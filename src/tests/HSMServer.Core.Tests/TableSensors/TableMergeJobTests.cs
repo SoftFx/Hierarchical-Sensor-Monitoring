@@ -1060,17 +1060,146 @@ namespace HSMServer.Core.Tests.TableSensors
 
             // Once every table sensor of the product has a period that has passed, it goes.
             Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = z.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
-            // Its week database was dropped at p1 (a's class), which took the hour's record out of Hours: the next pass merges
-            // the hour again (every row expired, the block listed again) and commits it, and the deletion waits for that
-            // commit's delay.
-            Assert.Equal(0, Pass(p1.AddHours(1)).ExpiredHoursDeleted);
+            // Its week database was dropped at p1 (a's class); the hour stays committed while its block is held (#1850 part
+            // 4b), so the merge never takes it again: the block is listed as unreadable once, and goes at the next hour.
             Assert.True(_server.Batches.IsHourMerged(other, Hour0.Ticks));
-            Assert.Equal(1, Pass(p1.AddHours(26)).ExpiredHoursDeleted);
+            Assert.Equal(1, Pass(p1.AddHours(1)).ExpiredHoursDeleted);
+            Assert.Equal(1, _server.Batches.MergeStatistics.UnreadableBlocksKept);
             Assert.Empty(_server.Blocks.GetBlocks(other));
+
+            // With neither a database of its week nor a block left, the record of the hour is forgotten in the same run.
+            Assert.False(_server.Batches.IsHourMerged(other, Hour0.Ticks));
+            Assert.Empty(_server.Batches.GetHoursWithoutDatabases(other));
             Assert.Equal(1, _server.Batches.MergeStatistics.ExpiredBlocksDeleted);
             Assert.Equal(1, _server.Batches.MergeStatistics.ExpiredBlockRowsDeleted);
             Assert.Equal(0, _server.Batches.MergeStatistics.RetentionFaults);
             Assert.Equal(0, _server.Service.Read(a.Id, From, To).Value.RowCount);
+        }
+
+
+        // === Placements (#1850 part 4b) ===
+
+        [Fact]
+        public async Task A_change_of_period_takes_effect_from_the_hour_after_every_hour_with_blocks_and_earlier_hours_keep_their_class()
+        {
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.Equal(new TablePlacement(1), _server.Batches.GetPlacement(_product, b.Id));
+
+            // The period changes while hour 1 has blocks: the change takes effect from hour 2.
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(61), 2.0, 2)]))));
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+            Pass(Hour0.AddHours(2).AddMinutes(3));
+
+            var placement = _server.Batches.GetPlacement(_product, b.Id);
+            Assert.Equal(new TablePlacement(5, [new TablePlacementSegment(long.MinValue, Hour0.AddHours(2).Ticks, 1)]), placement);
+            Assert.Equal([1], _server.Batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(c => c.PeriodWeeks));
+
+            _now = Hour0.AddMinutes(130);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(121), 3.0, 3)]))));
+            Pass(Hour0.AddHours(3).AddMinutes(3));
+            Assert.Equal([5], _server.Batches.GetHour(_product, Hour0.AddHours(2).Ticks).Classes.Select(c => c.PeriodWeeks));
+
+            // The placement survives a restart, and a pass with the setting unchanged changes nothing.
+            await RestartAsync(crash: false);
+            Pass(Hour0.AddHours(4));
+            Assert.Equal(placement, _server.Batches.GetPlacement(_product, b.Id));
+        }
+
+        [Fact]
+        public async Task A_repeat_of_an_hour_that_did_not_commit_gives_every_sensor_the_class_of_the_run_before_a_change_of_period()
+        {
+            var a = await RegisterAsync("a", keep: TimeIntervalModel.None);
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]), ("b", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+            // The first run writes the P0 part and stops before the P1 part.
+            _server.Batches.Checkpoint = p =>
+            {
+                if (p == "part-written")
+                    throw new IOException("crash");
+            };
+            Assert.NotNull(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            _server.Batches.Checkpoint = null;
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // b's period changes before the repeat: the repeat still writes b into P1, as the first run did.
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(4)).HoursMerged);
+
+            Assert.Equal([0, 1], _server.Batches.GetHour(_product, Hour0.Ticks).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(5, _server.Batches.GetPlacement(_product, b.Id).Target);
+            Assert.Equal(1, _server.Batches.GetPlacement(_product, b.Id).ClassOf(Hour0.Ticks));
+        }
+
+        [Fact]
+        public async Task A_change_on_the_product_is_recorded_for_every_sensor_that_inherits_it_within_a_pass()
+        {
+            var sensors = new List<BaseSensorModel>();
+            foreach (var name in new[] { "x", "y", "z" })
+                sensors.Add(await RegisterAsync(name));
+            var own = await RegisterAsync("own", keep: TimeIntervalModel.None);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("x", [(Hour0.AddMinutes(1), 1.0, 1)]), ("y", [(Hour0.AddMinutes(1), 1.0, 1)]), ("z", [(Hour0.AddMinutes(1), 1.0, 1)]), ("own", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+            var inherited = TablePeriodClass.Of((TableSensorModel)sensors[0], Hour0);
+            Assert.NotEqual(1, inherited);
+
+            Assert.True((await _server.Cache.UpdateProductAsync(new ProductUpdate { Id = _product, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            // No new rows: the next pass records the change for the three sensors that inherit it, from the next hour.
+            Pass(Hour0.AddHours(2));
+            foreach (var sensor in sensors)
+                Assert.Equal(new TablePlacement(1, [new TablePlacementSegment(long.MinValue, Hour0.AddHours(2).Ticks, inherited)]), _server.Batches.GetPlacement(_product, sensor.Id));
+            Assert.Equal(new TablePlacement(0), _server.Batches.GetPlacement(_product, own.Id));
+        }
+
+        [Fact]
+        public async Task Retention_keeps_a_week_database_whose_rows_are_owed_to_a_longer_period_and_drops_it_once_that_has_passed_too()
+        {
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+
+            // Lengthened to five weeks: the P1 database of the week holds rows the sensor keeps for five weeks now.
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+            Pass(Hour0.AddHours(2));
+
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            Assert.Equal(0, Pass(p1).WeeksDropped);
+            Assert.Contains(new TableBatchWeek(WeekStart, 1), _server.Batches.GetWeeks(_product));
+            Assert.Equal(1, _server.Batches.MergeStatistics.MoveWeeksPending);
+
+            var p5 = new DateTime(WeekStart + 6 * Week, DateTimeKind.Utc);
+            Assert.Equal(0, Pass(p5.AddTicks(-1)).WeeksDropped);
+            Assert.Equal(1, Pass(p5).WeeksDropped);
+            Assert.DoesNotContain(new TableBatchWeek(WeekStart, 1), _server.Batches.GetWeeks(_product));
+            Assert.Equal(0, _server.Batches.MergeStatistics.MoveWeeksPending);
+        }
+
+        [Fact]
+        public async Task Retention_drops_a_week_by_its_class_when_the_period_was_shortened()
+        {
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+            Pass(Hour0.AddHours(2));
+
+            // Nothing holds the P5 database past its own period, and nothing drops it earlier (the move deletes the rows).
+            Assert.Equal(0, Pass(new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc)).WeeksDropped);
+            Assert.Equal(1, Pass(new DateTime(WeekStart + 6 * Week, DateTimeKind.Utc)).WeeksDropped);
+            Assert.Equal(0, _server.Batches.MergeStatistics.MoveWeeksPending);
         }
 
 

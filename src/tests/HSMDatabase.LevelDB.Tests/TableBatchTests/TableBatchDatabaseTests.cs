@@ -531,7 +531,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
-        public void A_dropped_week_is_gone_from_disk_from_the_hours_and_from_the_ranges()
+        public void A_dropped_week_is_gone_from_disk_and_its_hours_stay_committed_until_they_are_forgotten()
         {
             var store = Open();
             store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 1)), Part(4, (_sensorB, 0, 1))]);
@@ -544,17 +544,36 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.False(Directory.Exists(store.WeekPath(_product, Week0, 1)));
             Assert.Empty(store.ReadSensor(_product, _sensorA, 1, [Week0, Week0 + Hour]));
 
-            // The first hour keeps its other class; the second had only the dropped one.
+            // A database of week 0 is left (P4): both its hours are listed with the classes of their records, the dropped
+            // one included (rows moved out of it would be within its range).
             var hours = store.GetHours(_product);
-            Assert.Equal([Week0, Week0 + Week], hours.Select(h => h.HourTicks));
-            Assert.Equal([4], hours[0].Classes.Select(c => c.PeriodWeeks));
-            Assert.False(store.IsHourMerged(_product, Week0 + Hour));
+            Assert.Equal([Week0, Week0 + Hour, Week0 + Week], hours.Select(h => h.HourTicks));
+            Assert.Equal([1, 4], hours[0].Classes.Select(c => c.PeriodWeeks));
+            Assert.True(store.IsHourMerged(_product, Week0 + Hour));
+            Assert.Empty(store.GetHoursWithoutDatabases(_product));
+
+            // The last database of week 0 goes: its hours are not listed, and stay committed (their blocks may still be
+            // held) until they are forgotten; forgetting skips an hour whose week has a database.
+            store.DropWeek(_product, new TableBatchWeek(Week0, 4));
+            Assert.Equal([Week0 + Week], store.GetHours(_product).Select(h => h.HourTicks));
+            Assert.True(store.IsHourMerged(_product, Week0) && store.IsHourMerged(_product, Week0 + Hour));
+            Assert.Equal([Week0, Week0 + Hour], store.GetHoursWithoutDatabases(_product));
             store.Dispose();
 
             var reopened = Open();
-            Assert.Equal([Week0, Week0 + Week], reopened.GetHours(_product).Select(h => h.HourTicks));
-            Assert.Equal([4], reopened.GetHours(_product)[0].Classes.Select(c => c.PeriodWeeks));
-            Assert.Equal([new TableBatchWeek(Week0, 4), new TableBatchWeek(Week0 + Week, 1)], reopened.GetWeeks(_product));
+            Assert.True(reopened.IsHourMerged(_product, Week0 + Hour));
+            Assert.Equal([Week0, Week0 + Hour], reopened.GetHoursWithoutDatabases(_product));
+
+            reopened.ForgetHours(_product, [Week0, Week0 + Week]);
+            Assert.False(reopened.IsHourMerged(_product, Week0));
+            Assert.True(reopened.IsHourMerged(_product, Week0 + Hour));
+            Assert.True(reopened.IsHourMerged(_product, Week0 + Week));
+            reopened.Dispose();
+
+            var again = Open();
+            Assert.Equal([Week0 + Hour], again.GetHoursWithoutDatabases(_product));
+            Assert.Equal([Week0 + Week], again.GetHours(_product).Select(h => h.HourTicks));
+            Assert.Equal([new TableBatchWeek(Week0 + Week, 1)], again.GetWeeks(_product));
         }
 
         [Fact]
@@ -570,7 +589,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
 
             var reopened = Open();
             var hour = Assert.Single(reopened.GetHours(_product));
-            Assert.Equal([4], hour.Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal([1, 4], hour.Classes.Select(c => c.PeriodWeeks));
             Assert.True(reopened.IsHourMerged(_product, Week0));
             Assert.Single(reopened.ReadSensor(_product, _sensorB, 4, [Week0]));
             Assert.Equal(1, reopened.Statistics.HoursRebuilt);
@@ -685,7 +704,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             // Dropped in the lists, the folder left on disk; a read finds nothing there, a write into it is a fault.
             Assert.True(Directory.Exists(path));
             Assert.Equal([new TableBatchWeek(Week0, 4)], store.GetWeeks(_product));
-            Assert.Equal([4], store.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal([1, 4], store.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
             Assert.Empty(store.ReadSensor(_product, _sensorA, 1, [Week0]));
             Assert.Equal(1, store.OpenDatabases);
             Assert.Throws<TableBatchStoreException>(() => store.WriteHour(_product, Commit(Week0 + Hour), [Part(1, (_sensorA, 0, 1))]));
@@ -696,33 +715,178 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             var reopened = Open();
             Assert.Equal([new TableBatchWeek(Week0, 4)], reopened.GetWeeks(_product));
             Assert.False(Directory.Exists(path));
-            Assert.Equal([4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal([1, 4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
         }
 
         [Fact]
-        public void A_drop_whose_removal_of_hours_fails_is_a_counted_store_fault_and_the_hours_stay_hidden()
+        public void Forgetting_hours_that_fails_is_a_counted_store_fault_and_the_hours_stay_committed()
         {
             var store = Open();
-            store.WriteHour(_product, Commit(Week0), TwoParts());
-            store.WriteHour(_product, Commit(Week0 + Hour), [Part(1, (_sensorA, 0, 1))]);
-            Assert.Equal(2, store.GetHours(_product).Count); // a snapshot of the hours taken before the drop
+            store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 1))]);
+            store.DropWeek(_product, new TableBatchWeek(Week0, 1));
 
-            store.Checkpoint = p => { if (p == "drop-hours") throw new IOException("write failure injected by the test"); };
-            Assert.Throws<TableBatchStoreException>(() => store.DropWeek(_product, new TableBatchWeek(Week0, 1)));
+            store.Checkpoint = p => { if (p == "forget-hours") throw new IOException("write failure injected by the test"); };
+            Assert.Throws<TableBatchStoreException>(() => store.ForgetHours(_product, [Week0]));
             store.Checkpoint = null;
 
             Assert.Equal(1, store.Statistics.WriteFailures);
-            Assert.False(Directory.Exists(store.WeekPath(_product, Week0, 1)));
-            Assert.Equal([new TableBatchWeek(Week0, 4)], store.GetWeeks(_product));
+            Assert.True(store.IsHourMerged(_product, Week0));
 
-            // The second hour had only the dropped class: hidden from the reads, in memory and after a reopen.
-            var hour = Assert.Single(store.GetHours(_product));
-            Assert.Equal([4], hour.Classes.Select(c => c.PeriodWeeks));
+            store.ForgetHours(_product, [Week0]);
+            Assert.False(store.IsHourMerged(_product, Week0));
+            store.Dispose();
+            Assert.False(Open().IsHourMerged(_product, Week0));
+        }
+
+        [Fact]
+        public void A_crash_during_the_scan_of_a_rebuild_is_not_trusted_and_the_next_open_rebuilds_again()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, sequence: 1), TwoParts());
+            store.WriteHour(_product, Commit(Week0 + Hour, sequence: 2), TwoParts());
+            store.Dispose();
+            DeleteHours();
+
+            // The rebuild stops in its scan: Hours exists, without a single hour.
+            var crashed = Open();
+            crashed.Checkpoint = p => { if (p == "rebuild-scanning") throw new CheckpointException(p); };
+            Assert.Throws<TableBatchStoreException>(() => crashed.GetHours(_product));
+            crashed.Dispose();
+            Assert.True(Directory.Exists(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName)));
+
+            // The next open finds the unfinished rebuild, sets that Hours aside and rebuilds both hours.
+            var reopened = Open();
+            Assert.Equal([Week0, Week0 + Hour], reopened.GetHours(_product).Select(h => h.HourTicks));
+            Assert.Equal(2L, reopened.GetWatermarks(_product)[_producer]);
+            Assert.Equal(2, reopened.Statistics.HoursRebuilt);
+            reopened.Dispose();
+
+            // And that rebuilt Hours is trusted from then on: nothing is rebuilt again.
+            var third = Open();
+            Assert.Equal(2, third.GetHours(_product).Count);
+            Assert.Equal(0, third.Statistics.HoursRebuilt);
+        }
+
+        // === Placements (#1850 part 4b) ===
+
+        [Fact]
+        public void A_placement_is_stored_durably_and_read_back_after_a_restart()
+        {
+            var store = Open();
+            var placement = new TablePlacement(5, [new TablePlacementSegment(long.MinValue, Week0 + 3 * Hour, 1)]);
+            store.SetPlacement(_product, _sensorA, placement);
+            store.SetPlacement(_product, _sensorB, new TablePlacement(0));
             store.Dispose();
 
             var reopened = Open();
-            Assert.Equal([Week0], reopened.GetHours(_product).Select(h => h.HourTicks));
-            Assert.Equal([4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(placement, reopened.GetPlacement(_product, _sensorA));
+            Assert.Equal(1, reopened.GetPlacement(_product, _sensorA).ClassOf(Week0 + 2 * Hour));
+            Assert.Equal(5, reopened.GetPlacement(_product, _sensorA).ClassOf(Week0 + 3 * Hour));
+            Assert.Equal(2, reopened.GetPlacements(_product).Count);
+            Assert.Null(reopened.GetPlacement(_product, Guid.NewGuid()));
+
+            reopened.SetPlacement(_product, _sensorB, null);
+            reopened.Dispose();
+            Assert.Null(Open().GetPlacement(_product, _sensorB));
+            Assert.Equal(0, _stores[^1].Statistics.PlacementsRebuilt);
+        }
+
+        [Fact]
+        public void Lost_placements_are_rebuilt_from_the_indexes_of_the_week_databases()
+        {
+            var store = Open();
+            // A in P1 for hours 0 and 1, then (its period changed) in P5 from hour 2; B in P5 throughout; C moved into P5 for
+            // hour 1 (the region of moved batches) and in P5 from hour 2.
+            store.WriteHour(_product, Commit(Week0, 1), [Part(1, (_sensorA, 0, 1)), Part(5, (_sensorB, 0, 1))]);
+            store.WriteHour(_product, Commit(Week0 + Hour, 2), [Part(1, (_sensorA, 0, 1)), Part(5, (_sensorB, 0, 1))]);
+            store.WriteHour(_product, Commit(Week0 + 2 * Hour, 3), [Part(5, (_sensorA, 0, 1), (_sensorB, 0, 1))]);
+            var sensorC = Guid.NewGuid();
+            store.WriteMoved(_product, new TableBatchWeek(Week0, 5), Week0 + Hour, [Batch(sensorC, Week0 + Hour + 5, 0)]);
+            store.Dispose();
+
+            Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.PlacementsName), recursive: true);
+
+            var reopened = Open();
+            Assert.Equal(new TablePlacement(5, [new TablePlacementSegment(long.MinValue, Week0 + 2 * Hour, 1)]), reopened.GetPlacement(_product, _sensorA));
+            Assert.Equal(new TablePlacement(5), reopened.GetPlacement(_product, _sensorB));
+            Assert.Equal(new TablePlacement(5), reopened.GetPlacement(_product, sensorC));
+            Assert.Equal(1, reopened.Statistics.PlacementsRebuilt);
+            reopened.Dispose();
+
+            // Rebuilt once: from then on it is the truth.
+            var again = Open();
+            Assert.Equal(3, again.GetPlacements(_product).Count);
+            Assert.Equal(0, again.Statistics.PlacementsRebuilt);
+        }
+
+        [Fact]
+        public void Damaged_placements_are_set_aside_and_rebuilt_and_so_is_a_rebuild_that_stopped_in_its_scan()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, 1), [Part(1, (_sensorA, 0, 1)), Part(4, (_sensorB, 0, 1))]);
+            store.Dispose();
+
+            var placementsPath = Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.PlacementsName);
+            using (var db = new DB(placementsPath, new Options()))
+                db.Put(_sensorA.ToByteArray(), [9, 9], new WriteOptions());
+
+            var reopened = Open();
+            reopened.Checkpoint = p => { if (p == "placements-scanning") throw new CheckpointException(p); };
+            Assert.Throws<TableBatchStoreException>(() => reopened.GetPlacements(_product));
+            reopened.Dispose();
+            Assert.Single(Directory.GetDirectories(Path.GetDirectoryName(placementsPath), TableBatchDatabase.PlacementsName + ".damaged-*"));
+
+            var again = Open();
+            Assert.Equal(new TablePlacement(1), again.GetPlacement(_product, _sensorA));
+            Assert.Equal(new TablePlacement(4), again.GetPlacement(_product, _sensorB));
+            Assert.Equal(1, again.Statistics.PlacementsRebuilt);
+        }
+
+        [Fact]
+        public void A_change_of_period_keeps_every_earlier_hour_in_its_class_and_a_change_back_drops_the_segment()
+        {
+            const long c1 = 100 * Hour, c2 = 200 * Hour, c3 = 300 * Hour;
+
+            var p = new TablePlacement(5).Retarget(1, c1);
+            Assert.Equal([new TablePlacementSegment(long.MinValue, c1, 5)], p.Segments);
+            Assert.Equal((5, 1), (p.ClassOf(c1 - Hour), p.ClassOf(c1)));
+
+            p = p.Retarget(53, c2);
+            Assert.Equal([new TablePlacementSegment(long.MinValue, c1, 5), new TablePlacementSegment(c1, c2, 1)], p.Segments);
+            Assert.Equal((5, 1, 53), (p.ClassOf(0), p.ClassOf(c1), p.ClassOf(c2)));
+
+            // Back to 5: the hours in 5 are where the sensor's hours belong again; those in 53 become a segment.
+            p = p.Retarget(5, c3);
+            Assert.Equal([new TablePlacementSegment(c1, c2, 1), new TablePlacementSegment(c2, c3, 53)], p.Segments);
+            Assert.Equal((5, 1, 53, 5), (p.ClassOf(0), p.ClassOf(c1), p.ClassOf(c2), p.ClassOf(c3)));
+
+            Assert.Same(p, p.Retarget(5, c3 + Hour));
+            Assert.Throws<ArgumentOutOfRangeException>(() => p.Retarget(1, c3 - Hour));
+
+            // A move takes hours out of the segments.
+            Assert.Equal([new TablePlacementSegment(c1, c1 + Hour, 1), new TablePlacementSegment(c2 + Hour, c3, 53)],
+                p.WithoutHours(c1 + Hour, c2 + Hour).Segments);
+        }
+
+        [Fact]
+        public void A_part_written_again_also_deletes_the_moved_batches_of_its_hour_in_that_database()
+        {
+            var store = Open();
+            var sensorC = Guid.NewGuid();
+
+            // A run that did not commit hour 1 left a part in P4; a move had written C's batches of that hour into P4 too.
+            store.Checkpoint = p => { if (p == "part-written") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0 + Hour), [Part(4, (_sensorA, 0, 1)), Part(5, (_sensorB, 0, 1))]));
+            store.Checkpoint = null;
+            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), Week0 + Hour, [Batch(sensorC, Week0 + Hour + 5, 0)]);
+            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), Week0 + 2 * Hour, [Batch(sensorC, Week0 + 2 * Hour + 5, 0)]);
+            Assert.Single(store.ReadSensor(_product, sensorC, 4, [Week0 + Hour]));
+
+            // The repeat writes the part again: everything P4 held of hour 1 is replaced, the moved batches of hour 1
+            // included; another hour's moved batches stay.
+            store.WriteHour(_product, Commit(Week0 + Hour), [Part(4, (_sensorA, 0, 1), (sensorC, 0, 1))]);
+            var read = store.ReadSensor(_product, sensorC, 4, [Week0 + Hour, Week0 + 2 * Hour]);
+            Assert.Equal([(Week0 + Hour, false), (Week0 + 2 * Hour, true)], read.Select(r => (r.HourTicks, r.Moved)));
         }
 
         // === Dispose ===
@@ -1072,6 +1236,9 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         private static Task<T> StartLong<T>(Func<T> action) => Task.Factory.StartNew(action, TaskCreationOptions.LongRunning);
 
         private static Task StartLong(Action action) => Task.Factory.StartNew(action, TaskCreationOptions.LongRunning);
+
+        private void DeleteHours() =>
+            Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName), recursive: true);
 
         // A record in the hours database that is not one: the next open puts it aside and rebuilds it from the marks.
         private void DamageHours()

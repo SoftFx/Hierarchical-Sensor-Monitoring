@@ -160,6 +160,9 @@ namespace HSMServer.Core.TableSensors
                 // gives disk back when the merge cannot write (too little free disk), so a fault of the merge never holds it off.
                 deleted = DeleteDue(utcNow, token, ref fault);
 
+                // Periods changed since the last pass (on a sensor, a folder, a product) are recorded before anything is merged.
+                Reconcile(utcNow, ref fault);
+
                 // Products whose merge faulted in this pass: their later hours wait for the next pass, so a product's hours
                 // are committed in order; the other products go on.
                 var faulted = new HashSet<Guid>();
@@ -421,7 +424,7 @@ namespace HSMServer.Core.TableSensors
                         if (share is not null && (path is null || !share.Contains(path)))
                             continue;
 
-                        var (sensor, period) = Resolve(product, path, resolved, utcNow);
+                        var (sensor, period) = Resolve(product, path, resolved, utcNow, hour);
 
                         if (sensor is null || entry.Sequence < sensor.FirstSequence || !Matches(sensor, t))
                         {
@@ -615,7 +618,10 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        private (TableSensorModel Sensor, int Period) Resolve(Guid product, string path, Dictionary<string, (TableSensorModel, int)> resolved, DateTime utcNow)
+        // The table sensor on a path and the class of its rows of the hour (its placement, #1850 part 4b): the merge writes
+        // them there and every read looks there. The merge creates the placement of a sensor that has none (create).
+        private (TableSensorModel Sensor, int Period) Resolve(Guid product, string path, Dictionary<string, (TableSensorModel, int)> resolved, DateTime utcNow,
+            long hour, bool create = true)
         {
             if (path is null)
                 return (null, 0);
@@ -623,7 +629,7 @@ namespace HSMServer.Core.TableSensors
             if (!resolved.TryGetValue(path, out var found))
             {
                 found = _cache.TryGetSensorByPath(product, path, out var sensor) && sensor is TableSensorModel table
-                    ? (table, TablePeriodClass.Of(table, utcNow))
+                    ? (table, PlaceSensor(product, table, utcNow, create).ClassOf(hour))
                     : (null, 0);
 
                 resolved[path] = found;

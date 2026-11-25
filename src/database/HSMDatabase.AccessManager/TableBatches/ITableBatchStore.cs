@@ -77,6 +77,8 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long WeeksFlushed;
         public long WeeksDropped;
         public long HoursRebuilt;
+        /// <summary>Products whose placements were rebuilt from the indexes of their week databases (#1850 part 4b): missing or damaged. Logged as a warning.</summary>
+        public long PlacementsRebuilt;
         public long ReadFailures;
         public long WriteFailures;
         /// <summary>
@@ -127,6 +129,11 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long ExpiredBlocksDeleted;
         /// <summary>Rows of those blocks (from the block index, every table of a block).</summary>
         public long ExpiredBlockRowsDeleted;
+        /// <summary>
+        /// Gauge (#1850 part 4b): week databases whose class has passed and that retention keeps because they hold rows of a
+        /// sensor whose period changed since and whose new period has not passed (owed to the move), at the last retention run.
+        /// </summary>
+        public long MoveWeeksPending;
 
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
 
@@ -174,8 +181,36 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// </summary>
         void WriteHour(Guid productId, TableBatchHourCommit commit, IReadOnlyList<TableBatchHourPart> parts);
 
-        /// <summary>The merged hours of a product in hour order, from memory (an empty list when it has none). Opens the product's hours database once.</summary>
+        /// <summary>
+        /// The merged hours of a product that hold batches and whose week still has a database (of any class), in hour order,
+        /// from memory (an empty list when it has none). An hour keeps the classes its record names, dropped ones included: the
+        /// rows of a sensor may have been moved from a dropped class into another one, and their times are within the record's
+        /// ranges. Opens the product's hours database once.
+        /// </summary>
         IReadOnlyList<TableBatchHour> GetHours(Guid productId);
+
+        /// <summary>The committed hours of a product no database of whose week is left (#1850 part 4b): retention forgets them once their blocks are gone.</summary>
+        IReadOnlyList<long> GetHoursWithoutDatabases(Guid productId);
+
+        /// <summary>
+        /// Removes the records of committed hours no database of whose week is left (hours with a database are skipped), in
+        /// one synced write. Retention calls it once the block store holds no block of those hours: until then the record
+        /// keeps the hour merged, so the merge never takes it again. Throws <see cref="TableBatchStoreException"/> on a fault.
+        /// </summary>
+        void ForgetHours(Guid productId, IReadOnlyCollection<long> hours);
+
+        /// <summary>The placement of a sensor's batches, or null when the store has none for it (it has no batch). From memory.</summary>
+        TablePlacement GetPlacement(Guid productId, Guid sensorId);
+
+        /// <summary>Every placement of a product, from memory.</summary>
+        IReadOnlyDictionary<Guid, TablePlacement> GetPlacements(Guid productId);
+
+        /// <summary>
+        /// Stores the placement of a sensor durably (one synced write into the product's placements database) and then in
+        /// memory; null removes it. Creates the product's folder. Throws <see cref="TableBatchStoreException"/> on a fault, with
+        /// nothing changed.
+        /// </summary>
+        void SetPlacement(Guid productId, Guid sensorId, TablePlacement placement);
 
         bool IsHourMerged(Guid productId, long hourTicks);
 
@@ -208,8 +243,7 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>
         /// Drops a week database: closes it (waiting for the reads that hold it; reads that start meanwhile find nothing
         /// there), records the drop durably in the product's record of dropped databases and deletes its folder. Its hours
-        /// lose that class; an hour left with none is removed from the hours database. A write into a dropped week database
-        /// is refused. A delete that fails throws <see cref="TableBatchStoreException"/> with the week already dropped; the
+        /// keep their records (see <see cref="ForgetHours"/>). A write into a dropped week database is refused. A delete that fails throws <see cref="TableBatchStoreException"/> with the week already dropped; the
         /// folder left is deleted at the next open of the product.
         /// </summary>
         void DropWeek(Guid productId, TableBatchWeek week);

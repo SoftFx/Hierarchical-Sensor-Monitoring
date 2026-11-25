@@ -145,6 +145,8 @@ namespace HSMServer.BackgroundServices
                 "Blocks never merged into batches (their product's hour not committed, or unreadable) that retention deleted since the server started because the period of every table sensor with rows in them had passed. Each deletion is logged as an Error.", _batchCounters);
             Add("Expired block rows deleted", () => Interlocked.Read(ref merge.ExpiredBlockRowsDeleted), false,
                 "Rows of the expired blocks deleted since the server started (every table of a block, from the block index).", _batchCounters);
+            Add("Move weeks pending", () => Interlocked.Read(ref merge.MoveWeeksPending), false,
+                "Week databases whose period has passed that retention keeps at its last run because they hold rows of a table sensor whose period changed since and has not passed: they wait for the move of those rows to the new period.", _batchCounters);
 
             _batchesCreated = true;
         }

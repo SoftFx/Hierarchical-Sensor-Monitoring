@@ -40,6 +40,14 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// </summary>
         public const string DroppedName = "Dropped";
 
+        /// <summary>
+        /// The product's placements (#1850 part 4b): LevelDB, key the sensor id (16 bytes, big-endian), value its
+        /// <see cref="TablePlacement"/>. Rebuilt from the indexes of the week databases when missing or damaged.
+        /// </summary>
+        public const string PlacementsName = "Placements";
+
+        private const byte PlacementVersion = 1;
+
         internal const byte TagIndex = 0x00;
         internal const byte TagBatch = 0x01;
         internal const byte TagMark = 0x02;
@@ -100,8 +108,8 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// Called at the points a test stands a crash or a pause at: "part-written", "stale-removed" (after each part of a
         /// class the record does not name is deleted), "before-commit", "committed" (the hour write); "flush" (before a week's
         /// memtable is written out); "read-holding" (a read holds a database and its iterator); "drop-waiting" (a drop waits
-        /// for the leases of the week, under the cache lock), "drop-deleting" (before the folder is deleted), "drop-hours"
-        /// (before the hours left without a class are removed from Hours); "dispose-waiting" (a dispose waits for leases,
+        /// for the leases of the week, under the cache lock), "drop-deleting" (before the folder is deleted); "forget-hours"
+        /// (before hours are removed from Hours); "dispose-waiting" (a dispose waits for leases,
         /// under the cache lock), "dispose-product" (before a dispose takes a product's lock); "product-opening" (a product's
         /// open, under its slot's gate and outside the store-wide lock).
         /// </summary>
@@ -302,15 +310,18 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
-        // Adds to the batch a delete of every key of the hour region of one hour (index records, batches, the mark). The region
-        // of moved batches starts with 0xFF and is not touched.
+        // Adds to the batch a delete of every key of one hour in a week database: the hour region (index records, batches, the
+        // mark) and the hour's keys in the region of moved batches (0xFF | hour). A part written again replaces everything the
+        // database holds of the hour, moved copies included, so an hour merged again from its blocks never sits beside a moved
+        // copy of the same rows. The move writes the hour's mark into the database it moves into, which is how a repeat finds
+        // that database (feature doc, "Moved batches and an hour merged again").
         private static void DeleteHourKeys(DB db, long hour, WriteBatch batch)
         {
-            var prefix = HourKey(hour, TagIndex)[..8];
-
             using var iterator = db.CreateIterator();
-            for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
-                batch.Delete(iterator.Key());
+
+            foreach (var prefix in new[] { HourKey(hour, TagIndex)[..8], MovedHourPrefix(hour) })
+                for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
+                    batch.Delete(iterator.Key());
         }
 
         /// <summary>
@@ -325,7 +336,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             lock (product.Lock)
             {
                 RefuseDropped(product, [week]);
-                var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: true, pin: false);
+                // Pinned as a part write is when it is the newest week: flushed when the next week starts, not only at its close.
+                var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: true, pin: week.WeekStartTicks >= product.PinnedWeek);
 
                 try
                 {
@@ -410,7 +422,57 @@ namespace HSMDatabase.LevelDB.TableBatches
                 return [];
 
             lock (product.Lock)
-                return product.Snapshot ??= product.Hours.Values.Select(h => Visible(product, h)).Where(h => h.Classes.Count > 0).ToArray();
+                return product.Snapshot ??= product.Hours.Values.Where(h => h.Classes.Count > 0 && HasDatabase(product, h.HourTicks)).ToArray();
+        }
+
+        public IReadOnlyList<long> GetHoursWithoutDatabases(Guid productId)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return [];
+
+            lock (product.Lock)
+                return product.Hours.Keys.Where(h => !HasDatabase(product, h)).ToArray();
+        }
+
+        public void ForgetHours(Guid productId, IReadOnlyCollection<long> hours)
+        {
+            ArgumentNullException.ThrowIfNull(hours);
+
+            var product = Product(productId, create: false);
+            if (product is null)
+                return;
+
+            lock (product.Lock)
+            {
+                if (product.HoursDb is null)
+                    throw new TableBatchStoreException("The table batch store is closed.");
+
+                // Only an hour no database of whose week is left: an hour with a database is still read from it.
+                var forgotten = hours.Distinct().Where(h => product.Hours.ContainsKey(h) && !HasDatabase(product, h)).ToList();
+                if (forgotten.Count == 0)
+                    return;
+
+                using var batch = new WriteBatch();
+                foreach (var hour in forgotten)
+                    batch.Delete(CommitKey(hour));
+
+                try
+                {
+                    Checkpoint?.Invoke("forget-hours");
+                    product.HoursDb.Write(batch, _syncWrite);
+                }
+                catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
+                {
+                    Statistics.Add(ref Statistics.WriteFailures);
+                    throw new TableBatchStoreException($"The merged hours of product {productId} could not be removed: {ex.Message}", ex);
+                }
+
+                foreach (var hour in forgotten)
+                    product.Hours.Remove(hour);
+
+                product.Snapshot = null;
+            }
         }
 
         public bool IsHourMerged(Guid productId, long hourTicks)
@@ -500,19 +562,11 @@ namespace HSMDatabase.LevelDB.TableBatches
                             var prefix = IndexPrefix(hour, sensorId);
                             for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
                                 found.Add(ReadIndexed(handle.Db, iterator.Key(), iterator.Value(), moved: false));
-                        }
 
-                        // The region of moved batches: 0xFF | sensor | hour | tag | ...
-                        var movedPrefix = MovedPrefix(sensorId);
-                        var hourSet = new HashSet<long>(selected);
-                        for (iterator.Seek(MovedPrefix(sensorId, selected[0])); iterator.IsValid && iterator.Key().AsSpan().StartsWith(movedPrefix); iterator.Next())
-                        {
-                            var key = iterator.Key();
-                            long hour = BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(17));
-                            if (hour > selected[^1])
-                                break;
-                            if (key[25] == TagIndex && hourSet.Contains(hour))
-                                found.Add(ReadIndexed(handle.Db, key, iterator.Value(), moved: true));
+                            // The region of moved batches: 0xFF | hour | sensor | 0x00 | ...
+                            var movedPrefix = MovedIndexPrefix(hour, sensorId);
+                            for (iterator.Seek(movedPrefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(movedPrefix); iterator.Next())
+                                found.Add(ReadIndexed(handle.Db, iterator.Key(), iterator.Value(), moved: true));
                         }
                     }
 
@@ -539,8 +593,8 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 if (moved)
                 {
-                    sensor = new Guid(key.AsSpan(1, 16), bigEndian: true);
-                    hour = BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(17));
+                    hour = BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(1));
+                    sensor = new Guid(key.AsSpan(9, 16), bigEndian: true);
                     first = BinaryPrimitives.ReadInt64BigEndian(key.AsSpan(26));
                     ordinal = BinaryPrimitives.ReadInt32BigEndian(key.AsSpan(34));
                     batchKey = MovedBatchKey(sensor, hour, ordinal);
@@ -643,36 +697,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                     product.Weeks.Remove(week);
                     product.Snapshot = null;
 
-                    // Hours of the week left without any database are removed from the hours database.
-                    var weekEnd = week.WeekStartTicks + 7 * TimeSpan.TicksPerDay;
-                    using var batch = new WriteBatch();
-                    var removed = new List<long>();
-
-                    foreach (var hour in product.Hours.Values.Where(h => h.HourTicks >= week.WeekStartTicks && h.HourTicks < weekEnd))
-                        if (Visible(product, hour).Classes.Count == 0)
-                        {
-                            batch.Delete(CommitKey(hour.HourTicks));
-                            removed.Add(hour.HourTicks);
-                        }
-
-                    if (removed.Count > 0)
-                    {
-                        try
-                        {
-                            Checkpoint?.Invoke("drop-hours");
-                            product.HoursDb.Write(batch, _syncWrite);
-                        }
-                        catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
-                        {
-                            // The drop is recorded and the week out of the lists: the hours stay in memory and in Hours with no
-                            // class left, hidden by Visible, and the next open loads them the same way.
-                            Statistics.Add(ref Statistics.WriteFailures);
-                            throw new TableBatchStoreException($"The hours of the dropped table batch database {path} could not be removed from the merged hours: {ex.Message}", ex);
-                        }
-                    }
-
-                    foreach (var hour in removed)
-                        product.Hours.Remove(hour);
+                    // The hours of the week stay committed (#1850 part 4b): a record leaves Hours only through ForgetHours, once
+                    // no database of its week is left and the block store holds none of its blocks. Removed here, an hour
+                    // whose blocks are still held (unreadable ones, kept) would be taken as not merged and merged again.
 
                     if (failure is not null)
                     {
@@ -739,14 +766,12 @@ namespace HSMDatabase.LevelDB.TableBatches
                 }
         }
 
-        // The hour with only the classes whose week database exists.
-        private static TableBatchHour Visible(ProductState product, TableBatchHour hour)
+        // Under the product's lock. Whether a database of the hour's week is left, of any class: rows of the hour may sit in a
+        // class its record does not name (moved there), so the record's classes are not the test.
+        private static bool HasDatabase(ProductState product, long hour)
         {
-            var week = StorageWeek.GetStartTicks(hour.HourTicks);
-            if (hour.Classes.All(c => product.Weeks.Contains(new TableBatchWeek(week, c.PeriodWeeks))))
-                return hour;
-
-            return hour with { Classes = hour.Classes.Where(c => product.Weeks.Contains(new TableBatchWeek(week, c.PeriodWeeks))).ToArray() };
+            var week = StorageWeek.GetStartTicks(hour);
+            return product.Weeks.Any(w => w.WeekStartTicks == week);
         }
 
 
@@ -808,10 +833,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                     }
                 }
 
-                // The store was disposed while the product opened: its hours database is closed here, as the dispose (which
-                // waits on this gate) would have closed it.
-                product.HoursDb?.Dispose();
-                product.HoursDb = null;
+                // The store was disposed while the product opened: its databases are closed here, as the dispose (which waits
+                // on this gate) would have closed them.
+                CloseProductDatabases(product);
                 throw new TableBatchStoreException("The table batch store is closed.");
             }
         }
@@ -827,8 +851,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             catch
             {
                 // Nothing of a product that failed to open stays open: the next call opens it again over the same folder.
-                product.HoursDb?.Dispose();
-                product.HoursDb = null;
+                CloseProductDatabases(product);
                 throw;
             }
         }
@@ -890,9 +913,266 @@ namespace HSMDatabase.LevelDB.TableBatches
             if (!existed && product.Weeks.Count > 0)
                 Rebuild(product);
 
+            OpenPlacements(product, folder);
+
             _logger.Info($"Table batches of product {productId} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: " +
-                         $"{product.Hours.Count} merged hours, {product.Weeks.Count} week databases");
+                         $"{product.Hours.Count} merged hours, {product.Weeks.Count} week databases, {product.Placements.Count} placements");
             return product;
+        }
+
+        private static void CloseProductDatabases(ProductState product)
+        {
+            product.HoursDb?.Dispose();
+            product.HoursDb = null;
+            product.PlacementsDb?.Dispose();
+            product.PlacementsDb = null;
+        }
+
+
+        // === Placements (#1850 part 4b) ===
+
+        public TablePlacement GetPlacement(Guid productId, Guid sensorId)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return null;
+
+            lock (product.Lock)
+                return product.Placements.GetValueOrDefault(sensorId);
+        }
+
+        public IReadOnlyDictionary<Guid, TablePlacement> GetPlacements(Guid productId)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return new Dictionary<Guid, TablePlacement>();
+
+            lock (product.Lock)
+                return new Dictionary<Guid, TablePlacement>(product.Placements);
+        }
+
+        public void SetPlacement(Guid productId, Guid sensorId, TablePlacement placement)
+        {
+            var product = Product(productId, create: true);
+
+            lock (product.Lock)
+            {
+                if (product.PlacementsDb is null)
+                    throw new TableBatchStoreException("The table batch store is closed.");
+
+                try
+                {
+                    Checkpoint?.Invoke("placement-writing");
+
+                    if (placement is null)
+                        product.PlacementsDb.Delete(PlacementKey(sensorId), _syncWrite);
+                    else
+                        product.PlacementsDb.Put(PlacementKey(sensorId), EncodePlacement(placement), _syncWrite);
+                }
+                catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
+                {
+                    Statistics.Add(ref Statistics.WriteFailures);
+                    throw new TableBatchStoreException($"The placement of table sensor {sensorId} of product {productId} could not be written: {ex.Message}", ex);
+                }
+
+                if (placement is null)
+                    product.Placements.Remove(sensorId);
+                else
+                    product.Placements[sensorId] = placement;
+            }
+        }
+
+        // The placements database of the product: opened, loaded, and rebuilt from the indexes of the week databases when it is
+        // missing (a store from before placements, or lost) or damaged (set aside first). An empty one that exists is the truth.
+        private void OpenPlacements(ProductState product, string folder)
+        {
+            var path = Path.Combine(folder, PlacementsName);
+            var existed = Directory.Exists(path);
+
+            try
+            {
+                product.PlacementsDb = OpenDb(path, Options());
+                LoadPlacements(product);
+            }
+            catch (Exception ex) when (existed && (ex is FormatException || ex.Message?.Contains("Corruption", StringComparison.OrdinalIgnoreCase) == true))
+            {
+                product.PlacementsDb?.Dispose();
+                product.PlacementsDb = null;
+                var aside = $"{path}.damaged-{DateTime.UtcNow.Ticks}";
+                Directory.Move(path, aside);
+                _logger.Warn($"The placements of the table batches of product {product.Id} could not be read ({ex.Message}); moved to {aside} and rebuilt from the week databases");
+
+                product.PlacementsDb = OpenDb(path, Options());
+                product.Placements.Clear();
+                existed = false;
+            }
+
+            if (!existed && product.Weeks.Count > 0)
+                RebuildPlacements(product);
+        }
+
+        private static void LoadPlacements(ProductState product)
+        {
+            using var iterator = product.PlacementsDb.CreateIterator();
+
+            for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+                if (key.AsSpan().SequenceEqual(RebuildingKey))
+                    throw new FormatException("a rebuild of the placements that did not finish");
+                if (key.Length != 16)
+                    throw new FormatException($"a placement key of {key.Length} bytes");
+
+                product.Placements[new Guid(key, bigEndian: true)] = DecodePlacement(iterator.Value());
+            }
+        }
+
+        // The placements are derived from where the batches are: for every committed hour, the index records of every
+        // database of its week (the hour region, one seek per hour and database, and the hour's keys in the region of moved
+        // batches) name the sensors with batches there. A sensor's rows of an hour are in one database; should two hold them
+        // (a move that stopped between its copy and the delete of the source), the hour region is taken: it is the source,
+        // complete until it is deleted, which happens only after the switch. A sensor's target is the class of its newest
+        // hour; its earlier runs in another class are its segments, each up to the start of the next run. Only the index
+        // records are read (and the moved region's keys); no batch is decoded. Uncommitted hours are not looked at.
+        private void RebuildPlacements(ProductState product)
+        {
+            product.PlacementsDb.Put(RebuildingKey, [], _syncWrite);
+            Checkpoint?.Invoke("placements-scanning");
+
+            var found = new Dictionary<Guid, SortedDictionary<long, (int Class, bool Moved)>>();
+
+            void Note(Guid sensor, long hour, int period, bool moved)
+            {
+                if (!found.TryGetValue(sensor, out var hours))
+                    found[sensor] = hours = [];
+
+                if (!hours.TryGetValue(hour, out var known) || (known.Moved && !moved))
+                    hours[hour] = (period, moved);
+            }
+
+            foreach (var group in product.Hours.Keys.GroupBy(StorageWeek.GetStartTicks).OrderBy(g => g.Key))
+                foreach (var week in product.Weeks.Where(w => w.WeekStartTicks == group.Key).OrderBy(w => w.PeriodWeeks).ToList())
+                {
+                    var handle = Acquire((product.Id, week.WeekStartTicks, week.PeriodWeeks), create: false, pin: false);
+                    if (handle is null)
+                        continue;
+
+                    try
+                    {
+                        using var iterator = handle.Db.CreateIterator();
+
+                        foreach (var hour in group.OrderBy(h => h))
+                        {
+                            var prefix = HourKey(hour, TagIndex);
+                            for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
+                                Note(new Guid(iterator.Key().AsSpan(9, 16), bigEndian: true), hour, week.PeriodWeeks, moved: false);
+
+                            var moved = MovedHourPrefix(hour);
+                            for (iterator.Seek(moved); iterator.IsValid && iterator.Key().AsSpan().StartsWith(moved); iterator.Next())
+                            {
+                                var key = iterator.Key();
+                                if (key.Length > 25 && key[25] == TagIndex)
+                                    Note(new Guid(key.AsSpan(9, 16), bigEndian: true), hour, week.PeriodWeeks, moved: true);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        Release(handle);
+                    }
+                }
+
+            using var batch = new WriteBatch();
+            var rebuilt = new Dictionary<Guid, TablePlacement>();
+
+            foreach (var (sensor, hours) in found)
+            {
+                var list = hours.ToList();
+                int target = list[^1].Value.Class;
+                var segments = new List<TablePlacementSegment>();
+
+                for (int i = 0; i < list.Count;)
+                {
+                    int period = list[i].Value.Class;
+                    long first = i == 0 ? long.MinValue : list[i].Key;
+
+                    int j = i;
+                    while (j < list.Count && list[j].Value.Class == period)
+                        j++;
+
+                    if (period != target)
+                        segments.Add(new TablePlacementSegment(first, list[j].Key, period));
+
+                    i = j;
+                }
+
+                var placement = new TablePlacement(target, segments);
+                rebuilt[sensor] = placement;
+                batch.Put(PlacementKey(sensor), EncodePlacement(placement));
+            }
+
+            batch.Delete(RebuildingKey);
+            product.PlacementsDb.Write(batch, _syncWrite);
+
+            foreach (var (sensor, placement) in rebuilt)
+                product.Placements[sensor] = placement;
+
+            Statistics.Add(ref Statistics.PlacementsRebuilt);
+            _logger.Warn($"The placements of the table batches of product {product.Id} were rebuilt from the indexes of {product.Weeks.Count} week databases: {rebuilt.Count} sensors");
+        }
+
+        private static byte[] PlacementKey(Guid sensor)
+        {
+            var key = new byte[16];
+            sensor.TryWriteBytes(key, bigEndian: true, out _);
+            return key;
+        }
+
+        // u8 version (1), u16 target, i32 count, per segment i64 first hour, i64 end hour, u16 class. Little-endian.
+        internal static byte[] EncodePlacement(TablePlacement placement)
+        {
+            var value = new byte[7 + 18 * placement.Segments.Count];
+            value[0] = PlacementVersion;
+            BinaryPrimitives.WriteUInt16LittleEndian(value.AsSpan(1), (ushort)placement.Target);
+            BinaryPrimitives.WriteInt32LittleEndian(value.AsSpan(3), placement.Segments.Count);
+
+            for (int i = 0; i < placement.Segments.Count; i++)
+            {
+                var s = placement.Segments[i];
+                var at = value.AsSpan(7 + 18 * i);
+                BinaryPrimitives.WriteInt64LittleEndian(at, s.FirstHour);
+                BinaryPrimitives.WriteInt64LittleEndian(at[8..], s.EndHour);
+                BinaryPrimitives.WriteUInt16LittleEndian(at[16..], (ushort)s.PeriodWeeks);
+            }
+
+            return value;
+        }
+
+        internal static TablePlacement DecodePlacement(byte[] value)
+        {
+            if (value.Length < 7 || value[0] != PlacementVersion)
+                throw new FormatException($"a placement of {value.Length} bytes, version {(value.Length > 0 ? value[0] : 0)}");
+
+            int count = BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(3));
+            if (count < 0 || value.Length != 7 + 18L * count)
+                throw new FormatException($"a placement of {value.Length} bytes with {count} segments");
+
+            var segments = new TablePlacementSegment[count];
+            for (int i = 0; i < count; i++)
+            {
+                var at = value.AsSpan(7 + 18 * i);
+                segments[i] = new TablePlacementSegment(BinaryPrimitives.ReadInt64LittleEndian(at), BinaryPrimitives.ReadInt64LittleEndian(at[8..]),
+                    BinaryPrimitives.ReadUInt16LittleEndian(at[16..]));
+            }
+
+            try
+            {
+                return new TablePlacement(BinaryPrimitives.ReadUInt16LittleEndian(value.AsSpan(1)), segments);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new FormatException($"a placement that breaks its rules: {ex.Message}", ex);
+            }
         }
 
         private static void LoadCommits(ProductState product)
@@ -902,6 +1182,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
             {
                 var key = iterator.Key();
+                if (key.AsSpan().SequenceEqual(RebuildingKey))
+                    throw new FormatException("a rebuild of the merged hours that did not finish");
                 if (key.Length != 8)
                     throw new FormatException($"a merged hour key of {key.Length} bytes");
 
@@ -936,6 +1218,12 @@ namespace HSMDatabase.LevelDB.TableBatches
         // (a write into a dropped database is refused, so its absence is never a part that was not written).
         private void Rebuild(ProductState product)
         {
+            // Written before the scan and deleted in the write of its result: a crash during the scan leaves the key, and the
+            // next open takes this Hours as damaged (LoadCommits), sets it aside and rebuilds again, instead of trusting an
+            // Hours that holds only part of the hours, or none.
+            product.HoursDb.Put(RebuildingKey, [], _syncWrite);
+            Checkpoint?.Invoke("rebuild-scanning");
+
             var marks = new Dictionary<long, (byte[] Record, HashSet<int> Found, bool Agree)>();
 
             foreach (var week in product.Weeks.OrderBy(w => w.WeekStartTicks).ThenBy(w => w.PeriodWeeks).ToList())
@@ -996,8 +1284,8 @@ namespace HSMDatabase.LevelDB.TableBatches
                 rebuilt++;
             }
 
-            if (rebuilt > 0)
-                product.HoursDb.Write(batch, _syncWrite);
+            batch.Delete(RebuildingKey);
+            product.HoursDb.Write(batch, _syncWrite);
 
             LoadCommits(product);
             Statistics.Add(ref Statistics.HoursRebuilt, rebuilt);
@@ -1129,7 +1417,8 @@ namespace HSMDatabase.LevelDB.TableBatches
                 }
 
                 foreach (var slot in _products.Values)
-                    slot.State?.HoursDb?.Dispose();
+                    if (slot.State is not null)
+                        CloseProductDatabases(slot.State);
 
                 _products.Clear();
             }
@@ -1185,10 +1474,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 Checkpoint?.Invoke("dispose-product");
 
                 lock (product.Lock)
-                {
-                    product.HoursDb?.Dispose();
-                    product.HoursDb = null;
-                }
+                    CloseProductDatabases(product);
             }
 
             lock (_productsLock)
@@ -1265,34 +1551,40 @@ namespace HSMDatabase.LevelDB.TableBatches
             return key;
         }
 
-        // 0xFF | sensor | hour | 0x00 | first time | ordinal: the index record of a moved batch
+        // 0xFF | hour | sensor | 0x00 | first time | ordinal: the index record of a moved batch. The hour comes first, so every
+        // key of an hour in the region is one prefix (0xFF | hour): a rewrite of the hour deletes it with the hour region.
         internal static byte[] MovedIndexKey(Guid sensor, long hour, long first, int ordinal)
         {
             var key = new byte[38];
             key[0] = MovedRegion;
-            sensor.TryWriteBytes(key.AsSpan(1), bigEndian: true, out _);
-            BinaryPrimitives.WriteInt64BigEndian(key.AsSpan(17), hour);
+            BinaryPrimitives.WriteInt64BigEndian(key.AsSpan(1), hour);
+            sensor.TryWriteBytes(key.AsSpan(9), bigEndian: true, out _);
             key[25] = TagIndex;
             BinaryPrimitives.WriteInt64BigEndian(key.AsSpan(26), first);
             BinaryPrimitives.WriteInt32BigEndian(key.AsSpan(34), ordinal);
             return key;
         }
 
-        // 0xFF | sensor | hour | 0x01 | ordinal: a moved batch
+        // 0xFF | hour | sensor | 0x01 | ordinal: a moved batch
         internal static byte[] MovedBatchKey(Guid sensor, long hour, int ordinal)
         {
             var key = new byte[30];
             key[0] = MovedRegion;
-            sensor.TryWriteBytes(key.AsSpan(1), bigEndian: true, out _);
-            BinaryPrimitives.WriteInt64BigEndian(key.AsSpan(17), hour);
+            BinaryPrimitives.WriteInt64BigEndian(key.AsSpan(1), hour);
+            sensor.TryWriteBytes(key.AsSpan(9), bigEndian: true, out _);
             key[25] = TagBatch;
             BinaryPrimitives.WriteInt32BigEndian(key.AsSpan(26), ordinal);
             return key;
         }
 
-        private static byte[] MovedPrefix(Guid sensor) => MovedBatchKey(sensor, 0, 0)[..17];
+        // 0xFF | hour: every key of the hour in the region of moved batches.
+        internal static byte[] MovedHourPrefix(long hour) => MovedBatchKey(Guid.Empty, hour, 0)[..9];
 
-        private static byte[] MovedPrefix(Guid sensor, long hour) => MovedBatchKey(sensor, hour, 0)[..25];
+        // 0xFF | hour | sensor | 0x00: the index records of a sensor's moved batches of an hour.
+        private static byte[] MovedIndexPrefix(long hour, Guid sensor) => MovedIndexKey(sensor, hour, 0, 0)[..26];
+
+        // A key of Hours that is no merged hour (one byte, never eight): present while a rebuild scans the week databases.
+        private static readonly byte[] RebuildingKey = [0xFF];
 
         private static byte[] CommitKey(long hour)
         {
@@ -1413,6 +1705,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             public readonly HashSet<TableBatchWeek> Weeks = [];
             public HashSet<TableBatchWeek> Dropped = [];
             public DB HoursDb;
+            public DB PlacementsDb;
+            public readonly Dictionary<Guid, TablePlacement> Placements = [];
             public long PinnedWeek = long.MinValue;
             public IReadOnlyDictionary<Guid, long> Watermarks = new Dictionary<Guid, long>();
             public IReadOnlyList<TableBatchHour> Snapshot;
