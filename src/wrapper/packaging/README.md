@@ -44,16 +44,17 @@ The run-time DLLs are whatever vcpkg's app-local deployment puts next to `HSMCpp
   nothing (`Refused` or `Pending` by the server's answer to their registration, or `Registered` with the
   table connection refused and their rows dropped and counted); after `UseHttpTransport()` they are
   `Unavailable`, with a reason that names the session. Details: `docs/native-collector-migration.md`.
-- **Files on the session: about 1 MiB with a default server.** `SendFileAsync` sends a file as one
-  element of a `list` frame, every file byte written as a decimal number and a comma (2 to 4 JSON bytes
-  per byte). It must fit the server's `CollectorSessions.MaxFrameBytes` (default 4 MiB) less 64 bytes, so
-  with the default the largest file is about 1 MiB (1.0 MiB worst case, about 1.1 MiB random binary),
-  although the wrapper accepts up to 10 MiB. A larger one is dropped, logged ("Dropped a value of N bytes:
-  it is larger than a collector session frame (M bytes).", in `.module/Collector errors`) and counted in
-  `Queue overflow`. Over HTTP (1.x, or after `UseHttpTransport()`) files up to 10 MiB are posted (the
-  server takes request bodies up to 50 MiB). Ways out: raise `CollectorSessions.MaxFrameBytes` on the
-  server (up to 64 MiB; 42 MiB covers 10 MiB files), or call `UseHttpTransport()` on a host that sends
-  large files. Large files as a feature: epic
+- **Files on the session (2.1.0, native collector 0.16.0).** `SendFileAsync` sends a file of up to a
+  quarter of the server's `CollectorSessions.MaxFrameBytes` (1 MiB with the default 4 MiB) as one element
+  of a `list` frame, as before. A larger one (the wrapper accepts up to 10 MiB) travels on the session's
+  file connection as a large file value of the same File sensor, not secure (a zip without a password on
+  the server; ADR-0022 points 20 and 21), when the server has file connections; nothing in the wrapper's
+  code or ABI changed for it. Against a server without file connections the behaviour of 2.0.0 stays: a
+  file that does not fit a frame (`MaxFrameBytes` less 64 bytes, 2 to 4 JSON bytes per file byte) is
+  dropped, logged ("Dropped a value of N bytes: it is larger than a collector session frame (M bytes).", in
+  `.module/Collector errors`) and counted in `Queue overflow`; a large value refused for good or cut by a
+  stop is dropped, logged and counted the same way. Over HTTP (1.x, or after `UseHttpTransport()`) files
+  up to 10 MiB are posted (the server takes request bodies up to 50 MiB). Large files as a feature: epic
   [#1882](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/issues/1882).
 - **Rollout:** update a server without sessions (before HSMServer 3.43.0, or with
   `CollectorSessions.MaxSessions` at zero) **before** a host with wrapper 2.0.0 talks to it, or have that
@@ -96,7 +97,7 @@ cmake -S src/wrapper -B build/wrapper `
   -DVCPKG_TARGET_TRIPLET=x64-windows
 cmake --build build/wrapper --config Release
 cmake --build build/wrapper --config Debug
-pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 2.0.0
+pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 2.1.0
 # -> dist/HSMCppWrapper-2.0.0.zip
 ```
 
@@ -108,6 +109,11 @@ native collector C ABI (`HSM_COLLECTOR_VERSION`). The wrapper's own version is
 version. Semver: MAJOR for a change a host must act on (a removed or changed export, a changed default
 behaviour), MINOR for an added export, PATCH for a fix. The manifest records the exact source commit
 each build came from.
+
+**2.1.0 (MINOR):** the bundle carries native collector 0.16.0, whose large file functions
+(`hsm_collector_watch_large_files`, `hsm_collector_send_large_file` and the rest, #1887) the `.def` exports
+with the rest of the C ABI; a `SendFileAsync` above a quarter of the frame limit travels on the file
+connection when the server has one (above). The wrapper's own ABI does not change.
 
 **2.0.0 (MAJOR):** the default transport became the collector session. The ABI only grew (one
 method), but a host relinked against 2.0.0 sends nothing to a server without sessions unless it calls

@@ -10,7 +10,7 @@
   Called by .github/workflows/hsm-wrapper-release.yml on a `wrapper-v*` tag push (cuts a GitHub
   Release) or a manual dispatch (uploads the zip as a workflow artifact). Run it locally the same way:
 
-    pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 2.0.0
+    pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 2.1.0
 
   Expects the wrapper to have been CMake-built for BOTH configs first, with a vcpkg checkout at the
   builtin-baseline of src/wrapper/vcpkg.json (see packaging/README.md, "Building the bundle locally"):

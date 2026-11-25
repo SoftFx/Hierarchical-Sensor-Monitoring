@@ -548,7 +548,15 @@ hsm_large_file_watch_release(w);                             /* stops watching *
   after `stored`, 10,000,000 **bytes sent** per second (`HSM_LARGE_FILE_NO_SPEED_LIMIT` for none), the File sensor
   registered with the alert "new data has been received" (`no_new_file_alert = 1` without it), sensor location
   Module, no description, the server's history period, no TTL, no self-destroy. A new field will be appended, with
-  0 as its default. Output structs are written up to `min(struct_size, sizeof)`.
+  0 as its default. Output structs are written up to `min(struct_size, sizeof)`. `not_secure` (0 = secure, the
+  default) says whether the server keeps the file in a zip under the product's dump password (secure) or in the
+  same zip without a password; it travels in `begin`.
+- **Ordinary file sends above the threshold.** On the session, `hsm_sensor_add_file` and
+  `hsm_sensor_add_file_from_path` with a content larger than a quarter of the session's frame limit (1 MiB at the
+  default) send it on the file connection as a large value that is not secure, when the server has file
+  connections; otherwise, as before, a value that does not fit a frame is dropped, logged and counted. Their result
+  codes and the 10 MiB cap do not change (`aicontext/features/collector/large-files/native-collector.md`,
+  "Ordinary sends above the threshold").
 - **Paths** (folder, mask, file, data folder) are UTF-8; a relative one is made absolute from the current
   directory at the call. The mask has `*` and `?`, matches the whole name, ignores the case of ASCII letters on
   Windows only, and may not contain `[`, `]`, `;`, `\`, `/` or a control character.

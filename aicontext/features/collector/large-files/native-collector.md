@@ -23,6 +23,10 @@ restart of either side.
   `hsm_collector_watch_large_files` (→ `hsm_large_file_watch_t`: `_get_stats`, `_state_reason`, `_release`),
   `hsm_collector_send_large_file` (→ `hsm_large_file_t`: `hsm_large_file_get_result`, `_reason`, `_cancel`,
   `_release`), `hsm_large_file_options_default`, `HSM_LARGE_FILE_NO_SPEED_LIMIT`. Zero in every option is its default.
+- **Secure or not** (ADR-0022 point 21): `not_secure` (0 = secure, the default; C++ `LargeFileOptions::secure`). Every
+  `begin` carries `"secure"`; the in-progress record keeps it, and it is part of the upload's key (another mark is
+  another upload). A secure file is kept on the server in a zip under the product's dump password, the other in the
+  same zip without one.
 - **C++ wrapper** (`include/hsm_collector/large_files.hpp`): `LargeFileOptions`, move-only `LargeFileWatch` (its
   destruction stops watching) and `LargeFile` (its destruction leaves the file queued), `Collector::SetDataFolder`,
   `WatchLargeFiles`, `WatchLargeFilesForLife`, `SendLargeFile`. They throw `Error` only for a mistake of the call and
@@ -59,6 +63,32 @@ restart of either side.
 | Delete | only after `stored` in this run (at `end`, or at `begin` for a file the server has), in delete mode, after the facts compare equal again; Windows through the open handle (`FileDispositionInfo`), Linux `unlink` with the descriptor still open over the comparison; the delivered entry is written first. Without an identity, a `stored` at `begin` deletes only with the collector's own record of sending that file. A hard link loses one name |
 | Feature absent | an upgrade answered 404 or 400: said once; asked again with every new session and every 30 minutes |
 | Stop / dispose | cut, never waited for; continue after Start from the server's `next` |
+
+## Ordinary sends above the threshold (ADR-0022 point 20)
+
+On a session, the content of `hsm_sensor_add_file`, `hsm_sensor_add_file_from_path` and `FileSensor::SendFile`
+(so the legacy wrapper's `SendFileAsync`) larger than a quarter of the frame limit of the session's hello (1 MiB at
+the default 4 MiB; before the first hello the default is assumed; the native frame clamp of 8 MiB applies) is a
+**routed send**: it goes to the uploader instead of a `list` frame, when the file connection is available. The
+10 MiB cap of these calls stays; the calls return as before.
+
+- The content comes from memory: no folder, no state file, no in-progress record or digest list on a disk, nothing
+  deleted, nothing kept across a restart (as the value queue).
+- `begin` carries `"secure": false`, `"source": "send:<guid>"` (a new one per send), `"modified"` = the value's
+  time, and `"status"` / `"comment"` of the value when not Ok / not empty. No registration of its own and no flag
+  4: it waits until the sensor's ordinary registration was acknowledged on the session.
+- Order: routed sends go before files of the large-file API, in the order sent; a routed send that is ready
+  preempts a large file after its piece in flight; the large file then begins again and continues from the
+  server's piece. The speed limit applies to both.
+- `stored` completes it. An answer with `retryAfter` is tried again while the process lives. A final refusal (a
+  4xx without `retryAfter`, a size over the server's limit, 3 discards, 10 checksum mismatches, 3 protocol
+  closes, 1008) and a cut by Stop or Dispose are a **dropped value**: said once with the sensor, the name and the
+  size, and counted in the overflow counter (`Queue overflow`), where a dropped file value is counted today; a
+  part a stop left on the server expires there (Stop cancels the connection, so no `discard` goes out).
+- **No route, no change**: the collector learns that the server has no file connections from a refused upgrade
+  (404 or 400), remembered until the next session; then, and in a build without large files, with the HTTP
+  transport, or before Start, the value takes today's path (a `list` frame; a value that does not fit a frame is
+  dropped, said and counted). A routed send waiting when the route turns out to be missing goes back to that path.
 
 ## The data folder and the state files
 
@@ -107,9 +137,6 @@ TSan in a Linux build with HTTP and tables (the CI sanitizer presets build witho
   verbs follow it.
 - Linux: nothing can deny writers; a writer that keeps writing is caught by the settle time and the comparisons
   before `end` and before the delete. A read blocked on a dead network mount holds Stop until it returns.
-- The owner's amendment of 2026-11-25 (secure and not-secure files, ordinary sends above the threshold on the file
-  connection, ADR-0022 points 20 and 21) is not in 0.16.0; `hsm_large_file_options_t` takes the mark as an appended
-  field.
 
 ## What differs from the managed collector
 

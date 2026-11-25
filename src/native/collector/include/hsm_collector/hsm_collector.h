@@ -1004,8 +1004,14 @@ hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
 /* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). On every
    transport the value travels with the other values: in a /list batch over HTTP, in a `list` frame
    on the collector session (since #1660 step 2b; before, the session refused it with
-   HSM_RESULT_INVALID_STATE). A file whose value does not fit a session frame is dropped, logged and
-   counted in Queue overflow, like any value larger than a frame. */
+   HSM_RESULT_INVALID_STATE). Since 0.16.0 (ADR-0022 point 20, #1887): on the session, a content
+   larger than a quarter of the frame limit the server announced (1 MiB at the default 4 MiB) is sent
+   on the file connection as a large file value that is not secure, when the server has file
+   connections and the collector is built with large files; it is then stored as a large value of the
+   same File sensor (no preview; its time is the time the server accepted it). Otherwise, as before:
+   a file whose value does not fit a session frame is dropped, logged and counted in Queue overflow,
+   like any value larger than a frame. A routed send that is refused for good or cut by a stop is
+   dropped, logged and counted the same way. The call returns as it always did. */
 hsm_result_t hsm_sensor_add_file(
     hsm_sensor_t* sensor,
     const char* utf8_content,
