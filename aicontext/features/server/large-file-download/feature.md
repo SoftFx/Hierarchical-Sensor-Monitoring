@@ -106,7 +106,7 @@ The 409 reasons: the product has no dump password yet (a Manager sets it in the 
 
 On an archive answer:
 
-- `Content-Disposition: attachment; filename="<ASCII fallback>"; filename*=UTF-8''<name>`, built with `ContentDispositionHeaderValue`. The name is the original name with the collector's extension and `.zip` appended, after the path is dropped, control characters and `:*?"<>|` become `_`, outer dots and spaces are trimmed and it is cut to 200 characters (empty: `file`); the plain `filename` keeps printable ASCII only, without `"`, `\` and `%`.
+- `Content-Disposition: attachment; filename="<ASCII fallback>"; filename*=UTF-8''<name>`, built with `ContentDispositionHeaderValue`. The name is the entry name (`ArchiveEntryNames.Sanitize`, above) with `.zip` appended, so control and format characters such as bidi overrides are dropped from it exactly as from the entry; the plain `filename` keeps printable ASCII only, without `"`, `\` and `%`.
 - `Repr-Digest: sha-256=:<base64>:` — the SHA-256 of the archive bytes (RFC 9530). The description gives the same hash as lowercase hex.
 - `X-Hsm-Password-Version: <N>` — the version of the product's dump password the archive opens with.
 - `Content-Type: application/zip`.
@@ -248,7 +248,7 @@ A first pack in the code is a build followed by a read-back check; a re-encrypti
 - `Downloads/LargeFileWebDownloadTests.cs` — every hidden case answers the same 404; 409 with the reason; not signed in redirects to the sign-in page; a bearer token does not open the web route.
 - `Downloads/LargeFileApiDownloadTests.cs` — the same 404 for an owner who cannot see and an unknown id; 401 without a token and with an access key; 409; GET recorded, HEAD not; 503 when the log fails, without the file; 206 and resumption with the ETag; a new password in the middle of a download makes the next range of the old archive 404; an archive replaced after the decision is not served; the marker from a trusted proxy hands the file to Caddy; no error answer carries the instruction.
 - `Downloads/LargeFileDescriptionTests.cs` — a packed and a verified file described without a password; the same 404 for unknown, invisible and other-sensor files; the MCP twin answers the same and is read-only and idempotent.
-- `Downloads/LargeFileArchiveBackgroundTests.cs` — signals coalesce and runs never overlap; a failing run is caught and the cleanup runs once a day; build outcomes reach the sensors; the default alerts; the settings defaults; `Content-Disposition` with the ASCII fallback and the full name.
+- `Downloads/LargeFileArchiveBackgroundTests.cs` — signals coalesce and runs never overlap; a failing run is caught and the cleanup runs once a day; build outcomes reach the sensors; the default alerts; the settings defaults; `Content-Disposition` with the ASCII fallback and the full name; the download name is the entry name plus `.zip`, format characters dropped.
 - `caddy/test.sh` — the hand-over through the real Caddy image (`aicontext/architecture/docker.md`).
 
 ## Known Issues / Limitations

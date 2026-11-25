@@ -201,11 +201,27 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         [InlineData("core", "", "core.zip")]
         [InlineData("../../etc/passwd", null, "passwd.zip")]
         [InlineData("C:\\dumps\\w3wp.dmp", null, "w3wp.dmp.zip")]
-        [InlineData("C:w3wp", "dmp", "C_w3wp.dmp.zip")]
+        [InlineData("C:w3wp", "dmp", "w3wp.dmp.zip")]
         [InlineData("..", null, "file.zip")]
-        [InlineData("a\"b<c>|?*\u0001", null, "a_b_c_____.zip")]
+        [InlineData("a\"b<c>|?*\u0001", null, "a_b_c____.zip")]
         public void TheDownloadName_IsTheOriginalNameWithoutAnyPath(string name, string extension, string expected) =>
             Assert.Equal(expected, LargeFileNames.DownloadFileName(name, extension));
+
+        [Theory]
+        [InlineData("report\u202Egpj.exe", "dmp", "reportgpj.exe.zip")]
+        [InlineData("a\u200Bb\u2066c", "dmp", "abc.dmp.zip")]
+        public void TheDownloadName_DropsFormatCharacters_AsTheEntryNameDoes(string name, string extension, string expected)
+        {
+            var fileName = LargeFileNames.DownloadFileName(name, extension);
+
+            Assert.Equal(expected, fileName);
+            Assert.Equal(ArchiveEntryNames.Sanitize(name, extension) + ".zip", fileName);
+
+            // Ordinal: a culture-aware search ignores format characters and finds one anywhere.
+            var header = LargeFileNames.ContentDisposition(fileName);
+            Assert.Equal(-1, header.IndexOf('\u202E'));
+            Assert.Equal(-1, header.IndexOf("%E2%80%AE", StringComparison.OrdinalIgnoreCase));
+        }
 
         [Fact]
         public void TheContentDisposition_CarriesAnAsciiFallbackAndTheFullName()

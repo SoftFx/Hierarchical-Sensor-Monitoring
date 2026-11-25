@@ -3650,9 +3650,9 @@
         </member>
         <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileNames.DownloadFileName(System.String,System.String)">
             <summary>
-            "&lt;original name&gt;.zip" with everything a file system or a header could misread replaced: no path (only the
-            part after the last slash or backslash), no drive letter, no control or reserved characters, no leading or
-            trailing dots and spaces. The extension the collector sent is appended when the name does not already end with it.
+            "&lt;entry name&gt;.zip": the name of the archive's only entry (<see cref="M:HSMServer.Core.LargeFiles.Archives.ArchiveEntryNames.Sanitize(System.String,System.String)"/>), so the
+            saved file and the file inside it carry the same name, with the same characters dropped (control and format
+            characters such as bidi overrides) or replaced.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileNames.ContentDisposition(System.String)">
