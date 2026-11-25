@@ -19,6 +19,18 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>Puts are refused (a fault) while the store's disk has less free space; 0 turns the check off.</summary>
         public long MinFreeDiskMb { get; init; } = DefaultMinFreeDiskMb;
+
+        public const int DefaultMaxOpenBatchDatabases = 32;
+        public const int DefaultDeleteMergedBlocksAfterHours = 24;
+
+        /// <summary>The most week databases of the batch store open at once (#1850); closed weeks are opened for a read or retention.</summary>
+        public int MaxOpenBatchDatabases { get; init; } = DefaultMaxOpenBatchDatabases;
+
+        /// <summary>
+        /// How long the blocks of a merged hour stay in the block store after the hour is committed (#1850): a rollback or a
+        /// defect found in that time loses nothing. Reads take a merged hour from its batches and ignore those blocks.
+        /// </summary>
+        public int DeleteMergedBlocksAfterHours { get; init; } = DefaultDeleteMergedBlocksAfterHours;
     }
 
 
@@ -50,8 +62,15 @@ namespace HSMServer.Core.TableSensors
     {
         public TableBlockPutOutcome Outcome { get; init; }
 
-        /// <summary>The sequence the block is stored under (Stored, Duplicate).</summary>
+        /// <summary>The sequence the block is stored under (Stored, Duplicate); null for a duplicate whose hour was merged.</summary>
         public long? Sequence { get; init; }
+
+        /// <summary>
+        /// False for a duplicate whose refusals are not known: the first put's block was merged and deleted (its producer
+        /// sequence is at or below the producer's watermark, #1850), or its envelope could not be read. <see cref="Refusals"/>
+        /// is then empty and says nothing about the tables. True for every other result.
+        /// </summary>
+        public bool RefusalsKnown { get; init; } = true;
 
         public int TableCount { get; init; }
 

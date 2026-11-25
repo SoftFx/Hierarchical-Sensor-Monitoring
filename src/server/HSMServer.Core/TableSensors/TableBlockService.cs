@@ -80,6 +80,9 @@ namespace HSMServer.Core.TableSensors
             var store = _database.TableBlocks ?? throw new ArgumentException("The database has no table block store.", nameof(database));
             store.MinFreeBytes = _options.MinFreeDiskMb * 1024 * 1024;
 
+            if (_database.TableBatches is { } batches)
+                batches.MaxOpenDatabases = _options.MaxOpenBatchDatabases;
+
             // Nothing is opened here: a store that cannot open costs table puts only, never the construction of this
             // service or of whatever it is injected into. The sequence floor is raised by the first put (EnsureSequenceFloor).
         }
@@ -135,6 +138,15 @@ namespace HSMServer.Core.TableSensors
 
                 switch (appended.Outcome)
                 {
+                    case TableBlockAppendOutcome.Duplicate when appended.Merged:
+                        return new TableBlockPutResult
+                        {
+                            Outcome = TableBlockPutOutcome.Duplicate,
+                            TableCount = directory.Entries.Count,
+                            RefusalsKnown = false,
+                            Message = "The block was stored before and its hour has been merged; its sequence and refusals are not known any more.",
+                        };
+
                     case TableBlockAppendOutcome.Duplicate:
                         return new TableBlockPutResult
                         {
@@ -143,6 +155,7 @@ namespace HSMServer.Core.TableSensors
                             TableCount = appended.Entry.TableCount,
                             Refusals = (appended.Envelope?.Refusals ?? []).Select(r => new TableRefusalInfo(r.Index, TableIdText(directory, r.Index), r.Reason)).ToList(),
                             Message = appended.Envelope is null ? "The stored block's envelope could not be read; its refusals are not known." : null,
+                            RefusalsKnown = appended.Envelope is not null,
                         };
 
                     case TableBlockAppendOutcome.NotStored:

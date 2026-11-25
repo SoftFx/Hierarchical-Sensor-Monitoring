@@ -301,6 +301,42 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_block_resent_after_its_hour_was_merged_is_a_duplicate_whose_refusals_are_unknown()
+        {
+            // #1850: the blocks of a merged hour are deleted; the producer's watermark still recognises a resend.
+            var sensor = await RegisterAsync("q");
+            var block = Block(("q", Quotes.Id, Quotes.ColumnTypes.ToArray()));
+            var sequence = NextProducerSequence();
+
+            Assert.Equal(TableBlockPutOutcome.Stored, _service.Put(_product, _producer, sequence, block).Outcome);
+            Store.DeleteMergedHour(Store.GetBlocks(_product)[^1].ArrivalHourTicks, [], [new TableBlockWatermark(_product, _producer, sequence)]);
+
+            var resent = _service.Put(_product, _producer, sequence, block);
+
+            Assert.Equal(TableBlockPutOutcome.Duplicate, resent.Outcome);
+            Assert.False(resent.RefusalsKnown);
+            Assert.Null(resent.Sequence);
+            Assert.Empty(resent.Refusals);
+            Assert.Equal(0, Read(sensor, T0, T0.AddHours(1)).RowCount);
+
+            // An ordinary duplicate knows its refusals.
+            var next = NextProducerSequence();
+            _service.Put(_product, _producer, next, block);
+            Assert.True(_service.Put(_product, _producer, next, block).RefusalsKnown);
+            Assert.True(_service.Put(_product, _producer, NextProducerSequence(), block).RefusalsKnown);
+        }
+
+        [Fact]
+        public void The_service_bounds_the_open_week_databases_of_the_batch_store()
+        {
+            var service = new TableBlockService(_databaseCoreManager.DatabaseCore, _valuesCache, new TableBlockOptions { MinFreeDiskMb = 0, MaxOpenBatchDatabases = 7 });
+
+            Assert.Equal(7, _databaseCoreManager.DatabaseCore.TableBatches.MaxOpenDatabases);
+            Assert.False(_databaseCoreManager.DatabaseCore.TableBatches.IsOpened);
+            GC.KeepAlive(service);
+        }
+
+        [Fact]
         public void A_block_that_breaks_the_format_or_the_limits_is_refused_as_a_result_not_a_fault()
         {
             var block = Table("q", (T0, 1.0, 1L));

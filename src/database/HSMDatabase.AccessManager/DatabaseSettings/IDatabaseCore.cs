@@ -39,6 +39,9 @@ namespace HSMServer.Core.DataLayer
         // The block store of table sensors (#1844). Nothing is opened before its first use.
         HSMDatabase.AccessManager.TableBlocks.ITableBlockStore TableBlocks { get; }
 
+        // The batch store of table sensors (#1850): the merged hours, under the same folder. Nothing is opened before its first use.
+        HSMDatabase.AccessManager.TableBatches.ITableBatchStore TableBatches { get; }
+
         // The size of its folder on disk; 0 when it does not exist (nothing is opened).
         long TableBlocksDbSize { get; }
 

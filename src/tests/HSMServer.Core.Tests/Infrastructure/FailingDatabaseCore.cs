@@ -52,6 +52,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public HSMDatabase.AccessManager.TableBlocks.ITableBlockStore TableBlocks => _inner.TableBlocks;
 
+        public HSMDatabase.AccessManager.TableBatches.ITableBatchStore TableBatches => _inner.TableBatches;
+
         public long TableBlocksDbSize => _inner.TableBlocksDbSize;
 
         public int SensorValuesPageCount => _inner.SensorValuesPageCount;

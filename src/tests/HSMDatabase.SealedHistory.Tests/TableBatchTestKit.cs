@@ -28,6 +28,10 @@ namespace HSMDatabase.SealedHistory.Tests
     {
         public const uint Schema = 0x8BF94DAC;
 
+        // 10^-d as literals, as DoubleColumn.PowersOfTen: Math.Pow goes to the platform's math library and is not guaranteed to
+        // be correctly rounded, and the inputs of the golden batches must be the same on every platform.
+        public static readonly double[] Ticks = [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15];
+
         public static readonly long Start = new DateTime(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc).Ticks;
 
         public static TableBatch Batch(params TableBatchColumn[] columns) => new(Schema, columns);
@@ -52,7 +56,7 @@ namespace HSMDatabase.SealedHistory.Tests
             var bid = new double[rows];
             var ask = new double[rows];
             var size = new long[rows];
-            double tick = Math.Pow(10, -decimals);
+            double tick = Ticks[decimals];
             long price = 10_000 + g.Below(1_000_000), spread = 1 + g.Below(3), t = Start;
 
             for (int i = 0; i < rows; i++)
