@@ -117,6 +117,19 @@ namespace HSMServer.Core.Tests.Controllers
         // ---- import
 
         [Fact]
+        public async Task Import_OfANodeFile_OnAFolder_ReportsThatNothingWasPlaced()
+        {
+            // The tree offers the import on a folder to its Manager. A file exported from a node names no
+            // products, and a folder is no node to import into: the answer says so instead of a success.
+            var tree = new WebAccessFixture();
+
+            var answer = await tree.Alerts(tree.Manager).ImportAlerts(Import(tree.Folder.Id, File(sensors: ["cpu"])));
+
+            Assert.Contains(HSMServer.Controllers.AlertsController.ImportTargetNotFound, answer);
+            Assert.Empty(ImportedPolicies(tree));
+        }
+
+        [Fact]
         public async Task Import_ToANode_IsWrittenForItsManager_AndForAnAdmin()
         {
             foreach (var pick in new Func<WebAccessFixture, User>[] { t => t.Manager, t => t.Admin })
@@ -145,7 +158,8 @@ namespace HSMServer.Core.Tests.Controllers
                 var unknown = await alerts.ImportAlerts(Import(Guid.NewGuid(), file));
 
                 Assert.Equal(unknown, refused);
-                Assert.Equal(string.Empty, refused);
+                Assert.Contains(HSMServer.Controllers.AlertsController.ImportTargetNotFound, refused);
+                Assert.DoesNotContain("no such sensor", refused);
                 Assert.Empty(ImportedPolicies(tree));
             }
         }
@@ -162,11 +176,16 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal([tree.Cpu.Id], ImportedPolicies(tree).Select(u => u.Id));
 
-            // The one report is about the managed product's own missing sensor.
+            // The managed product's own missing sensor is reported; the other names are reported alike,
+            // whether a product has them or not, and nothing is looked up in them.
             Assert.Contains("no such sensor", answer);
             Assert.Contains(tree.Own.Id.ToString(), answer);
             Assert.DoesNotContain(tree.Sibling.Id.ToString(), answer);
             Assert.DoesNotContain(tree.Foreign.Id.ToString(), answer);
+            Assert.Contains(HSMServer.Controllers.AlertsController.ProductNotFound, answer);
+
+            foreach (var name in new[] { "sibling", "foreign", "no such product" })
+                Assert.Contains(name, answer);
         }
 
         [Fact]
@@ -176,10 +195,11 @@ namespace HSMServer.Core.Tests.Controllers
             var alerts = tree.Alerts(tree.Outsider);
 
             var refused = await alerts.ImportAlerts(Import(tree.Foreign.Id, File(sensors: ["cpu", "no such sensor"], products: ["own", "sibling"])));
-            var unknown = await alerts.ImportAlerts(Import(tree.Foreign.Id, File(sensors: ["cpu", "no such sensor"], products: ["no such product"])));
+            var unknown = await alerts.ImportAlerts(Import(tree.Foreign.Id, File(sensors: ["cpu", "no such sensor"], products: ["no such 1", "no such 2"])));
 
-            Assert.Equal(unknown, refused);
-            Assert.Equal(string.Empty, refused);
+            // The answer repeats the names of the file and nothing else.
+            Assert.Equal(unknown.Replace("no such 1", "own").Replace("no such 2", "sibling"), refused);
+            Assert.DoesNotContain("no such sensor", refused);
             Assert.Empty(ImportedPolicies(tree));
         }
 

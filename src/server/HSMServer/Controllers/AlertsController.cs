@@ -36,6 +36,11 @@ namespace HSMServer.Controllers
             WriteIndented = true,
         };
 
+        // What the import answers for a group it could not place. The same for an unknown id or name and
+        // for one the user does not manage.
+        internal const string ImportTargetNotFound = "No node to import into: the file names no products, and the selected item is not a node you manage";
+        internal const string ProductNotFound = "No product you manage has this name";
+
         private static readonly JsonSerializerOptions _deserializeOptions = new()
         {
             AllowTrailingCommas = true,
@@ -101,8 +106,10 @@ namespace HSMServer.Controllers
             var toast = new ImportAlertsToastViewModel();
 
             // A node the user does not manage is no target, like an unknown id: nothing is looked up in
-            // it, so the answer says nothing about what it holds.
+            // it, so the answer says nothing about what it holds. A folder is no target either: a file
+            // exported from a folder names its products.
             _tree.TryGetManagedNode(CurrentUser, model.NodeId, out var target);
+            var targetReported = false;
 
             try
             {
@@ -113,15 +120,25 @@ namespace HSMServer.Controllers
                 foreach (var importGroup in importList)
                 {
                     if (importGroup.Products is null)
-                        ImportAlertsToProduct(target, importGroup, newAlerts, sensorNames, toast);
+                    {
+                        if (target is not null)
+                            ImportAlertsToProduct(target, importGroup, newAlerts, sensorNames, toast);
+                        else if (!targetReported)
+                        {
+                            toast.AddError(ImportTargetNotFound, "the selected item");
+                            targetReported = true;
+                        }
+                    }
                     else
                     {
                         // The names of a file are looked up over the whole server: a product the user
-                        // does not manage is passed over like a name no product has.
+                        // does not manage is reported like a name no product has.
                         foreach (var productName in importGroup.Products)
                             if (_cache.TryGetProductByName(productName, out var product) &&
                                 _tree.TryGetManagedNode(CurrentUser, product.Id, out var namedProduct))
                                 ImportAlertsToProduct(namedProduct, importGroup, newAlerts, sensorNames, toast);
+                            else
+                                toast.AddError(ProductNotFound, productName);
                     }
                 }
 

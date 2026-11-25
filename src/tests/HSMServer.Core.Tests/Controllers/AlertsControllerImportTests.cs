@@ -52,7 +52,9 @@ namespace HSMServer.Core.Tests.Controllers
             var answer = await tree.Alerts(tree.Admin).ImportAlerts(
                 Import(tree.Folder.Id, File(sensors: ["cpu"], products: ["own", "sibling", "no such product"])));
 
-            Assert.Equal(string.Empty, answer);
+            Assert.Contains(HSMServer.Controllers.AlertsController.ProductNotFound, answer);
+            Assert.Contains("no such product", answer);
+            Assert.DoesNotContain("sibling", answer);
             Assert.Equal(new[] { tree.Cpu.Id, tree.SiblingCpu.Id }.Order(), ImportedPolicies(tree).Select(u => u.Id).Order());
         }
 
