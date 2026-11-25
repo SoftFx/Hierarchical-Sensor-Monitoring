@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.TableSensors
 {
-    /// <summary>What one product's table blocks did in a period (#1847), drained by <see cref="TableFeedCounters.DrainProducts"/>.</summary>
+    /// <summary>What one product's table blocks did in a period (#1847), drained by <see cref="TableFeedCounters.Drain"/>.</summary>
     public sealed class TableFeedProductPeriod
     {
         /// <summary>Blocks of the product stored in the period (a duplicate is not counted).</summary>
@@ -45,17 +45,14 @@ namespace HSMServer.Core.TableSensors
         private Dictionary<Guid, long> _tables = [];
 
 
-        /// <summary>The arrival time of a block, the base of its delivery lag. Test seam; the UTC clock by default.</summary>
-        public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
-
-
         /// <summary>
-        /// A stored block: its accepted tables with their rows, its stored length, its refused tables and its last row time
-        /// (the header's, in ticks; the lag is measured against the provider's clock).
+        /// A stored block: its accepted tables with their rows, its stored length, its refused tables, its last row time
+        /// (the header's, in ticks; the provider's clock) and its arrival time as the store recorded it (taken before the
+        /// write, so a slow synced write is not reported as lag).
         /// </summary>
-        public void AddStored(Guid productId, IReadOnlyList<(Guid SensorId, int Rows)> accepted, int storedLength, int refusedTables, long lastRowTicks)
+        public void AddStored(Guid productId, IReadOnlyList<(Guid SensorId, int Rows)> accepted, int storedLength, int refusedTables, long lastRowTicks, long arrivalTicks)
         {
-            var lag = Clock().Ticks - lastRowTicks;
+            var lag = arrivalTicks - lastRowTicks;
 
             lock (_lock)
             {
@@ -96,25 +93,24 @@ namespace HSMServer.Core.TableSensors
                 Product(productId).UnreadableBlocks += blocks;
         }
 
-        /// <summary>The product counters since the last drain; they start again from nothing.</summary>
-        public Dictionary<Guid, TableFeedProductPeriod> DrainProducts()
+        /// <summary>
+        /// The product counters since the last drain, and with <paramref name="tables"/> the rows of each table sensor since
+        /// the last drain of the tables (null without), taken under one lock: a block is in the same period for both. What
+        /// is drained starts again from nothing.
+        /// </summary>
+        public (Dictionary<Guid, TableFeedProductPeriod> Products, Dictionary<Guid, long> Tables) Drain(bool tables)
         {
             lock (_lock)
             {
-                var drained = _products;
+                var products = _products;
                 _products = [];
-                return drained;
-            }
-        }
 
-        /// <summary>The rows of each table sensor since the last drain; they start again from nothing.</summary>
-        public Dictionary<Guid, long> DrainTables()
-        {
-            lock (_lock)
-            {
-                var drained = _tables;
+                if (!tables)
+                    return (products, null);
+
+                var rows = _tables;
                 _tables = [];
-                return drained;
+                return (products, rows);
             }
         }
 

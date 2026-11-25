@@ -196,7 +196,7 @@ namespace HSMServer.Core.TableSensors
 
                     default:
                         CountRefusals(refusals, detailed);
-                        Feed.AddStored(productId, accepted, appended.Entry.StoredLength, refusals.Count, header.LastTime);
+                        Feed.AddStored(productId, accepted, appended.Entry.StoredLength, refusals.Count, header.LastTime, appended.Entry.ArrivalTicks);
                         return new TableBlockPutResult
                         {
                             Outcome = TableBlockPutOutcome.Stored,

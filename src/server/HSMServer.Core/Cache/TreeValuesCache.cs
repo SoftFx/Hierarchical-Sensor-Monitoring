@@ -3724,10 +3724,14 @@ namespace HSMServer.Core.Cache
 
         // The add half of TryAddNewSensorValue, shared with values that reach a
         // moved sensor through an alias of another product (AliasValueRequest).
-        private void AddValueToSensor(BaseSensorModel sensor, string path, BaseValue value)
+        // False when the sensor did not take the value (blocked, or rejected);
+        // only the server's own values (#1847) ask.
+        private bool AddValueToSensor(BaseSensorModel sensor, string path, BaseValue value)
         {
             if (sensor.State == SensorState.Blocked)
-                return;
+                return false;
+
+            var added = true;
 
             // The previous cached newest, captured before the add: a value that
             // lands on the SAME tick as it keeps only the last row in the
@@ -3751,9 +3755,12 @@ namespace HSMServer.Core.Cache
                 // rejected value is a sensor-level event, not a transport error,
                 // and clients treat response entries as such.
                 Interlocked.Increment(ref sensor.RejectedValues);
+                added = false;
             }
 
             SensorUpdateViewAndNotify(sensor);
+
+            return added;
         }
 
 
@@ -4164,10 +4171,12 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseUpdateRequest request)
+        // keyless (#1847): nodes the server creates for its own sensors in a user's product get no access key and no
+        // author (the server is not a user), and need no key on the parent to take an author from.
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseUpdateRequest request, bool keyless = false)
         {
             var pathParts = request.PathParts;
-            var authorId =  parentProduct.AccessKeys.Values.FirstOrDefault().AuthorId;
+            var authorId = keyless ? null : parentProduct.AccessKeys.Values.FirstOrDefault().AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -4187,7 +4196,7 @@ namespace HSMServer.Core.Cache
                             subProduct.Policies.AddTTLPolicy(childTtl);
                         }
 
-                    AddProduct(subProduct);
+                    AddProduct(subProduct, defaultKey: !keyless);
                     UpdateProduct(parentProduct);
                 }
 
@@ -4197,7 +4206,7 @@ namespace HSMServer.Core.Cache
             return parentProduct;
         }
 
-        private ProductModel AddProduct(ProductModel product)
+        private ProductModel AddProduct(ProductModel product, bool defaultKey = true)
         {
             if (_tree.TryAdd(product.Id, product))
             {
@@ -4227,7 +4236,7 @@ namespace HSMServer.Core.Cache
                 foreach (var (_, key) in product.AccessKeys)
                     AddAccessKey(key);
 
-                if (product.AccessKeys.IsEmpty)
+                if (defaultKey && product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
 
@@ -4285,7 +4294,10 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        // server (#1847): a sensor the server creates for itself in a user's product (a feed sensor), with its description
+        // and unit, under nodes created without access keys; null for every other creation.
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed,
+            ServerSensorValue server = null)
         {
             sensor = null;
             error = string.Empty;
@@ -4320,7 +4332,7 @@ namespace HSMServer.Core.Cache
                     storing = false;
                 }
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request, keyless: server is not null);
 
                 var sensorName = request.SensorName;
 
@@ -4332,6 +4344,8 @@ namespace HSMServer.Core.Cache
                     DisplayUnit = 0,
                     CreationDate = DateTime.UtcNow.Ticks,
                     Table = table,
+                    Description = server?.Description,
+                    OriginalUnit = (int?)server?.Unit,
                 };
 
                 sensor = SensorModelFactory.Build(entity, _database, _alertScheduleProvider);
@@ -4371,7 +4385,7 @@ namespace HSMServer.Core.Cache
                 AddSensor(sensor, product);
                 UpdateProduct(parentProduct);
 
-                _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.System)
+                _journalService.AddRecord(new JournalRecordModel(sensor.Id, server is null ? InitiatorInfo.System : InitiatorInfo.AsSystemInfo(server.Initiator))
                 {
                     PropertyName = "sensor",
                     NewValue = sensor.FullPath,
