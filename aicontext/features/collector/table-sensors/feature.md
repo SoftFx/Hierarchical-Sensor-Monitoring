@@ -280,8 +280,8 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   from every writer, and every delivered row is checked against the run that accepted it (recorded at `AddRow`).
   `QueueOverflowFinalBarTests`: a loss the overflow sensor took after the snapshot of a periodic send in flight is in
   the bar its stop publishes.
-- Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver; the native driver
-  marks the table verbs `CONFORMANCE-UNSUPPORTED (#1848)` and does not run the fixture until step 6.
+- Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver and, since 0.15.0,
+  the native driver (tables build; see "Native collector").
 
 ## Known Issues / Limitations
 
@@ -314,6 +314,72 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - **A last bar that cannot be published.** A periodic send of `Queue overflow` that outlives the bounded wait of the
   sensor's stop (1 s; the send only enqueues a value) still owns the send guard when the last bar is due: that bar is
   not published, and the losses the sensor took after that send's snapshot are in no report.
+
+## Native collector
+
+The native C++ collector (`src/native/collector`) has table sensors since 0.15.0 (#1848 PR 3). The behaviour is the
+one above; this section says how it is reached and what differs.
+
+**API.** The C ABI in `hsm_collector.h` (`hsm_collector_create_table_sensor`, `hsm_table_sensor_add_row` and
+`_add_rows` (all or nothing), `_get_stats`, `_state_reason`, `_path`, `_release`, `hsm_collector_set_table_options`;
+`docs/native-collector-c-abi.md`, "Table sensors") and the C++ wrapper `include/hsm_collector/tables.hpp`
+(`Collector::CreateTableSensor(path, TableSensorOptions)`, move-only `TableSensor` with `AddRow(time_point,
+{cells})`, `AddRows`, `Stats()`, `Path()`; `TableCell` is a double, an int64 or `TableCell::Null()`). The time is
+Unix nanoseconds, kept to 100 ns (rounded down). Settings: `hsm_table_options_t` (`tick_period_ms` 10 s, at least
+1 s; `max_buffer_bytes` and `max_backlog_bytes` 64 MiB), set before the first table sensor.
+
+**Build option.** The ABI exists in every build. Packing needs `HSM_COLLECTOR_TABLES` (zstd, zlib; vcpkg feature
+`tables`); without it every table sensor is `Unavailable` ("built with HSM_COLLECTOR_TABLES=OFF"). The agent and
+the probe build with tables OFF.
+
+**What works at 0.15.0, and what does not.** The pipeline is complete up to an internal channel seam
+(`src/tables/hsm_table_channel.hpp`, the managed `ITableBlockChannel`). In 0.15.0 only the tests implement it: **on
+a real host every table sensor is `Unavailable` and counts its rows as dropped** (reason: the collector does not use
+the session transport, or "the table connection of the collector session is not implemented"). The channel over the
+table connection is the next PR of #1848, then the legacy wrapper.
+
+**Threads and lifetime.** The first table sensor makes the pipeline; a collector without one has no pipeline, no zstd
+context, no thread, no tick and no log line of this feature. From Start to Stop the pipeline has a tick thread (a
+second `ScheduledTask` on the collector's clock) and, when a channel exists, a delivery thread (registrations, then
+the backlog, stop and wait). Stop, on the caller's thread: rows are refused from now on; the tick is stopped and
+joined; every sensor's mutex is taken once for the final take, and the rows are packed (Registered sensors) or
+dropped (the others); the losses so far go to the `Queue overflow` sensor before its last bar; the delivery thread
+drains the backlog within the stop budget beside the value drain, is cancelled if the budget runs out and is joined;
+what is left is dropped and counted; the session stops as before; the one stop line names the rows the overflow sensor
+did not get. **When Stop returns no thread of the run exists**, so no tick, registration answer or acknowledgement of
+one run can reach the next: the managed run object, its generation checks and the races its three review rounds fixed
+(Start/Stop/Start, accounting at stop, a host without table sensors paying nothing) have no counterpart to get wrong.
+A writer preempted between its reservation and its append across a whole Stop and Start appends into the run that is
+accepting when it takes the sensor's mutex; the buffer counter is never reset, every reservation is given back by its
+owner. A sensor handle holds the sensor, and the sensor only a shared block of flags, the bound and the ledger: never
+the collector, so an application thread can never become the collector's last owner; after the collector is disposed
+its calls return `HSM_RESULT_INVALID_STATE`.
+
+**Differences from the managed collector.**
+
+- `Unavailable` is decided at creation and again **at every Start** (the managed collector decides it once, when it is
+  constructed): native transports are chosen by a call before Start. A sensor `Unavailable` in one run is `Pending` in
+  the next if a channel exists by then. `Refused` stays final in both.
+- A cell is a raw 8-byte union read by the column's type, so a double given to an int64 column is not detected (the
+  managed `TableCell` knows its kind and throws). The C++ wrapper's `TableCell` does detect it and throws.
+- A create on a disposed collector is refused with `HSM_RESULT_INVALID_STATE`, like every native create (managed gives
+  an `Unavailable` sensor).
+- The final pack at stop is not cut by the drain budget (it runs before the value drain); only the delivery is.
+- A `TooLarge` answer (a frame limit that shrank after packing; only a real connection gives it) drops the block's rows
+  under "refused by the server"; it is not packed again (the pipeline keeps no rows after packing).
+- The loss report goes to the one `Queue overflow` bar (native has no per-queue split); the stop line is the managed
+  one.
+- A writer paused between the moment it reads that the ledger is open and its count, across a whole stop, has its rows
+  in the next run's first report instead of none (the managed known limit loses them from the reports).
+
+**Tests.** `src/native/collector/tests/hsm_table_pipeline_tests.cpp`: the parts (buffer growth, failed growth, null map
+on first use, swap; the bound's compare-and-swap under eight threads; the backlog with a block in flight; splitting;
+paths; the ledger), the ABI and the wrapper, a host without table sensors, a handle that outlives its collector, the
+threads that exist only while running, a writer held across Stop and Start, a bounded drain, losses at stop, and a
+stress test (four writers, three sensors, eight runs of three ticks, a stop and a start, each boundary met by writes in
+flight; per sensor offered = accepted + refused, dropped = refused + lost after acceptance, every delivered row
+accepted once and under a run that was accepting during its call). The shared fixture
+`tests/conformance/collector/table_sensor_contract.hsmtest` and its must-fail fixture run in the native tables build.
 
 ## Open Points
 
