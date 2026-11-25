@@ -114,6 +114,7 @@ namespace HSMDataCollector.Tests.Tables
                 ack = TableBlockAck.Stored();
 
             sent.Outcome = ack.Outcome;
+            sent.Refused = new HashSet<int>(ack.Refused.Select(r => r.Index));
 
             lock (_lock)
                 _blocks.Add(sent);
@@ -171,11 +172,19 @@ namespace HSMDataCollector.Tests.Tables
 
             internal TableBlockOutcome Outcome { get; set; }
 
+            /// <summary>The directory indexes of the tables the answer refused: their rows were not stored.</summary>
+            internal ISet<int> Refused { get; set; } = new HashSet<int>();
+
             internal IReadOnlyList<string> TableNames => Block.Tables.Select(t => Encoding.UTF8.GetString(t.TableId)).ToList();
 
             internal IEnumerable<Row> RowsOf(string path)
             {
-                var table = Block.Tables.FirstOrDefault(t => Encoding.UTF8.GetString(t.TableId) == path);
+                var index = TableNames.ToList().IndexOf(path);
+
+                if (index < 0 || Refused.Contains(index))
+                    yield break;
+
+                var table = Block.Tables[index];
 
                 if (table == null)
                     yield break;

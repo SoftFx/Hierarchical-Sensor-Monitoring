@@ -29,7 +29,7 @@ using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Tests
 {
-    public sealed class CollectorConformanceTests
+    public sealed partial class CollectorConformanceTests
     {
         [Theory]
         [MemberData(nameof(CollectorContractCases))]
@@ -1369,6 +1369,9 @@ namespace HSMDataCollector.Tests
                     break;
 
                 default:
+                    if (await ExecuteTableStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
         }
@@ -1474,6 +1477,8 @@ namespace HSMDataCollector.Tests
                 ComputerName = computerName,
                 Module = module,
                 DataSender = sender,
+                // Table cases drive the table tick themselves (table_tick); no tick runs on its own.
+                ManualTableTick = true,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = maxValuesInPackage,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
@@ -2649,7 +2654,7 @@ namespace HSMDataCollector.Tests
             public override string ToString() => Action;
         }
 
-        private sealed class ContractState
+        private sealed partial class ContractState
         {
             public DataCollector Collector { get; set; }
 
@@ -2814,7 +2819,7 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        private sealed class RecordingSender : IDataSender
+        private sealed partial class RecordingSender : IDataSender
         {
             private readonly object _lock = new object();
 
