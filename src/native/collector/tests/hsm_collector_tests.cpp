@@ -3729,6 +3729,7 @@ namespace
         // CONFORMANCE-UNSUPPORTED: expect_table_frame_connections (#1848)
         // CONFORMANCE-UNSUPPORTED: expect_table_close_code (#1848)
         // CONFORMANCE-UNSUPPORTED: expect_table_closed_before_session (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_wait_connection_up (#1848)
         static const char* const kTableVerbs[] = {
             "create_collector_without_table_transport",
             "create_table_sensor",
@@ -3770,6 +3771,7 @@ namespace
             "expect_table_frame_connections",
             "expect_table_close_code",
             "expect_table_closed_before_session",
+            "table_wait_connection_up",
         };
 
         for (const char* verb : kTableVerbs)

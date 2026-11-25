@@ -103,6 +103,13 @@ namespace HSMDataCollector.Client.Session
         /// <summary>True while a table connection is open.</summary>
         internal bool IsUp => _link != null;
 
+        /// <summary>
+        /// For tests: a table connection is open and not over, so a put sends on it without waiting. With
+        /// <see cref="ConnectionsOpened"/> it says which connection that is: a connection's number is counted before it
+        /// is published, and the one before it is over (and cleared) before the next one is opened.
+        /// </summary>
+        internal bool IsServing => _link is Link link && !link.Ended.IsCompleted;
+
         /// <summary>Why no table connection is open now.</summary>
         internal string DownReason => _downReason;
 
@@ -116,10 +123,10 @@ namespace HSMDataCollector.Client.Session
         internal Task EndOfCurrentLink => _link?.Ended;
 
         /// <summary>
-        /// For tests: the wait for the ack of a block ends when the task this returns completes, in place of the request
-        /// timeout, so a test decides when "no ack in time" happens and no clock does.
+        /// For tests: the wait for the ack of a block ends when the task this returns for the block's request id
+        /// completes, in place of the request timeout, so a test decides when "no ack in time" happens and no clock does.
         /// </summary>
-        internal Func<Task> AckDeadlineForTests { get; set; }
+        internal Func<long, Task> AckDeadlineForTests { get; set; }
 
         private static TaskCompletionSource<bool> NewSignal() => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -942,7 +949,7 @@ namespace HSMDataCollector.Client.Session
 
             using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
             {
-                var deadline = AckDeadlineForTests?.Invoke() ?? Task.Delay(_requestTimeout, wait.Token);
+                var deadline = AckDeadlineForTests?.Invoke(id) ?? Task.Delay(_requestTimeout, wait.Token);
                 var cancelled = Task.Delay(Timeout.Infinite, wait.Token);
                 var first = await Task.WhenAny(waiter, link.Ended, deadline, cancelled).ConfigureAwait(false);
 

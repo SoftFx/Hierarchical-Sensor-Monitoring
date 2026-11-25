@@ -284,7 +284,7 @@ namespace HSMDataCollector.Tests.Transport
                 var noAckInTime = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 var waits = 0;
 
-                rig.Link.AckDeadlineForTests = () => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
+                rig.Link.AckDeadlineForTests = _ => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
 
                 // Stored, and the ack is lost.
                 rig.Server.AnswerTableNext(TableAnswer.StoreSilently());
@@ -326,7 +326,7 @@ namespace HSMDataCollector.Tests.Transport
                 var noAckInTime = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 var waits = 0;
 
-                rig.Link.AckDeadlineForTests = () => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
+                rig.Link.AckDeadlineForTests = _ => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
                 rig.Server.AnswerTableNext(TableAnswer.StoreSilently());
 
                 var random = new Random(1846);
@@ -644,7 +644,7 @@ namespace HSMDataCollector.Tests.Transport
                 // The request timeout sets the drain budget here (2 s) and would end the wait for an ack at the same
                 // moment; which of the two came first would decide what the test sees. The wait for an ack never
                 // ends on its own: only the stop and its budget end it.
-                rig.Link.AckDeadlineForTests = () => new TaskCompletionSource<bool>().Task;
+                rig.Link.AckDeadlineForTests = _ => new TaskCompletionSource<bool>().Task;
 
                 // Neither the delivery nor the drain's resend is answered.
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());

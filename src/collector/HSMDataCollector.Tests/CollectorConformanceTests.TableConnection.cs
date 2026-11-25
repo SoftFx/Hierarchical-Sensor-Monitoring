@@ -30,6 +30,31 @@ namespace HSMDataCollector.Tests
 
             switch (step.Action)
             {
+                case "table_wait_connection_up":
+                {
+                    // count|timeout_s: the collector's table connection number `count` (1 = the first it opened) is open
+                    // (hello and probe done), so a put sends on it without waiting. Judged by the collector's state,
+                    // not by the server's count of upgrades; the timeout only fails the case.
+                    var link = TableConnectionOf(state, step.Action);
+                    var expected = int.Parse(step.Arg(0), CultureInfo.InvariantCulture);
+
+                    Assert.True(await PollAsync(() => link.ConnectionsOpened >= expected && link.IsServing, step.Arg(1)).ConfigureAwait(false),
+                                $"table_wait_connection_up: table connection {expected} is not open (opened {link.ConnectionsOpened}, serving {link.IsServing}, {link.DownReason}).");
+                    Assert.Equal(expected, link.ConnectionsOpened);
+                    return true;
+                }
+
+                case "table_tick" when onSession:
+                {
+                    // A tick waits in the delivery (the ack of each block); the bound only fails a case whose tick hangs.
+                    var tick = state.Collector.TickTablesAsync();
+
+                    Assert.True(await Task.WhenAny(tick, Task.Delay(TickSafetyBound)).ConfigureAwait(false) == tick,
+                                $"table_tick did not end within {TickSafetyBound.TotalSeconds:0} s.");
+                    await tick.ConfigureAwait(false);
+                    return true;
+                }
+
                 case "table_register":
                 {
                     var table = Table(state, step.Arg(0));
@@ -201,13 +226,40 @@ namespace HSMDataCollector.Tests
         // time its close of a session arrives at the scripted server.
         private static void WatchTableConnectionAtSessionClose(ContractState state, HSMDataCollector.Client.Session.SessionDataSender sender)
         {
+            state.SessionSender = sender;
             state.SessionServer.SessionCloseReceived = () => state.TableUpAtSessionClose.Enqueue(sender.TablesIfMade?.IsUp ?? false);
         }
+
+        private static HSMDataCollector.Client.Session.TableConnection TableConnectionOf(ContractState state, string verb) =>
+            OnSession(state) && state.SessionSender?.TablesIfMade != null
+                ? state.SessionSender.TablesIfMade
+                : throw new InvalidOperationException($"{verb} needs a table sensor on a collector on the scripted session (create_collector_on_session).");
+
+        // The wait for the ack of a block ends as "no ack in time" exactly when the scripted server has decided to leave
+        // that frame (by its request id) without an answer (store_without_ack, no_answer), never when a clock says so;
+        // the wait for a frame that is answered never ends this way. A case whose server answers nothing although its
+        // script said it would hangs its tick, which the tick's bound fails.
+        private static void ConfigureTableConnection(ContractState state)
+        {
+            var tables = OnSession(state) ? state.SessionSender?.TablesIfMade : null;
+
+            if (tables == null || tables.AckDeadlineForTests != null)
+                return;
+
+            var server = state.SessionServer;
+
+            tables.AckDeadlineForTests = id => server.WhenTableFrameUnanswered(id);
+        }
+
+        private static readonly TimeSpan TickSafetyBound = TimeSpan.FromMinutes(1);
 
         private sealed partial class ContractState
         {
             // Whether the collector's table connection was up, each time its close of a session reached the server.
             public System.Collections.Concurrent.ConcurrentQueue<bool> TableUpAtSessionClose { get; } = new System.Collections.Concurrent.ConcurrentQueue<bool>();
+
+            // The sender of a collector on the scripted session, whose table connection the driver reads and configures.
+            public HSMDataCollector.Client.Session.SessionDataSender SessionSender { get; set; }
         }
 
         private static ScriptedSessionServer.TableAnswer SessionAnswer(string outcome)

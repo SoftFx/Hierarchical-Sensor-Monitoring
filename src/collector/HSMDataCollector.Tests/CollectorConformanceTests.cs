@@ -1435,11 +1435,16 @@ namespace HSMDataCollector.Tests
                     MinBackoff = TimeSpan.FromMilliseconds(50),
                     MaxBackoff = TimeSpan.FromMilliseconds(500),
 
-                    // The long pauses of the table connection, shortened like the backoff: how long a refused
-                    // upgrade (404, 400) waits before it is asked again, and how long a block waits for a table
-                    // connection before its tick gives up. No scenario depends on their length.
+                    // The long pauses of the table connection, shortened like the backoff so the cases are quick:
+                    // how long a refused upgrade (404, 400) waits before it is asked again, and how long a block
+                    // waits for a table connection before its tick gives up. Neither decides a case: a case waits
+                    // for the state it needs (table_wait_connection_up before a tick that must send, after every
+                    // lost connection and before a tick that follows a refusal), and a put that gave up waiting
+                    // leaves its block at the head, with its sequence, for the next tick, which the case runs
+                    // once the next connection is open. The end of a block's ack wait is the script's
+                    // (ConfigureTableConnection), not this request timeout.
                     TableRefusedRetry = TimeSpan.FromMilliseconds(200),
-                    TableConnectionWait = TimeSpan.FromMilliseconds(500),
+                    TableConnectionWait = TimeSpan.FromMilliseconds(200),
                 },
             };
 

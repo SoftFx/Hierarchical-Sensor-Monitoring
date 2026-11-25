@@ -43,6 +43,10 @@ namespace HSMDataCollector.Tests.Transport
         private int _refusedTableUpgrades;
         private int _tablePings;
 
+        // By request id: completed when this server decided to leave that block frame without an answer (stored
+        // silently, or not answered).
+        private readonly ConcurrentDictionary<long, TaskCompletionSource<bool>> _unanswered = new ConcurrentDictionary<long, TaskCompletionSource<bool>>();
+
 
         // --- the script ---
 
@@ -108,6 +112,16 @@ namespace HSMDataCollector.Tests.Transport
 
         /// <summary>The close codes the collector sent on table connections, in order.</summary>
         public IReadOnlyList<int> TableCloses => _tableCloses.ToArray();
+
+        /// <summary>
+        /// Completes once this server has decided to leave the block frame of request <paramref name="id"/> without an
+        /// answer by its script (stored silently, or not answered): the moment a collector's wait for that ack can end as
+        /// "no ack in time" without a clock deciding it. Never completes for a frame that is answered.
+        /// </summary>
+        public Task WhenTableFrameUnanswered(long id) => Unanswered(id).Task;
+
+        private TaskCompletionSource<bool> Unanswered(long id) =>
+            _unanswered.GetOrAdd(id, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
 
         /// <summary>
         /// Runs when the collector's close frame of a session arrives, before it is answered. The order in which this
@@ -292,7 +306,10 @@ namespace HSMDataCollector.Tests.Transport
                     _storedBlocks[key] = received;
 
                     if (answer.Silent)
+                    {
+                        Unanswered(id).TrySetResult(true);
                         return true;
+                    }
 
                     await table.SendTextAsync(BlockAck(id, "stored", received)).ConfigureAwait(false);
                     return true;
@@ -311,6 +328,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 case TableAnswerKind.Silent:
                     received.Outcome = "no answer";
+                    Unanswered(id).TrySetResult(true);
                     return true;
 
                 case TableAnswerKind.Close:
