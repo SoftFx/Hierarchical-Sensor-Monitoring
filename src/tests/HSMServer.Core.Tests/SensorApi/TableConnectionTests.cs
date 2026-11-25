@@ -1093,11 +1093,50 @@ namespace HSMServer.Core.Tests.SensorApi
 
             Assert.Equal((WebSocketCloseStatus)1013, await second.ExpectCloseAsync());
             Assert.Equal(0, budget.Waiting);
+            Assert.Empty(host.Log.Matching("held back only by its own access key"));
 
             hold.Release.SetResult();
 
             Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
             await TestWait.UntilAsync(() => budget.InUse == 0, "the budget to be whole again");
+            await IgnoreAsync(sending);
+        }
+
+        // The same 1013 for a wait that had room in the budget and waited only for another large
+        // frame of its own key says so (collectors sharing a key send such frames one at a time).
+        [Fact]
+        public async Task AWaitPastItsBound_HeldBackOnlyByItsOwnKey_SaysSo()
+        {
+            await using var host = await StartHost(sessions => { sessions.MaxTableFrameBytes = BudgetFrameBytes; sessions.MaxTableBytesInFlight = 2 * BudgetReservation; });
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+
+            var hold = _tables.HoldNextPut();
+
+            await first.SendBlockAsync(1, _producer, 1, LargeBlock("q", 1));
+            await hold.Entered.Task.WaitAsync(Patience);
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame of the key to wait");
+
+            var bound = new CollectorSessionsConfig().SilenceLimit * 2;
+            ManualTimer timer = null;
+
+            await TestWait.UntilAsync(() => (timer = host.Time.Timers.FirstOrDefault(t => t.DueTime == bound)) is not null, "the bound of the wait to be set");
+
+            timer.Fire();
+
+            Assert.Equal((WebSocketCloseStatus)1013, await second.ExpectCloseAsync());
+            Assert.Single(host.Log.Matching("held back only by its own access key"));
+            Assert.Empty(host.Log.Matching("The table frame budget is spent"));
+
+            hold.Release.SetResult();
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
             await IgnoreAsync(sending);
         }
 

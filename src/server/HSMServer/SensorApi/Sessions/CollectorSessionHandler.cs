@@ -123,6 +123,7 @@ namespace HSMServer.SensorApi.Sessions
         private long _offWarnedAtTicks;
         private long _tablesOffWarnedAtTicks;
         private long _budgetWarnedAtTicks;
+        private long _ownKeyWarnedAtTicks;
 
         // Refused upgrades, one throttle per kind of refusal.
         private readonly RefusalThrottle _badUpgradeRefusals = new();
@@ -691,6 +692,14 @@ namespace HSMServer.SensorApi.Sessions
                 }
                 catch (OperationCanceledException) when (Volatile.Read(ref timedOut) == 1)
                 {
+                    // One reservation per access key: with the budget not spent, the wait was for
+                    // another large frame of the same key (several collectors sharing a key).
+                    if (_tableBudget.IsHeldBackOnlyByItsKey(reservation, session.KeyId) && IsTimeToWarn(ref _ownKeyWarnedAtTicks))
+                        _logger.Warn($"Table connection {session.ShortId} from {session.RemoteIP} (client \"{CollectorSession.Printable(session.ClientName)}\") waited {BudgetWaitBound} " +
+                                     "for a table frame reservation and is closed with 1013, held back only by its own access key: another connection of the same key " +
+                                     "holds the key's one reservation for frames over 64 KiB, and the budget had room. Collectors sharing a key send such frames one at a time; " +
+                                     "give them keys of their own if this is steady.");
+
                     throw new TableFrameBudgetTimeoutException();
                 }
             }
