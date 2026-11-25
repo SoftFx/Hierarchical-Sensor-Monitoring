@@ -341,6 +341,22 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Equal("on-call", result.Value.Description);
         }
 
+        // A row stored with a padded name, from before the name was held trimmed, reads
+        // trimmed. Sending that name back unchanged is accepted — though another chat holds
+        // it trimmed — and the row is not renamed behind the caller.
+        [Fact]
+        public async Task UpdateChat_OfAChatStoredWithAPaddedName_KeepingIt_IsAccepted_AndNotRenamed()
+        {
+            var chat = AddChat("Dev team ");
+            AddChat("dev team");
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "Dev team", Description = "on-call" }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal("on-call", result.Value.Description);
+            Assert.Equal("Dev team ", _world.Store.Single(c => c.Id == chat.Id).Name);
+        }
+
         [Fact]
         public async Task UpdateChat_NameWithABidiOverride_IsRejectedUnderName_AndChangesNothing()
         {

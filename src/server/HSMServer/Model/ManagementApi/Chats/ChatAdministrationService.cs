@@ -51,6 +51,9 @@ namespace HSMServer.Model.ManagementApi.Chats
 
             _chats.TryGetValue(withId.Id, out var existing);
 
+            if (existing is not null)
+                withId = KeepingItsStoredName(withId, existing);
+
             // The row may already exist (pre-created by /start): a name it already holds is no clash.
             if (Validate(withId, nameRequired: true, existing?.Name) is { } invalid)
                 return invalid;
@@ -60,7 +63,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             if (existing is not null)
             {
                 if (!await _chats.TryUpdate(withId))
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+                    return RefusedWrite(withId, existing.Name);
 
                 chat = existing;
             }
@@ -69,7 +72,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 chat = BuildChat(withId, authorId);
 
                 if (!await _chats.TryAdd(chat))
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+                    return RefusedWrite(withId, currentName: null);
             }
 
             await BindFoldersAsync(chat, binding, initiator);
@@ -88,11 +91,13 @@ namespace HSMServer.Model.ManagementApi.Chats
             if (!_chats.TryGetValue(stamped.Id, out var chat))
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
+            stamped = KeepingItsStoredName(stamped, chat);
+
             if (Validate(stamped, currentName: chat.Name) is { } invalid)
                 return invalid;
 
             if (!await _chats.TryUpdate(stamped))
-                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+                return RefusedWrite(stamped, chat.Name);
 
             await BindFoldersAsync(chat, binding, initiator);
 
@@ -123,9 +128,9 @@ namespace HSMServer.Model.ManagementApi.Chats
 
 
         // The write rules of both surfaces: the chat name (#1829 — required on a creation,
-        // at most 100 characters, unique per server ignoring case; an omitted name, a
-        // partial update, is not checked, and a row keeping its own name breaks nothing),
-        // the aggregation delay (0..a day — a negative delay never flushes a channel's
+        // at most 100 characters, unique per server ignoring case and surrounding spaces; an
+        // omitted name, a partial update, is not checked, and a row keeping its own name
+        // breaks nothing — compared trimmed, like every stored name), the aggregation delay (0..a day — a negative delay never flushes a channel's
         // accumulator, so a chat holding one drops its alerts in silence), and the webhook
         // URL-shape rule the web form enforced (NotificationsController's
         // ValidateWebhooks, #1329): a non-null webhook field of a write must be an absolute
@@ -171,6 +176,27 @@ namespace HSMServer.Model.ManagementApi.Chats
         // as it was validated.
         private static ChatUpdate Stamp(ChatUpdate update, InitiatorInfo initiator) =>
             update with { Initiator = initiator, Name = update.Name?.Trim() };
+
+        // A posted name that is the row's stored name once trimmed is no change: the web
+        // form shows a row stored with surrounding spaces (from before the name was held
+        // trimmed) trimmed, and posts that back on an untouched save. The stored name is
+        // kept as it is, so the row is neither refused as a clash with another chat's name
+        // nor renamed — and journaled as renamed — behind the user's back.
+        private static ChatUpdate KeepingItsStoredName(ChatUpdate update, Chat chat) =>
+            update.Name is not null && string.Equals(update.Name, chat.Name?.Trim(), StringComparison.Ordinal)
+                ? update with { Name = chat.Name }
+                : update;
+
+        // A write the store refused. The store repeats the name rule in front of its own
+        // write (ChatsManager), so this is where two creates of one name end: the loser's
+        // write is refused there and, back here, the winner is in the store — the answer is
+        // then the same 422 as up front, naming the field. A refusal whose name is still
+        // free is the store's own failure: the fixed-message conflict.
+        private PolicyWriteResult RefusedWrite(ChatUpdate update, string currentName) =>
+            ChatNameValidator.FindError(update.Name, update.Id, _chats.GetValues() ?? [], currentName) == ChatNameValidator.NameDuplicateMessage
+                ? PolicyWriteResult.Fail(PolicyWriteOutcome.Invalid,
+                    new Dictionary<string, string[]> { [nameof(ChatUpdate.Name)] = [ChatNameValidator.NameDuplicateMessage] })
+                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
 
         // A brand-new chat is built from the update the same way the web form built it
         // (ChatViewModel.ToNewChat): defaults for the omitted settings, author + creation time

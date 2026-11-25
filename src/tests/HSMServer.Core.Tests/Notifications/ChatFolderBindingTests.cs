@@ -311,8 +311,8 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         // Telegram permits 128-character titles, the name rule 100: a title beyond the
-        // maximum is cut, so the flow never creates a row the web form cannot save — and
-        // the suffix of a disambiguated name still fits.
+        // maximum is cut, so the name never breaks the length rule — and the suffix of a
+        // disambiguated name still fits.
         [Fact]
         public async Task TryConnect_TitleLongerThanTheNameRule_CutsItToTheMaximum()
         {
@@ -326,6 +326,22 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(
                 [new string('t', 96) + " (2)", new string('t', 100)],
                 manager.GetValues().Select(chat => chat.Name).OrderBy(name => name, StringComparer.Ordinal));
+        }
+
+        // A title arrives as Telegram has it, surrounding spaces included: the chat is named
+        // by the trimmed title, the way every other surface holds a name — so a stored name
+        // is that same name, padded or not.
+        [Fact]
+        public async Task TryConnect_TitleWithSurroundingSpaces_IsNamedByTheTrimmedTitle()
+        {
+            var manager = BuildManager();
+            var user = new User("test-user");
+
+            var first = await manager.TryConnect(BuildGroupMessage(chatId: 4001, title: "  Dev team  "), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: user));
+            var second = await manager.TryConnect(BuildGroupMessage(chatId: 4002, title: "Dev team"), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: user));
+
+            Assert.Equal("Dev team", first.Name);
+            Assert.Equal("Dev team (2)", second.Name);
         }
 
         // #1304 conflict policy — target Chat already bound to a different Telegram chat.

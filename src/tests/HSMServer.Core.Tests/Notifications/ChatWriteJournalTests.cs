@@ -1,3 +1,4 @@
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Model.ManagementApi.Chats;
@@ -34,6 +35,7 @@ namespace HSMServer.Core.Tests.Notifications
 
         private readonly ChatWriteHarness _world = new();
 
+        private ChatsManager _chats;
         private ChatWriteService _service;
 
 
@@ -55,10 +57,11 @@ namespace HSMServer.Core.Tests.Notifications
                 var config = new Mock<IServerConfig>();
                 config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = "hsm_test_bot", BotToken = "test-bot-token" });
 
-                var chats = new ChatsManager(_databaseCoreManager.DatabaseCore, _userManager, config.Object,
+                _chats = new ChatsManager(_databaseCoreManager.DatabaseCore, _userManager, config.Object,
                     new JournalAppender(_journalService, TimeProvider.System));
+                await _chats.Initialize();
 
-                _service = new ChatWriteService(chats, new ChatAdministrationService(chats, _world.Folders.Object),
+                _service = new ChatWriteService(_chats, new ChatAdministrationService(_chats, _world.Folders.Object),
                     _world.Authorization.Object, _world.Folders.Object, _world.Users.Object, _world.Usage.Object);
             }
 
@@ -101,6 +104,79 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.All(records, r => Assert.Equal("User (admin)", r.Initiator));
             Assert.DoesNotContain(records, r => TextOf(r).Contains(SlackUrl) || TextOf(r).Contains(MattermostUrl));
         }
+
+        // The engine checks a name against a snapshot and writes after. On the real storage
+        // the store repeats the rule in front of its write, so of several creates of one
+        // name racing through that window exactly one lands: the others answer the same 422
+        // as up front, and one creation is journaled.
+        [Fact]
+        public async Task ConcurrentCreatesOfOneName_ThroughTheApi_StoreOneChat_AndRefuseTheOthersUnderName()
+        {
+            var service = await Service();
+
+            var results = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(_ => Task.Run(() => service.CreateChat(new CreateChatRequestDto { Name = "Race" }, _world.Token))));
+
+            var winner = Assert.Single(results, r => r.Success);
+            var losers = results.Where(r => !r.Success).ToList();
+
+            Assert.Equal(results.Length - 1, losers.Count);
+            Assert.All(losers, r =>
+            {
+                Assert.Equal(PolicyWriteOutcome.Invalid, r.Failure.Outcome);
+                Assert.Equal([ChatNameValidator.NameDuplicateMessage], r.Failure.Errors["name"]);
+            });
+
+            var stored = Assert.Single(_chats.GetValues(), chat => chat.Name == "Race");
+            Assert.Equal(winner.Value.Id, stored.Id);
+            Assert.Equal(
+                [("Create chat", "chat", "", "Race")],
+                RecordsOf(stored.Id).Select(r => (r.Enviroment, r.PropertyName, r.OldValue, r.NewValue)).ToList());
+        }
+
+        // Two rows named alike exist from before names were unique and trimmed (one of them
+        // was stored with a trailing space). The form shows that one trimmed and posts it
+        // back on an untouched save: through the engine and the real store this is no
+        // change — the row keeps its stored name and the journal shows no rename.
+        [Fact]
+        public async Task UnchangedSaveOfAPaddedLegacyDuplicate_KeepsItsStoredName_AndJournalsNoRename()
+        {
+            var service = await Service();
+            var db = _databaseCoreManager.DatabaseCore;
+
+            var padded = new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = ChatWriteHarness.OwnerId.ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "Dev team ",
+            };
+            db.AddChat(padded);
+            db.AddChat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = ChatWriteHarness.OwnerId.ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "dev team",
+            });
+            await _chats.Initialize();
+            var paddedId = new Guid(padded.Id);
+
+            var result = await service.UpdateChat(paddedId, new UpdateChatRequestDto { Name = "Dev team", Description = "on-call" }, _world.Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal("Dev team ", _chats[paddedId].Name);
+            Assert.Equal("on-call", _chats[paddedId].Description);
+            Assert.Equal(
+                [("Chat update", "Description", "", "on-call")],
+                RecordsOf(paddedId).Select(r => (r.Enviroment, r.PropertyName, r.OldValue, r.NewValue)).ToList());
+        }
+
+        private List<JournalRecordModel> RecordsOf(Guid chatId) =>
+            _journalService.GetRecords(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddMinutes(1))
+                .Where(r => r.Key.Id == chatId)
+                .OrderBy(r => r.Key.Time)
+                .ToList();
 
 
         // Every text cell a record can carry.

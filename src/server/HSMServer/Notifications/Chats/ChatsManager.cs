@@ -12,6 +12,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -22,6 +23,15 @@ namespace HSMServer.Notifications.Chats
     public sealed class ChatsManager : ConcurrentStorage<Chat, ChatEntity, ChatUpdate>, IChatsManager
     {
         private readonly ConcurrentDictionary<ChatId, Chat> _telegramChatIds = new();
+
+        // One gate for every write that names a chat. The name rule (#1829) is checked by
+        // the engine against a snapshot, and the write comes after: two creates of one name
+        // could both pass the check. The uniqueness part of the rule is repeated here, under
+        // the gate and in front of the write, so the second of them is refused — TryAdd and
+        // TryUpdate answer false, which the engine tells apart from a storage failure.
+        // Nothing under the gate raises an event of this storage, so no subscriber can lead
+        // a caller back into it.
+        private readonly SemaphoreSlim _nameWrites = new(1, 1);
 
         private readonly TelegramConfig _config;
         private readonly IDatabaseCore _database;
@@ -62,12 +72,54 @@ namespace HSMServer.Notifications.Chats
             if (model.TelegramChatId is not null && !_telegramChatIds.TryAdd(model.TelegramChatId, model))
                 return false;
 
-            if (!await base.TryAdd(model))
+            bool added;
+            await _nameWrites.WaitAsync();
+            try
             {
-                if (model.TelegramChatId is not null)
-                    _telegramChatIds.TryRemove(model.TelegramChatId, out _);
-                return false;
+                added = !ChatNameValidator.IsTaken(model.Name, model.Id, Values) && await AddCore(model);
             }
+            finally
+            {
+                _nameWrites.Release();
+            }
+
+            if (!added && model.TelegramChatId is not null)
+                _telegramChatIds.TryRemove(model.TelegramChatId, out _);
+
+            return added;
+        }
+
+        // Stores a chat the Telegram /start flow creates, under the first name free at the
+        // moment of the write. The name would otherwise be picked before the add and checked
+        // again inside it: two groups sharing a title, starting at once, could both pick the
+        // first free name, and the second add would then be refused.
+        private async Task<bool> TryAddUnderAFreeName(Chat chat, string proposed)
+        {
+            if (chat.TelegramChatId is not null && !_telegramChatIds.TryAdd(chat.TelegramChatId, chat))
+                return false;
+
+            bool added;
+            await _nameWrites.WaitAsync();
+            try
+            {
+                chat.Update(new ChatUpdate { Id = chat.Id, Name = TelegramChatName(proposed) });
+                added = await AddCore(chat);
+            }
+            finally
+            {
+                _nameWrites.Release();
+            }
+
+            if (!added && chat.TelegramChatId is not null)
+                _telegramChatIds.TryRemove(chat.TelegramChatId, out _);
+
+            return added;
+        }
+
+        private async Task<bool> AddCore(Chat model)
+        {
+            if (!await base.TryAdd(model))
+                return false;
 
             _journal.Write(model.Id, JournalKinds.Chat, ChatJournal.CreateEnviroment, model.Name, AuthorOf(model),
                 ChatJournal.CreationChanges(ChatJournal.StateOf(model)));
@@ -92,7 +144,18 @@ namespace HSMServer.Notifications.Chats
             var oldTelegramChatId = chat?.TelegramChatId;
             var before = chat is null ? default : ChatJournal.StateOf(chat);
 
-            var result = await base.TryUpdate(update);
+            bool result;
+            await _nameWrites.WaitAsync();
+            try
+            {
+                // The same last word for a rename. A name the chat already holds is none:
+                // the duplicates of the past keep their names and stay editable.
+                result = !NamesOntoATakenName(update.Name, update.Id, chat?.Name) && await base.TryUpdate(update);
+            }
+            finally
+            {
+                _nameWrites.Release();
+            }
 
             if (result && chat is not null)
             {
@@ -184,6 +247,7 @@ namespace HSMServer.Notifications.Chats
 
             // Folder-scoped flow: create a brand-new chat and bind it to the folder named in the token.
             var isChatExist = _telegramChatIds.TryGetValue(message?.Chat, out var chat);
+            string proposedName = null;
 
             if (!isChatExist)
             {
@@ -197,11 +261,7 @@ namespace HSMServer.Notifications.Chats
                     TelegramType = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
                 };
 
-                chat.Update(new ChatUpdate()
-                {
-                    Id = chat.Id,
-                    Name = TelegramChatName(isUserChat ? message.From.Username : message.Chat.Title)
-                });
+                proposedName = isUserChat ? message.From.Username : message.Chat.Title;
             }
 
             var folderName = ConnectChatToFolder is null
@@ -212,7 +272,7 @@ namespace HSMServer.Notifications.Chats
                 return new ChatConnectResult(ChatConnectOutcome.Failed);
 
             if (!isChatExist)
-                await TryAdd(chat);
+                await TryAddUnderAFreeName(chat, proposedName);
 
             chat.Folders.Add(token.FolderId);
             return new ChatConnectResult(ChatConnectOutcome.FolderAdded, folderName);
@@ -243,7 +303,6 @@ namespace HSMServer.Notifications.Chats
                 Id = chatId.ToByteArray(),
                 Author = user.Id.ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                Name = TelegramChatName(isUserChat ? message.From?.Username : incomingChat.Title),
                 SendMessages = Chat.DefaultSendMessages,
                 MessagesAggregationTimeSec = Chat.DefaultMessagesAggregationTimeSec,
                 TelegramChatId = incomingChat.Id,
@@ -256,7 +315,7 @@ namespace HSMServer.Notifications.Chats
                 Author = user.Name,
             };
 
-            if (!await TryAdd(chat))
+            if (!await TryAddUnderAFreeName(chat, isUserChat ? message.From?.Username : incomingChat.Title))
                 return new ChatConnectResult(ChatConnectOutcome.Failed);
 
             return new ChatConnectResult(ChatConnectOutcome.ChatBound, chat.Name);
@@ -268,6 +327,14 @@ namespace HSMServer.Notifications.Chats
         // " (2)", " (3)"… appended: nobody is there to pick another name.
         private string TelegramChatName(string proposed) =>
             ChatNameValidator.UniqueIn(proposed, GetValues());
+
+        // Whether a write gives a chat a name another chat holds — a rename, which is what
+        // the rule guards. A name the chat already holds (trimmed alike: a stored name may
+        // be padded) is none, and neither is no name at all.
+        private bool NamesOntoATakenName(string name, Guid chatId, string storedName) =>
+            name is not null
+            && !string.Equals(name.Trim(), storedName?.Trim(), StringComparison.Ordinal)
+            && ChatNameValidator.IsTaken(name, chatId, Values);
 
         // Strict conflict policy: refuse if (a) the target Chat already has a different TelegramChatId
         // (rebind — admin must explicitly Remove Telegram via EditChat first), or (b) the incoming

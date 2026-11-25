@@ -4468,15 +4468,20 @@
             <summary>
             The name rule of a chat write (#1829) — ONE rule behind the web form and the
             management API, where each used to have its own half: the name is required, at
-            most 100 characters, and unique per server ignoring case, a chat excluded from the
-            check against itself. Alert import resolves chats by name, and the read DTO always
-            promised the uniqueness that nothing enforced.
+            most 100 characters, and unique per server ignoring case and surrounding spaces, a
+            chat excluded from the check against itself. Alert import resolves chats by name,
+            and the read DTO always promised the uniqueness that nothing enforced.
+            The engine runs the rule on a snapshot; the storage repeats the uniqueness part in
+            front of its own write (<see cref="M:HSMServer.Notifications.Chats.ChatsManager.TryAdd(HSMServer.Notifications.Chats.Chat)"/>), which is what
+            makes it hold under two writes at once.
             </summary>
         </member>
         <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.FindError(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat},System.String)">
             <summary>
             The message of the first rule the name breaks, or null when the name is valid.
-            The name arrives trimmed (the write engine trims it). A row that KEEPS its own
+            The name arrives trimmed (the write engine trims it); a stored name is compared
+            trimmed as well, so a row stored with surrounding spaces, from before the name
+            was held trimmed, holds the same name it reads as. A row that KEEPS its own
             name breaks nothing: the rule guards changes, not history. Chats duplicated
             before the rule existed stay editable on both surfaces until someone renames
             them; a row whose name is longer than the rule allows (a Telegram group title,
@@ -4486,16 +4491,21 @@
             </summary>
         </member>
         <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.IsTaken(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
-            <summary>Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring case.</summary>
+            <summary>
+            Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring
+            case and surrounding spaces. A blank name is held by no one: rows without a
+            name (a Telegram user that has no username) are not each other's duplicates.
+            </summary>
         </member>
         <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.UniqueIn(System.String,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
             <summary>
-            A name no stored chat holds yet: the proposed one, or it with " (2)", " (3)"…
-            appended — for the rows the Telegram /start flow creates, named after the chat
-            title or the username, where nobody is there to pick another name. A title
-            longer than the rule allows (Telegram permits 128 characters) is cut to the
-            maximum, so the flow never creates a row the web form cannot save; a blank
-            proposal is left as it is.
+            A name no stored chat holds yet: the proposed one trimmed, or it with " (2)",
+            " (3)"… appended — for the rows the Telegram /start flow creates, named after
+            the chat title or the username, where nobody is there to pick another name. A
+            title longer than the rule allows (Telegram permits 128 characters) is cut to
+            the maximum, so the name never breaks the length rule. A blank proposal — a
+            Telegram user without a username — is left as it is: the row then has no name
+            until one is given to it in the web form, which asks for it.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

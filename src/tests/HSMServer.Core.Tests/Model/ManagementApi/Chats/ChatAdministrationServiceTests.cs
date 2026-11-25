@@ -497,6 +497,140 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
         }
 
+        // A row stored with a padded name, from before the name was held trimmed, is the
+        // same name once trimmed. The web form shows it trimmed and posts it back on an
+        // unchanged save: that is no change. The row then keeps its name as it is stored —
+        // it is neither refused as a clash with another chat's name nor renamed behind the
+        // user's back (and journaled as a rename).
+        [Fact]
+        public async Task UpdateChat_PaddedNameKeptOnAnUnchangedSave_WhileAnotherChatHoldsItTrimmed_IsAccepted_AndNotRenamed()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team ")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Dev team ")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "dev team")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team", Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Dev team " && u.Description == "on-call")),
+                Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateChat_PaddedNameKeptOnAnUnchangedSave_IsNotSilentlyRenamed()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team ")));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Dev team ")), Times.Once);
+        }
+
+        [Fact]
+        public async Task CreateChat_OnAPreCreatedRowWithAPaddedName_KeptOnSave_IsNotRenamed()
+        {
+            // The Add-chat form saving a row the /start flow pre-created before names were trimmed.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team ")));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Dev team ")), Times.Once);
+        }
+
+        // The other side of the trim: another chat's padded name is that name, so a rename
+        // onto it is the clash it looks like.
+        [Fact]
+        public async Task UpdateChat_RenameOntoAnotherChatsNamePaddedWithSpaces_IsRefused_AndChangesNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Ops")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "Dev team ")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameDuplicateMessage], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+
+        // The engine checks a name against a snapshot and writes after, so two creates of
+        // one name can both pass the check. The store repeats the rule in front of its write
+        // and refuses the loser; by then the winner is in the store, and the loser gets the
+        // same 422 as up front — the field and the rule, not an opaque conflict.
+        [Fact]
+        public async Task CreateChat_NameTakenBetweenTheCheckAndTheWrite_AnswersInvalid_UnderName()
+        {
+            var stored = new List<Chat>();
+            _chats.Setup(m => m.GetValues()).Returns(stored);
+            SetupNoChatAnywhere();
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>()))
+                // The other create lands as this write is refused.
+                .Callback<Chat>(_ => stored.Add(new Chat(BuildChatEntity(Guid.NewGuid(), name: "Ops"))))
+                .ReturnsAsync(false);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "Ops" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameDuplicateMessage], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        [Fact]
+        public async Task UpdateChat_NameTakenBetweenTheCheckAndTheWrite_AnswersInvalid_UnderName()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            var stored = new List<Chat> { new(BuildChatEntity(chatId, name: "Ops")) };
+            _chats.Setup(m => m.GetValues()).Returns(stored);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>()))
+                .Callback<ChatUpdate>(_ => stored.Add(new Chat(BuildChatEntity(Guid.NewGuid(), name: "New"))))
+                .ReturnsAsync(false);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "New" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameDuplicateMessage], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        // A refused write whose name is still free is not a lost race: the store's own
+        // failure stays the fixed-message conflict.
+        [Fact]
+        public async Task UpdateChat_FailedWrite_WithTheNameStillFree_AnswersConflict()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns([new Chat(BuildChatEntity(chatId, name: "Ops"))]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(false);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "New" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Conflict, result.Failure.Outcome);
+            Assert.Equal("The chat could not be saved.", result.Failure.Message);
+        }
+
         [Fact]
         public async Task UpdateChat_OverlongNameOfAnOldRow_IsEditableThroughTheEngineUntilRenamed()
         {

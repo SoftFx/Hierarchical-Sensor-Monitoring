@@ -7,9 +7,12 @@ namespace HSMServer.Notifications.Chats
     /// <summary>
     /// The name rule of a chat write (#1829) — ONE rule behind the web form and the
     /// management API, where each used to have its own half: the name is required, at
-    /// most 100 characters, and unique per server ignoring case, a chat excluded from the
-    /// check against itself. Alert import resolves chats by name, and the read DTO always
-    /// promised the uniqueness that nothing enforced.
+    /// most 100 characters, and unique per server ignoring case and surrounding spaces, a
+    /// chat excluded from the check against itself. Alert import resolves chats by name,
+    /// and the read DTO always promised the uniqueness that nothing enforced.
+    /// The engine runs the rule on a snapshot; the storage repeats the uniqueness part in
+    /// front of its own write (<see cref="ChatsManager.TryAdd(Chat)"/>), which is what
+    /// makes it hold under two writes at once.
     /// </summary>
     internal static class ChatNameValidator
     {
@@ -25,7 +28,9 @@ namespace HSMServer.Notifications.Chats
 
         /// <summary>
         /// The message of the first rule the name breaks, or null when the name is valid.
-        /// The name arrives trimmed (the write engine trims it). A row that KEEPS its own
+        /// The name arrives trimmed (the write engine trims it); a stored name is compared
+        /// trimmed as well, so a row stored with surrounding spaces, from before the name
+        /// was held trimmed, holds the same name it reads as. A row that KEEPS its own
         /// name breaks nothing: the rule guards changes, not history. Chats duplicated
         /// before the rule existed stay editable on both surfaces until someone renames
         /// them; a row whose name is longer than the rule allows (a Telegram group title,
@@ -38,7 +43,9 @@ namespace HSMServer.Notifications.Chats
             if (string.IsNullOrEmpty(name))
                 return NameRequiredMessage;
 
-            if (string.Equals(name, currentName, StringComparison.Ordinal))
+            // The posted name arrives trimmed — or comes back as the row's own stored one,
+            // kept as it is by the engine. Either way, surrounding spaces make no difference.
+            if (string.Equals(name.Trim(), currentName?.Trim(), StringComparison.Ordinal))
                 return null;
 
             if (name.Length > NameMaxLength)
@@ -47,20 +54,28 @@ namespace HSMServer.Notifications.Chats
             return IsTaken(name, chatId, existing) ? NameDuplicateMessage : null;
         }
 
-        /// <summary>Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring case.</summary>
+        /// <summary>
+        /// Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring
+        /// case and surrounding spaces. A blank name is held by no one: rows without a
+        /// name (a Telegram user that has no username) are not each other's duplicates.
+        /// </summary>
         public static bool IsTaken(string name, Guid chatId, IEnumerable<Chat> existing) =>
-            existing.Any(chat => chat.Id != chatId && string.Equals(chat.Name, name, StringComparison.OrdinalIgnoreCase));
+            !string.IsNullOrEmpty(name)
+            && existing.Any(chat => chat.Id != chatId && string.Equals(chat.Name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
-        /// A name no stored chat holds yet: the proposed one, or it with " (2)", " (3)"…
-        /// appended — for the rows the Telegram /start flow creates, named after the chat
-        /// title or the username, where nobody is there to pick another name. A title
-        /// longer than the rule allows (Telegram permits 128 characters) is cut to the
-        /// maximum, so the flow never creates a row the web form cannot save; a blank
-        /// proposal is left as it is.
+        /// A name no stored chat holds yet: the proposed one trimmed, or it with " (2)",
+        /// " (3)"… appended — for the rows the Telegram /start flow creates, named after
+        /// the chat title or the username, where nobody is there to pick another name. A
+        /// title longer than the rule allows (Telegram permits 128 characters) is cut to
+        /// the maximum, so the name never breaks the length rule. A blank proposal — a
+        /// Telegram user without a username — is left as it is: the row then has no name
+        /// until one is given to it in the web form, which asks for it.
         /// </summary>
         public static string UniqueIn(string proposed, IEnumerable<Chat> existing)
         {
+            proposed = proposed?.Trim();
+
             if (string.IsNullOrEmpty(proposed))
                 return proposed;
 
