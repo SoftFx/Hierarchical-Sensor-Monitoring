@@ -79,6 +79,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         }
 
 
+        /// <summary>The clock of commit times. Test seam.</summary>
+        internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+
         /// <summary>Called at the points a test stands a crash at: "part-written", "before-commit", "committed".</summary>
         internal Action<string> Checkpoint { get; set; }
 
@@ -145,7 +148,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                 var classes = ordered.Select(p => new TableBatchClassRange(p.PeriodWeeks,
                     p.Batches.Count == 0 ? 0 : p.Batches.Min(b => b.FirstTime), p.Batches.Count == 0 ? 0 : p.Batches.Max(b => b.LastTime),
                     p.Batches.Count, p.Batches.Sum(b => (long)b.RowCount))).ToList();
-                var record = EncodeCommit(commit, classes);
+                // The commit time: the deletion delay of the hour's blocks runs from it, also across a restart.
+                long commitTicks = Clock().Ticks;
+                var record = EncodeCommit(commit, classes, commitTicks);
 
                 try
                 {
@@ -197,7 +202,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                     throw new TableBatchStoreException($"The merged hour {new DateTime(hour, DateTimeKind.Utc):O} of product {productId} could not be written: {ex.Message}", ex);
                 }
 
-                product.Hours[hour] = new TableBatchHour(hour, classes, commit.FirstBlockSequence, commit.LastBlockSequence, commit.BlocksMerged, commit.UnreadableBlocks.ToArray());
+                product.Hours[hour] = new TableBatchHour(hour, classes, commit.FirstBlockSequence, commit.LastBlockSequence, commit.BlocksMerged, commit.UnreadableBlocks.ToArray(), commitTicks);
                 product.Snapshot = null;
 
                 if (hour >= product.WatermarkHour)
@@ -633,13 +638,19 @@ namespace HSMDatabase.LevelDB.TableBatches
             using var batch = new WriteBatch();
             int rebuilt = 0;
 
+            // A mark holds the time its part was written, which may be earlier than the commit (a part written by a run that
+            // did not commit). The rebuilt commit takes the time of the rebuild: the safe side, the blocks live a little longer.
+            long rebuildTicks = Clock().Ticks;
+
             foreach (var (hour, (record, found)) in marks.OrderBy(m => m.Key))
             {
                 var (decoded, _) = DecodeCommit(hour, record);
                 if (!decoded.Classes.All(c => found.Contains(c.PeriodWeeks)))
                     continue;
 
-                batch.Put(CommitKey(hour), record);
+                var rebuiltRecord = (byte[])record.Clone();
+                BinaryPrimitives.WriteInt64LittleEndian(rebuiltRecord.AsSpan(rebuiltRecord.Length - 8), rebuildTicks);
+                batch.Put(CommitKey(hour), rebuiltRecord);
                 rebuilt++;
             }
 
@@ -914,8 +925,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         // The record of a merged hour: the commit in Hours and the mark in each of its week databases. Little-endian:
         // u8 version, i64 hour, i64 first block sequence, i64 last block sequence, i32 blocks merged,
         // u16 classes, per class (u16 period weeks, i64 min time, i64 max time, i32 batches, i64 rows),
-        // i32 unreadable blocks, per block i64 sequence, i32 watermarks, per watermark (16 producer id, i64 sequence).
-        internal static byte[] EncodeCommit(TableBatchHourCommit commit, IReadOnlyList<TableBatchClassRange> classes)
+        // i32 unreadable blocks, per block i64 sequence, i32 watermarks, per watermark (16 producer id, i64 sequence),
+        // i64 commit time (UTC ticks; last, so that a rebuild can set it).
+        internal static byte[] EncodeCommit(TableBatchHourCommit commit, IReadOnlyList<TableBatchClassRange> classes, long commitTicks)
         {
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
@@ -943,6 +955,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 writer.Write(producer.ToByteArray());
                 writer.Write(sequence);
             }
+            writer.Write(commitTicks);
 
             writer.Flush();
             return stream.ToArray();
@@ -981,10 +994,12 @@ namespace HSMDatabase.LevelDB.TableBatches
                 for (int i = 0; i < watermarkCount; i++)
                     watermarks[new Guid(reader.ReadBytes(16))] = reader.ReadInt64();
 
+                long commitTicks = reader.ReadInt64();
+
                 if (reader.BaseStream.Position != value.Length)
                     throw new FormatException("bytes after the merged hour record");
 
-                return (new TableBatchHour(hour, classes, first, last, blocks, unreadable), watermarks);
+                return (new TableBatchHour(hour, classes, first, last, blocks, unreadable, commitTicks), watermarks);
             }
             catch (EndOfStreamException ex)
             {

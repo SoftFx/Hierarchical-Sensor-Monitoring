@@ -208,6 +208,40 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
+        public void The_commit_time_of_an_hour_survives_a_restart()
+        {
+            var committedAt = new DateTime(2026, 11, 2, 1, 7, 0, DateTimeKind.Utc);
+            var store = Open(clock: () => committedAt);
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
+            Assert.Equal(committedAt.Ticks, store.GetHours(_product).Single().CommitTicks);
+            store.Dispose();
+
+            var reopened = Open(clock: () => committedAt.AddDays(3));
+            Assert.Equal(committedAt.Ticks, reopened.GetHours(_product).Single().CommitTicks);
+        }
+
+        [Fact]
+        public void A_rebuilt_merged_hours_database_takes_the_time_of_the_rebuild_as_the_commit_time()
+        {
+            var committedAt = new DateTime(2026, 11, 2, 1, 7, 0, DateTimeKind.Utc);
+            var store = Open(clock: () => committedAt);
+            store.WriteHour(_product, Commit(Week0, sequence: 4), [Part(4, (_sensorA, 0, 1))]);
+            store.Dispose();
+
+            Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName), recursive: true);
+
+            var rebuiltAt = committedAt.AddDays(2);
+            var reopened = Open(clock: () => rebuiltAt);
+            var hour = Assert.Single(reopened.GetHours(_product));
+            Assert.Equal(rebuiltAt.Ticks, hour.CommitTicks);
+            Assert.Equal(4L, reopened.GetWatermarks(_product)[_producer]);
+            reopened.Dispose();
+
+            // Written to the rebuilt database: the next open reads the rebuild time back.
+            Assert.Equal(rebuiltAt.Ticks, Open(clock: () => rebuiltAt.AddDays(1)).GetHours(_product).Single().CommitTicks);
+        }
+
+        [Fact]
         public void A_damaged_merged_hours_database_is_put_aside_and_rebuilt()
         {
             var store = Open();
@@ -387,9 +421,11 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
 
         // === Helpers ===
 
-        private TableBatchDatabase Open(long writeBufferSize = 8L * 1024 * 1024, Func<string, Options, DB> open = null, string root = null)
+        private TableBatchDatabase Open(long writeBufferSize = 8L * 1024 * 1024, Func<string, Options, DB> open = null, string root = null, Func<DateTime> clock = null)
         {
             var store = new TableBatchDatabase(root ?? _root, writeBufferSize, open);
+            if (clock is not null)
+                store.Clock = clock;
             _stores.Add(store);
             return store;
         }

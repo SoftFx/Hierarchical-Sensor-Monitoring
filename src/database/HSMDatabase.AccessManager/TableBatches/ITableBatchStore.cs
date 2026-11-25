@@ -43,10 +43,11 @@ namespace HSMDatabase.AccessManager.TableBatches
     /// <summary>
     /// A merged hour of a product as the store knows it in memory, loaded from its commits at open: the period classes that
     /// hold its batches with their row-time ranges (a read selects hours by them; a late block makes an hour's range reach
-    /// back), and what the merge recorded.
+    /// back), and what the merge recorded. <see cref="CommitTicks"/> is when the hour was committed (UTC ticks, the store's
+    /// clock when it wrote the hour); for an hour whose commit was rebuilt from the marks, the time of the rebuild.
     /// </summary>
     public sealed record TableBatchHour(long HourTicks, IReadOnlyList<TableBatchClassRange> Classes, long FirstBlockSequence, long LastBlockSequence,
-        int BlocksMerged, IReadOnlyList<long> UnreadableBlocks);
+        int BlocksMerged, IReadOnlyList<long> UnreadableBlocks, long CommitTicks);
 
 
     /// <summary>A week database of a product: the Monday of the week of its merge hours and its period class.</summary>

@@ -156,7 +156,7 @@ The ordinal numbers the batches of one hour in one database in the order the mer
 
 ### The record of a merged hour
 
-Little-endian: u8 version (1), i64 hour, i64 first block sequence, i64 last block sequence, i32 blocks merged, u16 class count, per class (u16 period weeks, i64 minimum row time, i64 maximum row time, i32 batches, i64 rows), i32 count and the i64 sequences of the blocks the merge could not read, i32 count and per producer (16 bytes producer id, i64 sequence) the product's watermarks after the hour (cumulative). A record that does not decode is a `FormatException` at the open.
+Little-endian: u8 version (1), i64 hour, i64 first block sequence, i64 last block sequence, i32 blocks merged, u16 class count, per class (u16 period weeks, i64 minimum row time, i64 maximum row time, i32 batches, i64 rows), i32 count and the i64 sequences of the blocks the merge could not read, i32 count and per producer (16 bytes producer id, i64 sequence) the product's watermarks after the hour (cumulative), i64 the commit time (UTC ticks, the store's clock when `WriteHour` wrote the hour; last in the record). A record that does not decode is a `FormatException` at the open. The commit time is what the deletion delay of the hour's blocks runs from, also across a restart (`TableBatchHour.CommitTicks`). The field was added before the store was released, without a version step. A mark holds the time its part was written; an `Hours` database rebuilt from the marks takes the time of the rebuild as the commit time of every hour it rebuilds (the safe side: their blocks live a little longer).
 
 ### Writing an hour
 
