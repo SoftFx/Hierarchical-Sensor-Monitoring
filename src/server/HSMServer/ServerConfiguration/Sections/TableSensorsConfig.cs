@@ -53,6 +53,12 @@ namespace HSMServer.ServerConfiguration
         // The memory the merge of one product's hour may take for its rows (#1850); a larger hour is merged in several passes.
         public int MergeMemoryBudgetMb { get; set; } = TableBlockOptions.DefaultMergeMemoryBudgetMb;
 
+        // The rows of its range a chart of a table sensor reads before it stops and answers the part it read in full (#1847):
+        // a bound on the time of one chart request (its memory does not grow with the rows).
+        public long MaxChartScanRows { get; set; } = TableBlockOptions.DefaultMaxChartScanRows;
+
+        public const long MaxChartScanRowsLimit = 1_000_000_000_000;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -70,6 +76,7 @@ namespace HSMServer.ServerConfiguration
             Check(MaxConcurrentReads, 1024, nameof(MaxConcurrentReads));
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
             Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
+            Check(MaxChartScanRows, MaxChartScanRowsLimit, nameof(MaxChartScanRows));
 
             if (DeleteMergedBlocksAfterHours < 0 || DeleteMergedBlocksAfterHours > 8760)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(DeleteMergedBlocksAfterHours)} = {DeleteMergedBlocksAfterHours} is invalid: expected 0..8760 hours.");
@@ -85,6 +92,7 @@ namespace HSMServer.ServerConfiguration
                 MaxOpenBatchDatabases = MaxOpenBatchDatabases,
                 DeleteMergedBlocksAfterHours = DeleteMergedBlocksAfterHours,
                 MergeMemoryBudgetMb = MergeMemoryBudgetMb,
+                MaxChartScanRows = MaxChartScanRows,
             };
         }
 
