@@ -294,6 +294,23 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - Rows of refused tables beyond the first 100 of one acknowledgement are not in `RowsDropped`: the server lists at
   most 100 refusals and gives only the number of the rest (`refusedCount`), so the collector knows neither their tables
   nor their rows. The collector logs both numbers.
+- **A logger that disposes the collector from the stop line deadlocks.** The one line `Collector stop: N table row(s)
+  ...` is written by the stop itself (`TablePipeline.ReportStopLine`); a host `ICollectorLogger` that calls
+  `Dispose()` synchronously inside the callback of that line waits for the stop task that is waiting for the logger
+  (`DataCollector.Dispose` joins the stop in flight). Every other report of the tables is written outside the gates and
+  may dispose.
+- **A count can miss the reports when a thread is paused across a whole stop.** A writer refused by a full buffer
+  counts the rows in `RowsDropped` first and in the ledger second (`TableSensor.Drop`); paused between the two until
+  the stop line has closed the ledger, its rows stay on the sensor and are in no report. The same for a tick that took
+  the unreported count from the ledger (`TableLossLedger.TakeUnreported`) and outlasts the stop's wait for it (1 s):
+  the overflow sensor no longer takes the count and the closed ledger does not take it back.
+- **A block stored too late is counted as lost.** When the `stored` answer of a block arrives after the delivery wait
+  and the drain budget of the stop have expired, the stop has counted its rows as not delivered although the server
+  has them. The count errs on the side of loss.
+- **A registration refusal that lands between two runs stays.** A refusal answered for run R1 and applied after R1
+  closed, before the next `Start` attached the sensor to R2, still finds the sensor in R1 and makes it `Refused`
+  (`TableSensor.TryMove`); `Start` puts only `Registered` sensors back to `Pending`, so R2 does not register it. The
+  outcome is that of the same refusal a moment earlier: a refusal is final.
 - **A last bar that cannot be published.** A periodic send of `Queue overflow` that outlives the bounded wait of the
   sensor's stop (1 s; the send only enqueues a value) still owns the send guard when the last bar is due: that bar is
   not published, and the losses the sensor took after that send's snapshot are in no report.
