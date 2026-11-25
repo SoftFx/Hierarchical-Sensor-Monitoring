@@ -3159,6 +3159,8 @@ namespace
                 if (tables_may_run_ && !pipeline->Running())
                     pipeline->Start(channel, reason);
             }
+            // Reports reach the host's logger only here, with no lock held: a logger may call back
+            // into the collector (create a table sensor, read its stats) on this thread.
             pipeline->FlushReports();
             ClearError();
             return HSM_RESULT_OK;
@@ -4789,6 +4791,7 @@ namespace
                 const auto channel = TableChannelFor(reason);
                 pipeline->Start(channel, reason);
             }
+            // With no lock held (see CreateTableSensor).
             pipeline->FlushReports();
         }
 

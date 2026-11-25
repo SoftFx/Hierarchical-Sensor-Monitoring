@@ -785,7 +785,8 @@ namespace hsm::collector::tables
                 }
             }
         }
-        FlushReports();
+        // No FlushReports here: the collector starts the pipeline under its tables_mutex_, and a host
+        // logger may call back into the collector. The caller flushes after it released its locks.
     }
 
     void TablePipeline::BeginStop()

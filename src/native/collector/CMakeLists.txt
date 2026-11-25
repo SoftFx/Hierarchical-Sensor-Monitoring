@@ -383,10 +383,13 @@ if(HSM_COLLECTOR_TABLES)
             native_table_split_keeps_every_row
             native_table_too_large_is_final_and_sequences_never_go_back
             native_table_pack_failure_settles_every_row
+            native_table_reports_reach_the_host_with_no_lock_held
             native_table_stress_writers_ticks_and_restarts)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
     set_tests_properties(native_table_stress_writers_ticks_and_restarts PROPERTIES TIMEOUT 600)
+    # A report written under a lock the host's callback takes again deadlocks: the timeout fails it.
+    set_tests_properties(native_table_reports_reach_the_host_with_no_lock_held PROPERTIES TIMEOUT 120)
     # Blocks and their rows as text, read by the managed reader in NativeBlockVectorTests
     # (HSM_NATIVE_TABLE_BLOCKS_DIR=<build>/table-block-vectors; the CI HTTP lane runs both).
     add_test(NAME native_table_write_vectors

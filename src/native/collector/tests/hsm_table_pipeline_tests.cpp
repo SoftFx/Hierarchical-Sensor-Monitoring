@@ -1604,6 +1604,136 @@ namespace
         Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
+    // A host log sink that calls back into the collector from inside its callback: it creates a table
+    // sensor and reads its stats. A report written under a lock of the collector or of the pipeline that
+    // these calls take again would lock a std::mutex twice on one thread (a deadlock, or an error).
+    struct ReentrantSink
+    {
+        hsm_collector_t* collector = nullptr;
+        std::atomic<int> table_reports{ 0 };
+        std::atomic<int> failures{ 0 };
+        inline static thread_local int depth = 0;
+
+        static void Log(hsm_log_level_t, const char* message, void* user)
+        {
+            auto& sink = *static_cast<ReentrantSink*>(user);
+            if (depth > 0)
+                return;
+            ++depth;
+            // Only table reports call back: a call back from a lifecycle line would make the pipeline
+            // before the path under test does.
+            const std::string text = message;
+            if (text.find("table") == std::string::npos && text.find("Table") == std::string::npos)
+            {
+                --depth;
+                return;
+            }
+            ++sink.table_reports;
+            const hsm_table_column_t column{ "v", HSM_TABLE_COLUMN_DOUBLE };
+            hsm_table_sensor_t* handle = nullptr;
+            const auto created = hsm_collector_create_table_sensor(sink.collector, "reentrant", &column, 1, nullptr, &handle);
+            if (created == HSM_RESULT_OK)
+            {
+                hsm_table_sensor_stats_t stats{};
+                stats.struct_size = sizeof stats;
+                if (hsm_table_sensor_get_stats(handle, &stats) != HSM_RESULT_OK)
+                    ++sink.failures;
+                hsm_table_sensor_release(handle);
+            }
+            else if (created != HSM_RESULT_INVALID_STATE)
+            {
+                ++sink.failures;
+            }
+            --depth;
+        }
+
+        void Attach(hsm_collector_t* value)
+        {
+            collector = value;
+            hsm_collector_set_logger(value, &ReentrantSink::Log, this);
+        }
+
+        // Runs `step` and checks that it wrote a table report and that every call back succeeded.
+        template <typename Step>
+        void Expect(const std::string& path, Step step)
+        {
+            const int before = table_reports.load();
+            step();
+            Check(table_reports.load() > before, path + ": no table report reached the sink");
+            CheckEqual(0, failures.load(), path + ": a call back into the collector failed");
+        }
+    };
+
+    // Every path that writes a table report writes it with no lock held: a create while running (the
+    // first table sensor makes the pipeline and starts its run), a start, a tick (registration and
+    // delivery), the delivery thread, a stop and a dispose.
+    void ReportsReachTheHostWithNoLockHeld()
+    {
+        {
+            // The first table sensor, created while running, with no channel: its run starts at once and
+            // says the sensor cannot send.
+            Collector collector;
+            ReentrantSink sink;
+            sink.Attach(collector.value);
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            sink.Expect("create while running", [&] { CreateTable(collector.value, "first", { { "v", HSM_TABLE_COLUMN_DOUBLE } }); });
+            Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        }
+        {
+            // A start that makes a sensor Unavailable, rows lost at stop, a dispose of a running collector.
+            Collector collector;
+            ReentrantSink sink;
+            sink.Attach(collector.value);
+            tables::test::InstallChannel(collector.value, std::make_shared<RecordingChannel>());
+            tables::test::SetManualTick(collector.value, true);
+            Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            tables::test::InstallChannel(collector.value, nullptr);
+            sink.Expect("start", [&] { Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start"); });
+            sink.Expect("create in a run", [&] { CreateTable(collector.value, "u", { { "v", HSM_TABLE_COLUMN_DOUBLE } }); });
+            Check(AddDouble(table, 1, 1) == HSM_RESULT_INVALID_STATE, "add to an Unavailable sensor");
+            sink.Expect("stop", [&] { Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop"); });
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start again");
+            Check(AddDouble(table, 2, 2) == HSM_RESULT_INVALID_STATE, "add to an Unavailable sensor");
+            sink.Expect("dispose", [&] { hsm_collector_dispose(collector.value); });
+        }
+        {
+            // A tick: a registration without an answer, then a block that is not delivered.
+            Collector collector;
+            ReentrantSink sink;
+            sink.Attach(collector.value);
+            auto channel = std::make_shared<RecordingChannel>();
+            tables::test::InstallChannel(collector.value, channel);
+            tables::test::SetManualTick(collector.value, true);
+            Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            channel->FailRegistrations(1);
+            sink.Expect("tick: registration", [&] { tables::test::RunTick(collector.value); });
+            tables::test::RunTick(collector.value);
+            Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+            channel->SetDown(true);
+            sink.Expect("tick: delivery", [&] { tables::test::RunTick(collector.value); });
+            Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        }
+        {
+            // The delivery thread.
+            ThreadedCollector host;
+            ReentrantSink sink;
+            sink.Attach(host.collector.value);
+            Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+            WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+            host.channel->SetDown(true);
+            Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+            sink.Expect("delivery thread", [&] {
+                const int before = sink.table_reports.load();
+                hsm_collector_test_advance_clock_ms(host.collector.value, 1000);
+                WaitOrFail([&] { return sink.table_reports.load() > before; }, "a report of the delivery thread");
+            });
+            Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop");
+            CheckEqual(0, sink.failures.load(), "a call back into the collector failed");
+        }
+    }
+
     // Three sensors of 100 rows each, registered on a channel whose limits cut them into pieces of 40 rows
     // and whose frame limit makes most blocks split: every allocation point of a pack is met.
     struct PackFixture
@@ -1909,6 +2039,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_losses_at_stop_reach_the_stop_line", [](const std::string&) { LossesAtStopReachTheStopLine(); } },
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
         { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
+        { "native_table_reports_reach_the_host_with_no_lock_held", [](const std::string&) { ReportsReachTheHostWithNoLockHeld(); } },
         { "native_table_pack_failure_settles_every_row", [](const std::string&) { PackFailureSettlesEveryRow(); } },
         { "native_table_stress_writers_ticks_and_restarts", [](const std::string&) { StressWritersTicksAndRestarts(); } },
 #endif

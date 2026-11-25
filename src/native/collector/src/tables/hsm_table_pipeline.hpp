@@ -303,6 +303,8 @@ namespace hsm::collector::tables
         /// Starts a run: a new producer id, sequence 0, every sensor registered again (Registered and
         /// Unavailable go to Pending when `channel` exists; every sensor but a Refused one becomes
         /// Unavailable with `unavailable_reason` when it does not), the tick and the delivery thread.
+        /// Queues its reports: the caller flushes them once it holds no lock (a host logger may call
+        /// back into the collector).
         void Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason);
         /// The first half of a stop, before the collector's final Queue overflow report: rows are
         /// refused from now on, the tick is joined, every buffer is taken (each sensor's mutex once) and
@@ -322,7 +324,7 @@ namespace hsm::collector::tables
         bool Running() const;
         /// Nudges the tick to read the clock again (a manual clock moved).
         void WakeTick();
-        /// Writes the queued reports. Call with no lock of the pipeline held.
+        /// Writes the queued reports. Call with no lock of the collector or of the pipeline held.
         void FlushReports() noexcept;
         /// Records a failure to report, allocating nothing.
         void Fault(TableFault fault) noexcept;

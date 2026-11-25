@@ -360,6 +360,14 @@ report) settles every row it took on every exit, as the managed catch and finall
 counted once as "packing failed" (on its sensor and in the ledger), and its room in the buffer bound goes back, so a
 failed pack never shrinks the bound for later adds. The tick's pack and the stop's final pack alike.
 
+**Reports and locks.** Every report of the tables reaches the host's logger with no lock of the pipeline and no lock
+of the collector's table state held, so a logger may call back into the collector on any path (create a table sensor,
+read its stats: `native_table_reports_reach_the_host_with_no_lock_held`). The one lock held is the collector's
+lifecycle lock: what Start, Stop and Dispose report (the run's start, the losses at stop, the stop line) is written
+while it is held, as every lifecycle notification and log line of the native collector is, so a logger must not call
+`hsm_collector_start`, `_stop`, `_dispose` or `_destroy` from those lines (the managed known issue of the stop line,
+for every lifecycle report).
+
 **Differences from the managed collector.**
 
 - `Unavailable` is decided at creation and again **at every Start** (the managed collector decides it once, when it is
