@@ -16,7 +16,8 @@
 // The WebSocket protocol itself is libcurl's: the upgrade exchange, masking, frame encoding and
 // frame parsing all happen inside libcurl (CONNECT_ONLY=2 with curl_ws_send / curl_ws_recv). This
 // class adds no protocol code of its own. What it adds is policy around libcurl's API: timeouts,
-// cancellation, whole-message assembly with a size limit, text only, and the subprotocol check.
+// cancellation, whole-message assembly with a size limit, text-only receiving, and the subprotocol
+// check. It sends text and binary messages (binary since #1848: the table connection's blocks).
 // libcurl stays confined to hsm_ws_connection.cpp, like the HTTP transport.
 //
 // The price of not owning the protocol is that a session exists only where libcurl can carry one:
@@ -58,12 +59,12 @@ namespace hsm::http
                  // the connection is released
     };
 
-    // One connection, one owner thread. Open/SendText/Receive/Close must be called from the same
-    // thread; Cancel() is the only member that may be called from another one. It makes a blocked
-    // Open, SendText or Receive return within one wait slice (kWaitSliceMs) and stays in force for
-    // the life of the object: a cancelled connection is not reopened.
+    // One connection, one owner thread. Open/SendText/SendBinary/Receive/Close must be called from
+    // the same thread; Cancel() is the only member that may be called from another one. It makes a
+    // blocked Open, send or Receive return within one wait slice (kWaitSliceMs) and stays in force
+    // for the life of the object: a cancelled connection is not reopened.
     //
-    // Every terminal outcome (a failed Open, a failed SendText, Receive returning Closed or Error)
+    // Every terminal outcome (a failed Open, a failed send, Receive returning Closed or Error)
     // releases the connection, so IsOpen() is the truth and nothing is written to a finished
     // WebSocket afterwards. No member throws; Close(0) and the destructor never block.
     //
@@ -74,9 +75,11 @@ namespace hsm::http
     class WebSocketConnection
     {
     public:
-        // Messages larger than this are refused by Receive (Error) instead of growing without
-        // bound. The size comes from the frame header, so the refusal happens before the payload
-        // is read.
+        // The default receive cap (the collector session's): a message larger than the cap is
+        // refused by Receive (Error) instead of growing without bound. The size comes from the
+        // frame header, so the refusal happens before the payload is read. A connection that only
+        // expects small answers (the table connection's acks) asks for a smaller cap in the
+        // constructor. The cap bounds what is received; what is sent has no cap here.
         static constexpr size_t kMaxMessageBytes = 8u * 1024u * 1024u;
         // Longest timeout honoured; larger values are clamped (and cannot overflow the clock).
         static constexpr int64_t kMaxTimeoutMs = 24LL * 60 * 60 * 1000;
@@ -97,7 +100,8 @@ namespace hsm::http
         // same text; the caller stays on HTTP.
         static bool Supported(std::string* reason = nullptr) noexcept;
 
-        explicit WebSocketConnection(bool verify_peer);
+        // `max_message_bytes`: the receive cap of this connection (see kMaxMessageBytes).
+        explicit WebSocketConnection(bool verify_peer, size_t max_message_bytes = kMaxMessageBytes);
         ~WebSocketConnection();
 
         WebSocketConnection(const WebSocketConnection&) = delete;
@@ -119,10 +123,27 @@ namespace hsm::http
         // connection is released then (a frame may be half-written).
         bool SendText(const std::string& text, int64_t timeout_ms, std::string& error);
 
+        // Sends `size` bytes as one binary message in one frame, with the outcomes of SendText.
+        // `data` may be null only when `size` is 0.
+        //
+        // A frame of many megabytes (the table connection sends up to the server's maxFrameBytes)
+        // is still ONE frame: no fragmentation flag is set, so libcurl writes one header with the
+        // whole payload length and FIN set. It masks the payload into its own send buffer, at
+        // most two chunks of 64 KiB, so memory does not grow with the frame, and the caller's
+        // buffer must stay untouched until the call returns. When the socket blocks part-way,
+        // curl_ws_send reports how much of the payload it took and SendFrame waits for the
+        // socket and passes the rest of the SAME frame (what libcurl requires: a shorter or a
+        // longer remainder is refused). So the call blocks until the last byte is handed to the
+        // socket; `timeout_ms` bounds the whole frame, not each piece, and a cancel is seen
+        // within one wait slice. A peer that reads slowly makes the send slow, not large. A send
+        // that fails part-way leaves half a frame on the wire, so the connection is released.
+        bool SendBinary(const char* data, size_t size, int64_t timeout_ms, std::string& error);
+
         // Waits up to `timeout_ms` for one complete text message. Partial reads and fragmented
         // messages are assembled across calls, so a Timeout loses nothing; and it is a Timeout
         // whenever no message is complete by then, even if frames kept arriving. Pings are answered and
-        // pongs dropped without surfacing. A binary message is an Error: the session is text only.
+        // pongs dropped without surfacing. A binary message is an Error: what this client receives
+        // is text only (the session's frames, the table connection's acks).
         // Answering a ping is a complete frame write, so it can extend the call by up to one
         // second beyond `timeout_ms` when the socket is not writable, and a pong that cannot be
         // written in that second ends the connection (a half-written frame would corrupt it).
@@ -146,6 +167,9 @@ namespace hsm::http
         // How the last Receive that returned Closed saw the connection end.
         const WebSocketClosure& LastClosure() const { return closure_; }
 
+        // The receive cap this connection was built with.
+        size_t MaxMessageBytes() const { return max_message_bytes_; }
+
     private:
         enum class Wait
         {
@@ -161,6 +185,8 @@ namespace hsm::http
 
         Wait WaitForSocket(bool for_read, Deadline deadline);
         bool SendFrame(const char* data, size_t size, unsigned int flags, Deadline deadline, std::string& error);
+        // One whole data message, text or binary: the body of SendText and SendBinary.
+        bool SendDataMessage(const char* data, size_t size, unsigned int flags, int64_t timeout_ms, std::string& error);
         std::string Describe(int curl_code) const;
         void ForgetDetail();
         void Release();
@@ -168,6 +194,7 @@ namespace hsm::http
         void* curl_ = nullptr;    // CURL*, opaque so <curl/curl.h> stays in the .cpp
         void* headers_ = nullptr; // curl_slist* of the upgrade request, owned for the handle's life
         bool verify_peer_;
+        size_t max_message_bytes_;
         std::atomic<bool> cancelled_{ false };
         std::string message_;      // payload received so far of the message being assembled
         std::string control_;      // payload received so far of the ping or close frame in progress

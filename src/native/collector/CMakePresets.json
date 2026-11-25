@@ -30,6 +30,7 @@
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "HSM_COLLECTOR_SANITIZER": "address",
+        "HSM_COLLECTOR_TABLES": "ON",
         "HSM_COLLECTOR_WERROR": "ON"
       }
     },
@@ -43,6 +44,7 @@
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "HSM_COLLECTOR_SANITIZER": "thread",
+        "HSM_COLLECTOR_TABLES": "ON",
         "HSM_COLLECTOR_WERROR": "ON"
       }
     }

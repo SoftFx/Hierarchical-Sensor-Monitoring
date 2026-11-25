@@ -29,7 +29,7 @@ using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Tests
 {
-    public sealed class CollectorConformanceTests
+    public sealed partial class CollectorConformanceTests
     {
         [Theory]
         [MemberData(nameof(CollectorContractCases))]
@@ -294,12 +294,25 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "add_queue_diagnostic_sensors":
+                {
                     // The ".module/Collector queue stats" group, as hsm_collector_add_all_queue_diagnostic_sensors.
+                    //
+                    // Their bars are posted on wall-clock boundaries (every 15 s, and when a 5-minute bar
+                    // closes) into the data queue the case's own values use: a case that ran across such a
+                    // boundary had diagnostic values in its parked package or evicting its queued values
+                    // from a queue of 10, and failed about once in 200 runs (requeue_drop_at_capacity:
+                    // "expected 2, got 4", "expected 10 sent, got 8"). With a post period and a bar period
+                    // whose first boundary is thousands of years away, nothing of theirs enters a queue
+                    // during a case; they post what they hold when the collector stops, which is what the
+                    // case reads (expect_bar_sum).
+                    var quiet = new BarSensorOptions { PostDataPeriod = DiagnosticsNeverPost, BarPeriod = DiagnosticsNeverPost };
+
                     if (DataCollector.IsWindowsOS)
-                        state.Collector.Windows.AddAllQueueDiagnosticSensors();
+                        state.Collector.Windows.AddAllQueueDiagnosticSensors(quiet);
                     else
-                        state.Collector.Unix.AddAllQueueDiagnosticSensors();
+                        state.Collector.Unix.AddAllQueueDiagnosticSensors(quiet);
                     break;
+                }
 
                 case "service_send_custom":
                     state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendCustomCommand(ExpandTextToken(step.Arg(1)), ExpandTextToken(step.Arg(2)));
@@ -1369,9 +1382,16 @@ namespace HSMDataCollector.Tests
                     break;
 
                 default:
+                    if (await ExecuteTableStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
         }
+
+        // A period whose first boundary (bars align to multiples of the period since 0001-01-01) lies in
+        // the year 8214: within DateTime's range, and never reached by a case.
+        private static readonly TimeSpan DiagnosticsNeverPost = TimeSpan.FromDays(3_000_000);
 
         // The scripted session server of a case, created by the first verb that needs it.
         private static ScriptedSessionServer SessionServer(ContractState state) =>
@@ -1474,6 +1494,8 @@ namespace HSMDataCollector.Tests
                 ComputerName = computerName,
                 Module = module,
                 DataSender = sender,
+                // Table cases drive the table tick themselves (table_tick); no tick runs on its own.
+                ManualTableTick = true,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = maxValuesInPackage,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
@@ -2649,7 +2671,7 @@ namespace HSMDataCollector.Tests
             public override string ToString() => Action;
         }
 
-        private sealed class ContractState
+        private sealed partial class ContractState
         {
             public DataCollector Collector { get; set; }
 
@@ -2814,7 +2836,7 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        private sealed class RecordingSender : IDataSender
+        private sealed partial class RecordingSender : IDataSender
         {
             private readonly object _lock = new object();
 

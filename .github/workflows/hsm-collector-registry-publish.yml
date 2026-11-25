@@ -3,7 +3,8 @@ name: hsm-collector registry publish
 # Automates publishing a new hsm-collector version into this repo's vcpkg registry, so there is no
 # manual "recipe" to remember. Push a `collector-v<semver>` tag (or run this manually) and it:
 #   1. computes the source tarball SHA512 for that tag,
-#   2. updates ports/hsm-collector/ (portfile REF + SHA512, vcpkg.json version),
+#   2. updates ports/hsm-collector/ (portfile REF + SHA512 + the feature-to-option mapping, vcpkg.json
+#      with the overlay port's dependencies and features, and the version),
 #   3. refreshes the version database (versions/),
 #   4. builds+installs the updated port to prove it's valid, then
 #   5. opens a PR to master.
@@ -119,6 +120,25 @@ jobs:
 
           sed -i -E "s|REF collector-v[0-9]+\.[0-9]+\.[0-9]+|REF ${TAG}|" ports/hsm-collector/portfile.cmake
           sed -i -E "s|SHA512 [0-9a-f]{128}|SHA512 ${SHA}|" ports/hsm-collector/portfile.cmake
+
+          # The features copied above build something only through the portfile's feature-to-option
+          # mapping (vcpkg_check_features): carry the overlay port's block too, and fail if a feature
+          # of the manifest has no option there (hsm-collector[tables] would otherwise install zstd and
+          # zlib and compile the table writer out, #1848).
+          python3 - <<'PY'
+          import json, re, sys
+          pattern = re.compile(r"vcpkg_check_features\(.*?\n\)", re.S)
+          overlay = open("src/native/collector/vcpkg-port/portfile.cmake", encoding="utf-8").read()
+          path = "ports/hsm-collector/portfile.cmake"
+          block = pattern.search(overlay).group(0)
+          text, count = pattern.subn(lambda m: block, open(path, encoding="utf-8").read())
+          if count != 1:
+              sys.exit(f"expected one vcpkg_check_features block in {path}, found {count}")
+          for feature in json.load(open("ports/hsm-collector/vcpkg.json", encoding="utf-8")).get("features", {}):
+              if not re.search(rf"^\s+{re.escape(feature)}\s+HSM_COLLECTOR_\w+\s*$", block, re.M):
+                  sys.exit(f"feature '{feature}' has no CMake option in the portfile's vcpkg_check_features")
+          open(path, "w", encoding="utf-8", newline="\n").write(text)
+          PY
           sed -i -E "s|(\"version\"[[:space:]]*:[[:space:]]*\")[0-9]+\.[0-9]+\.[0-9]+(\")|\1${VER}\2|" ports/hsm-collector/vcpkg.json
 
           # Commit the port first so the recorded git-tree is the NEW port content. --allow-empty because

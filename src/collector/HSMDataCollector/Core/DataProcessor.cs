@@ -10,6 +10,7 @@ using HSMDataCollector.Exceptions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
+using HSMDataCollector.Tables;
 using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -17,7 +18,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Core
 {
-    internal sealed class DataProcessor : IDisposable
+    internal sealed class DataProcessor : IDisposable, ITableDiagnostics
     {
         private readonly DataQueueProcessor _dataQueue;
         private readonly PriorityDataQueueProcessor _priorityQueue;
@@ -45,6 +46,18 @@ namespace HSMDataCollector.Core
         private DefaultSensorsCollection DefaultSensors => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (DefaultSensorsCollection)SensorStorage.Windows : (DefaultSensorsCollection)SensorStorage.Unix;
 
         internal SensorsStorage SensorStorage { get; }
+
+        /// <summary>
+        /// The table sensors of the collector (ADR-0021): null until the first table sensor is created, so a collector
+        /// without table sensors has none of their machinery. Set by the collector under its lifecycle gate.
+        /// </summary>
+        internal TablePipeline Tables
+        {
+            get => Volatile.Read(ref _tables);
+            set => Volatile.Write(ref _tables, value);
+        }
+
+        private TablePipeline _tables;
 
         /// <summary>
         /// Per-collector scheduler used by sensors and the message deduplicator. Owned by the
@@ -96,16 +109,31 @@ namespace HSMDataCollector.Core
         {
             Volatile.Write(ref _diagnosticsSuppressedFlag, 0);
 
-            var dataStarted = _dataQueue.Start();
-            var priorityStarted = dataStarted && _priorityQueue.Start();
-            var fileStarted = priorityStarted && _fileQueue.Start();
-            var commandStarted = fileStarted && _commandQueue.Start();
+            bool dataStarted = false, priorityStarted = false, fileStarted = false, commandStarted = false;
+
+            try
+            {
+                dataStarted = _dataQueue.Start();
+                priorityStarted = dataStarted && _priorityQueue.Start();
+                fileStarted = priorityStarted && _fileQueue.Start();
+                commandStarted = fileStarted && _commandQueue.Start();
+            }
+            catch (Exception)
+            {
+                // A queue that threw while starting: the ones started before it are not left running behind a
+                // collector that reports Stopped.
+                RollbackStartedQueues(dataStarted, priorityStarted, fileStarted, commandStarted);
+                throw;
+            }
 
             if (!commandStarted)
             {
                 RollbackStartedQueues(dataStarted, priorityStarted, fileStarted, commandStarted);
                 return false;
             }
+
+            // Never throws: a table pipeline that cannot start says so through its sensors and reports.
+            Tables?.Start();
 
             return true;
         }
@@ -167,6 +195,14 @@ namespace HSMDataCollector.Core
             // spent sends nothing and its items are discarded and counted.
             using (var drainBudget = new CancellationTokenSource(GetFlushTimeout(mode)))
             {
+                // The table blocks go on a connection of their own (ADR-0021 point 7): their drain runs beside the
+                // value queues' under the same budget, so it does not make the stop longer.
+                var budget = drainBudget.Token;
+                var tables = Tables;
+
+                // On a thread of its own: packing the last rows must not hold the value queues' drain back (#1846 review, item 4).
+                var tablesDrain = tables != null ? Task.Run(() => tables.FlushAsync(budget)) : Task.CompletedTask;
+
                 // Registrations first: the values behind them are of little use to a server that
                 // was never told what those sensors are. Their package diagnostics are suppressed
                 // like every diagnostic of a non-data flush (#1075, below).
@@ -205,6 +241,8 @@ namespace HSMDataCollector.Core
 
                 if (fileStopped)
                     await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures, valuesFailed).ConfigureAwait(false);
+
+                await TryStopPhase(() => tablesDrain, failures).ConfigureAwait(false);
             }
         }
 
@@ -223,6 +261,7 @@ namespace HSMDataCollector.Core
                 TryStopPhase(() => _priorityQueue.StopAsync(mode).AsTask(), failures),
                 TryStopPhase(() => _fileQueue.StopAsync(mode).AsTask(), failures),
                 TryStopPhase(() => _commandQueue.StopAsync(mode).AsTask(), failures),
+                TryStopPhase(() => Tables != null ? Tables.StopWithoutFlushAsync() : Task.CompletedTask, failures),
             };
             await Task.WhenAll(stopTasks).ConfigureAwait(false);
         }
@@ -271,6 +310,7 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            Tables?.Dispose();
             _messageDeduplicator?.Dispose();
             SensorStorage?.Dispose();
             _dataQueue?.Dispose();
@@ -462,6 +502,23 @@ namespace HSMDataCollector.Core
         public void ReportRequeueEviction(string queueName, int droppedCount) =>
             EmitOverflowDrops(queueName, droppedCount);
 
+        bool ITableDiagnostics.CanAcceptData => CanAcceptData;
+
+        /// <summary>
+        /// Lost table rows go to the <c>Queue overflow</c> sensor under the queue "Table rows" while that sensor takes
+        /// values: from its start until it has published its last bar of the run. False otherwise; the table pipeline then
+        /// keeps them in its ledger, and its one stop line says them.
+        /// </summary>
+        bool ITableDiagnostics.TryReportDroppedRows(long rows)
+        {
+            if (rows <= 0)
+                return true;
+
+            var sensor = DefaultSensors?.QueueOverflowSensor;
+
+            return sensor != null && rows <= int.MaxValue && sensor.TryAddValue(TablePipeline.DroppedRowsQueueName, (int)rows);
+        }
+
         private void EmitOverflowDrops(string queueName, int droppedCount)
         {
             if (droppedCount <= 0)
@@ -491,6 +548,9 @@ namespace HSMDataCollector.Core
 
             if (lost > 0)
                 _logger.Error($"Collector stop: {lost} value(s) dropped from the full send queue during this run (Queue overflow sensor not registered).");
+
+            // The table rows lost in the run that are in no published bar: one line, the only one about table rows.
+            Tables?.ReportStopLine();
         }
 
         private void LogDiscardedItems(int count, string queueName)

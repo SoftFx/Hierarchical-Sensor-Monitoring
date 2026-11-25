@@ -32,6 +32,7 @@
 
 #if defined(HSM_COLLECTOR_HTTP)
 #include "../src/hsm_http_transport.hpp"
+#include "../src/hsm_reconnect_backoff.hpp"
 #include "../src/hsm_session_transport.hpp"
 #include "../src/hsm_ws_connection.hpp"
 #include "http_capture_server.hpp"
@@ -3682,6 +3683,76 @@ namespace
             throw std::runtime_error("The collector session verbs need the HTTP build (HSM_COLLECTOR_HTTP): " + action);
 #endif
         }
+
+        // Table sensors (#1846, tests/conformance/collector/table_sensor_contract.hsmtest) come to the native
+        // collector with step 6 of epic #1842. Until then the fixture is not registered in CMakeLists.txt, and the
+        // verbs fail by name instead of as unknown ones, so the port backlog stays visible:
+        // CONFORMANCE-UNSUPPORTED: create_collector_without_table_transport (#1848)
+        // CONFORMANCE-UNSUPPORTED: create_table_sensor (#1848)
+        // CONFORMANCE-UNSUPPORTED: create_table_sensor_at_product (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_create_table_sensor_rejected (#1848)
+        // CONFORMANCE-UNSUPPORTED: add_table_row (#1848)
+        // CONFORMANCE-UNSUPPORTED: add_table_rows (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_tick (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_refuse_registration (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_fail_registrations (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_down (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_up (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_frame_limit (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_answer_next (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_refuse_table_next (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_add_results (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_path (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_state (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_rows_accepted (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_rows_dropped (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_registration_count (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_registration_size (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_registration (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_blocks (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_block_attempts (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_block_tables (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_blocks_within (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_sequences (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_sequences_increasing (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_rows (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_row (#1848)
+        static const char* const kTableVerbs[] = {
+            "create_collector_without_table_transport",
+            "create_table_sensor",
+            "create_table_sensor_at_product",
+            "expect_create_table_sensor_rejected",
+            "add_table_row",
+            "add_table_rows",
+            "table_tick",
+            "table_server_refuse_registration",
+            "table_server_fail_registrations",
+            "table_server_down",
+            "table_server_up",
+            "table_server_frame_limit",
+            "table_server_answer_next",
+            "table_server_refuse_table_next",
+            "expect_table_add_results",
+            "expect_table_path",
+            "expect_table_state",
+            "expect_table_rows_accepted",
+            "expect_table_rows_dropped",
+            "expect_table_registration_count",
+            "expect_table_registration_size",
+            "expect_table_registration",
+            "expect_table_blocks",
+            "expect_table_block_attempts",
+            "expect_table_block_tables",
+            "expect_table_blocks_within",
+            "expect_table_sequences",
+            "expect_table_sequences_increasing",
+            "expect_table_rows",
+            "expect_table_row",
+        };
+
+        for (const char* verb : kTableVerbs)
+            if (action == verb)
+                throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1848)");
 
         throw std::runtime_error("Unknown conformance action: " + action);
     }
@@ -7613,6 +7684,249 @@ namespace
         return options;
     }
 
+    // ---- #1848: what a second connection of the session needs (table sensors, step 6 PR 2) ----
+
+    // Bytes that are not all alike, so a lost, doubled or reordered piece changes the checksum.
+    std::string PatternBytes(size_t size)
+    {
+        std::string bytes(size, '\0');
+        uint64_t state = 0x9e3779b97f4a7c15ull ^ static_cast<uint64_t>(size);
+        for (auto& byte : bytes)
+        {
+            state = state * 6364136223846793005ull + 1442695040888963407ull;
+            byte = static_cast<char>(state >> 56);
+        }
+        return bytes;
+    }
+
+    // A binary message arrives at the server whole and unchanged, as ONE frame, at sizes on both
+    // sides of libcurl's 64 KiB send chunk and up to 16 MiB (four times the server's default
+    // maxFrameBytes for table frames); a text message that answers it is received as before.
+    void NativeWsSendsBinaryFramesIntact()
+    {
+        if (!WsAvailable("native_ws_sends_binary_frames_intact"))
+            return;
+
+        hsm::test::WebSocketTestServer server; // answers a binary message with "binary:<size>:<fnv1a64>"
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+
+        const size_t sizes[] = { 0, 5, 64 * 1024 + 1, 4 * 1024 * 1024, 16 * 1024 * 1024 };
+        for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i)
+        {
+            const std::string payload = PatternBytes(sizes[i]);
+            const std::string expected =
+                "binary:" + std::to_string(payload.size()) + ":" + hsm::test::ws_detail::Hex64(hsm::test::ws_detail::Fnv1a64(payload));
+            const std::string label = std::to_string(payload.size()) + " bytes";
+
+            std::string error;
+            std::string text;
+            const auto started = std::chrono::steady_clock::now();
+            Require(connection.SendBinary(payload.data(), payload.size(), 60000, error), ("a binary send of " + label + " must succeed: " + error).c_str());
+            const auto sent_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+            Require(connection.Receive(text, 60000, error) == hsm::http::WebSocketReceive::Text,
+                    ("the text answer after " + label + " must arrive: " + error).c_str());
+            const auto answered_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+
+            // The server's own count and checksum of what it read, and then the bytes themselves.
+            Require(text == expected, ("the server must have read " + label + " with the same checksum, it answered '" + text + "'").c_str());
+            const auto received = server.BinaryReceived();
+            Require(received.size() == i + 1 && received[i] == payload, ("the server must hold the " + label + " byte for byte").c_str());
+            std::cout << "native_ws_sends_binary_frames_intact: " << label << " sent in " << sent_ms << " ms, answered in " << answered_ms
+                      << " ms" << std::endl;
+        }
+        Require(server.DataFrameFragments() == 0, "every message must have gone as one frame, never fragmented");
+
+        std::string error;
+        Require(!connection.SendBinary(nullptr, 3, 1000, error) && !error.empty(), "a null buffer with a size must be refused");
+        Require(connection.IsOpen(), "a refused argument writes nothing, so the connection stays usable");
+
+        std::string text;
+        Require(connection.SendText("after-binary", 5000, error), ("a text send after the binary ones must succeed: " + error).c_str());
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text == "echo:after-binary",
+                "text must still round-trip after binary messages");
+    }
+
+    // The receive cap is the connection's own: the session keeps 8 MiB, a connection that expects
+    // only small answers asks for less, and the cap is enforced from the frame header at that
+    // value. What a connection receives stays text only, whatever its cap.
+    void NativeWsReceiveCapIsSetPerConnection()
+    {
+        if (!WsAvailable("native_ws_receive_cap_is_set_per_connection"))
+            return;
+
+        {
+            hsm::http::WebSocketConnection by_default(/*verify_peer=*/false);
+            Require(by_default.MaxMessageBytes() == hsm::http::WebSocketConnection::kMaxMessageBytes &&
+                        hsm::http::WebSocketConnection::kMaxMessageBytes == 8u * 1024u * 1024u,
+                    "without an argument the cap is the session's 8 MiB");
+        }
+
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        hsm::test::WebSocketTestServer server(options);
+        constexpr size_t kCap = 1024 * 1024;
+
+        std::string error;
+        std::string text;
+        {
+            hsm::http::WebSocketConnection small(/*verify_peer=*/false, kCap);
+            Require(small.MaxMessageBytes() == kCap, "the cap must be the one asked for");
+            Require(small.Open(WsUrl(server), {}, "", 5000).ok, "the first upgrade must succeed");
+            Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the first connection");
+
+            // Written by a thread of the server while this one reads: 1 MiB need not fit the
+            // loopback buffers of an idle reader.
+            server.PushText(std::string(kCap, 'c'));
+            Require(small.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text.size() == kCap,
+                    ("a message of exactly the cap must be received: " + error).c_str());
+            Require(server.JoinPushes(), "the server must have written the message of exactly the cap");
+
+            Require(server.SendBinary("\x01\x02\x03"), "the server must be able to send a binary message");
+            Require(small.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "a binary message from the server must still be refused");
+            Contains(error, "binary");
+            Require(!small.IsOpen(), "a refused message must release the connection");
+        }
+        Require(WaitUntil([&] { return !server.Connected(); }), "the server must have finished the first connection");
+
+        hsm::http::WebSocketConnection small(/*verify_peer=*/false, kCap);
+        Require(small.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+        Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the second connection");
+        Require(server.SendOversizedFrameStart(kCap + 1), "the server must be able to start a frame one byte over the cap");
+        Require(small.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "a message one byte over the cap must be refused");
+        Contains(error, "size limit");
+        Require(!small.IsOpen(), "an oversized message must release the connection");
+    }
+
+    hsm::test::WebSocketTestServer::Options SessionWithSideServerOptions()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.session = true;
+        options.side_subprotocol = "hsm.tables.v1";
+        return options;
+    }
+
+    hsm::http::SessionOptions SessionTransportOptions(const hsm::test::WebSocketTestServer& server)
+    {
+        hsm::http::SessionOptions options;
+        options.url = WsUrl(server);
+        options.verify_peer = false;
+        options.headers = { hsm::http::HttpHeader{ "Key", "session-key" }, hsm::http::HttpHeader{ "ClientName", "session-client" } };
+        return options;
+    }
+
+    // A second WebSocket to the session's own route opens while the session stays up: the session
+    // transport gives what it needs (its URL, headers and certificate check, and the session id
+    // for X-Hsm-Session), the server sees the subprotocol and the header, its hello arrives first,
+    // a binary frame is answered with a text ack, and how the server closes it is reported with
+    // the close code. None of it touches the session.
+    void NativeWsSecondConnectionOpensBesideTheSession()
+    {
+        if (!WsAvailable("native_ws_second_connection_opens_beside_the_session"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionWithSideServerOptions());
+        const std::string side_hello = "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":4194304,\"heartbeatSeconds\":30}}";
+        server.SetSideHello(side_hello);
+
+        hsm::http::SessionTransport session(SessionTransportOptions(server));
+        session.Start();
+        Require(WaitUntilFor([&] { return session.IsUp(); }, 10000), "the session must come up");
+        const auto identity = session.CurrentSession();
+        Require(identity.generation == 1 && identity.session_id.size() == 32, "the session must have a generation and the hello's id");
+
+        // Everything the second connection needs comes from the session transport.
+        auto headers = session.Options().headers;
+        headers.push_back(hsm::http::HttpHeader{ hsm::http::SessionTransport::kSessionIdHeader, identity.session_id });
+        const auto open_side = [&](hsm::http::WebSocketConnection& side) {
+            const auto opened = side.Open(session.Options().url, headers, "hsm.tables.v1", 5000);
+            Require(opened.ok, ("the second connection must open: " + opened.error).c_str());
+            Require(opened.status_code == 101 && opened.subprotocol == "hsm.tables.v1", "the second connection must have its subprotocol");
+            std::string text;
+            std::string error;
+            Require(side.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text == side_hello,
+                    ("the server's hello must be the first message of the second connection: " + error).c_str());
+        };
+
+        std::string error;
+        std::string text;
+        {
+            hsm::http::WebSocketConnection side(session.Options().verify_peer, 1024 * 1024);
+            open_side(side);
+
+            const auto heads = server.SideUpgradeHeads();
+            Require(heads.size() == 1, "the server must have seen one upgrade of the second kind");
+            Contains(heads[0], "GET /api/sensors/session HTTP/1.1");
+            Contains(heads[0], "Sec-WebSocket-Protocol: hsm.tables.v1");
+            Contains(heads[0], "X-Hsm-Session: " + identity.session_id);
+            Contains(heads[0], "Key: session-key");
+            Contains(heads[0], "ClientName: session-client");
+
+            Require(server.Connected() && server.SideConnected(), "both connections must be open at once");
+            Require(session.Request("list", "[]", 5000).IsSuccess(), "the session must go on serving requests beside the second connection");
+
+            const std::string block = PatternBytes(300 * 1024);
+            Require(side.SendBinary(block.data(), block.size(), 10000, error), ("a binary frame on the second connection must go: " + error).c_str());
+            Require(side.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text, ("its text ack must arrive: " + error).c_str());
+            Contains(text, "\"ack\":1");
+            Contains(text, "\"bytes\":" + std::to_string(block.size()));
+            Contains(text, "\"fnv1a\":\"" + hsm::test::ws_detail::Hex64(hsm::test::ws_detail::Fnv1a64(block)) + "\"");
+            const auto blocks = server.SideBinaryReceived();
+            Require(blocks.size() == 1 && blocks[0] == block, "the server must hold the binary frame byte for byte");
+
+            Require(server.SideSendClose(1013, "try again later"), "the server must be able to close the second connection");
+            Require(side.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a close of the second connection must be reported as Closed");
+            Require(side.LastClosure().close_frame && side.LastClosure().code == 1013, "the close must be reported with its code 1013");
+            Require(side.LastClosure().reason == "try again later", "the close must keep its reason");
+        }
+        Require(WaitUntil([&] { return !server.SideConnected(); }), "the server must have finished the second connection");
+        Require(session.IsUp() && session.CurrentSession().generation == 1, "the end of the second connection must not touch the session");
+
+        {
+            hsm::http::WebSocketConnection side(session.Options().verify_peer, 1024 * 1024);
+            open_side(side);
+            Require(server.SideSendClose(1000, "its session ended"), "the server must be able to close the second connection again");
+            Require(side.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Closed, "a normal closure must be reported as Closed");
+            Require(side.LastClosure().close_frame && side.LastClosure().code == 1000, "the close must be reported with its code 1000");
+            Require(side.LastClosure().reason == "its session ended", "the close must keep its reason");
+        }
+        Require(server.SideUpgrades() == 2 && server.Upgrades() == 1, "two second connections beside one session");
+
+        session.Stop(1000);
+        Require(session.CurrentSession().generation == 0 && session.CurrentSession().session_id.empty(), "a stopped transport has no session");
+    }
+
+    // A refused upgrade of the second connection is a failed Open that carries the server's status
+    // (the table connection reacts to 404, 409 and 503 differently), and leaves nothing open.
+    void NativeWsSecondConnectionRefusalReportsItsStatus()
+    {
+        if (!WsAvailable("native_ws_second_connection_refusal_reports_its_status"))
+            return;
+
+        hsm::test::WebSocketTestServer::Options options;
+        options.side_subprotocol = "hsm.tables.v1";
+        hsm::test::WebSocketTestServer server(options);
+
+        int refused = 0;
+        for (const int status : { 404, 409, 503 })
+        {
+            server.RefuseSideUpgradesWith(status);
+            hsm::http::WebSocketConnection side(/*verify_peer=*/false, 1024 * 1024);
+            const auto opened = side.Open(WsUrl(server), { hsm::http::HttpHeader{ "X-Hsm-Session", "0123456789abcdef0123456789abcdef" } }, "hsm.tables.v1", 5000);
+            Require(!opened.ok && !side.IsOpen(), ("a refused upgrade must fail and leave nothing open: " + std::to_string(status)).c_str());
+            Require(opened.status_code == status, ("the refusal must report its status " + std::to_string(status) + ", got " + std::to_string(opened.status_code)).c_str());
+            Require(server.SideRefusedUpgrades() == ++refused, "the server must have refused the upgrade itself");
+        }
+
+        // The refusal is the second kind's only: a main connection to the same route still opens.
+        hsm::http::WebSocketConnection main(/*verify_peer=*/false);
+        Require(main.Open(WsUrl(server), {}, "", 5000).ok, "a main connection must open while the second kind is refused");
+        server.RefuseSideUpgradesWith(0);
+        hsm::http::WebSocketConnection side(/*verify_peer=*/false, 1024 * 1024);
+        Require(side.Open(WsUrl(server), {}, "hsm.tables.v1", 5000).ok, "the second kind must open again once accepted, beside the main one");
+        Require(WaitUntil([&] { return server.Connected() && server.SideConnected(); }), "both must be served at once");
+    }
+
     // The whole path on a session: the upgrade says who the collector is, the registration of a
     // sensor that existed before Start arrives as a `commands` frame once the session is up, a
     // value arrives as a `list` frame in the wire format, and a graceful stop closes normally.
@@ -8431,6 +8745,106 @@ namespace
         transport.Stop(1000);
         Require(!transport.IsUp(), "a stopped transport has no session");
         Require(WaitUntilFor([&] { return server.CloseCodes().size() == 1 && server.CloseCodes()[0] == 1000; }, 5000), "Stop with a linger must close normally");
+    }
+
+    // #1848: the hello's sessionId and the session generation. A second connection names the
+    // session by its id and must notice when it was replaced: every session that comes up has a
+    // new generation (and, from the server, a new id), and a session whose hello has no id, or
+    // one of another form, still works, with an empty id.
+    void NativeSessionReportsSessionIdAndGeneration()
+    {
+        if (!WsAvailable("native_session_reports_session_id_and_generation"))
+            return;
+
+        hsm::test::WebSocketTestServer server(SessionServerOptions());
+        hsm::http::SessionTransport transport(SessionTransportOptions(server));
+        Require(transport.CurrentSession().generation == 0 && transport.CurrentSession().session_id.empty(), "no session before Start");
+
+        transport.Start();
+        Require(WaitUntilFor([&] { return transport.CurrentSession().generation == 1; }, 10000), "the first session must have generation 1");
+        const auto first = transport.CurrentSession();
+        Require(server.HelloSessionIds().size() == 1 && first.session_id == server.HelloSessionIds()[0],
+                ("the id must be the one of the hello, got '" + first.session_id + "'").c_str());
+
+        // The server drops the session; the transport reconnects to a new one.
+        server.Drop();
+        Require(WaitUntilFor([&] { return transport.CurrentSession().generation == 2; }, 20000), "the next session must have generation 2");
+        const auto second = transport.CurrentSession();
+        Require(server.HelloSessionIds().size() == 2 && second.session_id == server.HelloSessionIds()[1] && second.session_id != first.session_id,
+                "the next session must carry the id of its own hello");
+
+        // A server before #1845 sends no id: the session works, without one.
+        server.SetHelloSessionId("");
+        server.Drop();
+        Require(WaitUntilFor([&] { return transport.CurrentSession().generation == 3; }, 20000), "a session without an id must come up");
+        Require(transport.CurrentSession().session_id.empty(), "a hello without an id gives an empty id");
+        Require(transport.Request("list", "[]", 5000).IsSuccess(), "a session without an id must serve requests");
+
+        // An id of another form is not passed on (it would go into a header of the next upgrade):
+        // here one that the JSON decodes to a line break and a header line.
+        server.SetHelloSessionId("0123456789abcdef\\r\\nX-Injected: 1");
+        server.Drop();
+        Require(WaitUntilFor([&] { return transport.CurrentSession().generation == 4; }, 20000), "a session with a malformed id must come up");
+        Require(transport.CurrentSession().session_id.empty(), "a malformed id gives an empty id");
+
+        transport.Stop(1000);
+        Require(transport.CurrentSession().generation == 0, "a stopped transport has no session");
+
+        // Generations are never reused, across a Stop and a Start.
+        server.SetHelloSessionId("ABCDEF0123456789abcdef0123456789");
+        transport.Start();
+        Require(WaitUntilFor([&] { return transport.CurrentSession().generation == 5; }, 10000), "the session after a restart must have generation 5");
+        Require(transport.CurrentSession().session_id == "ABCDEF0123456789abcdef0123456789", "an id in upper case is as the server wrote it");
+
+        // Ids of the right length (32 characters once the JSON is decoded) that are not hex digits:
+        // the length check lets them through, the digit check must not. A restart for each, so
+        // the reconnect waits no backoff.
+        const char* const not_hex[] = {
+            "0123456789abcdef0123456789abcd\\r\\n",  // 30 hex digits, CR, LF
+            "0123456789abcdef0123456789abcdeg",      // 31 hex digits and a 'g'
+            "0123456789abcdef 123456789abcdef",      // a space
+            "0123456789abcdef0123456789abcde\\u0000" // 31 hex digits and a NUL
+        };
+        uint64_t generation = 5;
+        for (const char* id : not_hex)
+        {
+            transport.Stop(1000);
+            server.SetHelloSessionId(id);
+            transport.Start();
+            ++generation;
+            Require(WaitUntilFor([&] { return transport.CurrentSession().generation == generation; }, 10000),
+                    (std::string("a session whose id is not hex must come up: ") + id).c_str());
+            Require(transport.CurrentSession().session_id.empty(), (std::string("an id that is not hex gives an empty id: ") + id).c_str());
+        }
+        transport.Stop(1000);
+    }
+
+    // The backoff moved into a helper shared by every connection that reconnects; it must be the
+    // formula the session used: a step of 1 s doubling to 60 s, and a wait between half the step
+    // and the step, drawn uniformly.
+    void NativeSessionReconnectBackoffKeepsItsFormula()
+    {
+        const int64_t steps[] = { 1000, 2000, 4000, 8000, 16000, 32000, 60000, 60000, 60000, 60000, 60000, 60000, 60000 };
+        for (int attempt = 0; attempt < static_cast<int>(sizeof(steps) / sizeof(steps[0])); ++attempt)
+            Require(hsm::http::ReconnectBackoffStepMs(attempt) == steps[attempt], ("the step of attempt " + std::to_string(attempt)).c_str());
+        Require(hsm::http::ReconnectBackoffStepMs(1000000) == 60000, "a huge attempt count must stay at the cap");
+
+        // The old code, as it stood in hsm_session_transport.cpp, fed by an engine with the same seed.
+        std::mt19937_64 old_random(20261125);
+        std::mt19937_64 new_random(20261125);
+        for (int round = 0; round < 50; ++round)
+        {
+            for (int attempt = 0; attempt < 14; ++attempt)
+            {
+                const int64_t step = (std::min)(int64_t{ 60000 }, int64_t{ 1000 } << (std::min)(attempt, 10));
+                const int64_t expected = std::uniform_int_distribution<int64_t>(step / 2, step)(old_random);
+                const int64_t delay = hsm::http::ReconnectBackoffDelayMs(attempt, new_random);
+                Require(delay == expected, ("the delay of attempt " + std::to_string(attempt) + " must be the old formula's").c_str());
+                Require(delay >= step / 2 && delay <= step, "the delay must lie between half the step and the step");
+            }
+        }
+        const int64_t unseeded = hsm::http::ReconnectBackoffDelayMs(0);
+        Require(unseeded >= 500 && unseeded <= 1000, "the thread's own engine draws within the same bounds");
     }
 
     // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
@@ -10877,6 +11291,10 @@ namespace
             { "native_ws_cancel_unblocks_receive", [](const std::string&) { NativeWsCancelUnblocksReceive(); } },
             { "native_ws_refuses_binary_and_oversized_messages", [](const std::string&) { NativeWsRefusesBinaryAndOversizedMessages(); } },
             { "native_ws_live_probe", [](const std::string&) { NativeWsLiveProbe(); } },
+            { "native_ws_sends_binary_frames_intact", [](const std::string&) { NativeWsSendsBinaryFramesIntact(); } },
+            { "native_ws_receive_cap_is_set_per_connection", [](const std::string&) { NativeWsReceiveCapIsSetPerConnection(); } },
+            { "native_ws_second_connection_opens_beside_the_session", [](const std::string&) { NativeWsSecondConnectionOpensBesideTheSession(); } },
+            { "native_ws_second_connection_refusal_reports_its_status", [](const std::string&) { NativeWsSecondConnectionRefusalReportsItsStatus(); } },
             { "native_session_delivers_registrations_and_values", [](const std::string&) { NativeSessionDeliversRegistrationsAndValues(); } },
             { "native_session_queues_while_refused_and_delivers_after_connect", [](const std::string&) { NativeSessionQueuesWhileRefusedAndDeliversAfterConnect(); } },
             { "native_session_reconnects_after_a_drop", [](const std::string&) { NativeSessionReconnectsAfterADrop(); } },
@@ -10894,6 +11312,8 @@ namespace
             { "native_session_value_at_the_frame_limit_does_not_stall_the_sender",
               [](const std::string&) { NativeSessionValueAtTheFrameLimitDoesNotStallTheSender(); } },
             { "native_session_transport_request_contract", [](const std::string&) { NativeSessionTransportRequestContract(); } },
+            { "native_session_reports_session_id_and_generation", [](const std::string&) { NativeSessionReportsSessionIdAndGeneration(); } },
+            { "native_session_reconnect_backoff_keeps_its_formula", [](const std::string&) { NativeSessionReconnectBackoffKeepsItsFormula(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_posts_file_values_in_the_wire_format", [](const std::string&) { NativeHttpPostsFileValuesInTheWireFormat(); } },
             { "native_http_hands_header_directives_to_the_host", [](const std::string&) { NativeHttpHandsHeaderDirectivesToTheHost(); } },
@@ -11175,6 +11595,11 @@ namespace
     }
 } // namespace
 
+#if defined(HSM_COLLECTOR_TABLES)
+// Defined in hsm_table_block_tests.cpp (#1848).
+const std::map<std::string, std::function<void(const std::string&)>>& TableBlockTests();
+#endif
+
 int main(int argc, char** argv)
 {
     try
@@ -11183,11 +11608,23 @@ int main(int argc, char** argv)
 
         if (argc > 1)
         {
+            const auto argument = argc > 2 ? std::string{ argv[2] } : std::string{};
             const auto test = tests.find(argv[1]);
             if (test == tests.end())
+            {
+#if defined(HSM_COLLECTOR_TABLES)
+                // The table block tests live in hsm_table_block_tests.cpp (#1848).
+                const auto& table_tests = TableBlockTests();
+                const auto table_test = table_tests.find(argv[1]);
+                if (table_test != table_tests.end())
+                {
+                    table_test->second(argument);
+                    return 0;
+                }
+#endif
                 throw std::runtime_error(std::string("Unknown test: ") + argv[1]);
+            }
 
-            const auto argument = argc > 2 ? std::string{ argv[2] } : std::string{};
             test->second(argument);
             return 0;
         }

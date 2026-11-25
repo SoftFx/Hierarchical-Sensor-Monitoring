@@ -10,6 +10,7 @@
     <!-- Explicit: HSMDataCollector marks this reference PrivateAssets="all" (NuGet bundling),
          so it no longer flows transitively. -->
     <ProjectReference Include="..\..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
+    <ProjectReference Include="..\..\..\api\HSMTableBlocks\HSMTableBlocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>
