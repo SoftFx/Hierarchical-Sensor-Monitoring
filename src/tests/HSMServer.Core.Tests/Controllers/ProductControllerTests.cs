@@ -220,6 +220,9 @@ namespace HSMServer.Core.Tests.Controllers
 
         public static TheoryData<string> GatedActions => [Edit, AddRight, EditRole, RemoveRole, Move];
 
+        // The gated actions that take a node below the root. The move is not one: a folder holds root products.
+        public static TheoryData<string> NodeActions => [Edit, AddRight, EditRole, RemoveRole];
+
         public static TheoryData<string> RoleActions => [AddRight, EditRole, RemoveRole];
 
 
@@ -429,7 +432,7 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Theory]
-        [MemberData(nameof(GatedActions))]
+        [MemberData(nameof(NodeActions))]
         public async Task GatedAction_NestedNode_ManagerOfTheRoot_IsLetThrough(string action)
         {
             await Post(action, UserWith(_root.Id, ProductRoleEnum.ProductManager), _nested.Id);
@@ -437,8 +440,23 @@ namespace HSMServer.Core.Tests.Controllers
             VerifyChanged(action, _nested.Id);
         }
 
+        [Fact]
+        public async Task MoveProduct_OfANodeBelowTheRoot_IsRefused_ForItsManagerAndForAnAdmin()
+        {
+            // A folder holds root products. A node below the root stays in its product whoever asks.
+            foreach (var caller in new[] { UserWith(_root.Id, ProductRoleEnum.ProductManager), Admin() })
+                foreach (var node in new[] { _nested, _leaf })
+                {
+                    var result = await Post(Move, caller, node.Id);
+
+                    Assert.Equal(StatusCodes.Status400BadRequest, StatusCodeOf(result));
+                }
+
+            VerifyNothingChanged();
+        }
+
         [Theory]
-        [MemberData(nameof(GatedActions))]
+        [MemberData(nameof(NodeActions))]
         public async Task GatedAction_NodeTwoLevelsDown_ManagerOfTheRoot_IsLetThrough(string action)
         {
             await Post(action, UserWith(_root.Id, ProductRoleEnum.ProductManager), _leaf.Id);
