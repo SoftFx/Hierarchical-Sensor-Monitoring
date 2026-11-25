@@ -83,6 +83,8 @@ namespace hsm::collector::tables
 
         /// The reasons with rows lost since the last call, each once.
         std::vector<TableDropReason> TakeReasons();
+        /// Forgets the reasons not yet worded (the ledger closes). Allocates nothing.
+        void ClearReasons() noexcept;
 
         /// Takes the unreported rows to hand them to the overflow sensor; GiveBack when it refuses them.
         std::int64_t TakeUnreported() noexcept;
@@ -233,8 +235,8 @@ namespace hsm::collector::tables
         void EndFlight(const std::shared_ptr<PendingBlock>& block) noexcept;
         /// A final answer: removes the block (false when it is no longer there) and ends its flight.
         bool Settle(const std::shared_ptr<PendingBlock>& block);
-        /// Everything, for a stop: the backlog is empty after.
-        std::vector<std::shared_ptr<PendingBlock>> TakeAll();
+        /// Drops every block under `reason`, for a stop: the backlog is empty after. Allocates nothing.
+        void DropAll(TableDropReason reason) noexcept;
 
         std::int64_t Bytes() const;
         std::size_t Blocks() const;
@@ -266,6 +268,11 @@ namespace hsm::collector::tables
     enum class TableFault : int
     {
         PackFailed = 0,
+        TickFailed,
+        DeliveryFailed,
+        DrainFailed,
+        StartFailed,
+        StopFailed,
         Count,
     };
 
@@ -305,21 +312,23 @@ namespace hsm::collector::tables
         /// Unavailable with `unavailable_reason` when it does not), the tick and the delivery thread.
         /// Queues its reports: the caller flushes them once it holds no lock (a host logger may call
         /// back into the collector).
-        void Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason);
+        /// A start whose threads cannot be made is rolled back: no thread of the run is left, rows are
+        /// refused, and the sensors are Unavailable for this run (tried again at the next Start).
+        void Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason) noexcept;
         /// The first half of a stop, before the collector's final Queue overflow report: rows are
         /// refused from now on, the tick is joined, every buffer is taken (each sensor's mutex once) and
         /// packed, and the losses so far are reported.
-        void BeginStop();
+        void BeginStop() noexcept;
         /// Delivery drains the backlog within `budget_ms`, beside the collector's value drain.
-        void StartDrain(std::int64_t budget_ms);
+        void StartDrain(std::int64_t budget_ms) noexcept;
         /// Waits for the drain until its deadline, cancels and joins the delivery thread, drops and
         /// counts what is left, reports the losses. When it returns no thread of the run exists.
-        void FinishDrain();
+        void FinishDrain() noexcept;
         /// The rows lost in the run that are in no report of the Queue overflow sensor; closes the
         /// ledger (a row refused after it is counted on its sensor only).
-        std::int64_t CloseLedger();
+        std::int64_t CloseLedger() noexcept;
         /// Ends everything; every later call of a sensor is refused. Idempotent.
-        void Dispose();
+        void Dispose() noexcept;
 
         bool Running() const;
         /// Nudges the tick to read the clock again (a manual clock moved).
@@ -346,24 +355,30 @@ namespace hsm::collector::tables
         std::function<void()> on_ack_for_tests;
         /// For tests: runs before every allocation of a pack (a test makes it throw std::bad_alloc).
         std::function<void()> on_pack_allocation_for_tests;
+        /// For tests: runs before a thread of a run is made (a test makes it throw std::system_error).
+        std::function<void()> before_thread_start_for_tests;
+        /// For tests: runs in the stop's FinishDrain before what is left is counted (a test throws).
+        std::function<void()> in_finish_drain_for_tests;
 
     private:
         struct Taken;
         struct PackPass;
 
         void Tick() noexcept;
-        void ReportLosses();
+        void ReportLosses() noexcept;
         void Note(std::string message) noexcept;
         std::vector<std::shared_ptr<TableSensor>> SnapshotSensors() const;
         void RegisterPending();
         void Pack(bool final_pack) noexcept;
         void PackTaken(std::vector<Taken>& taken, PackPass& pass);
         void PackAllocation();
+        void StartThreads();
+        void DiscardAllRows(TableDropReason reason) noexcept;
         void Deliver(bool at_stop, std::chrono::steady_clock::time_point deadline);
         void Settle(const std::shared_ptr<PendingBlock>& block, const TableBlockAck& ack);
         void ApplyRefusals(const PendingBlock& block, const TableBlockAck& ack, bool count_rows);
         void RequestDelivery(bool registration, bool blocks);
-        void DeliveryLoop();
+        void DeliveryLoop() noexcept;
         void StopThread(std::thread& delivery, const std::shared_ptr<ITableChannel>& channel, bool cancel);
         std::string Describe(TableDropReason reason) const;
 

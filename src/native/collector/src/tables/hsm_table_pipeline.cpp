@@ -174,6 +174,12 @@ namespace hsm::collector::tables
         return reasons;
     }
 
+    void TableLedger::ClearReasons() noexcept
+    {
+        for (int i = 0; i < kReasons; ++i)
+            unworded_[i].store(0, std::memory_order_relaxed);
+    }
+
     std::int64_t TableLedger::TakeUnreported() noexcept
     {
         return unreported_.exchange(0, std::memory_order_relaxed);
@@ -485,14 +491,14 @@ namespace hsm::collector::tables
         return true;
     }
 
-    std::vector<std::shared_ptr<PendingBlock>> TableBacklog::TakeAll()
+    void TableBacklog::DropAll(TableDropReason reason) noexcept
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        std::vector<std::shared_ptr<PendingBlock>> all(std::make_move_iterator(blocks_.begin()), std::make_move_iterator(blocks_.end()));
+        for (const auto& block : blocks_)
+            block->DropRows(reason);
         blocks_.clear();
         in_flight_ = nullptr;
         bytes_ = 0;
-        return all;
     }
 
     std::int64_t TableBacklog::Bytes() const
@@ -554,6 +560,16 @@ namespace hsm::collector::tables
             {
             case TableFault::PackFailed:
                 return "Packing table rows failed; the rows it took are dropped and counted (packing failed).";
+            case TableFault::TickFailed:
+                return "The table tick failed; rows not packed stay buffered for the next tick.";
+            case TableFault::DeliveryFailed:
+                return "The table delivery failed; the blocks not delivered are kept and sent again.";
+            case TableFault::DrainFailed:
+                return "The table stop drain failed; what it did not deliver is dropped and counted.";
+            case TableFault::StartFailed:
+                return "The table sensors could not start their threads; for this run they are Unavailable and their rows are dropped and counted.";
+            case TableFault::StopFailed:
+                return "A step of the table stop failed; what it did not deliver is dropped and counted.";
             default:
                 return "A table sensor operation failed.";
             }
@@ -714,82 +730,153 @@ namespace hsm::collector::tables
         return running_;
     }
 
-    void TablePipeline::Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason)
+    void TablePipeline::Start(std::shared_ptr<ITableChannel> channel, const std::string& unavailable_reason) noexcept
     {
+        bool failed = false;
+        std::unique_ptr<detail::ScheduledTask> failed_tick;
+        std::thread failed_delivery;
+        std::shared_ptr<ITableChannel> failed_channel;
+        try
         {
             std::lock_guard<std::mutex> guard(lifecycle_mutex_);
             if (running_ || disposed_)
                 return;
 
-            if (channel)
-                channel->Reset();
-            channel_ = std::move(channel);
-            channel_reason_ = channel_ ? std::string() : unavailable_reason;
+            try
+            {
+                if (channel)
+                    channel->Reset();
+                channel_ = std::move(channel);
+                channel_reason_ = channel_ ? std::string() : unavailable_reason;
 
-            {
-                std::lock_guard<std::mutex> pack(pack_mutex_);
-                producer_ = NewProducerId();
-                next_sequence_ = 0;
-            }
-            retry_not_before_ms_.store(0);
-            stop_delivery_.store(false);
-            {
-                std::lock_guard<std::mutex> delivery(delivery_mutex_);
-                register_due_ = false;
-                deliver_due_ = false;
-                drain_requested_ = false;
-                drain_done_ = false;
-            }
-
-            // Every Start registers every sensor again; whether a sensor can send at all is decided now.
-            for (const auto& sensor : SnapshotSensors())
-            {
-                const auto state = sensor->State();
-                if (state == HSM_TABLE_SENSOR_REFUSED)
-                    continue;
-                if (!channel_)
                 {
-                    if (state != HSM_TABLE_SENSOR_UNAVAILABLE || sensor->Reason() != channel_reason_)
+                    std::lock_guard<std::mutex> pack(pack_mutex_);
+                    producer_ = NewProducerId();
+                    next_sequence_ = 0;
+                }
+                retry_not_before_ms_.store(0);
+                stop_delivery_.store(false);
+                {
+                    std::lock_guard<std::mutex> delivery(delivery_mutex_);
+                    register_due_ = false;
+                    deliver_due_ = false;
+                    drain_requested_ = false;
+                    drain_done_ = false;
+                }
+
+                // Every Start registers every sensor again; whether a sensor can send at all is decided now.
+                for (const auto& sensor : SnapshotSensors())
+                {
+                    const auto state = sensor->State();
+                    if (state == HSM_TABLE_SENSOR_REFUSED)
+                        continue;
+                    if (!channel_)
                     {
-                        sensor->SetState(HSM_TABLE_SENSOR_UNAVAILABLE, channel_reason_);
-                        Note("The table sensor " + sensor->Path() + " cannot send its rows: " + channel_reason_ + ". Its rows are dropped and counted.");
+                        if (state != HSM_TABLE_SENSOR_UNAVAILABLE || sensor->Reason() != channel_reason_)
+                        {
+                            sensor->SetState(HSM_TABLE_SENSOR_UNAVAILABLE, channel_reason_);
+                            Note("The table sensor " + sensor->Path() + " cannot send its rows: " + channel_reason_ + ". Its rows are dropped and counted.");
+                        }
+                    }
+                    else
+                    {
+                        sensor->SetState(HSM_TABLE_SENSOR_PENDING, std::string());
                     }
                 }
-                else
-                {
-                    sensor->SetState(HSM_TABLE_SENSOR_PENDING, std::string());
-                }
+
+                shared_->ledger_open.store(true, std::memory_order_release);
+                shared_->accepting.store(true, std::memory_order_release);
+                run_count_.fetch_add(1);
+                running_ = true;
+
+                if (!options_.manual_tick)
+                    StartThreads();
             }
-
-            shared_->ledger_open.store(true, std::memory_order_release);
-            shared_->accepting.store(true, std::memory_order_release);
-            run_count_.fetch_add(1);
-            running_ = true;
-
-            if (!options_.manual_tick)
+            catch (...)
             {
-                last_tick_ms_.store(host_.TableSteadyNowMs());
-                tick_ = std::make_unique<detail::ScheduledTask>(
-                    [this] { return host_.TableSteadyNowMs(); },
-                    [this] { return last_tick_ms_.load() + options_.tick_period_ms; },
-                    [this] {
-                        last_tick_ms_.store(host_.TableSteadyNowMs());
-                        Tick();
-                    });
-                tick_->Start();
-
-                if (channel_)
-                {
-                    delivery_thread_ = std::thread([this] { DeliveryLoop(); });
-                    RequestDelivery(/*registration=*/true, /*blocks=*/false);
-                }
+                // Rolled back: rows are refused, and no thread of this run is left (joined below, with no
+                // lock held: a tick in progress may report). The ledger stays open until the stop line.
+                failed = true;
+                shared_->accepting.store(false, std::memory_order_release);
+                running_ = false;
+                failed_tick = std::move(tick_);
+                failed_delivery = std::move(delivery_thread_);
+                failed_channel = channel_;
             }
         }
+        catch (...)
+        {
+            failed = true;
+        }
+
+        if (!failed)
+            return;
+
+        if (failed_tick)
+        {
+            try
+            {
+                failed_tick->Stop();
+            }
+            catch (...)
+            {
+            }
+        }
+        if (failed_delivery.joinable())
+        {
+            try
+            {
+                StopThread(failed_delivery, failed_channel, /*cancel=*/true);
+            }
+            catch (...)
+            {
+            }
+        }
+
+        // The sensors say why, for this run; the next Start decides again.
+        try
+        {
+            const std::string reason = "the table sensors could not start their threads; they are tried again at the next Start";
+            for (const auto& sensor : SnapshotSensors())
+                if (sensor->State() != HSM_TABLE_SENSOR_REFUSED)
+                    sensor->SetState(HSM_TABLE_SENSOR_UNAVAILABLE, reason);
+        }
+        catch (...)
+        {
+            // A sensor left Pending refuses rows all the same: the run does not accept them.
+        }
+        Fault(TableFault::StartFailed);
         // No FlushReports here: the collector starts the pipeline under its tables_mutex_, and a host
         // logger may call back into the collector. The caller flushes after it released its locks.
     }
 
-    void TablePipeline::BeginStop()
+    // Caller holds lifecycle_mutex_. The delivery thread is made last, and nothing after it can throw:
+    // when this throws, the tick may exist (the caller stops it) and the delivery thread does not.
+    void TablePipeline::StartThreads()
+    {
+        last_tick_ms_.store(host_.TableSteadyNowMs());
+        if (before_thread_start_for_tests)
+            before_thread_start_for_tests();
+        tick_ = std::make_unique<detail::ScheduledTask>(
+            [this] { return host_.TableSteadyNowMs(); },
+            [this] { return last_tick_ms_.load() + options_.tick_period_ms; },
+            [this] {
+                last_tick_ms_.store(host_.TableSteadyNowMs());
+                Tick();
+            });
+        tick_->Start();
+
+        if (channel_)
+        {
+            if (before_thread_start_for_tests)
+                before_thread_start_for_tests();
+            // The registration is asked for before the thread exists: the thread finds it on its first wait.
+            RequestDelivery(/*registration=*/true, /*blocks=*/false);
+            delivery_thread_ = std::thread([this] { DeliveryLoop(); });
+        }
+    }
+
+    void TablePipeline::BeginStop() noexcept
     {
         std::unique_ptr<detail::ScheduledTask> tick;
         {
@@ -802,7 +889,16 @@ namespace hsm::collector::tables
         }
         // Joined with no lock of the pipeline held: a tick in progress may still report.
         if (tick)
-            tick->Stop();
+        {
+            try
+            {
+                tick->Stop();
+            }
+            catch (...)
+            {
+                Fault(TableFault::StopFailed);
+            }
+        }
 
         // The final take: each sensor's mutex once. A writer that got in before is packed; one after
         // sees `accepting` false under the same mutex and is counted.
@@ -810,7 +906,7 @@ namespace hsm::collector::tables
         ReportLosses();
     }
 
-    void TablePipeline::StartDrain(std::int64_t budget_ms)
+    void TablePipeline::StartDrain(std::int64_t budget_ms) noexcept
     {
         std::lock_guard<std::mutex> guard(lifecycle_mutex_);
         if (!running_)
@@ -824,7 +920,7 @@ namespace hsm::collector::tables
         }
     }
 
-    void TablePipeline::FinishDrain()
+    void TablePipeline::FinishDrain() noexcept
     {
         std::thread delivery;
         std::shared_ptr<ITableChannel> channel;
@@ -839,35 +935,53 @@ namespace hsm::collector::tables
         }
 
         // No lock of the pipeline is held from here: the drain reports, and a host logger may call back.
+        try
+        {
+            if (delivery.joinable())
+            {
+                bool done = false;
+                {
+                    std::unique_lock<std::mutex> lock(delivery_mutex_);
+                    if (drain_requested_)
+                        done = drained_cv_.wait_until(lock, deadline, [this] { return drain_done_; });
+                }
+                StopThread(delivery, channel, /*cancel=*/!done);
+            }
+            else if (channel)
+            {
+                // A manual tick (tests): the drain runs here, after the value drain, on the same budget.
+                try
+                {
+                    Deliver(/*at_stop=*/true, deadline);
+                }
+                catch (...)
+                {
+                    Fault(TableFault::DrainFailed);
+                }
+            }
+            if (in_finish_drain_for_tests)
+                in_finish_drain_for_tests();
+        }
+        catch (...)
+        {
+            Fault(TableFault::StopFailed);
+        }
         if (delivery.joinable())
         {
-            bool done = false;
-            {
-                std::unique_lock<std::mutex> lock(delivery_mutex_);
-                if (drain_requested_)
-                    done = drained_cv_.wait_until(lock, deadline, [this] { return drain_done_; });
-            }
-            StopThread(delivery, channel, /*cancel=*/!done);
-        }
-        else if (channel)
-        {
-            // A manual tick (tests): the drain runs here, after the value drain, on the same budget.
+            // The drain failed before its join: the thread is stopped and joined all the same.
             try
             {
-                Deliver(/*at_stop=*/true, deadline);
+                StopThread(delivery, channel, /*cancel=*/true);
             }
             catch (...)
             {
-                Note("The table stop drain failed.");
             }
         }
 
         // What could not be delivered is dropped and counted; so are rows a sensor still holds (none
-        // after BeginStop's final take: this is a guard).
-        for (const auto& block : backlog_.TakeAll())
-            block->DropRows(TableDropReason::NotDeliveredAtStop);
-        for (const auto& sensor : SnapshotSensors())
-            sensor->DiscardRows(TableDropReason::NotDeliveredAtStop);
+        // after BeginStop's final take: this is a guard). Neither allocates.
+        backlog_.DropAll(TableDropReason::NotDeliveredAtStop);
+        DiscardAllRows(TableDropReason::NotDeliveredAtStop);
 
         {
             std::lock_guard<std::mutex> guard(lifecycle_mutex_);
@@ -876,10 +990,10 @@ namespace hsm::collector::tables
         ReportLosses();
     }
 
-    std::int64_t TablePipeline::CloseLedger()
+    std::int64_t TablePipeline::CloseLedger() noexcept
     {
         shared_->ledger_open.store(false, std::memory_order_release);
-        shared_->ledger.TakeReasons();
+        shared_->ledger.ClearReasons();
         return shared_->ledger.TakeUnreported();
     }
 
@@ -896,7 +1010,14 @@ namespace hsm::collector::tables
             delivery.join();
     }
 
-    void TablePipeline::Dispose()
+    void TablePipeline::DiscardAllRows(TableDropReason reason) noexcept
+    {
+        std::lock_guard<std::mutex> guard(sensors_mutex_);
+        for (const auto& entry : sensors_)
+            entry.second->DiscardRows(reason);
+    }
+
+    void TablePipeline::Dispose() noexcept
     {
         std::unique_ptr<detail::ScheduledTask> tick;
         std::thread delivery;
@@ -916,18 +1037,28 @@ namespace hsm::collector::tables
             running_ = false;
         }
 
-        if (tick)
-            tick->Stop();
-        if (delivery.joinable())
-            StopThread(delivery, channel, /*cancel=*/true);
+        try
+        {
+            if (tick)
+                tick->Stop();
+        }
+        catch (...)
+        {
+        }
+        try
+        {
+            if (delivery.joinable())
+                StopThread(delivery, channel, /*cancel=*/true);
+        }
+        catch (...)
+        {
+        }
 
         if (was_running)
         {
             // The collector disposes after its stop; a pipeline still running here had none.
-            for (const auto& block : backlog_.TakeAll())
-                block->DropRows(TableDropReason::NotDeliveredAtStop);
-            for (const auto& sensor : SnapshotSensors())
-                sensor->DiscardRows(TableDropReason::NotDeliveredAtStop);
+            backlog_.DropAll(TableDropReason::NotDeliveredAtStop);
+            DiscardAllRows(TableDropReason::NotDeliveredAtStop);
         }
 
         shared_->ledger_open.store(false, std::memory_order_release);
@@ -976,7 +1107,7 @@ namespace hsm::collector::tables
 
     // ---- Losses --------------------------------------------------------------------------------------
 
-    void TablePipeline::ReportLosses()
+    void TablePipeline::ReportLosses() noexcept
     {
         try
         {
@@ -1039,13 +1170,10 @@ namespace hsm::collector::tables
                 RequestDelivery(/*registration=*/false, /*blocks=*/true);
             }
         }
-        catch (const std::exception& ex)
-        {
-            Note(std::string("The table tick failed: ") + ex.what());
-        }
         catch (...)
         {
-            Note("The table tick failed.");
+            // Nothing is allocated here: a second failure must not leave this noexcept function.
+            Fault(TableFault::TickFailed);
         }
         FlushReports();
     }
@@ -1430,51 +1558,62 @@ namespace hsm::collector::tables
         delivery_cv_.notify_all();
     }
 
-    void TablePipeline::DeliveryLoop()
+    // The delivery thread's function: nothing leaves it, and its catch handlers allocate nothing (a
+    // second failure there would end the host's process).
+    void TablePipeline::DeliveryLoop() noexcept
     {
-        std::unique_lock<std::mutex> lock(delivery_mutex_);
-        while (true)
+        try
         {
-            delivery_cv_.wait(lock, [this] { return stop_delivery_.load() || drain_requested_ || register_due_ || deliver_due_; });
-            if (stop_delivery_.load())
-                return;
-
-            if (drain_requested_)
+            std::unique_lock<std::mutex> lock(delivery_mutex_);
+            while (true)
             {
-                const auto deadline = drain_deadline_;
+                delivery_cv_.wait(lock, [this] { return stop_delivery_.load() || drain_requested_ || register_due_ || deliver_due_; });
+                if (stop_delivery_.load())
+                    return;
+
+                if (drain_requested_)
+                {
+                    const auto deadline = drain_deadline_;
+                    lock.unlock();
+                    try
+                    {
+                        Deliver(/*at_stop=*/true, deadline);
+                    }
+                    catch (...)
+                    {
+                        Fault(TableFault::DrainFailed);
+                    }
+                    lock.lock();
+                    drain_done_ = true;
+                    drained_cv_.notify_all();
+                    // The stop takes it from here; wait for its word to end.
+                    delivery_cv_.wait(lock, [this] { return stop_delivery_.load(); });
+                    return;
+                }
+
+                const bool registration = std::exchange(register_due_, false);
+                const bool blocks = std::exchange(deliver_due_, false);
                 lock.unlock();
                 try
                 {
-                    Deliver(/*at_stop=*/true, deadline);
+                    if (registration)
+                        RegisterPending();
+                    if (blocks)
+                        Deliver(/*at_stop=*/false, std::chrono::steady_clock::time_point::max());
                 }
                 catch (...)
                 {
-                    Note("The table stop drain failed.");
+                    Fault(TableFault::DeliveryFailed);
+                    FlushReports();
                 }
                 lock.lock();
-                drain_done_ = true;
-                drained_cv_.notify_all();
-                // The stop takes it from here; wait for its word to end.
-                delivery_cv_.wait(lock, [this] { return stop_delivery_.load(); });
-                return;
             }
-
-            const bool registration = std::exchange(register_due_, false);
-            const bool blocks = std::exchange(deliver_due_, false);
-            lock.unlock();
-            try
-            {
-                if (registration)
-                    RegisterPending();
-                if (blocks)
-                    Deliver(/*at_stop=*/false, std::chrono::steady_clock::time_point::max());
-            }
-            catch (...)
-            {
-                Note("The table delivery failed.");
-                FlushReports();
-            }
-            lock.lock();
+        }
+        catch (...)
+        {
+            // The loop itself failed (its lock): the thread ends; what it did not deliver is counted at
+            // the stop, whose drain then waits for its deadline only.
+            Fault(TableFault::DeliveryFailed);
         }
     }
 

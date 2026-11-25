@@ -32,6 +32,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -1604,6 +1605,70 @@ namespace
         Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
+    // A table run whose threads cannot be made (the host's thread limit: std::thread throws) is rolled
+    // back: the collector's Start returns OK and runs, no thread of the table run is left, rows are
+    // refused and counted, the sensors say why; the stop and the next Start work as usual. For the tick's
+    // thread and for the delivery thread.
+    void StartFailureRollsBack()
+    {
+        for (int fail_at = 0; fail_at < 2; ++fail_at)
+        {
+            const std::string what = fail_at == 0 ? "tick thread" : "delivery thread";
+            ThreadedCollector host;
+            Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            auto& pipeline = host.Pipeline();
+            int calls = 0;
+            pipeline.before_thread_start_for_tests = [&] {
+                if (calls++ == fail_at)
+                    throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+            };
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_start(host.collector.value)), what + ": start");
+            CheckEqual(static_cast<int>(HSM_COLLECTOR_STATUS_RUNNING), static_cast<int>(hsm_collector_status(host.collector.value)), what + ": status");
+            Check(calls > fail_at, what + ": the seam was not reached");
+            Check(!pipeline.Running() && !pipeline.TickAlive() && !pipeline.DeliveryThreadAlive(), what + ": a table thread was left");
+            CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(table).state), what + ": state");
+            Check(Reason(table).find("could not start their threads") != std::string::npos, what + ": reason '" + Reason(table) + "'");
+            CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 1, 1)), what + ": add");
+            CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, what + ": the refused row is counted");
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_stop(host.collector.value)), what + ": stop");
+
+            pipeline.before_thread_start_for_tests = nullptr;
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_start(host.collector.value)), what + ": start again");
+            Check(pipeline.Running() && pipeline.TickAlive() && pipeline.DeliveryThreadAlive(), what + ": threads of the next run");
+            WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, what + ": the registration");
+            Check(AddDouble(table, 2, 2) == HSM_RESULT_OK, what + ": add in the next run");
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_stop(host.collector.value)), what + ": stop again");
+            CheckEqual(std::size_t{ 1 }, host.channel->RowsOf(hsm_table_sensor_path(table.value)).size(), what + ": delivered in the next run");
+        }
+    }
+
+    // A stop whose drain fails (a step that throws) still completes: Stop returns, the delivery thread is
+    // joined, what was not delivered is counted; a destroy that runs such a stop deletes the collector.
+    void StopFailureCompletes()
+    {
+        ThreadedCollector host;
+        Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        auto& pipeline = host.Pipeline();
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+        WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+        host.channel->SetDown(true);
+        Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+        pipeline.in_finish_drain_for_tests = [] { throw std::bad_alloc(); };
+        CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_stop(host.collector.value)), "stop");
+        CheckEqual(static_cast<int>(HSM_COLLECTOR_STATUS_STOPPED), static_cast<int>(hsm_collector_status(host.collector.value)), "status");
+        Check(!pipeline.Running() && !pipeline.TickAlive() && !pipeline.DeliveryThreadAlive(), "a table thread after stop");
+        CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "reserved bytes");
+        CheckEqual(std::size_t{ 0 }, pipeline.BacklogBlocks(), "backlog");
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "the undelivered row is counted");
+        CheckEqual(std::int64_t{ 1 }, pipeline.Ledger().Total(tables::TableDropReason::NotDeliveredAtStop), "its reason");
+
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start again");
+        Check(AddDouble(table, 2, 2) == HSM_RESULT_OK, "add again");
+        host.collector.Destroy();
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 3, 3)), "add after destroy");
+        CheckEqual(std::uint64_t{ 3 }, Stats(table).rows_dropped, "every row of the destroyed run is counted");
+    }
+
     // A host log sink that calls back into the collector from inside its callback: it creates a table
     // sensor and reads its stats. A report written under a lock of the collector or of the pipeline that
     // these calls take again would lock a std::mutex twice on one thread (a deadlock, or an error).
@@ -2039,6 +2104,8 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_losses_at_stop_reach_the_stop_line", [](const std::string&) { LossesAtStopReachTheStopLine(); } },
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
         { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
+        { "native_table_start_failure_rolls_back", [](const std::string&) { StartFailureRollsBack(); } },
+        { "native_table_stop_failure_completes", [](const std::string&) { StopFailureCompletes(); } },
         { "native_table_reports_reach_the_host_with_no_lock_held", [](const std::string&) { ReportsReachTheHostWithNoLockHeld(); } },
         { "native_table_pack_failure_settles_every_row", [](const std::string&) { PackFailureSettlesEveryRow(); } },
         { "native_table_stress_writers_ticks_and_restarts", [](const std::string&) { StressWritersTicksAndRestarts(); } },

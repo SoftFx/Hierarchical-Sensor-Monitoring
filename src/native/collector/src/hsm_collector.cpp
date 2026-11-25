@@ -3496,10 +3496,20 @@ namespace
             {
                 const std::int64_t table_rows = tables->CloseLedger();
                 if (table_rows > 0)
-                    LogMessage(HSM_LOG_LEVEL_ERROR,
-                               "Collector stop: " + std::to_string(table_rows) +
-                                   " table row(s) were lost during this run and are not in the Queue overflow sensor "
-                                   "(not registered, or reported after it published its last bar).");
+                {
+                    try
+                    {
+                        LogMessage(HSM_LOG_LEVEL_ERROR,
+                                   "Collector stop: " + std::to_string(table_rows) +
+                                       " table row(s) were lost during this run and are not in the Queue overflow sensor "
+                                       "(not registered, or reported after it published its last bar).");
+                    }
+                    catch (...)
+                    {
+                        // The rows are counted on their sensors; a line that cannot be built must not
+                        // break the stop (nor a destroy that runs it).
+                    }
+                }
             }
 
             NotifyLifecycle(CollectorState::Stopped);
@@ -4777,10 +4787,13 @@ namespace
 #endif
         }
 
-        void StartTables()
+        // Never throws: a table run that cannot start leaves the collector's Start as it is (the managed
+        // pipeline's Start does not throw either); its sensors say why and refuse their rows.
+        void StartTables() noexcept
         {
             overflow_bar_closed_.store(false, std::memory_order_release);
             tables::TablePipeline* pipeline = nullptr;
+            try
             {
                 std::lock_guard<std::mutex> guard(tables_mutex_);
                 tables_may_run_ = true;
@@ -4791,12 +4804,20 @@ namespace
                 const auto channel = TableChannelFor(reason);
                 pipeline->Start(channel, reason);
             }
+            catch (...)
+            {
+                // Only the reason's text can fail before the pipeline's own (non-throwing) Start: the
+                // run is not started, so its rows are refused and counted.
+                if (pipeline != nullptr)
+                    pipeline->Fault(tables::TableFault::StartFailed);
+            }
             // With no lock held (see CreateTableSensor).
-            pipeline->FlushReports();
+            if (pipeline != nullptr)
+                pipeline->FlushReports();
         }
 
         // The first half of the table stop; null when the collector has no table sensor.
-        tables::TablePipeline* BeginTableStop()
+        tables::TablePipeline* BeginTableStop() noexcept
         {
             tables::TablePipeline* pipeline = nullptr;
             {

@@ -358,7 +358,14 @@ its calls return `HSM_RESULT_INVALID_STATE`.
 **Failures.** A pack that fails at any step (an allocation of its pieces, groups, a split, a block, the backlog or a
 report) settles every row it took on every exit, as the managed catch and finally do: a row is in a queued block or
 counted once as "packing failed" (on its sensor and in the ledger), and its room in the buffer bound goes back, so a
-failed pack never shrinks the bound for later adds. The tick's pack and the stop's final pack alike.
+failed pack never shrinks the bound for later adds. The tick's pack and the stop's final pack alike. No exception of
+the tables leaves a C function or a thread: a start whose threads cannot be made (the host's thread limit) is rolled
+back, as the managed `Start` that never throws: no thread of the table run is left, rows are refused and counted, the
+sensors are `Unavailable` for the run with that reason, and `hsm_collector_start` returns `HSM_RESULT_OK` for the rest
+of the collector (`native_table_start_failure_rolls_back`); the next Start tries again. A stop, a dispose and a destroy
+always complete: the delivery thread is joined and what was not delivered is counted, whatever step of the drain fails
+(`native_table_stop_failure_completes`). The tick's and the delivery thread's failure handlers allocate nothing: they
+raise a flag that the next report writes as a fixed line.
 
 **Reports and locks.** Every report of the tables reaches the host's logger with no lock of the pipeline and no lock
 of the collector's table state held, so a logger may call back into the collector on any path (create a table sensor,
