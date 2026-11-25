@@ -25,6 +25,15 @@
     <span asp-validation-for="SavedHistoryPeriod"></span>
 </div>
 
+@if (Model is SensorInfoViewModel { SensorType: HSMCommon.Model.SensorType.Table })
+{
+    @* The retention of a table sensor's rows (#1850). When its deletion is applied, the second line goes. *@
+    <div id="tableRetentionNote" class="ms-3 mt-1 text-muted small">
+        For a table sensor this period is counted in whole weeks of rows.
+        Rows are not deleted by it yet: the retention of table rows is in work (#1850).
+    </div>
+}
+
 <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
     <span class="meta-info-label">Remove @entity after inactivity</span>
 

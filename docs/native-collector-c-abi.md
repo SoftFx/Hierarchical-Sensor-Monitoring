@@ -167,6 +167,11 @@ Version history:
   They exist in every build; see "Table sensors" below. **In 0.15.0 a real host cannot deliver
   tables yet** (the table connection of the session is the next step of #1848): every table sensor
   is `UNAVAILABLE` and counts its rows as dropped.
+- **0.14.2** (#1848, table sensors step 6, part 2) — no ABI change and no change in what the
+  collector sends: internal pieces of the session for a second connection tied to it (binary WebSocket
+  frames, a receive cap per connection, the hello's `sessionId` and a session generation, the
+  reconnect backoff as a shared helper). See
+  `aicontext/features/collector/http-client/feature.md`.
 - **0.14.0** (#1660 steps 2b and 5, #1666) — no new entry point, behaviour changes:
   - `hsm_sensor_add_file*` return `HSM_RESULT_OK` on a collector session (they returned
     `HSM_RESULT_INVALID_STATE`): a file value travels as an element of a `list` frame, and one
