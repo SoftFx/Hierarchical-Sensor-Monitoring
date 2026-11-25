@@ -342,25 +342,74 @@ namespace HSMServer.Folders
 
         public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId, InitiatorInfo initiator)
         {
-            if (TryGetValueById(fromFolderId, out var fromFolder))
+            var fromFound = TryGetValueById(fromFolderId, out var fromFolder);
+            var toFound = TryGetValueById(toFolderId, out var toFolder);
+
+            // The folder the product is in is not a destination: taking the
+            // product out and putting it back would turn the settings it
+            // inherits from the folder into its own and re-create its template
+            // alerts (new policies, the per-sensor enable/disable choices gone).
+            if (fromFound && toFound && fromFolder.Id == toFolder.Id)
             {
+                _logger.Info($"MoveProduct: Product '{product.Name}' is already in folder '{toFolder.Name}', nothing to move.");
+                return;
+            }
+
+            if (fromFound && toFound)
+            {
+                // The product's folder changes once, from the old one straight to
+                // the new one. It used to change twice (out of the old folder,
+                // then into the new one), and the cache follows a change of folder
+                // at once: in no folder in between, the product lost every
+                // template alert to the first update, values already queued were
+                // evaluated without them, and a dashboard subscription for
+                // products without a folder took the sensors for good.
+                //
+                // The two steps and their order are kept, so the product ends up
+                // with what it always did: first what it inherited from the old
+                // folder becomes its own (as when it leaves a folder, but it
+                // stays in it), then it enters the new folder.
                 fromFolder.Products.Remove(product.Id);
-                await RemoveProductFromFolder(product.Id, fromFolderId.Value, initiator);
 
-                _logger.Info($"MoveProduct: Product '{product.Name}' is removed from folder '{fromFolder.Name}' by '{initiator}'");
+                if (await TryUpdateProductInFolder(product.Id, fromFolder, initiator, ActionType.Delete, keepsFolder: true))
+                {
+                    await RevokeFolderRoles(fromFolder, product.Id);
+
+                    // Listed in the new folder only now, as it always was: a
+                    // settings update of that folder must not reach the product
+                    // before it stopped inheriting from the old one.
+                    toFolder.Products[product.Id] = product;
+
+                    await TryUpdateProductInFolder(product.Id, toFolder, initiator);
+                    await GrantFolderRoles(toFolder, product.Id);
+
+                    _logger.Info($"MoveProduct: Product '{product.Name}' is moved from '{fromFolder.Name}' to '{toFolder.Name}' by '{initiator}'");
+                }
+                else
+                    _logger.Warn($"MoveProduct: product '{product.Id}' was not found.");
             }
             else
-                _logger.Warn($"MoveProduct: folder from '{fromFolderId}' not found.");
-
-            if (TryGetValueById(toFolderId, out var toFolder))
             {
-                toFolder.Products.Add(product.Id, product);
-                await AddProductToFolder(product.Id, toFolderId.Value, initiator);
+                if (fromFound)
+                {
+                    fromFolder.Products.Remove(product.Id);
+                    await RemoveProductFromFolder(product.Id, fromFolderId.Value, initiator);
 
-                _logger.Info($"MoveProduct: Product '{product.Name}' is moved to '{toFolder.Name}' by '{initiator}'");
+                    _logger.Info($"MoveProduct: Product '{product.Name}' is removed from folder '{fromFolder.Name}' by '{initiator}'");
+                }
+                else
+                    _logger.Warn($"MoveProduct: folder from '{fromFolderId}' not found.");
+
+                if (toFound)
+                {
+                    toFolder.Products.Add(product.Id, product);
+                    await AddProductToFolder(product.Id, toFolderId.Value, initiator);
+
+                    _logger.Info($"MoveProduct: Product '{product.Name}' is moved to '{toFolder.Name}' by '{initiator}'");
+                }
+                else
+                    _logger.Warn($"MoveProduct: folder to '{toFolderId}' not found.");
             }
-            else
-                _logger.Warn($"MoveProduct: folder to '{toFolderId}' not found.");
 
             // The tree-CRUD trace of the move (#1588), written AFTER the
             // move and ONLY when a folder was actually resolved — an unknown
@@ -389,12 +438,7 @@ namespace HSMServer.Folders
 
             if (await TryUpdateProductInFolder(productId, folder, initiator))
             {
-                foreach (var (user, role) in folder.UserRoles)
-                    if (!user.IsUserProduct(productId))
-                    {
-                        user.ProductsRoles.Add((productId, role));
-                        await _userManager.UpdateUser(user);
-                    }
+                await GrantFolderRoles(folder, productId);
 
                 _logger.Info($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}' by '{initiator}'");
             }
@@ -413,9 +457,7 @@ namespace HSMServer.Folders
 
             if (await TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
             {
-                foreach (var (user, role) in folder.UserRoles)
-                    if (user.ProductsRoles.Remove((productId, role)))
-                        await _userManager.UpdateUser(user);
+                await RevokeFolderRoles(folder, productId);
 
                 _logger.Info($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}' by '{initiator}'");
             }
@@ -435,7 +477,26 @@ namespace HSMServer.Folders
             return chats;
         }
 
-        private async Task<bool> TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
+        private async Task GrantFolderRoles(FolderModel folder, Guid productId)
+        {
+            foreach (var (user, role) in folder.UserRoles)
+                if (!user.IsUserProduct(productId))
+                {
+                    user.ProductsRoles.Add((productId, role));
+                    await _userManager.UpdateUser(user);
+                }
+        }
+
+        private async Task RevokeFolderRoles(FolderModel folder, Guid productId)
+        {
+            foreach (var (user, role) in folder.UserRoles)
+                if (user.ProductsRoles.Remove((productId, role)))
+                    await _userManager.UpdateUser(user);
+        }
+
+        // keepsFolder: only the settings are updated, the product's folder is
+        // left as it is (the first half of a move between two folders).
+        private async Task<bool> TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update, bool keepsFolder = false)
         {
             if (_cache.TryGetProduct(productId, out var product))
             {
@@ -448,7 +509,7 @@ namespace HSMServer.Folders
                 var update = new ProductUpdate()
                 {
                     Id = productId,
-                    FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
+                    FolderId = keepsFolder ? null : action is ActionType.Delete ? Guid.Empty : folder.Id,
 
                     DefaultChats = GetCorePolicy(defaultChats, folder, action),
                     KeepHistory = GetCoreUpdate(savedHistory, folder.KeepHistory, action),

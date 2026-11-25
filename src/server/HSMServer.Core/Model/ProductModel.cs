@@ -115,6 +115,10 @@ namespace HSMServer.Core.Model
                 Policies.AddPolicy(policy);
         }
 
+        // Whether Update lets this initiator change the name: the rule
+        // UpdateProperty applies to DisplayName.
+        internal bool AcceptsRename(InitiatorInfo initiator) => ChangeTable.Properties[nameof(DisplayName)].CanChange(initiator);
+
         internal ProductModel Update(ProductUpdate update)
         {
             base.Update(update);

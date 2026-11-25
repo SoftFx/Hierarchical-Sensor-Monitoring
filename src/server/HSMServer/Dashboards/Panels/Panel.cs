@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using HSMCommon.Collections;
@@ -172,6 +173,32 @@ namespace HSMServer.Dashboards
                     return;
 
             AddSensor(sensor);
+        }
+
+        // AddMovedSensor for many sensors at once (a root product that changed its name or folder):
+        // the sources are looked through once, not once per sensor, and the
+        // panel is stored once if any source was added.
+        public void AddMovedSensors(IReadOnlyCollection<BaseSensorModel> sensors)
+        {
+            if (!Subscriptions.Any(s => s.Value.IsSubscribed))
+                return;
+
+            var onPanel = Sources.Select(s => s.Value.Sensor?.Id).ToHashSet();
+            var added = false;
+
+            // A candidate that throws (a subscription edited at this very
+            // moment) ends the batch; what was added before it is still stored.
+            try
+            {
+                foreach (var sensor in sensors)
+                    if (!onPanel.Contains(sensor.Id))
+                        added |= AddSubscribedSources(sensor);
+            }
+            finally
+            {
+                if (added)
+                    Sources.Call();
+            }
         }
 
         // One source per subscription that covers the sensor. The panel is not
