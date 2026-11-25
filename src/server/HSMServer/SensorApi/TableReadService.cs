@@ -28,7 +28,7 @@ namespace HSMServer.SensorApi
     //
     // A refusal is an HTTP status with a short text: 400 for a request that cannot be answered as it
     // is, 404 for a path with no sensor in the key's product, 406 for a key that may not read, 503
-    // (with Retry-After) when the block store cannot be read now. A read is cut at a row limit and at
+    // (with Retry-After) when the block store cannot be read now or the key could not be looked up. A read is cut at a row limit and at
     // a time boundary; the headers say whether it was cut and where the next page starts.
     public sealed class TableReadService
     {
@@ -41,7 +41,10 @@ namespace HSMServer.SensorApi
 
         public const string BlocksContentType = "application/vnd.hsm.table-blocks";
 
-        private const int StoreRetryAfterSeconds = 60;
+        public const string KeyLookupFault = "The access key cannot be checked now.";
+
+        // The Retry-After of a 503: a store that cannot be read now, or a fault while the key was looked up.
+        public const int RetryAfterSeconds = 60;
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -67,6 +70,15 @@ namespace HSMServer.SensorApi
         public async Task<IActionResult> ReadAsync(HttpContext context, TableHistoryRequest request)
         {
             var token = context.RequestAborted;
+
+            // The server failed while it looked the key up (#1756): a fault, not a key that may not read.
+            // The telemetry middleware answers it before the route runs; this is for a request that
+            // reaches the route anyway.
+            if (context.HasPublicApiFault())
+            {
+                context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+                return Refuse(StatusCodes.Status503ServiceUnavailable, KeyLookupFault);
+            }
 
             // The key filter of the route judges the key after the action has run; a read is checked
             // before anything is read.
@@ -135,7 +147,7 @@ namespace HSMServer.SensorApi
             {
                 _logger.Debug($"A table history read of \"{path}\" is answered 503: {ex.Message}");
 
-                context.Response.Headers.RetryAfter = StoreRetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+                context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
                 return Refuse(StatusCodes.Status503ServiceUnavailable, "The table block store cannot be read now.");
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)

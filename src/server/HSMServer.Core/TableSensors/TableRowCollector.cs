@@ -271,9 +271,10 @@ namespace HSMServer.Core.TableSensors
 
                 if (keep == 0)
                 {
-                    // One time has more rows than the limit: they are cut at the limit, and the next page starts after it.
+                    // One time has more rows than the limit: they are cut at the limit, and the next page starts after it,
+                    // unless that is the end of the range: then there is no next page.
                     keep = _limit;
-                    nextFrom = next + 1;
+                    nextFrom = next + 1 < _to ? next + 1 : null;
                     omitted = true;
                 }
                 else

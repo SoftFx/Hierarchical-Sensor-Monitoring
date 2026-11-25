@@ -54,7 +54,8 @@ namespace HSMServer.ServerConfiguration
             Check(MaxRows, int.MaxValue, nameof(MaxRows));
             Check(MaxColumnsPerTable, TableBlockLimits.FormatMaxColumnsPerTable, nameof(MaxColumnsPerTable));
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
-            Check(MaxReadRows, int.MaxValue, nameof(MaxReadRows));
+            // A read collects one row past its limit to know where the next page starts.
+            Check(MaxReadRows, int.MaxValue - 1, nameof(MaxReadRows));
             Check(MaxConcurrentPuts, 1024, nameof(MaxConcurrentPuts));
             Check(MaxTextReadRows, int.MaxValue, nameof(MaxTextReadRows));
             Check(MaxConcurrentReads, 1024, nameof(MaxConcurrentReads));

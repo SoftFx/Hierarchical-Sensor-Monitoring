@@ -18,7 +18,8 @@ namespace HSMSensorDataObjects.HistoryRequests
 
     /// <summary>
     /// The rows of one table sensor in <c>[From, To)</c>, at <c>POST api/sensors/tableHistory</c> (#1845, ADR-0021 point 13).
-    /// <see cref="BaseRequest.Path"/> is the sensor's path in the product of the access key.
+    /// <see cref="BaseRequest.Path"/> is the sensor's path in the product of the access key. The key is read from the
+    /// <c>Key</c> header only: the obsolete <see cref="BaseRequest.Key"/> of the body is not honoured on this route.
     /// </summary>
     public class TableHistoryRequest : BaseRequest
     {

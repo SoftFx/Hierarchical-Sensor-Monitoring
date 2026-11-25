@@ -115,7 +115,9 @@ namespace HSMServer.Core.TableSensors
         /// returned. A truncated result never ends in the middle of the rows of one time: the rows of the time it would
         /// have cut are left for the next page, which starts at that time, so paging by it returns every row exactly once.
         /// The one exception is a single time with more rows than the limit: then the result is those rows cut at the
-        /// limit, <see cref="RowsAtTimeOmitted"/> is set, and the next page starts one tick later. Null when not truncated.
+        /// limit, <see cref="RowsAtTimeOmitted"/> is set, and the next page starts one tick later. Null when there is no
+        /// next page: not truncated, or truncated only by that one time at the last tick of the range. A client pages
+        /// until it is null.
         /// </summary>
         public long? NextFromTicks { get; init; }
 

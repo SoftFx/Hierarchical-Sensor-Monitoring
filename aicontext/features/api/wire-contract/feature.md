@@ -301,19 +301,19 @@ A collector with table sensors sends their rows as blocks (`aicontext/features/a
 
 ## Table history (#1845, ADR-0021 point 13)
 
-`POST {base}tableHistory` reads the rows of one table sensor in `[From, To)`, for the client library (blocks) and for clients without it (CSV, JSON). The same `Key` header as every route; the key must be able to read (`CanReadSensorData`), and the sensor is found by its path in the root product of the key, in normal form (`/a// b` finds `a/b`). Rows not merged yet and, after #1850, merged ones, joined by time; equal times in the order they arrived.
+`POST {base}tableHistory` reads the rows of one table sensor in `[From, To)`, for the client library (blocks) and for clients without it (CSV, JSON). The same `Key` header as every route, and only the header: the obsolete body `Key` of `BaseRequest` is not honoured on this route (it is on `history` and `historyFile`). The key must be able to read (`CanReadSensorData`), and the sensor is found by its path in the root product of the key, in normal form (`/a// b` finds `a/b`). Rows not merged yet and, after #1850, merged ones, joined by time; equal times in the order they arrived.
 
 ```json
 {"Path":"quotes/EURUSD","From":"2026-11-25T09:00:00Z","To":"2026-11-25T10:00:00Z","MaxRows":100000,"Format":0}
 ```
 
 - **Times** are UTC (a time without a kind is UTC). `MaxRows` is optional and capped: by `TableSensors.MaxTextReadRows` (100,000 by default) for CSV and JSON, by `TableSensors.MaxReadRows` (1,000,000) for blocks.
-- **A cut answer ends at a time boundary.** When more rows match than the limit allows, the answer holds the earliest ones but never only some of the rows of one time: those are left for the next page, which starts at their time. `X-Hsm-Next-From` (and `nextFrom` in JSON) is where the next page starts: send it as `From` and every row comes exactly once. The one exception is a single time with more rows than the limit: the answer is those rows cut at the limit, `X-Hsm-Rows-At-Time-Omitted: true` says the rest of that time is skipped, and the next page starts one tick later. A client that needs those rows asks with a larger `MaxRows`.
-- **Headers** of every answer: `X-Hsm-Row-Count`, `X-Hsm-Truncated` (`true` / `false`), `X-Hsm-Next-From` (ISO, when truncated), `X-Hsm-Rows-At-Time-Omitted` (only when `true`), `X-Hsm-Blocks-Failed` (stored blocks that could not be read and whose rows are missing: the answer is incomplete when it is not `0`).
+- **A cut answer ends at a time boundary.** When more rows match than the limit allows, the answer holds the earliest ones but never only some of the rows of one time: those are left for the next page, which starts at their time. `X-Hsm-Next-From` (and `nextFrom` in JSON) is where the next page starts: send it as `From` and every row comes exactly once. The one exception is a single time with more rows than the limit: the answer is those rows cut at the limit, `X-Hsm-Rows-At-Time-Omitted: true` says the rest of that time is skipped, and the next page starts one tick later; when that time is the last tick of the range there is no next page. A client that needs those rows asks with a larger `MaxRows`. **A client pages until an answer has no `X-Hsm-Next-From`** (no `nextFrom` in JSON); `X-Hsm-Truncated` says whether rows were left out, not whether there is a next page.
+- **Headers** of every answer: `X-Hsm-Row-Count`, `X-Hsm-Truncated` (`true` / `false`), `X-Hsm-Next-From` (ISO, when there is a next page), `X-Hsm-Rows-At-Time-Omitted` (only when `true`), `X-Hsm-Blocks-Failed` (stored blocks that could not be read and whose rows are missing: the answer is incomplete when it is not `0`).
 - **JSON** (`Format` 0, `application/json`): the columns, the counts and the rows as arrays in column order. A time is ISO 8601 with seven fraction digits (exact to the tick); a double is the shortest text that reads back to the same value; NaN and the infinities, which JSON numbers cannot carry, are the strings `"NaN"`, `"Infinity"`, `"-Infinity"`; a cell without a value is `null`. An int64 beyond 2^53 is written as the exact number, which JavaScript readers round.
 
 ```json
-{"path":"quotes/EURUSD","columns":[{"name":"time","type":"time"},{"name":"bid","type":"double"},{"name":"size","type":"int64"}],"rowCount":2,"truncated":true,"nextFrom":"2026-11-25T09:00:00.3000000Z","rowsAtTimeOmitted":false,"blocksFailed":0,"rows":[["2026-11-25T09:00:00.1000000Z",1.0841,100],["2026-11-25T09:00:00.2000000Z",null,"NaN"]]}
+{"path":"quotes/EURUSD","columns":[{"name":"time","type":"time"},{"name":"bid","type":"double"},{"name":"size","type":"int64"}],"rowCount":3,"truncated":true,"nextFrom":"2026-11-25T09:00:00.3000000Z","rowsAtTimeOmitted":false,"blocksFailed":0,"rows":[["2026-11-25T09:00:00.1000000Z",1.0841,100],["2026-11-25T09:00:00.2000000Z",null,7],["2026-11-25T09:00:00.2500000Z","NaN",5]]}
 ```
 
 - **CSV** (`Format` 1, `text/csv; charset=utf-8`): RFC 4180, CRLF line ends, a header line with the column names (quoted when a name holds a comma, a quote or a line break), the values as in JSON without quotes; **a cell without a value is empty**.
@@ -322,10 +322,11 @@ A collector with table sensors sends their rows as blocks (`aicontext/features/a
 time,bid,size
 2026-11-25T09:00:00.1000000Z,1.0841,100
 2026-11-25T09:00:00.2000000Z,,7
+2026-11-25T09:00:00.2500000Z,NaN,5
 ```
 
 - **Blocks** (`Format` 2, `application/vnd.hsm.table-blocks`): the rows as table blocks of the one table (identifier: the sensor path; schema id: the sensor's; null maps as the format defines), one after another, at most 65,536 rows each; a reader takes them apart by the compressed length in each 44-byte header. `X-Hsm-Table-Columns: time;1,bid;3,size;2` names the columns (names percent-encoded, types the format's numbers). No rows, no body. `MaxBlockFormatVersion` (default 1) is the newest block format the client reads: the server never writes a newer one, and answers 400 when it cannot write one that old.
-- **Statuses**: `200`; `400` a body that cannot be read, no path, `From` not before `To`, an unknown format, `MaxRows` not positive, a block format the server cannot write, a sensor that is not a table sensor; `404` no sensor with that path in the product of the key; `406` no key, or a key that may not read; `503` with `Retry-After: 60` when the block store cannot be read now (a fault, the same request later is answered).
+- **Statuses**: `200`; `400` a body that cannot be read, no path, `From` not before `To`, an unknown format, `MaxRows` not positive, a block format the server cannot write, a sensor that is not a table sensor; `404` no sensor with that path in the product of the key; `406` no key, or a key that may not read; `503` with `Retry-After: 60` when the block store cannot be read now, or when the server failed while it looked the access key up (a fault, the same request later is answered; not the `406` of a key that may not read).
 - **Cost**: reads run at most `TableSensors.MaxConcurrentReads` (2) at a time; others wait. Until a range is merged (#1850) a read decompresses every stored block whose time range meets it, whatever `MaxRows` is: about 60–160 ms per hour of one table. A client that goes away stops the read before its next block.
 
 ## Invariants

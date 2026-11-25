@@ -70,6 +70,7 @@ public sealed class TableBlockOperationsTests : IDisposable
     [InlineData(nameof(TableSensorsConfig.MaxColumnsPerTable), 256)]
     [InlineData(nameof(TableSensorsConfig.MaxTableIdLength), 65_536)]
     [InlineData(nameof(TableSensorsConfig.MaxReadRows), 0)]
+    [InlineData(nameof(TableSensorsConfig.MaxReadRows), int.MaxValue)] // one row past the limit is collected to page
     [InlineData(nameof(TableSensorsConfig.MinFreeDiskMb), -1)]
     public void A_value_out_of_range_fails_the_validation_with_the_name_of_its_key(string key, long value)
     {

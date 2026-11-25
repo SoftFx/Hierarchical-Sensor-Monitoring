@@ -157,7 +157,7 @@ Registration normalizes a sensor path (`BaseUpdateRequest`: a leading separator,
 
 ## Configuration
 
-Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read once at startup, written back with its defaults, validated with an error that names the key (`TableSensors.MaxReadRows = 0 is invalid: expected 1..2147483647.`):
+Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read once at startup, written back with its defaults, validated with an error that names the key (`TableSensors.MaxReadRows = 0 is invalid: expected 1..2147483646.`):
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -166,7 +166,7 @@ Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read
 | `MaxRows` | 8,388,608 | |
 | `MaxColumnsPerTable` | 64 | |
 | `MaxTableIdLength` | 1,024 | |
-| `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request). |
+| `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request); at most 2,147,483,646, since a read collects one row past its limit to know where the next page starts. |
 | `MinFreeDiskMb` | 1,024 | Puts are refused (a fault) while the store's disk has less free; 0 turns the check off. |
 
 There is no switch: the feature does nothing until a table sensor exists.

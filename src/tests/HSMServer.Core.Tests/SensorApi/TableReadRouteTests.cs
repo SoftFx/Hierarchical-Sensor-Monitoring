@@ -273,6 +273,28 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(new[] { 99.0 }, next["rows"].AsArray().Select(row => (double)row[1]));
         }
 
+        // The same when that one time is the last tick of the range: the next page would start at To,
+        // so there is none. The answer is cut and says so, and has no X-Hsm-Next-From: a client stops
+        // there instead of asking for an empty range (a 400).
+        [Fact]
+        public async Task OneTimeOverTheLimit_AtTheLastTickOfTheRange_HasNoNextPage()
+        {
+            await using var host = await StartHost();
+            await RegisterAsync("q");
+
+            Put(Table("q", Enumerable.Range(0, 10).Select(i => (T0, (double?)i, (long?)i)).ToArray()));
+
+            var page = await ReadAsync(host, "q", T0, T0.AddTicks(1), maxRows: 4);
+            var body = JsonNode.Parse(page.Body);
+
+            Assert.Equal(HttpStatusCode.OK, page.Status);
+            Assert.Equal("4", page.Header("X-Hsm-Row-Count"));
+            Assert.Equal("true", page.Header("X-Hsm-Truncated"));
+            Assert.Equal("true", page.Header("X-Hsm-Rows-At-Time-Omitted"));
+            Assert.Null(page.Header("X-Hsm-Next-From"));
+            Assert.Null((string)body["nextFrom"]);
+        }
+
         // The text formats are capped by MaxTextReadRows, the blocks answer by MaxReadRows; a larger
         // MaxRows is capped, and the answer says it was cut.
         [Fact]
@@ -375,6 +397,28 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         // A store that cannot be read now is the server's fault, not the request's.
+        [Fact]
+        public async Task AFaultWhileTheKeyIsLookedUp_Is503_WithRetryAfter_NotTheRefusalOfTheKey()
+        {
+            // The server fails while it looks the key up (#1756): a fault the same request later is
+            // answered for, not the 406 of a key that may not read, which a client takes as final.
+            var faulting = FaultingCache.Wrap(_valuesCache);
+
+            await using var host = await SensorApiTestHost.StartAsync(faulting.Cache, new CollectorSessionsConfig(), tables: _tables, tableSensors: new TableSensorsConfig());
+            await RegisterAsync("q");
+
+            faulting.FaultOnKeyLookup();
+
+            var answer = await ReadAsync(host, "q", T0, T0.AddHours(1));
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, answer.Status);
+            Assert.Equal("60", answer.Header("Retry-After"));
+
+            faulting.Recover();
+
+            Assert.Equal(HttpStatusCode.OK, (await ReadAsync(host, "q", T0, T0.AddHours(1))).Status);
+        }
+
         [Fact]
         public async Task AStoreFault_Is503_WithRetryAfter()
         {
