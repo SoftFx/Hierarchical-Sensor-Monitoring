@@ -47,6 +47,10 @@ namespace HSMDatabase.LevelDB.LargeFiles
         public const string FaultIndexFlushed = "idx-flushed";
         public const string FaultRecordWritten = "record-written";
 
+        // Points outside the store's lock where files are written (FaultHook): what runs beside them is not blocked.
+        public const string FaultCreatingUpload = "creating-upload";
+        public const string FaultCommittingArchive = "committing-archive";
+
         private const string PartSuffix = ".part";
         private const string IndexSuffix = ".idx";
         private const string RecordSuffix = ".rec";
@@ -68,7 +72,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         // Archives being built in this process with the space each reserves (their temporary files are not leftovers), and
         // records that could not be read at open with their product folders (their files are kept, never taken for orphans).
-        private readonly Dictionary<Guid, long> _building = [];
+        private readonly Dictionary<Guid, (Guid Product, long Reservation)> _building = [];
         private readonly HashSet<Guid> _unreadable = [];
         private readonly HashSet<Guid> _unreadableProducts = [];
 
@@ -80,6 +84,15 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         private bool _opened, _disposed;
         private LargeFileStoreLimits _limits = new();
+
+        // A failed open is not tried again (nor counted again) for a minute, as the table store's backoff.
+        private static readonly TimeSpan OpenBackoff = TimeSpan.FromMinutes(1);
+        private LargeFileStoreException _openFailure;
+        private long _openFailedMs;
+
+        // Set when values name files the store has no record of: an archive no record names may then be one of them.
+        private string _orphanArchivesKeptBecause;
+        private readonly HashSet<Guid> _orphanArchiveProductsReported = [];
 
 
         public LargeFileStore(string folder)
@@ -97,10 +110,21 @@ namespace HSMDatabase.LevelDB.LargeFiles
         /// <summary>Called with a named point of an append (<see cref="FaultPartWritten"/> ...). Test seam for a crash.</summary>
         internal Action<string> FaultHook { get; set; }
 
+        /// <summary>
+        /// The monotonic clock of leases and backoffs, in milliseconds (a step of the wall clock never ends or prolongs a
+        /// lease). Test seam.
+        /// </summary>
+        internal Func<long> MonotonicMs { get; set; } = () => Environment.TickCount64;
+
+        private long Mono() => MonotonicMs();
+
 
         public string Folder => _folder;
 
         public bool Exists => Directory.Exists(_folder);
+
+        public bool HasContent =>
+            Directory.Exists(Path.Combine(_folder, UploadsFolderName)) || Directory.Exists(Path.Combine(_folder, ArchivesFolderName));
 
         public bool IsOpened => Volatile.Read(ref _opened);
 
@@ -146,6 +170,17 @@ namespace HSMDatabase.LevelDB.LargeFiles
         }
 
 
+        public void KeepOrphanArchives(string reason)
+        {
+            lock (_lock)
+            {
+                if (_orphanArchivesKeptBecause is null)
+                    _logger.Warn($"Archives no record names are kept from now on, not removed: {reason}");
+
+                _orphanArchivesKeptBecause ??= reason;
+            }
+        }
+
         public void EnsureOpened()
         {
             lock (_lock)
@@ -154,7 +189,13 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         // === Begin ===
 
-        public LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize)
+        public bool IsChecking(Guid fileId)
+        {
+            lock (_lock)
+                return _files.TryGetValue(fileId, out var entry) && !entry.Removed && entry.Checking;
+        }
+
+        public LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null)
         {
             key = key with { SourceModifiedUtc = AsUtc(key.SourceModifiedUtc), Name = key.Name ?? string.Empty };
 
@@ -164,6 +205,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
             for (var round = 0; ; round++)
             {
                 Entry stale = null;
+                Entry created = null;
+                UploadLease createdLease = default;
+                long createdPieces = 0;
 
                 lock (_lock)
                 {
@@ -193,13 +237,14 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         if (entry.Checking)
                             return new LargeFileBeginResult(LargeFileBeginOutcome.Checking, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize, CheckingRetry, null);
 
-                        if (IsLive(entry, now, limits))
+                        if (IsLive(entry, Mono(), limits))
                             return new LargeFileBeginResult(LargeFileBeginOutcome.Busy, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize,
-                                Max(entry.LeaseTouched + limits.LeaseTimeout - now, TimeSpan.FromSeconds(1)), "Another connection uploads this file.");
+                                Max(TimeSpan.FromMilliseconds(entry.LeaseTouched + (long)limits.LeaseTimeout.TotalMilliseconds - Mono()), TimeSpan.FromSeconds(1)),
+                                "Another connection uploads this file.");
 
                         if (record.PieceSize == pieceSize)
                         {
-                            if (LiveLeases(now, limits) >= limits.MaxUploadsInProgress)
+                            if (LiveLeases(Mono(), limits) >= limits.MaxUploadsInProgress)
                                 return Refused(LargeFileBeginOutcome.TooManyUploads, TooManyMessage(limits), TooManyRetry);
 
                             var lease = Grant(entry, now, maxPieceSize);
@@ -214,7 +259,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     }
                     else
                     {
-                        if (LiveLeases(now, limits) >= limits.MaxUploadsInProgress)
+                        if (LiveLeases(Mono(), limits) >= limits.MaxUploadsInProgress)
                             return Refused(LargeFileBeginOutcome.TooManyUploads, TooManyMessage(limits), TooManyRetry);
 
                         var parts = _files.Values.Count(e => !e.Removed && e.Record.ProductId == key.ProductId && e.Record.State == LargeFileState.Uploading);
@@ -236,18 +281,24 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             return Refused(LargeFileBeginOutcome.NoRoom, "Too little free space on the server for this file.", NoRoomRetry);
                         }
 
-                        return StartNew(key, extension, pieceSize, maxPieceSize, pieceCount, now);
+                        (created, createdLease) = Prepare(key, extension, pieceSize, maxPieceSize, now, clientName, remoteAddress);
+                        createdPieces = pieceCount;
                     }
                 }
 
+                if (created is not null)
+                    return CreateFiles(created, createdLease, createdPieces);
+
                 // Another piece size: the old part cannot be continued; its pieces never mix into a new file id.
                 RemoveEntry(stale, $"a begin with another piece size ({pieceSize}) replaced it", force: false,
-                    still: e => e.Record.State == LargeFileState.Uploading && !IsLive(e, Clock(), Limits));
+                    still: e => e.Record.State == LargeFileState.Uploading && !IsLive(e, Mono(), Limits));
             }
         }
 
-        // Under _lock.
-        private LargeFileBeginResult StartNew(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, long pieceCount, DateTime now)
+        // Under _lock: the entry of a new upload, registered while its files are written (pending: it holds its lease, its
+        // reservation and its place among the parts; nothing else touches it).
+        private (Entry, UploadLease) Prepare(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, DateTime now,
+            string clientName, string remoteAddress)
         {
             var record = new LargeFileRecord
             {
@@ -259,17 +310,31 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 Size = key.Size,
                 SourceModifiedUtc = key.SourceModifiedUtc,
                 SourceIdentity = key.SourceIdentity,
+                ClientName = clientName,
+                RemoteAddress = remoteAddress,
                 PieceSize = pieceSize,
                 State = LargeFileState.Uploading,
                 CreatedUtc = now,
                 LastPieceUtc = now,
             };
 
+            var entry = new Entry { Record = record, Pending = true };
+            _files[record.FileId] = entry;
+            _byKey[key] = record.FileId;
+
+            return (entry, Grant(entry, now, maxPieceSize));
+        }
+
+        // Outside _lock: the part and the index before the record (a record always has its files), then the entry is
+        // published, or taken back when a write failed.
+        private LargeFileBeginResult CreateFiles(Entry entry, UploadLease lease, long pieceCount)
+        {
+            var record = entry.Record;
+
             try
             {
-                Directory.CreateDirectory(UploadsFolder(record.ProductId));
-
-                // The part and the index before the record: a record always has its files.
+                Fault(FaultCreatingUpload);
+                EnsureFolder(UploadsFolder(record.ProductId));
                 CreateEmpty(PartPath(record));
                 CreateEmpty(IndexPath(record));
                 WriteRecord(record);
@@ -280,18 +345,41 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 TryDelete(IndexPath(record));
                 TryDelete(RecordPath(record));
 
+                lock (_lock)
+                {
+                    entry.Removed = true;
+                    _files.Remove(record.FileId);
+
+                    if (_byKey.TryGetValue(record.Key, out var id) && id == record.FileId)
+                        _byKey.Remove(record.Key);
+                }
+
                 throw Failed($"The upload of a large file could not be started in {_folder}", ex);
             }
 
-            var entry = new Entry { Record = record };
-            _files[record.FileId] = entry;
-            _byKey[key] = record.FileId;
-
-            var lease = Grant(entry, now, maxPieceSize);
+            lock (_lock)
+                entry.Pending = false;
 
             _logger.Info($"Large file upload {record.FileId:N} started: product {record.ProductId}, sensor {record.SensorId}, {record.Size} bytes in {pieceCount} pieces");
 
-            return new LargeFileBeginResult(LargeFileBeginOutcome.Started, lease, record.FileId, 0, pieceCount, pieceSize, null, null);
+            return new LargeFileBeginResult(LargeFileBeginOutcome.Started, lease, record.FileId, 0, pieceCount, record.PieceSize, null, null);
+        }
+
+        // Creates a folder and the ones above it that are missing, each made durable in its parent (Linux).
+        private void EnsureFolder(string folder)
+        {
+            if (Directory.Exists(folder))
+                return;
+
+            var parent = Path.GetDirectoryName(folder);
+
+            if (parent is not null)
+                EnsureFolder(parent);
+
+            Directory.CreateDirectory(folder);
+
+            if (parent is not null)
+                DurableFile.SyncDirectory(parent, strict: true);
         }
 
         // === Append ===
@@ -312,7 +400,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 if (refusal is not null)
                     return refusal;
 
-                entry.LeaseTouched = Clock();
+                entry.LeaseTouched = Mono();
             }
 
             lock (entry.Gate)
@@ -356,7 +444,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     if (!entry.Removed)
                         entry.Record = updated;
 
-                    entry.LeaseTouched = Clock();
+                    entry.LeaseTouched = Mono();
                 }
 
                 Statistics.Add(ref Statistics.PiecesStored);
@@ -374,7 +462,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
             var record = entry.Record;
 
-            if (!HoldsLease(entry, lease, Clock(), Limits) || entry.Checking || record.State != LargeFileState.Uploading)
+            if (!HoldsLease(entry, lease, Mono(), Limits) || entry.Checking || record.State != LargeFileState.Uploading)
                 return new LargeFileAppendResult(LargeFileAppendOutcome.LeaseLost, record.PieceCount);
 
             if (storedLength <= 0 || storedLength > MaxStoredPieceBytes(entry.MaxPieceSize))
@@ -471,7 +559,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             !entry.Removed && !entry.Checking && entry.Record.State == LargeFileState.Uploading && entry.Record.PieceCount == 0;
 
         // Under _lock.
-        private bool IsEmptyPartWithoutLease(Entry entry) => IsEmptyPart(entry) && !IsLive(entry, Clock(), Limits);
+        private bool IsEmptyPartWithoutLease(Entry entry) => IsEmptyPart(entry) && !IsLive(entry, Mono(), Limits);
 
         // Parts that received no piece and whose lease expired.
         private void RemoveEmptyPartsWithoutLease()
@@ -502,7 +590,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 if (entry.Checking && entry.LeaseId == lease.LeaseId)
                     return new LargeFileFinishTicket(LargeFileFinishStart.Checking, record.PieceCount, record, null);
 
-                if (!HoldsLease(entry, lease, Clock(), Limits) || record.State != LargeFileState.Uploading)
+                if (!HoldsLease(entry, lease, Mono(), Limits) || record.State != LargeFileState.Uploading)
                     return new LargeFileFinishTicket(LargeFileFinishStart.LeaseLost, record.PieceCount, record, null);
 
                 if (record.PieceCount < record.TotalPieces)
@@ -615,7 +703,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                 lock (_lock)
                 {
-                    if (entry.Removed || (entry.Checking && !force) || (still is not null && !still(entry)))
+                    if (entry.Removed || entry.Pending || (entry.Checking && !force) || (still is not null && !still(entry)))
                         return false;
 
                     record = entry.Record;
@@ -680,7 +768,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             lock (_lock)
             {
                 EnsureOpen();
-                return [.. _files.Values.Select(e => e.Record)];
+                return [.. _files.Values.Where(e => !e.Pending).Select(e => e.Record)];
             }
         }
 
@@ -689,7 +777,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             lock (_lock)
             {
                 EnsureOpen();
-                return [.. _files.Values.Select(e => e.Record).Where(r => r.State == state)];
+                return [.. _files.Values.Where(e => !e.Pending).Select(e => e.Record).Where(r => r.State == state)];
             }
         }
 
@@ -775,7 +863,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 }
 
                 var archiveId = Guid.NewGuid();
-                _building[archiveId] = reservation;
+                _building[archiveId] = (record.ProductId, reservation);
 
                 var target = new ArchiveTarget(fileId, archiveId, record.ArchiveId, Path.Combine(UploadsFolder(record.ProductId), archiveId.ToString("N") + ArchiveTempSuffix));
 
@@ -827,19 +915,20 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     var archives = ArchivesFolder(record.ProductId);
                     var path = ArchivePath(record.ProductId, target.ArchiveId);
 
-                    // Under _lock: the pass removes empty product folders under it.
-                    lock (_lock)
-                    {
-                        Directory.CreateDirectory(archives);
-                        DurableFile.Rename(target.TempPath, path, overwrite: false);
-                    }
-
+                    // The pass leaves the product folder alone while the build is registered (_building).
+                    Fault(FaultCommittingArchive);
+                    EnsureFolder(archives);
+                    DurableFile.Rename(target.TempPath, path, overwrite: false);
                     DurableFile.SyncDirectory(archives, strict: true);
 
                     WriteRecord(packed);
                 }
                 catch (Exception ex) when (IsFileError(ex))
                 {
+                    // The build is over: its reservation goes, and its file is no longer named (the pass removes what is left).
+                    lock (_lock)
+                        _building.Remove(target.ArchiveId);
+
                     throw Failed($"The archive {target.ArchiveId:N} of large file {target.FileId:N} could not be committed", ex);
                 }
 
@@ -954,7 +1043,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                 now = Clock();
                 limits = Limits;
-                abandoned = [.. _files.Values.Where(e => e.Record.State == LargeFileState.Uploading && !e.Checking && !IsLive(e, now, limits) &&
+                abandoned = [.. _files.Values.Where(e => !e.Pending && e.Record.State == LargeFileState.Uploading && !e.Checking && !IsLive(e, Mono(), limits) &&
                                                          e.Record.LastPieceUtc < now - limits.AbandonedUploadAge)];
                 records = [.. _files.Values.Select(e => e.Record)];
                 building = [.. _building.Keys];
@@ -968,7 +1057,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
             foreach (var entry in abandoned)
                 if (RemoveEntry(entry, $"abandoned: no piece for {limits.AbandonedUploadAge.TotalDays:0.#} days", force: false,
-                        still: e => e.Record.State == LargeFileState.Uploading && !IsLive(e, now, limits) && e.Record.LastPieceUtc < now - limits.AbandonedUploadAge))
+                        still: e => e.Record.State == LargeFileState.Uploading && !IsLive(e, Mono(), limits) && e.Record.LastPieceUtc < now - limits.AbandonedUploadAge))
                     abandonedRemoved++;
 
             var known = records.Select(r => r.FileId).ToHashSet();
@@ -1050,6 +1139,15 @@ namespace HSMDatabase.LevelDB.LargeFiles
             lock (_lock)
                 named = [.. _files.Values.SelectMany(e => e.Record.PreviousArchiveIds.Append(e.Record.ArchiveId ?? Guid.Empty)), .. _building.Keys];
 
+            HashSet<Guid> productsWithRecords;
+            string keptBecause;
+
+            lock (_lock)
+            {
+                productsWithRecords = [.. _files.Values.Select(e => e.Record.ProductId)];
+                keptBecause = _orphanArchivesKeptBecause;
+            }
+
             foreach (var product in ProductFolders(ArchivesFolderName))
             {
                 if (Guid.TryParseExact(Path.GetFileName(product), "N", out var productId) && unreadableProducts.Contains(productId))
@@ -1065,6 +1163,22 @@ namespace HSMDatabase.LevelDB.LargeFiles
                     if (written >= now - OrphanArchiveAge)
                     {
                         orphanArchivesKept++;
+                        continue;
+                    }
+
+                    // A product without any record (its uploads/ lost, a folder put back, a store opened on another folder),
+                    // or values that name files the store does not know: the archive may be the only copy of a value's file.
+                    // Kept and reported, never removed.
+                    var why = keptBecause ?? (productsWithRecords.Contains(productId) ? null : "its product has no record in the store");
+
+                    if (why is not null)
+                    {
+                        orphanArchivesKept++;
+
+                        lock (_lock)
+                            if (_orphanArchiveProductsReported.Add(productId))
+                                _logger.Warn($"The archives no record names in {product} are kept, not removed: {why}");
+
                         continue;
                     }
 
@@ -1101,6 +1215,10 @@ namespace HSMDatabase.LevelDB.LargeFiles
             if (_opened)
                 return;
 
+            // Inside the backoff the failure is answered again, not tried and not counted again.
+            if (_openFailure is not null && Mono() - _openFailedMs < (long)OpenBackoff.TotalMilliseconds)
+                throw new LargeFileStoreException(_openFailure.Message, _openFailure);
+
             try
             {
                 Load();
@@ -1112,9 +1230,13 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 _unreadable.Clear();
                 _unreadableProducts.Clear();
 
-                throw Failed($"The large file store {_folder} could not be opened", ex);
+                _openFailure = Failed($"The large file store {_folder} could not be opened", ex);
+                _openFailedMs = Mono();
+
+                throw _openFailure;
             }
 
+            _openFailure = null;
             Volatile.Write(ref _opened, true);
         }
 
@@ -1326,7 +1448,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             lock (_lock)
             {
                 EnsureOpen();
-                return _files.TryGetValue(fileId, out var entry) && !entry.Removed ? entry : null;
+                return _files.TryGetValue(fileId, out var entry) && !entry.Removed && !entry.Pending ? entry : null;
             }
         }
 
@@ -1335,30 +1457,30 @@ namespace HSMDatabase.LevelDB.LargeFiles
         {
             entry.HasLease = true;
             entry.LeaseId = Guid.NewGuid();
-            entry.LeaseTouched = now;
+            entry.LeaseTouched = Mono();
             entry.MaxPieceSize = maxPieceSize;
 
             return new UploadLease(entry.Record.FileId, entry.LeaseId);
         }
 
-        private static bool IsLive(Entry entry, DateTime now, LargeFileStoreLimits limits) =>
-            entry.HasLease && (entry.Checking || entry.LeaseTouched + limits.LeaseTimeout > now);
+        private static bool IsLive(Entry entry, long nowMs, LargeFileStoreLimits limits) =>
+            entry.HasLease && (entry.Checking || entry.Pending || nowMs - entry.LeaseTouched < (long)limits.LeaseTimeout.TotalMilliseconds);
 
-        private static bool HoldsLease(Entry entry, UploadLease lease, DateTime now, LargeFileStoreLimits limits) =>
-            entry.LeaseId == lease.LeaseId && IsLive(entry, now, limits);
+        private static bool HoldsLease(Entry entry, UploadLease lease, long nowMs, LargeFileStoreLimits limits) =>
+            !entry.Pending && entry.LeaseId == lease.LeaseId && IsLive(entry, nowMs, limits);
 
         // Under _lock.
-        private int LiveLeases(DateTime now, LargeFileStoreLimits limits) =>
-            _files.Values.Count(e => !e.Removed && e.Record.State == LargeFileState.Uploading && IsLive(e, now, limits));
+        private int LiveLeases(long nowMs, LargeFileStoreLimits limits) =>
+            _files.Values.Count(e => !e.Removed && e.Record.State == LargeFileState.Uploading && IsLive(e, nowMs, limits));
 
         // Under _lock: every upload not packed holds its announced size minus what its part holds already.
         // Under _lock: until its first pack an upload reserves what its part still needs plus room for its archive; a
         // re-encryption reserves room for its second archive until it is committed or abandoned.
         private long Reserved() =>
-            _files.Values.Where(e => e.Record.State != LargeFileState.Packed).Sum(e => ReservationOf(e.Record)) + _building.Values.Sum();
+            _files.Values.Where(e => e.Record.State != LargeFileState.Packed).Sum(e => ReservationOf(e.Record)) + _building.Values.Sum(b => b.Reservation);
 
         private static long ReservationOf(LargeFileRecord record) =>
-            Math.Max(0, record.Size - record.PartLength) + record.Size + ArchiveSlack;
+            (record.State == LargeFileState.Uploading ? Math.Max(0, record.Size - record.PartLength) : 0) + record.Size + ArchiveSlack;
 
         private long GetFreeBytes()
         {
@@ -1473,8 +1595,13 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 {
                     lock (_lock)
                     {
-                        // A begin creates the folder and its files under _lock: an empty folder seen here stays empty.
-                        if (Directory.EnumerateFileSystemEntries(product).Any())
+                        // A new upload or a build of the product writes its files outside _lock: its folder stays while either is
+                        // registered. Otherwise an empty folder seen here stays empty (nothing creates files in it without them).
+                        var productId = Guid.ParseExact(Path.GetFileName(product), "N");
+
+                        if (_files.Values.Any(e => e.Record.ProductId == productId && (e.Pending || e.Record.State != LargeFileState.Packed)) ||
+                            _building.Values.Any(b => b.Product == productId) ||
+                            Directory.EnumerateFileSystemEntries(product).Any())
                             continue;
 
                         try
@@ -1542,7 +1669,11 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
             public bool HasLease;
             public Guid LeaseId;
-            public DateTime LeaseTouched;
+            // Monotonic milliseconds (MonotonicMs).
+            public long LeaseTouched;
+
+            // A new upload whose files are being written: published by CreateFiles.
+            public bool Pending;
             public int MaxPieceSize;
         }
 

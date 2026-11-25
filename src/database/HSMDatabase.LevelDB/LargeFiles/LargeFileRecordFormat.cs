@@ -9,7 +9,8 @@ using HSMDatabase.AccessManager.LargeFiles;
 namespace HSMDatabase.LevelDB.LargeFiles
 {
     /// <summary>
-    /// The text of a <c>.rec</c> file (#1883): one JSON object, version 1. Ids in the <c>N</c> format, times as UTC
+    /// The text of a <c>.rec</c> file (#1883): one JSON object, version 1. Members added later (the client name, the remote
+    /// address) are optional: a record without them reads with null. Ids in the <c>N</c> format, times as UTC
     /// round-trip strings, hashes as lowercase hex, the state by its name. Unknown members are ignored, so a later version
     /// may add members; a missing or other version is refused.
     /// </summary>
@@ -35,6 +36,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
             Size = record.Size,
             SourceModifiedUtc = Time(record.SourceModifiedUtc),
             SourceIdentity = record.SourceIdentity,
+            ClientName = record.ClientName,
+            RemoteAddress = record.RemoteAddress,
             PieceSize = record.PieceSize,
             PieceCount = record.PieceCount,
             PartLength = record.PartLength,
@@ -80,6 +83,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 Size = dto.Size,
                 SourceModifiedUtc = ParseTime(dto.SourceModifiedUtc, "sourceModifiedUtc"),
                 SourceIdentity = dto.SourceIdentity,
+                ClientName = dto.ClientName,
+                RemoteAddress = dto.RemoteAddress,
                 PieceSize = dto.PieceSize > 0 ? dto.PieceSize : throw new FormatException($"pieceSize {dto.PieceSize}"),
                 PieceCount = dto.PieceCount >= 0 ? dto.PieceCount : throw new FormatException($"pieceCount {dto.PieceCount}"),
                 PartLength = dto.PartLength >= 0 ? dto.PartLength : throw new FormatException($"partLength {dto.PartLength}"),
@@ -136,6 +141,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
             public long Size { get; set; }
             public string SourceModifiedUtc { get; set; }
             public string SourceIdentity { get; set; }
+            public string ClientName { get; set; }
+            public string RemoteAddress { get; set; }
             public int PieceSize { get; set; }
             public long PieceCount { get; set; }
             public long PartLength { get; set; }

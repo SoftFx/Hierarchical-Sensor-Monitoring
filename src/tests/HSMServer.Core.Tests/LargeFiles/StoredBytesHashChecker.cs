@@ -3,10 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.LargeFiles;
 
-namespace HSMServer.Core.LargeFiles
+namespace HSMServer.Core.Tests.LargeFiles
 {
     /// <summary>
-    /// The end check of step 1 (#1883): SHA-256 over the stored bytes as they are, compared with the whole hash, and given
+    /// The test checker of step 1 (#1883), in the tests only (production gets its checker from the file connection, #1884):
+    /// SHA-256 over the stored bytes as they are, compared with the whole hash, and given
     /// as the content hash. For tests and for a part that is stored uncompressed; the file connection (#1884) supplies the
     /// production checker, which decompresses each piece and checks its digest.
     /// </summary>

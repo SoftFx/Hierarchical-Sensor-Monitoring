@@ -42,9 +42,27 @@ namespace HSMServer.Core.Cache
             return keepFloor > clearFloor ? keepFloor : clearFloor;
         }
 
-        /// <summary>True when the large file store has a record of the sensor (any state). Opens the store's records.</summary>
-        internal bool HasLargeFiles(BaseSensorModel sensor) =>
-            sensor is FileSensorModel && _database.LargeFiles is { } store && store.HasFiles(sensor.Id);
+        /// <summary>
+        /// Whether the large file store has a record of the sensor (any state): false for a sensor of another type without
+        /// asking the store, null with <paramref name="error"/> when the store cannot be read (it cannot tell).
+        /// </summary>
+        internal bool? HasLargeFiles(BaseSensorModel sensor, out string error)
+        {
+            error = null;
+
+            if (sensor is not FileSensorModel || _database.LargeFiles is not { } store)
+                return false;
+
+            try
+            {
+                return store.HasFiles(sensor.Id);
+            }
+            catch (LargeFileStoreException ex)
+            {
+                error = ex.Message;
+                return null;
+            }
+        }
 
 
         /// <summary>
@@ -113,7 +131,7 @@ namespace HSMServer.Core.Cache
                         return;
                     }
 
-                    if (!TryFindFreeValueTime(sensor, LargeFileClock(), out time))
+                    if (!TryFindFreeValueTime(sensor, ValueTimeFloor(sensor, LargeFileClock()), out time))
                     {
                         request.Outcome = LargeFileValueOutcome.Fault;
                         request.Error = $"No free value time was found for sensor '{sensor.FullPath}'.";
@@ -151,10 +169,26 @@ namespace HSMServer.Core.Cache
                     _logger.Warn($"Sensor '{sensor.FullPath}' did not take the large value of file {record.FileId:N} through its checks; its row was written directly");
                 }
 
-                // The write of a value row reports nothing (a failure is only logged): read it back.
+                // The alerts of a new file are delivered like any value's; a row written again from its record is an old
+                // value, shown and never alerted again.
+                if (request.RollForward)
+                    SensorUpdateView(sensor);
+                else
+                    SensorUpdateViewAndNotify(sensor);
+
+                // The write of a value row reports nothing (a failure is only logged), and the add may skip it (a late value
+                // below the history floor, a value inside an aggregated span): read it back, write it directly when missing.
                 var row = _database.GetSensorValue(sensor.Id, time.Ticks);
 
-                if (row is null || !LargeFileValue.IsLargeFileRow(row) || (sensor.Convert(row) as LargeFileValue)?.FileId != record.FileId)
+                if (row is null || !IsRowOf(sensor, row, record.FileId))
+                {
+                    SaveSensorValueToDb(value, sensor.Id);
+                    row = _database.GetSensorValue(sensor.Id, time.Ticks);
+
+                    _logger.Warn($"The value row of large file {record.FileId:N} of sensor '{sensor.FullPath}' at {time:O} was not written by the add; written directly");
+                }
+
+                if (row is null || !IsRowOf(sensor, row, record.FileId))
                 {
                     request.Outcome = LargeFileValueOutcome.Fault;
                     request.Error = $"The value row of large file {record.FileId:N} could not be written for sensor '{sensor.FullPath}' at {time:O}.";
@@ -170,6 +204,26 @@ namespace HSMServer.Core.Cache
                 request.Error = ex.Message;
                 request.Exception = ex;
             }
+        }
+
+        private static bool IsRowOf(BaseSensorModel sensor, byte[] row, Guid fileId) =>
+            LargeFileValue.IsLargeFileRow(row) && (sensor.Convert(row) as LargeFileValue)?.FileId == fileId;
+
+        // The earliest time a new large value may get: now, but above the sensor's history floor (a value below it is never
+        // stored, and the pass would take its file for one removed by retention) and after its newest value (so it is the
+        // sensor's newest value, never a late one).
+        private static DateTime ValueTimeFloor(BaseSensorModel sensor, DateTime utcNow)
+        {
+            var time = utcNow;
+            var floor = HistoryFloor(sensor, utcNow);
+
+            if (floor != DateTime.MinValue && time <= floor)
+                time = floor.AddTicks(1);
+
+            if (sensor.LastValue?.Time is { } last && time <= last)
+                time = last.AddTicks(1);
+
+            return time;
         }
 
         // Now, or the next tick with no row of the sensor: a value's key is the sensor and its time, so two files must never
@@ -287,7 +341,16 @@ namespace HSMServer.Core.Cache
 
                 foreach (var record in store.GetFiles().Where(r => r.SensorId == sensor.Id && r.State != LargeFileState.Uploading &&
                                                                    r.ValueTimeUtc is { } time && time >= from && time <= to))
+                {
+                    // The delete of the rows reports nothing: a row still there keeps its file (the pass looks again).
+                    if (_database.GetSensorValue(sensor.Id, record.ValueTimeUtc.Value.Ticks) is not null)
+                    {
+                        _logger.Warn($"The row of large file {record.FileId:N} of sensor '{sensor.FullPath}' at {record.ValueTimeUtc:O} is still there after the clear; the file is kept");
+                        continue;
+                    }
+
                     store.Remove(record.FileId, $"the history of sensor '{sensor.FullPath}' was cleared up to {to:O}");
+                }
             }
             catch (LargeFileStoreException ex)
             {

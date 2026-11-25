@@ -6,12 +6,15 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
+using System.Collections.Concurrent;
 using HSMDatabase.AccessManager.Formatters;
 using HSMDatabase.AccessManager.LargeFiles;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.LargeFiles;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
@@ -76,6 +79,8 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             await Assert.ThrowsAsync<ArgumentException>(() => _service.BeginAsync(Request(file.Path, 10) with { Name = "" }, default));
             await Assert.ThrowsAsync<ArgumentException>(() => _service.BeginAsync(Request(file.Path, 10) with { SourceIdentity = new string('x', 257) }, default));
+            await Assert.ThrowsAsync<ArgumentException>(() => _service.BeginAsync(Request(file.Path, 10) with { ClientName = new string('x', 257) }, default));
+            await Assert.ThrowsAsync<ArgumentException>(() => _service.BeginAsync(Request(file.Path, 10) with { RemoteAddress = new string('x', 257) }, default));
         }
 
         [Fact]
@@ -171,6 +176,7 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             var second = await _service.FinishAsync(begin.Lease, SHA256.HashData(content), _checker, default);
             Assert.Equal(LargeFileFinishOutcome.Checking, second.Outcome);
+            Assert.True(_service.IsChecking(begin.FileId));
             Assert.Equal(LargeFileBeginOutcome.Checking, (await BeginAsync(sensor.Path, content.Length, raw: true)).Outcome);
 
             gate.Release.SetResult();
@@ -433,6 +439,10 @@ namespace HSMServer.Core.Tests.LargeFiles
                 Name = "lost.dmp",
             });
 
+            // Not scanned while the store never took a file (the folder may come from a bind mount).
+            Assert.Equal(0, (await _service.RunPassAsync(DateTime.UtcNow, atStart: true)).RowsWithoutRecord);
+
+            Assert.Equal(LargeFileBeginOutcome.Started, (await BeginAsync(ordinary.Path, Piece, raw: true)).Outcome);
             var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: true);
 
             Assert.Equal(1, report.RowsWithoutRecord);
@@ -441,6 +451,174 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             // Only at start.
             Assert.Equal(0, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
+        }
+
+        // === After the review of the branch ===
+
+        [Fact]
+        public async Task A_file_whose_sensor_left_the_tree_but_not_the_database_is_kept_and_reported()
+        {
+            // A sensor the tree did not build at start, or whose removal failed after it left the tree: in the database still.
+            var entity = EntitiesFactory.BuildSensorEntity(name: "unloaded", parent: _product.ToString(), type: (byte)SensorType.File);
+            _databaseCoreManager.DatabaseCore.AddSensor(entity);
+            var sensorId = Guid.Parse(entity.Id);
+
+            var content = Content(Piece);
+            var begin = Store.Begin(new LargeFileUploadKey(_product, sensorId, "x.dmp", content.Length, Modified, null), "dmp", Piece, Piece);
+            Store.Append(begin.Lease, 0, content, SHA256.HashData(content));
+            Store.StartFinish(begin.Lease);
+            Store.MarkVerified(begin.FileId, SHA256.HashData(content), DateTime.UtcNow);
+            Store.EndFinish(begin.Lease);
+
+            var kept = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(0, kept.FilesRemoved);
+            Assert.NotNull(Store.TryGetFile(begin.FileId));
+            Assert.Equal(1, Store.Statistics.FilesOfUnloadedSensors);
+
+            // Gone from the database too: removed.
+            _databaseCoreManager.DatabaseCore.RemoveSensorWithMetadata(sensorId);
+            var removed = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(1, removed.FilesRemoved);
+            Assert.Null(Store.TryGetFile(begin.FileId));
+        }
+
+        [Fact]
+        public async Task A_verified_file_is_alerted_once_like_any_new_value_and_its_roll_forward_is_not_alerted_again()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var update = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = InitiatorInfo.AsSystemForce("tests"),
+                Policies =
+                [
+                    new PolicyUpdate
+                    {
+                        Id = Guid.NewGuid(),
+                        Template = "new file",
+                        Destination = new PolicyDestinationUpdate(),
+                        Conditions = [new PolicyConditionUpdate(PolicyOperation.ReceivedNewValue, PolicyProperty.NewSensorData, new TargetValue(TargetType.Const, ""))],
+                    },
+                ],
+            });
+            Assert.True(update.IsOk, update.Error);
+
+            // An alert message leaves the cache only for a product in a folder.
+            var folder = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = _product, FolderId = Guid.NewGuid() }, default);
+            Assert.True(folder.IsOk, folder.Error);
+
+            var alerts = new ConcurrentQueue<AlertMessage>();
+            void Record(AlertMessage message)
+            {
+                if (message.SensorId == sensor.Id)
+                    alerts.Enqueue(message);
+            }
+
+            _valuesCache.NewAlertMessageEvent += Record;
+
+            try
+            {
+                var verified = await UploadAsync(sensor, Content(Piece));
+                await WaitForAsync(() => !alerts.IsEmpty);
+                Assert.Single(alerts);
+
+                // The row lost and written again from the record: shown, not alerted again.
+                _databaseCoreManager.DatabaseCore.ClearSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
+                Assert.Equal(1, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RolledForward);
+                await Task.Delay(500);
+
+                Assert.Single(alerts);
+                Assert.NotNull(Store.TryGetFile(verified.FileId));
+            }
+            finally
+            {
+                _valuesCache.NewAlertMessageEvent -= Record;
+            }
+        }
+
+        [Fact]
+        public async Task A_clock_stepped_back_below_a_clear_still_gets_the_file_a_row_above_the_floor_and_the_file_stays()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var t0 = DateTime.UtcNow;
+
+            _valuesCache.LargeFileClock = () => t0;
+            var first = await UploadAsync(sensor, Content(Piece), name: "first.dmp");
+
+            // A clear up to just before it (HistoryClearedTo), then the clock steps back an hour.
+            Assert.True((await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id, t0.AddMinutes(-1)))).IsOk);
+            _valuesCache.LargeFileClock = () => t0.AddHours(-1);
+
+            var second = await UploadAsync(sensor, Content(Piece), name: "second.dmp");
+
+            Assert.True(second.ValueTimeUtc > first.ValueTimeUtc);
+            Assert.Equal(second.FileId, Assert.IsType<LargeFileValue>(sensor.LastValue).FileId);
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.NotNull(Store.TryGetFile(second.FileId));
+            Assert.Equal(2, (await ReadRowsAsync(sensor)).Count);
+        }
+
+        [Fact]
+        public async Task A_store_that_cannot_be_read_refuses_a_file_sensors_move_to_another_product_and_lets_other_sensors_move()
+        {
+            if (!OperatingSystem.IsWindows())
+                return; // the failure is made by holding a record without sharing, which Linux does not enforce
+
+            var file = await CreateFileSensorAsync("f");
+            var integer = await CreateIntSensorAsync("i");
+            var other = await _valuesCache.AddProductAsync($"other{Guid.NewGuid():N}"[..14], Guid.Empty);
+
+            var uploads = Path.Combine(Store.Folder, "uploads", _product.ToString("N"));
+            Directory.CreateDirectory(uploads);
+            var record = Path.Combine(uploads, $"{Guid.NewGuid():N}.rec");
+            File.WriteAllText(record, "{}");
+
+            using (File.Open(record, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var refused = await _valuesCache.MoveSensorAsync(file.Id, other.Id, "f");
+                Assert.Equal(SensorMoveOutcome.NotSupported, refused.Outcome);
+                Assert.Contains("cannot be read", refused.Error);
+                Assert.Equal(SensorMoveOutcome.NotSupported, _valuesCache.PreviewMove(file.Id, other.Id, "f").Outcome);
+
+                Assert.Equal(SensorMoveOutcome.Moved, (await _valuesCache.MoveSensorAsync(integer.Id, other.Id, "i")).Outcome);
+            }
+        }
+
+        [Fact]
+        public async Task A_fault_of_the_verified_record_is_counted_once()
+        {
+            if (!OperatingSystem.IsWindows())
+                return; // the record write is made to fail by holding it without sharing
+
+            var sensor = await CreateFileSensorAsync("f");
+            var content = Content(Piece);
+            var begin = await BeginAsync(sensor.Path, content.Length, raw: true);
+            await AppendAllAsync(begin.Lease, content);
+
+            var gate = new BlockingChecker(_checker);
+            var finishing = _service.FinishAsync(begin.Lease, SHA256.HashData(content), gate, default);
+            await gate.Entered.Task;
+
+            var path = Path.Combine(Store.Folder, "uploads", _product.ToString("N"), $"{begin.FileId:N}.rec");
+
+            using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                gate.Release.SetResult();
+                await Assert.ThrowsAsync<LargeFileStoreException>(() => finishing);
+            }
+
+            Assert.Equal(1, Store.Statistics.WriteFailures);
+            Assert.Equal(LargeFileState.Uploading, Store.TryGetFile(begin.FileId).State);
+        }
+
+        private static async Task WaitForAsync(Func<bool> condition)
+        {
+            for (var i = 0; i < 100 && !condition(); i++)
+                await Task.Delay(50);
         }
 
         // === Move and merge ===

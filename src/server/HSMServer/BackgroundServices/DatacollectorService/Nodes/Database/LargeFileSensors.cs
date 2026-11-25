@@ -11,14 +11,15 @@ using HSMSensorDataObjects.SensorRequests;
 namespace HSMServer.BackgroundServices
 {
     /// <summary>
-    /// Self-monitoring of the large file store (#1883), under <c>Database/Large files</c>, posted from the 5-minute
+    /// Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
     /// self-monitoring sample. Inert until the store's folder exists: a server that never took a large file creates none of
     /// these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
     /// Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
     /// </summary>
     public sealed class LargeFileSensors
     {
-        internal const string NodeName = "Database/Large files";
+        // The node of the large file store's sensors; steps 3 and 4 (#1885, #1886) add theirs to this class.
+        internal const string NodeName = "Large files";
 
         private readonly IDataCollector _collector;
         private readonly ILargeFileStore _store;
@@ -38,7 +39,8 @@ namespace HSMServer.BackgroundServices
 
         internal void SendInfo()
         {
-            if (_store is null || !_store.Exists)
+            // Not the folder: a bind mount creates it on every server. Its subtrees exist only once a file was taken.
+            if (_store is null || !_store.HasContent)
                 return;
 
             if (!_created)
@@ -68,6 +70,9 @@ namespace HSMServer.BackgroundServices
                 "Value rows of verified files written again from their records since the server started (the row was missing inside the sensor's kept history).");
             Add("Rows that disagree", () => Interlocked.Read(ref stats.RowDisagreements), true,
                 "Verified files whose value time holds another row, or whose sensor is elsewhere, found by a pass since the server started; the files are kept.");
+            Add("Files of sensors not loaded", () => Interlocked.Read(ref stats.FilesOfUnloadedSensors), true,
+                "Files a pass kept since the server started although their sensor is not in the tree, because the sensor is still in the database " +
+                "(it was not built at start, or its removal failed): they are never removed for that.");
             Add("Write failures", () => Interlocked.Read(ref stats.WriteFailures), true,
                 "Writes of the store that failed since the server started (a piece, an index, a record, a value row after a verified check): nothing was acknowledged.");
 

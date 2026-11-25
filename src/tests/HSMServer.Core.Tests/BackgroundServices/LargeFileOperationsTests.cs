@@ -98,6 +98,8 @@ public sealed class LargeFileOperationsTests : IDisposable
     {
         var sensors = new LargeFileSensors(_collector.Object, _store);
 
+        // The folder alone (a bind mount creates it on every server) is not a store that took a file.
+        Directory.CreateDirectory(_folder);
         _store.EnsureOpened();
         sensors.SendInfo();
 
@@ -109,8 +111,8 @@ public sealed class LargeFileOperationsTests : IDisposable
         sensors.SendInfo();
 
         Assert.True(sensors.IsCreated);
-        Assert.Equal(8, _sensors.Count);
-        Assert.All(_sensors.Keys, k => Assert.StartsWith("Database/Large files/", k));
+        Assert.Equal(9, _sensors.Count);
+        Assert.All(_sensors.Keys, k => Assert.StartsWith("Large files/", k));
         Assert.Equal((0, SensorStatus.Ok), Single("Refused for space"));
 
         _store.Statistics.Add(ref _store.Statistics.RefusedForSpace);

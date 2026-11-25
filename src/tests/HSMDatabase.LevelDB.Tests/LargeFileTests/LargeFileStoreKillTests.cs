@@ -89,6 +89,25 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         }
 
 
+        [Fact]
+        public void A_kill_after_the_part_flush_and_before_the_record_leaves_bytes_past_the_record_which_the_open_cuts_back()
+        {
+            // The host stops inside piece 3, between the flush of the part and the write of the record: certainly mid-piece.
+            var run = RunHost(killAfter: null, pausePiece: 3);
+
+            Assert.True(run.Paused, run.Error);
+            Assert.Equal(2, run.LastAck);
+            Assert.True(TailBeyondRecord() >= PieceSize, "the piece in flight is in the part, past the record");
+
+            var record = Check(2);
+            Assert.Equal(3, record.PieceCount);
+
+            // And the upload continues from piece 3.
+            var last = RunHost(killAfter: null);
+            Assert.True(last.Done, last.Error);
+            Assert.Equal(Pieces, Check(Pieces - 1).PieceCount);
+        }
+
         // The bytes of the part and the index beyond what the record on the disk covers, before an open cuts them.
         private long TailBeyondRecord()
         {
@@ -130,7 +149,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             return record;
         }
 
-        private HostRun RunHost(TimeSpan? killAfter)
+        private HostRun RunHost(TimeSpan? killAfter, long? pausePiece = null)
         {
             var startInfo = new ProcessStartInfo
             {
@@ -141,10 +160,15 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
                 UseShellExecute = false,
             };
 
+            if (pausePiece is { } pause)
+                startInfo.ArgumentList.Add(pause.ToString());
+
             using var process = new Process { StartInfo = startInfo };
+            var paused = false;
             var lastAck = -1L;
             var done = false;
             var firstAck = new ManualResetEventSlim();
+            var pausedEvent = new ManualResetEventSlim();
             var error = new System.Text.StringBuilder();
 
             process.OutputDataReceived += (_, e) =>
@@ -162,6 +186,11 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
                     done = true;
                     firstAck.Set();
                 }
+                else if (e.Data.StartsWith("PAUSED ", StringComparison.Ordinal))
+                {
+                    paused = true;
+                    pausedEvent.Set();
+                }
             };
             process.ErrorDataReceived += (_, e) =>
             {
@@ -174,7 +203,18 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            if (killAfter is { } delay)
+            if (pausePiece is not null)
+            {
+                // Paused for good inside the piece: the kill lands there.
+                pausedEvent.Wait(HostTimeout);
+
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException) { }
+            }
+            else if (killAfter is { } delay)
             {
                 // At least one piece in, then a moment that falls inside a piece more often than not (a piece of 1 MiB
                 // flushed twice takes a few milliseconds and more).
@@ -192,7 +232,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             process.WaitForExit(); // the output is read to its end
 
             // Read after the exit: every line the host printed before it died has been handled.
-            return new HostRun(Interlocked.Read(ref lastAck), done, error.ToString());
+            return new HostRun(Interlocked.Read(ref lastAck), done, error.ToString()) { Paused = paused };
         }
 
         private static string LocateHost()
@@ -210,6 +250,9 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         }
 
 
-        private sealed record HostRun(long LastAck, bool Done, string Error);
+        private sealed record HostRun(long LastAck, bool Done, string Error)
+        {
+            public bool Paused { get; init; }
+        }
     }
 }

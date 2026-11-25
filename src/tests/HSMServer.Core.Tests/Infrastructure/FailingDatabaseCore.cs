@@ -284,7 +284,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             OnAddSensorValue?.Invoke(sensorId, value);
             _inner.AddSensorValue(sensorId, value);
         }
-        public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.ClearSensorValues(sensorId, from, to);
+        // A delete of history rows that fails without a word, as SensorValuesDatabaseWorker's does (#1883).
+        internal bool ClearSensorValuesSilentlyFails { get; set; }
+
+        public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to)
+        {
+            if (!ClearSensorValuesSilentlyFails)
+                _inner.ClearSensorValues(sensorId, from, to);
+        }
 
         // Sensor-move merge (#1720): set to make the history copy throw, as a
         // failed write inside it does.

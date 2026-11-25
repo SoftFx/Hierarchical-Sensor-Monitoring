@@ -20,6 +20,8 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         private readonly List<LargeFileStore> _stores = [];
 
         private DateTime _now = T0;
+        // When set, the monotonic clock of leases stops following the wall clock (a step of the wall clock).
+        private long? _monotonicMs;
         private long _free = long.MaxValue / 2;
 
 
@@ -575,6 +577,240 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Empty(Directory.GetDirectories(archives.FullName));
         }
 
+        // === After the review of the branch (#1883) ===
+
+        [Fact]
+        public void A_verified_file_with_a_compressed_part_reserves_only_its_archive()
+        {
+            // Pieces of 64 KiB stored as 100 bytes each: the part holds 200 bytes of a file of 128 KiB.
+            var store = Open();
+            var begin = Begin(store, Key("a", 2 * Piece));
+            Assert.Equal(LargeFileAppendOutcome.Stored, store.Append(begin.Lease, 0, new byte[100], new byte[32]).Outcome);
+            Assert.Equal(LargeFileAppendOutcome.Stored, store.Append(begin.Lease, 1, new byte[100], new byte[32]).Outcome);
+            Assert.Equal(2 * Piece - 200 + 2 * Piece + LargeFileStore.ArchiveSlack, store.ReservedBytes);
+
+            Assert.Equal(LargeFileFinishStart.Ready, store.StartFinish(begin.Lease).Outcome);
+            store.MarkVerified(begin.FileId, new byte[32], _now);
+
+            // Nothing more comes into the part: only the archive is reserved.
+            Assert.Equal(2 * Piece + LargeFileStore.ArchiveSlack, store.ReservedBytes);
+        }
+
+        [Fact]
+        public void The_files_of_a_new_upload_and_of_an_archive_are_written_outside_the_stores_lock()
+        {
+            var store = Open();
+            var inside = new ManualResetEventSlim();
+            var release = new ManualResetEventSlim();
+
+            store.FaultHook = point =>
+            {
+                if (point is LargeFileStore.FaultCreatingUpload or LargeFileStore.FaultCommittingArchive && !release.IsSet)
+                {
+                    inside.Set();
+                    release.Wait(TimeSpan.FromSeconds(30));
+                }
+            };
+
+            var first = Task.Run(() => Begin(store, Key("slow", Piece)));
+            Assert.True(inside.Wait(TimeSpan.FromSeconds(30)));
+
+            // While its files are written: another file begins, the same file is busy, nothing is listed half-made.
+            store.FaultHook = null;
+            var other = Begin(store, Key("other", Piece));
+            Assert.Equal(LargeFileBeginOutcome.Started, other.Outcome);
+            Assert.Equal(LargeFileBeginOutcome.Busy, Begin(store, Key("slow", Piece)).Outcome);
+            Assert.Single(store.GetFiles());
+
+            release.Set();
+            Assert.Equal(LargeFileBeginOutcome.Started, first.Result.Outcome);
+            Assert.Equal(2, store.GetFiles().Count);
+
+            // A commit: its rename and record are written while a begin goes on.
+            var id = Verify(store, "packed", Content(Piece));
+            var pack = Started(store.BeginArchive(id));
+            File.WriteAllBytes(pack.TempPath, [1]);
+
+            inside.Reset();
+            release.Reset();
+            store.FaultHook = point =>
+            {
+                if (point == LargeFileStore.FaultCommittingArchive && !release.IsSet)
+                {
+                    inside.Set();
+                    release.Wait(TimeSpan.FromSeconds(30));
+                }
+            };
+
+            var commit = Task.Run(() => store.CommitArchive(pack, 1, 1, [1]));
+            Assert.True(inside.Wait(TimeSpan.FromSeconds(30)));
+            store.FaultHook = null;
+            Assert.Equal(LargeFileBeginOutcome.Started, Begin(store, Key("during", Piece)).Outcome);
+            store.RunStorePass();
+
+            release.Set();
+            Assert.Equal(ArchiveCommitOutcome.Committed, commit.Result);
+            Assert.True(File.Exists(store.ArchivePath(store.TryGetFile(id))));
+        }
+
+        [Fact]
+        public void Archives_of_a_product_without_records_or_after_values_named_unknown_files_are_kept_and_reported()
+        {
+            // An archives/ with files and no record (its uploads/ lost, or a folder put back): never removed as orphans.
+            var lost = Path.Combine(_root, "archives", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(lost);
+            var archive = Path.Combine(lost, $"{Guid.NewGuid():N}.zip");
+            File.WriteAllBytes(archive, [1]);
+            File.SetLastWriteTimeUtc(archive, _now.AddDays(-3));
+
+            var store = Open();
+            Assert.Equal(1, store.Statistics.StartDisagreements);
+
+            var report = store.RunStorePass();
+            Assert.Equal(0, report.OrphanArchivesRemoved);
+            Assert.Equal(1, report.OrphanArchivesKept);
+            Assert.True(File.Exists(archive));
+
+            // Values naming files the store does not know: no orphan is removed, also of a product with records.
+            var id = Verify(store, "a", Content(Piece));
+            var pack = Started(store.BeginArchive(id));
+            File.WriteAllBytes(pack.TempPath, [1]);
+            store.CommitArchive(pack, 1, 1, [1]);
+
+            var stray = Path.Combine(Path.GetDirectoryName(store.ArchivePath(store.TryGetFile(id)))!, $"{Guid.NewGuid():N}.zip");
+            File.WriteAllBytes(stray, [1]);
+            File.SetLastWriteTimeUtc(stray, _now.AddDays(-3));
+
+            store.KeepOrphanArchives("a test");
+            Assert.Equal(0, store.RunStorePass().OrphanArchivesRemoved);
+            Assert.True(File.Exists(stray));
+        }
+
+        [Fact]
+        public void The_store_has_content_only_once_it_took_a_file_whatever_its_folder()
+        {
+            // A bind mount creates the folder on every server.
+            Directory.CreateDirectory(_root);
+            var store = Open();
+
+            Assert.True(store.Exists);
+            Assert.False(store.HasContent);
+
+            Begin(store, Key("a", Piece));
+            Assert.True(store.HasContent);
+        }
+
+        [Fact]
+        public void A_lease_follows_the_monotonic_clock_not_the_wall_clock()
+        {
+            var store = Open();
+            var key = Key("a", 2 * Piece);
+            var begin = Begin(store, key);
+
+            // The wall clock steps a day forward: the lease is still live.
+            _monotonicMs = _now.Ticks / TimeSpan.TicksPerMillisecond;
+            _now = _now.AddDays(1);
+            Assert.Equal(LargeFileBeginOutcome.Busy, Begin(store, key).Outcome);
+
+            // The monotonic clock passes the lease timeout while the wall clock stands: expired.
+            _monotonicMs += 181_000;
+            Assert.Equal(LargeFileAppendOutcome.LeaseLost, Append(store, begin.Lease, 0, Content(Piece)).Outcome);
+        }
+
+        [Fact]
+        public void A_store_that_cannot_open_answers_the_fault_for_a_minute_without_trying_again_and_counts_it_once()
+        {
+            if (!OperatingSystem.IsWindows())
+                return; // the failure is made by holding a record without sharing, which Linux does not enforce
+
+            var uploads = Path.Combine(_root, "uploads", _product.ToString("N"));
+            Directory.CreateDirectory(uploads);
+            var locked = Path.Combine(uploads, $"{Guid.NewGuid():N}.rec");
+            File.WriteAllText(locked, "{}");
+
+            var store = new LargeFileStore(_root) { Clock = () => _now, MonotonicMs = () => _monotonicMs ?? 0, FreeBytes = () => _free };
+            _stores.Add(store);
+            _monotonicMs = 1_000;
+
+            using (File.Open(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Assert.Throws<LargeFileStoreException>(() => store.HasFiles(_sensor));
+                Assert.Throws<LargeFileStoreException>(() => store.HasFiles(_sensor));
+            }
+
+            // Inside the backoff: the same fault, not tried again, not counted again.
+            Assert.Throws<LargeFileStoreException>(() => store.GetFiles());
+            Assert.Equal(1, store.Statistics.WriteFailures);
+
+            _monotonicMs += 61_000;
+            Assert.False(store.HasFiles(_sensor));
+            Assert.Equal(1, store.Statistics.StartDisagreements); // the record "{}" cannot be read: reported, kept
+        }
+
+        [Fact]
+        public void A_commit_that_fails_ends_its_build_its_reservation_and_leaves_its_temporary_file_to_the_pass()
+        {
+            var store = Open();
+            var id = Verify(store, "a", Content(Piece));
+            var pack = Started(store.BeginArchive(id));
+            File.WriteAllBytes(pack.TempPath, new byte[10]);
+            store.CommitArchive(pack, 1, 10, [1]);
+
+            var again = Started(store.BeginArchive(id));
+            Assert.Equal(10 + LargeFileStore.ArchiveSlack, store.ReservedBytes);
+            File.WriteAllBytes(again.TempPath, [2]);
+
+            // The rename cannot happen: something already stands where the archive goes.
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(store.ArchivePath(store.TryGetFile(id)))!, $"{again.ArchiveId:N}.zip"));
+
+            Assert.Throws<LargeFileStoreException>(() => store.CommitArchive(again, 2, 1, [2]));
+            Assert.Equal(0, store.ReservedBytes);
+            Assert.Equal(pack.ArchiveId, store.TryGetFile(id).ArchiveId);
+
+            Assert.Equal(1, store.RunStorePass().LeftoversRemoved);
+            Assert.False(File.Exists(again.TempPath));
+        }
+
+        [Fact]
+        public void Where_a_file_came_from_is_kept_in_its_record_from_its_begin_and_an_older_record_without_it_still_reads()
+        {
+            var store = Open();
+            var begin = store.Begin(Key("a", 2 * Piece), null, Piece, Piece, "collector-1", "10.0.0.7");
+            Append(store, begin.Lease, 0, Content(Piece));
+            store.Release(begin.Lease);
+
+            // A continue from elsewhere keeps the record's origin.
+            Assert.Equal(LargeFileBeginOutcome.Continue, store.Begin(Key("a", 2 * Piece), null, Piece, Piece, "collector-2", "10.0.0.8").Outcome);
+            store.Dispose();
+
+            var record = Open().TryGetFile(begin.FileId);
+            Assert.Equal("collector-1", record.ClientName);
+            Assert.Equal("10.0.0.7", record.RemoteAddress);
+
+            // A record written before the members existed.
+            var text = File.ReadAllText(PathOf(begin.FileId, ".rec"));
+            Assert.Contains("clientName", text);
+            var older = LargeFileRecordFormat.Read(text.Replace("\"clientName\":\"collector-1\",", "").Replace(",\"remoteAddress\":\"10.0.0.7\"", "").Replace("\"remoteAddress\":\"10.0.0.7\",", ""));
+            Assert.Null(older.ClientName);
+            Assert.Null(older.RemoteAddress);
+            Assert.Equal(begin.FileId, older.FileId);
+        }
+
+        [Fact]
+        public void A_file_is_being_checked_from_the_start_of_its_finish_to_its_end()
+        {
+            var store = Open();
+            var begin = Begin(store, Key("a", Piece));
+            Append(store, begin.Lease, 0, Content(Piece));
+
+            Assert.False(store.IsChecking(begin.FileId));
+            store.StartFinish(begin.Lease);
+            Assert.True(store.IsChecking(begin.FileId));
+            store.EndFinish(begin.Lease);
+            Assert.False(store.IsChecking(begin.FileId));
+            Assert.False(store.IsChecking(Guid.NewGuid()));
+        }
+
         [Fact]
         public void An_archive_no_record_names_is_removed_by_the_pass_once_a_day_old()
         {
@@ -986,6 +1222,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             var store = new LargeFileStore(_root)
             {
                 Clock = () => _now,
+                MonotonicMs = () => _monotonicMs ?? _now.Ticks / TimeSpan.TicksPerMillisecond,
                 FreeBytes = () => _free,
                 Limits = limits ?? new LargeFileStoreLimits(),
             };

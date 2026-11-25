@@ -48,6 +48,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>An optional opaque identity of the source file (a file id, an inode); part of the upload key.</summary>
         public string SourceIdentity { get; init; }
 
+        /// <summary>Where the file came from: the client name of the session that began the upload (optional, at most 256 characters).</summary>
+        public string ClientName { get; init; }
+
+        /// <summary>Where the file came from: the remote address of that session (optional, at most 256 characters).</summary>
+        public string RemoteAddress { get; init; }
+
         /// <summary>Original bytes per piece; the last piece holds the remainder.</summary>
         public int PieceSize { get; init; }
 
@@ -347,6 +353,9 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>A row at a large value's time that is not that value, found by a pass.</summary>
         public long RowDisagreements;
 
+        /// <summary>Files kept by a pass although their sensor is not in the tree, because the sensor is still in the database.</summary>
+        public long FilesOfUnloadedSensors;
+
         /// <summary>Writes of the store that failed (a part, an index, a record, a value row after a verified finish).</summary>
         public long WriteFailures;
 
@@ -392,6 +401,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>True when the folder exists on disk (nothing is opened).</summary>
         bool Exists { get; }
 
+        /// <summary>
+        /// True when <c>uploads/</c> or <c>archives/</c> exists: the store took a file at some time. The folder itself may
+        /// exist on every server (a bind mount creates it).
+        /// </summary>
+        bool HasContent { get; }
+
         /// <summary>True once the records were read in this process.</summary>
         bool IsOpened { get; }
 
@@ -408,16 +423,29 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>Raised after a file became verified and its value row was written (<see cref="PublishVerified"/>). Not durable.</summary>
         event Action<LargeFileRecord> FileVerified;
 
-        /// <summary>Reads the records if they were not read yet (the check at open). Creates nothing.</summary>
+        /// <summary>
+        /// Reads the records if they were not read yet (the check at open). Creates nothing. A failed open is answered again
+        /// for a minute without a new attempt (and counted once).
+        /// </summary>
         void EnsureOpened();
 
         /// <summary>
-        /// Begins or continues the upload of a file. The caller has checked the sensor and the name (1..1,024 characters)
-        /// and the source identity (at most 256 characters). <paramref name="pieceSize"/> is the original bytes per piece,
+        /// From now on the pass keeps archive files no record names instead of removing them: called when values name files
+        /// the store has no record of, since such an archive may be the only copy of one. Not durable.
+        /// </summary>
+        void KeepOrphanArchives(string reason);
+
+        /// <summary>
+        /// Begins or continues the upload of a file. The caller has checked the sensor and the name (1..1,024 characters),
+        /// the source identity, the client name and the remote address (each at most 256 characters). The client name and
+        /// the remote address are kept in the record of a new upload; a continue keeps the record's. <paramref name="pieceSize"/> is the original bytes per piece,
         /// within 65,536 .. <paramref name="maxPieceSize"/>. A new upload must find room for its whole reservation: the
         /// announced size for the part and the announced size + 1 MiB for its archive.
         /// </summary>
-        LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize);
+        LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null);
+
+        /// <summary>True while the end check of the file runs (a finish between its start and its end).</summary>
+        bool IsChecking(Guid fileId);
 
         /// <summary>
         /// Appends piece <paramref name="pieceNumber"/>: the bytes to the part, the entry to the index, both flushed to the

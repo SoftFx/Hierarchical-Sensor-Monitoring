@@ -47,6 +47,8 @@ namespace HSMServer.Core.LargeFiles
     /// a registration stores, looked up byte for byte in root product <paramref name="ProductId"/> (the product of the
     /// access key). <paramref name="Name"/> is shown and used as an archive entry name, never as a path on the server.
     /// <paramref name="SourceIdentity"/> is optional and opaque (a file id, an inode), at most 256 characters.
+    /// <paramref name="ClientName"/> and <paramref name="RemoteAddress"/> say where the file came from (the session's client
+    /// name and remote address): optional, at most 256 characters each, kept in the record of a new upload only.
     /// </summary>
     public sealed record LargeFileBeginRequest(
         Guid ProductId,
@@ -56,7 +58,9 @@ namespace HSMServer.Core.LargeFiles
         DateTime SourceModifiedUtc,
         string SourceIdentity,
         int PieceSize,
-        int MaxPieceSize);
+        int MaxPieceSize,
+        string ClientName = null,
+        string RemoteAddress = null);
 
 
     /// <summary>
@@ -69,8 +73,8 @@ namespace HSMServer.Core.LargeFiles
     public interface ILargeFileUploads
     {
         /// <summary>
-        /// Begins or continues an upload. The name has 1..1,024 characters and the source identity at most 256
-        /// (<see cref="ArgumentException"/> otherwise); the piece size is within 65,536 .. <c>MaxPieceSize</c> (a refusal).
+        /// Begins or continues an upload. The name has 1..1,024 characters, the source identity, the client name and the
+        /// remote address at most 256 each (<see cref="ArgumentException"/> otherwise); the piece size is within 65,536 .. <c>MaxPieceSize</c> (a refusal).
         /// </summary>
         Task<LargeFileBeginResult> BeginAsync(LargeFileBeginRequest request, CancellationToken ct);
 
@@ -86,6 +90,9 @@ namespace HSMServer.Core.LargeFiles
 
         /// <summary>Ends a lease when the connection ends; idempotent; a stale lease is ignored.</summary>
         void Release(UploadLease lease);
+
+        /// <summary>True while the end check of the file runs ("being checked").</summary>
+        bool IsChecking(Guid fileId);
 
         /// <summary>
         /// Checks the stored pieces with <paramref name="checker"/> (<paramref name="wholeHash"/>, 32 bytes, is only its
@@ -121,6 +128,7 @@ namespace HSMServer.Core.LargeFiles
     {
         public const int MaxNameLength = 1024;
         public const int MaxSourceIdentityLength = 256;
+        public const int MaxOriginLength = 256;
 
         private static readonly Logger _logger = LogManager.GetLogger("LargeFiles");
 
@@ -153,6 +161,9 @@ namespace HSMServer.Core.LargeFiles
             if (request.SourceIdentity?.Length > MaxSourceIdentityLength)
                 throw new ArgumentException($"A source identity has at most {MaxSourceIdentityLength} characters.", nameof(request));
 
+            if (request.ClientName?.Length > MaxOriginLength || request.RemoteAddress?.Length > MaxOriginLength)
+                throw new ArgumentException($"A client name and a remote address have at most {MaxOriginLength} characters.", nameof(request));
+
             ct.ThrowIfCancellationRequested();
 
             if (!TryResolveSensor(request.ProductId, request.SensorPath, out var sensor, out var error))
@@ -160,7 +171,7 @@ namespace HSMServer.Core.LargeFiles
 
             var key = new LargeFileUploadKey(request.ProductId, sensor.Id, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity);
 
-            return Task.FromResult(Store.Begin(key, ExtensionOf(request.Name), request.PieceSize, request.MaxPieceSize));
+            return Task.FromResult(Store.Begin(key, ExtensionOf(request.Name), request.PieceSize, request.MaxPieceSize, request.ClientName, request.RemoteAddress));
         }
 
         public Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct)
@@ -178,6 +189,8 @@ namespace HSMServer.Core.LargeFiles
         }
 
         public void Release(UploadLease lease) => Store.Release(lease);
+
+        public bool IsChecking(Guid fileId) => Store.IsChecking(fileId);
 
         public async Task<LargeFileFinishResult> FinishAsync(UploadLease lease, byte[] wholeHash, ILargeFilePartChecker checker, CancellationToken ct)
         {
@@ -240,8 +253,11 @@ namespace HSMServer.Core.LargeFiles
 
                     default:
                         // The record may say Verified already: then the store's pass writes the row again from it, and a Begin of
-                        // the file answers AlreadyStored. Either way nothing is acknowledged now.
-                        store.Statistics.Add(ref store.Statistics.WriteFailures);
+                        // the file answers AlreadyStored. Either way nothing is acknowledged now. A fault of the store counted
+                        // itself; the row's is counted here.
+                        if (value.Exception is not LargeFileStoreException)
+                            store.Statistics.Add(ref store.Statistics.WriteFailures);
+
                         _logger.Error(value.Exception, $"The value of large file {record.FileId:N} could not be written: {value.Error}");
                         throw new LargeFileStoreException($"The value of large file {record.FileId:N} could not be written: {value.Error}", value.Exception);
                 }
@@ -281,7 +297,12 @@ namespace HSMServer.Core.LargeFiles
 
             store.EnsureOpened();
 
-            var rowsWithoutRecord = atStart ? await ReportRowsWithoutRecordAsync(token) : 0;
+            // Only on a server that ever took a large file: the folder alone may come from a bind mount.
+            var rowsWithoutRecord = atStart && store.HasContent ? await ReportRowsWithoutRecordAsync(token) : 0;
+
+            // A value naming a file the store does not know: an archive no record names may be that file.
+            if (rowsWithoutRecord > 0)
+                store.KeepOrphanArchives($"{rowsWithoutRecord} large values name files the store has no record of");
 
             if (!store.Exists)
                 return new LargeFilePassReport { RowsWithoutRecord = rowsWithoutRecord };
@@ -293,11 +314,26 @@ namespace HSMServer.Core.LargeFiles
             var alive = new List<LargeFileRecord>();
 
             // A sensor that is gone never comes back under its id: decided without the queue (its product may be gone too).
+            // Gone means gone from the database: a sensor the tree did not build at start, or whose removal failed halfway,
+            // keeps its files (reported), since they may be the only copies.
+            HashSet<Guid> stored = null;
+
             foreach (var record in records)
             {
                 if (_cache.GetSensor(record.SensorId) is not null)
                 {
                     alive.Add(record);
+                    continue;
+                }
+
+                stored ??= StoredSensorIds();
+
+                if (stored is null || stored.Contains(record.SensorId))
+                {
+                    notChecked++;
+                    stats.Add(ref stats.FilesOfUnloadedSensors);
+                    _logger.Warn($"Large file {record.FileId:N} ({record.State}) is kept: its sensor {record.SensorId} is not in the tree, " +
+                                 (stored is null ? "and the sensors in the database could not be read" : "but it is still in the database (not loaded at start, or a removal that failed)"));
                     continue;
                 }
 
@@ -330,6 +366,25 @@ namespace HSMServer.Core.LargeFiles
                     switch (verdict.Kind)
                     {
                         case LargeFileVerdictKind.SensorGone:
+                            stored ??= StoredSensorIds();
+
+                            if (stored is null || stored.Contains(record.SensorId))
+                            {
+                                notChecked++;
+                                stats.Add(ref stats.FilesOfUnloadedSensors);
+                                _logger.Warn($"Large file {record.FileId:N} ({record.State}) is kept: its sensor {record.SensorId} left the tree but is still in the database");
+                                break;
+                            }
+
+                            if (store.Remove(record.FileId, verdict.Reason))
+                            {
+                                if (record.State == LargeFileState.Uploading)
+                                    partsRemoved++;
+                                else
+                                    filesRemoved++;
+                            }
+                            break;
+
                         case LargeFileVerdictKind.ValueGone:
                             if (store.Remove(record.FileId, verdict.Reason))
                             {
@@ -378,6 +433,20 @@ namespace HSMServer.Core.LargeFiles
                              $"{storeReport.OrphanPartsKept} parts without a record kept, {storeReport.LeftoversRemoved} leftovers removed, {notChecked} not checked");
 
             return report;
+        }
+
+        // The ids of the sensors in the database; null when they cannot be read.
+        private HashSet<Guid> StoredSensorIds()
+        {
+            try
+            {
+                return [.. _database.GetAllSensors().Select(s => Guid.Parse(s.Id))];
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "The sensors in the database could not be read; no large file of a sensor missing from the tree is removed");
+                return null;
+            }
         }
 
         // The rows of File sensors that hold a large value whose file has no record. A row is recognised by its union tag
