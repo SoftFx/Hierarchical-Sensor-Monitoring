@@ -759,7 +759,7 @@ namespace HSMServer.Core.Cache
             {
                 false => null,
                 true => new(SensorMoveOutcome.NotSupported,
-                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) holds large files: it cannot be moved to another product.") { OldPath = sensor.FullPath },
+                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) holds large files: it cannot be moved to another product. The files leave with the sensor's history period or with clear-history.") { OldPath = sensor.FullPath },
                 null => new(SensorMoveOutcome.NotSupported,
                     $"Sensor '{sensor.FullPath}' (id {sensor.Id}) is a File sensor and the large file store cannot be read ({error}): it is not moved to another product until it can.") { OldPath = sensor.FullPath },
             };
@@ -776,7 +776,7 @@ namespace HSMServer.Core.Cache
 
             return first == true || second == true
                 ? new(SensorMoveOutcome.NotSupported,
-                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) or '{occupant.FullPath}' (id {occupant.Id}) holds large files: sensors with large files are never merged.") { OldPath = sensor.FullPath }
+                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) or '{occupant.FullPath}' (id {occupant.Id}) holds large files: sensors with large files are never merged. The files leave with the sensor's history period or with clear-history.") { OldPath = sensor.FullPath }
                 : new(SensorMoveOutcome.NotSupported,
                     $"Sensors '{sensor.FullPath}' and '{occupant.FullPath}' are File sensors and the large file store cannot be read ({error ?? otherError}): they are not merged until it can.") { OldPath = sensor.FullPath };
         }

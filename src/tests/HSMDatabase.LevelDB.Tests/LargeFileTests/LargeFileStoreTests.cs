@@ -801,16 +801,23 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         {
             var store = Open();
 
-            var open = store.Begin(Key("open.zip", 2 * Piece), null, Piece, Piece, secure: false);
+            var open = store.Begin(Key("open.zip", 2 * Piece) with { Secure = false }, null, Piece, Piece, status: HSMCommon.Model.SensorStatus.Error, comment: "routed");
             Assert.False(open.Secure);
             Append(store, open.Lease, 0, Content(Piece));
             store.Release(open.Lease);
 
-            // A begin of the same file with the other mark continues it with the record's mark.
-            var continued = store.Begin(Key("open.zip", 2 * Piece), null, Piece, Piece, secure: true);
+            // The same mark continues it; the other mark is another upload, from piece 0 under a new file id.
+            var continued = store.Begin(Key("open.zip", 2 * Piece) with { Secure = false }, null, Piece, Piece);
             Assert.Equal(LargeFileBeginOutcome.Continue, continued.Outcome);
             Assert.Equal(open.FileId, continued.FileId);
             Assert.False(continued.Secure);
+            store.Release(continued.Lease);
+
+            var other = store.Begin(Key("open.zip", 2 * Piece), null, Piece, Piece);
+            Assert.Equal(LargeFileBeginOutcome.Started, other.Outcome);
+            Assert.NotEqual(open.FileId, other.FileId);
+            Assert.True(other.Secure);
+            Append(store, other.Lease, 0, Content(Piece));
 
             var dump = Begin(store, Key("app.dmp", Piece));
             Assert.True(dump.Secure);
@@ -819,16 +826,30 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             store.Dispose();
 
             var reopened = Open();
-            Assert.False(reopened.TryGetFile(open.FileId).Secure);
+            var openRecord = reopened.TryGetFile(open.FileId);
+            Assert.False(openRecord.Secure);
+            Assert.Equal(HSMCommon.Model.SensorStatus.Error, openRecord.Status);
+            Assert.Equal("routed", openRecord.Comment);
             Assert.True(reopened.TryGetFile(dump.FileId).Secure);
+            Assert.Equal(HSMCommon.Model.SensorStatus.Ok, reopened.TryGetFile(dump.FileId).Status);
+            Assert.Null(reopened.TryGetFile(dump.FileId).Comment);
+
+            // The mark is kept across the restart and a continue.
+            var again = reopened.Begin(Key("open.zip", 2 * Piece) with { Secure = false }, null, Piece, Piece);
+            Assert.Equal(LargeFileBeginOutcome.Continue, again.Outcome);
+            Assert.False(again.Secure);
 
             // A record written before the mark existed: secure (fail closed).
             var text = File.ReadAllText(PathOf(open.FileId, ".rec"));
             Assert.Contains("\"secure\":false", text);
-            Assert.True(LargeFileRecordFormat.Read(text.Replace(",\"secure\":false", "").Replace("\"secure\":false,", "")).Secure);
+            var older = LargeFileRecordFormat.Read(text.Replace(",\"secure\":false", "").Replace("\"secure\":false,", "")
+                .Replace(",\"status\":\"Error\"", "").Replace(",\"comment\":\"routed\"", ""));
+            Assert.True(older.Secure);
+            Assert.Equal(HSMCommon.Model.SensorStatus.Ok, older.Status);
+            Assert.Null(older.Comment);
         }
 
-        private LargeFileBeginResult Refused(LargeFileStore store) => store.Begin(Key("negative", -1), null, Piece, Piece, secure: false);
+        private LargeFileBeginResult Refused(LargeFileStore store) => store.Begin(Key("negative", -1) with { Secure = false }, null, Piece, Piece);
 
         [Fact]
         public void A_file_is_being_checked_from_the_start_of_its_finish_to_its_end()

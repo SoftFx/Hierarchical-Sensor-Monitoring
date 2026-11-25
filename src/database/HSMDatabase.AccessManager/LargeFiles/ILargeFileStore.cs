@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMCommon.Model;
 
 namespace HSMDatabase.AccessManager.LargeFiles
 {
@@ -60,6 +61,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// </summary>
         public bool Secure { get; init; } = true;
 
+        /// <summary>The status the value gets when the file is verified (a routed ordinary send keeps its own); Ok by default.</summary>
+        public SensorStatus Status { get; init; } = SensorStatus.Ok;
+
+        /// <summary>The comment the value gets (sanitized at the begin, at most 1,024 characters); null by default.</summary>
+        public string Comment { get; init; }
+
         /// <summary>Original bytes per piece; the last piece holds the remainder.</summary>
         public int PieceSize { get; init; }
 
@@ -97,15 +104,17 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>The number of pieces the whole file has: ceil(Size / PieceSize).</summary>
         public long TotalPieces => PieceSize <= 0 ? 0 : (Size + PieceSize - 1) / PieceSize;
 
-        public LargeFileUploadKey Key => new(ProductId, SensorId, Name, Size, SourceModifiedUtc, SourceIdentity);
+        public LargeFileUploadKey Key => new(ProductId, SensorId, Name, Size, SourceModifiedUtc, SourceIdentity, Secure);
     }
 
 
     /// <summary>
     /// What makes two uploads the same file, across restarts of either side. A null <see cref="SourceIdentity"/> matches only
-    /// a null one; names and identities compare ordinally. The piece size is not part of it.
+    /// a null one; names and identities compare ordinally. The secure mark is part of it: the same file with the other mark is
+    /// another upload (the old part expires as any abandoned part). The piece size is not part of it.
     /// </summary>
-    public readonly record struct LargeFileUploadKey(Guid ProductId, Guid SensorId, string Name, long Size, DateTime SourceModifiedUtc, string SourceIdentity);
+    public readonly record struct LargeFileUploadKey(Guid ProductId, Guid SensorId, string Name, long Size, DateTime SourceModifiedUtc, string SourceIdentity,
+        bool Secure = true);
 
 
     /// <summary>The right to append to one part, held in memory by one connection (not durable: a restart frees every lease).</summary>
@@ -166,10 +175,7 @@ namespace HSMDatabase.AccessManager.LargeFiles
         TimeSpan? RetryAfter,
         string Error)
     {
-        /// <summary>
-        /// The record's mark (secure or not): the begin's on Started, the record's on Continue, AlreadyStored, Checking and
-        /// Busy (it never changes, whatever a later begin says), true for a refusal.
-        /// </summary>
+        /// <summary>The record's mark (secure or not; part of the upload key): true for a refusal.</summary>
         public bool Secure { get; init; } = true;
     }
 
@@ -456,7 +462,7 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// announced size for the part and the announced size + 1 MiB for its archive.
         /// </summary>
         LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null,
-            bool secure = true);
+            SensorStatus status = SensorStatus.Ok, string comment = null);
 
         /// <summary>True while the end check of the file runs (a finish between its start and its end).</summary>
         bool IsChecking(Guid fileId);

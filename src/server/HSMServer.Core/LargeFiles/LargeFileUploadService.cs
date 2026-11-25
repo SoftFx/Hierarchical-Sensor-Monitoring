@@ -50,8 +50,10 @@ namespace HSMServer.Core.LargeFiles
     /// <paramref name="ClientName"/> and <paramref name="RemoteAddress"/> say where the file came from (the session's client
     /// name and remote address): optional, at most 256 characters each, kept in the record of a new upload only.
     /// <paramref name="Secure"/> is the mark the application sets at the send (secure by default: a dump, its archive under
-    /// the product's dump password; or not: the same zip without a password): kept in the record of a new upload and never
-    /// changed; a later begin of the same file gets the record's mark back in its result.
+    /// the product's dump password; or not: the same zip without a password). It is part of the upload's key: the same file
+    /// with the other mark is another upload. <paramref name="Status"/> and <paramref name="Comment"/> are what the value gets
+    /// (a routed ordinary send keeps its own; Ok and none by default); the comment is sanitized as every value's comment and
+    /// has at most 1,024 characters. All of them are kept in the record of a new upload; a continue keeps the record's.
     /// </summary>
     public sealed record LargeFileBeginRequest(
         Guid ProductId,
@@ -64,7 +66,9 @@ namespace HSMServer.Core.LargeFiles
         int MaxPieceSize,
         string ClientName = null,
         string RemoteAddress = null,
-        bool Secure = true);
+        bool Secure = true,
+        SensorStatus Status = SensorStatus.Ok,
+        string Comment = null);
 
 
     /// <summary>
@@ -133,6 +137,7 @@ namespace HSMServer.Core.LargeFiles
         public const int MaxNameLength = 1024;
         public const int MaxSourceIdentityLength = 256;
         public const int MaxOriginLength = 256;
+        public const int MaxCommentLength = 1024;
 
         private static readonly Logger _logger = LogManager.GetLogger("LargeFiles");
 
@@ -168,14 +173,21 @@ namespace HSMServer.Core.LargeFiles
             if (request.ClientName?.Length > MaxOriginLength || request.RemoteAddress?.Length > MaxOriginLength)
                 throw new ArgumentException($"A client name and a remote address have at most {MaxOriginLength} characters.", nameof(request));
 
+            if (request.Comment?.Length > MaxCommentLength)
+                throw new ArgumentException($"A comment has at most {MaxCommentLength} characters.", nameof(request));
+
+            if (!Enum.IsDefined(request.Status))
+                throw new ArgumentException($"The status {request.Status} is not a sensor status.", nameof(request));
+
             ct.ThrowIfCancellationRequested();
 
             if (!TryResolveSensor(request.ProductId, request.SensorPath, out var sensor, out var error))
                 return Task.FromResult(new LargeFileBeginResult(LargeFileBeginOutcome.SensorRefused, default, Guid.Empty, 0, 0, 0, null, error));
 
-            var key = new LargeFileUploadKey(request.ProductId, sensor.Id, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity);
+            var key = new LargeFileUploadKey(request.ProductId, sensor.Id, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity, request.Secure);
+            var comment = request.Comment is null ? null : Services.HtmlSanitizerService.SanitizeText(request.Comment);
 
-            return Task.FromResult(Store.Begin(key, ExtensionOf(request.Name), request.PieceSize, request.MaxPieceSize, request.ClientName, request.RemoteAddress, request.Secure));
+            return Task.FromResult(Store.Begin(key, ExtensionOf(request.Name), request.PieceSize, request.MaxPieceSize, request.ClientName, request.RemoteAddress, request.Status, comment));
         }
 
         public Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct)

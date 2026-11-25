@@ -4,13 +4,15 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HSMCommon.Model;
 using HSMDatabase.AccessManager.LargeFiles;
 
 namespace HSMDatabase.LevelDB.LargeFiles
 {
     /// <summary>
     /// The text of a <c>.rec</c> file (#1883): one JSON object, version 1. Members added later are optional: a record without
-    /// the client name or the remote address reads with null, one without the secure mark reads as secure (fail closed). Ids in the <c>N</c> format, times as UTC
+    /// the client name, the remote address or the comment reads with null, one without the secure mark reads as secure (fail
+    /// closed), one without the status reads as Ok (written only when it is not Ok). Ids in the <c>N</c> format, times as UTC
     /// round-trip strings, hashes as lowercase hex, the state by its name. Unknown members are ignored, so a later version
     /// may add members; a missing or other version is refused.
     /// </summary>
@@ -39,6 +41,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
             ClientName = record.ClientName,
             RemoteAddress = record.RemoteAddress,
             Secure = record.Secure,
+            Status = record.Status == SensorStatus.Ok ? null : record.Status.ToString(),
+            Comment = record.Comment,
             PieceSize = record.PieceSize,
             PieceCount = record.PieceCount,
             PartLength = record.PartLength,
@@ -88,6 +92,10 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 RemoteAddress = dto.RemoteAddress,
                 // Fail closed: a record without the mark is secure.
                 Secure = dto.Secure ?? true,
+                Status = dto.Status is null ? SensorStatus.Ok
+                    : Enum.TryParse<SensorStatus>(dto.Status, out var status) && Enum.IsDefined(status) ? status
+                    : throw new FormatException($"unknown status '{dto.Status}'"),
+                Comment = dto.Comment,
                 PieceSize = dto.PieceSize > 0 ? dto.PieceSize : throw new FormatException($"pieceSize {dto.PieceSize}"),
                 PieceCount = dto.PieceCount >= 0 ? dto.PieceCount : throw new FormatException($"pieceCount {dto.PieceCount}"),
                 PartLength = dto.PartLength >= 0 ? dto.PartLength : throw new FormatException($"partLength {dto.PartLength}"),
@@ -147,6 +155,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
             public string ClientName { get; set; }
             public string RemoteAddress { get; set; }
             public bool? Secure { get; set; }
+            public string Status { get; set; }
+            public string Comment { get; set; }
             public int PieceSize { get; set; }
             public long PieceCount { get; set; }
             public long PartLength { get; set; }

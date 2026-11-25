@@ -147,7 +147,9 @@ namespace HSMServer.Core.Cache
                 {
                     Time = time,
                     ReceivingTime = time,
-                    Status = SensorStatus.Ok,
+                    // What the begin said (a routed ordinary send keeps its status and comment), also on a roll-forward.
+                    Status = record.Status,
+                    Comment = record.Comment,
                     Value = [],
                     Name = record.Name,
                     Extension = record.Extension,

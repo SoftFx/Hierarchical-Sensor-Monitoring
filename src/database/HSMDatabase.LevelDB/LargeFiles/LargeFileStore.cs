@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using HSMCommon.Model;
 using HSMDatabase.AccessManager.LargeFiles;
 using HSMDatabase.LevelDB.Sealed;
 using NLog;
@@ -196,7 +197,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
         }
 
         public LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null,
-            bool secure = true)
+            SensorStatus status = SensorStatus.Ok, string comment = null)
         {
             key = key with { SourceModifiedUtc = AsUtc(key.SourceModifiedUtc), Name = key.Name ?? string.Empty };
 
@@ -282,7 +283,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             return Refused(LargeFileBeginOutcome.NoRoom, "Too little free space on the server for this file.", NoRoomRetry);
                         }
 
-                        (created, createdLease) = Prepare(key, extension, pieceSize, maxPieceSize, now, clientName, remoteAddress, secure);
+                        (created, createdLease) = Prepare(key, extension, pieceSize, maxPieceSize, now, clientName, remoteAddress, status, comment);
                         createdPieces = pieceCount;
                     }
                 }
@@ -299,7 +300,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
         // Under _lock: the entry of a new upload, registered while its files are written (pending: it holds its lease, its
         // reservation and its place among the parts; nothing else touches it).
         private (Entry, UploadLease) Prepare(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, DateTime now,
-            string clientName, string remoteAddress, bool secure)
+            string clientName, string remoteAddress, SensorStatus status, string comment)
         {
             var record = new LargeFileRecord
             {
@@ -313,7 +314,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 SourceIdentity = key.SourceIdentity,
                 ClientName = clientName,
                 RemoteAddress = remoteAddress,
-                Secure = secure,
+                Secure = key.Secure,
+                Status = status,
+                Comment = comment,
                 PieceSize = pieceSize,
                 State = LargeFileState.Uploading,
                 CreatedUtc = now,

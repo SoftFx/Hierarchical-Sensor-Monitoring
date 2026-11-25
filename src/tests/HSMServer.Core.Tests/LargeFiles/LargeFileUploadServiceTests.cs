@@ -615,6 +615,46 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Equal(LargeFileState.Uploading, Store.TryGetFile(begin.FileId).State);
         }
 
+        [Fact]
+        public async Task The_status_and_the_sanitized_comment_of_the_begin_go_into_the_value_also_on_a_roll_forward()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var content = Content(Piece);
+
+            await Assert.ThrowsAsync<ArgumentException>(() => _service.BeginAsync(Request(sensor.Path, 10) with { Comment = new string('x', 1025) }, default));
+
+            var begin = await _service.BeginAsync(Request(sensor.Path, content.Length) with
+            {
+                Secure = false,
+                Status = SensorStatus.Error,
+                Comment = "crash 7<script>alert(1)</script>",
+            }, default);
+            Assert.False(begin.Secure);
+            await AppendAllAsync(begin.Lease, content);
+            var finish = await _service.FinishAsync(begin.Lease, SHA256.HashData(content), _checker, default);
+
+            var record = Store.TryGetFile(finish.FileId);
+            Assert.False(record.Secure);
+            Assert.Null(record.PasswordVersion);
+            Assert.Equal(SensorStatus.Error, record.Status);
+            Assert.DoesNotContain("<script", record.Comment);
+            Assert.StartsWith("crash 7", record.Comment);
+
+            var value = Assert.IsType<LargeFileValue>(sensor.LastValue);
+            Assert.Equal(SensorStatus.Error, value.Status);
+            Assert.Equal(record.Comment, value.Comment);
+
+            // Both kinds are verified files for the packer.
+            Assert.Contains(Store.GetFiles(LargeFileState.Verified), r => r.FileId == finish.FileId);
+
+            _databaseCoreManager.DatabaseCore.ClearSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
+            Assert.Equal(1, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RolledForward);
+
+            var row = Assert.IsType<LargeFileValue>(Assert.Single(await ReadRowsAsync(sensor)));
+            Assert.Equal(SensorStatus.Error, row.Status);
+            Assert.Equal(record.Comment, row.Comment);
+        }
+
         private static async Task WaitForAsync(Func<bool> condition)
         {
             for (var i = 0; i < 100 && !condition(); i++)
