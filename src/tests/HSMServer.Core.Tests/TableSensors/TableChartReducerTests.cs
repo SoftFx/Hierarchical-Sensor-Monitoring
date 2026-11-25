@@ -51,6 +51,23 @@ namespace HSMServer.Core.Tests.TableSensors
             AssertMatchesReference(chart, rows, from, to, AllColumns);
             Assert.Null(chart.CompleteToTicks);
             Assert.False(chart.IsIncomplete);
+
+            // The first and the last row of the range, whatever order the rows came in.
+            var inRange = rows.Where(r => r.Time >= from && r.Time < to).Select(r => r.Time).ToList();
+            Assert.Equal(inRange.Count == 0 ? (long?)null : inRange.Min(), chart.FirstRowTicks);
+            Assert.Equal(inRange.Count == 0 ? (long?)null : inRange.Max(), chart.LastRowTicks);
+        }
+
+        [Fact]
+        public void The_first_and_the_last_row_are_found_in_rows_out_of_order_across_batches()
+        {
+            var reducer = Reducer(0, 1000, [1], 10);
+            Assert.True(reducer.AddBatch(Batch([Row(500, 1), Row(30, 2), Row(999, 3)]), 0, 0, false));
+            Assert.True(reducer.AddBatch(Batch([Row(7, 4), Row(1000, 5), Row(-1, 6), Row(640, 7)]), 0, 1, false));
+
+            var chart = reducer.Build();
+
+            Assert.Equal((7L, 999L), (chart.FirstRowTicks, chart.LastRowTicks));
         }
 
         [Fact]
@@ -66,6 +83,8 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.NotNull(chart.Rows);
             Assert.Equal(0, chart.Rows.RowCount);
             Assert.False(chart.IsIncomplete);
+            Assert.Null(chart.FirstRowTicks);
+            Assert.Null(chart.LastRowTicks);
         }
 
         // === The bucket arithmetic ===
@@ -249,6 +268,9 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.All(chart.BucketRows.Skip(4), r => Assert.Equal(0, r));
             Assert.All(chart.Columns[0].ValueCount.Skip(4), v => Assert.Equal(0, v));
             AssertMatchesReference(chart, first.Where(r => r.Time < 400).ToArray(), from, to, [1]);
+
+            // The rows counted: the late row at 650 was scanned, but its bucket was emptied by the stop.
+            Assert.Equal((0L, 350L), (chart.FirstRowTicks, chart.LastRowTicks));
         }
 
         [Fact]
