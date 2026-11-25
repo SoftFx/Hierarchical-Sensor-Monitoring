@@ -90,8 +90,10 @@ namespace HSMDataCollector.Tables
         Invalid,
 
         /// <summary>
-        /// Not sent: the block is larger than a frame of the table connection takes now (a server whose hello states a
-        /// smaller limit than the one the block was packed for). The pipeline packs its rows again into smaller blocks.
+        /// Not sent on the connection that judged it: the block is larger than a frame of the table connection takes now,
+        /// or breaks the block limits of its hello (a server whose hello states smaller numbers than the ones the block
+        /// was packed for). The pipeline packs its rows again into smaller blocks; a block of one row cannot be made
+        /// smaller, so for it the answer is final (dropped and counted as too large).
         /// </summary>
         TooLarge,
     }

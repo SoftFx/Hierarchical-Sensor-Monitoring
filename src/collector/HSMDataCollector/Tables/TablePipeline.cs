@@ -858,7 +858,7 @@ namespace HSMDataCollector.Tables
                     Cut(entry.Key, entry.Value, limits, pieces);
 
                 foreach (var group in Group(pieces, limits))
-                    abandoned += EncodeAndQueue(run, group, maxBlock, token, cancelledReason, (bytes, packed) => Enqueue(run, bytes, packed));
+                    abandoned += EncodeAndQueue(run, group, maxBlock, limits, token, cancelledReason, (bytes, packed) => Enqueue(run, bytes, packed));
             }
             catch (Exception ex)
             {
@@ -933,10 +933,13 @@ namespace HSMDataCollector.Tables
                 yield return group;
         }
 
-        // One block per group; a block larger than a frame allows is split, by tables first and then by rows.
-        // Returns the rows left unpacked because the token fired (dropped and counted here).
-        private long EncodeAndQueue(TableRun run, List<Piece> group, int maxBlock, CancellationToken token, TableDropReason cancelledReason,
-                                    Action<byte[], List<Piece>> sink)
+        // One block per group; a block larger than a frame allows, or one that breaks a block limit once written (the
+        // pieces keep to the limits by estimate; the written block is what the table connection checks), is split, by
+        // tables first and then by rows. A single row that still breaks one is dropped and counted as too large: every
+        // limit a block can break on its own is judged here, so no block that leaves this method is too large for the
+        // limits it was packed for. Returns the rows left unpacked because the token fired (dropped and counted here).
+        private long EncodeAndQueue(TableRun run, List<Piece> group, int maxBlock, TableBlockLimits limits, CancellationToken token,
+                                    TableDropReason cancelledReason, Action<byte[], List<Piece>> sink)
         {
             if (token.IsCancellationRequested)
             {
@@ -954,8 +957,9 @@ namespace HSMDataCollector.Tables
             OnPackPassForTests?.Invoke();
 
             var block = Encode(group);
+            var exceeded = Exceeds(block, maxBlock, limits);
 
-            if (block.Length <= maxBlock)
+            if (exceeded == null)
             {
                 sink(block, group);
                 return 0;
@@ -964,8 +968,8 @@ namespace HSMDataCollector.Tables
             if (group.Count > 1)
             {
                 var half = group.Count / 2;
-                return EncodeAndQueue(run, group.GetRange(0, half), maxBlock, token, cancelledReason, sink)
-                     + EncodeAndQueue(run, group.GetRange(half, group.Count - half), maxBlock, token, cancelledReason, sink);
+                return EncodeAndQueue(run, group.GetRange(0, half), maxBlock, limits, token, cancelledReason, sink)
+                     + EncodeAndQueue(run, group.GetRange(half, group.Count - half), maxBlock, limits, token, cancelledReason, sink);
             }
 
             var piece = group[0];
@@ -973,13 +977,28 @@ namespace HSMDataCollector.Tables
             if (piece.Count > 1)
             {
                 var first = piece.Count / 2;
-                return EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, token, cancelledReason, sink)
-                     + EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, token, cancelledReason, sink);
+                return EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, limits, token, cancelledReason, sink)
+                     + EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, limits, token, cancelledReason, sink);
             }
 
             piece.Sensor.Drop(1, TableDropReason.RowTooLarge, run);
-            Note($"A row of the table sensor {piece.Sensor.Path} does not fit a frame of the table connection ({maxBlock} bytes) and is dropped.");
+            Note($"A row of the table sensor {piece.Sensor.Path} does not fit {exceeded} and is dropped.");
             return 0;
+        }
+
+        // The limit a written block breaks, in words that name the limit and not the block (a report is deduplicated by
+        // its text); null when it breaks none. The same checks as the table connection's before a put.
+        private static string Exceeds(byte[] block, int maxBlock, TableBlockLimits limits)
+        {
+            if (block.Length > maxBlock)
+                return $"a frame of the table connection ({maxBlock} bytes)";
+
+            var header = TableBlockReader.ReadHeader(block, ReadBackLimits);
+
+            return header.DecompressedLength > limits.MaxDecompressedBytes ? $"the block limit of the table connection ({limits.MaxDecompressedBytes} bytes before compression)"
+                : header.RowCount > limits.MaxRows ? $"the block limit of the table connection ({limits.MaxRows} rows)"
+                : header.TableCount > limits.MaxTables ? $"the block limit of the table connection ({limits.MaxTables} tables)"
+                : null;
         }
 
         /// <summary>For tests: runs when a stop has ended a run's tick and loop and is about to wait for a pack of it.</summary>
@@ -1175,8 +1194,20 @@ namespace HSMDataCollector.Tables
 
                     if (ack.Outcome == TableBlockOutcome.TooLarge)
                     {
-                        // Packed for a larger frame than the table connection takes now: its rows are packed again
-                        // into blocks that fit, in its place, and the delivery goes on with the first of them.
+                        // A block of one row cannot be made smaller: the answer is final, its row dropped and counted.
+                        if (head.Rows <= 1)
+                        {
+                            if (DropHead(run, head, TableDropReason.RowTooLarge))
+                                Note($"A row of the table sensor {(head.Tables.Length > 0 ? head.Tables[0].Sensor.Path : "?")} is larger than the table connection takes now and is dropped.");
+
+                            continue;
+                        }
+
+                        // Packed for larger limits than the table connection takes now: its rows are packed again into
+                        // blocks of at most half its rows, in its place, and the delivery goes on with the first of
+                        // them. Every such answer removes the head or halves it, so the answers TooLarge to the rows of
+                        // one block are bounded (at most twice its rows); no answer makes this loop turn without either
+                        // progress or a return to wait.
                         await RepackAsync(run, head, ack.Error).ConfigureAwait(false);
                         continue;
                     }
@@ -1223,9 +1254,12 @@ namespace HSMDataCollector.Tables
 
         // A block packed for a larger frame (or larger block limits) than the table connection takes now: a server whose
         // hello came after the pack states smaller numbers. Its rows are read back and packed again into blocks that fit,
-        // which take its place at the head of the backlog. Sequences keep their order: the new blocks take the head's
-        // number (the next one when the head may have reached the server), and the blocks behind it, which were never put,
-        // are renumbered after them. Under the run's pack gate, the owner of the sequence.
+        // which take its place at the head of the backlog. Each new block has at most half the head's rows (the head has
+        // two or more), whatever the limits read now say: the limits the put judged by may be newer than the ones read
+        // here, and a repack that built the same block again would be answered the same way forever. A row that breaks a
+        // limit on its own is dropped and counted (EncodeAndQueue). Sequences keep their order: the new blocks take the
+        // head's number (the next one when the head may have reached the server), and the blocks behind it, which were
+        // never put, are renumbered after them. Under the run's pack gate, the owner of the sequence.
         private async Task RepackAsync(TableRun run, PendingBlock head, string why)
         {
             await run.PackGate.WaitAsync().ConfigureAwait(false);
@@ -1240,7 +1274,9 @@ namespace HSMDataCollector.Tables
                 Interlocked.Increment(ref _repacked);
 
                 var block = TableBlockReader.Read(head.Bytes, ReadBackLimits);
-                var limits = _channel?.BlockLimits ?? TableBlockLimits.Default;
+                var current = _channel?.BlockLimits ?? TableBlockLimits.Default;
+                var limits = new TableBlockLimits(current.MaxDecompressedBytes, current.MaxTables, Math.Min(current.MaxRows, Math.Max(1, head.Rows / 2)),
+                                                  current.MaxColumnsPerTable, current.MaxTableIdLength);
                 var maxBlock = _channel?.MaxBlockBytes ?? int.MaxValue;
                 var pieces = new List<Piece>();
 
@@ -1256,7 +1292,7 @@ namespace HSMDataCollector.Tables
                 var packed = new List<KeyValuePair<byte[], List<Piece>>>();
 
                 foreach (var group in Group(pieces, limits))
-                    EncodeAndQueue(run, group, maxBlock, CancellationToken.None, TableDropReason.NotDeliveredAtStop,
+                    EncodeAndQueue(run, group, maxBlock, limits, CancellationToken.None, TableDropReason.NotDeliveredAtStop,
                                    (bytes, rows) => packed.Add(new KeyValuePair<byte[], List<Piece>>(bytes, rows)));
 
                 lock (run.BacklogLock)
@@ -1334,7 +1370,8 @@ namespace HSMDataCollector.Tables
             return rows;
         }
 
-        private void DropHead(TableRun run, PendingBlock head, TableDropReason reason)
+        // True when this call removed the block and counted its rows (false: a stop dropped and counted it already).
+        private bool DropHead(TableRun run, PendingBlock head, TableDropReason reason)
         {
             bool removed;
 
@@ -1351,6 +1388,8 @@ namespace HSMDataCollector.Tables
 
             if (removed)
                 head.DropRows(reason);
+
+            return removed;
         }
 
         // A block with a final answer leaves the backlog; its refused tables are counted and acted on.

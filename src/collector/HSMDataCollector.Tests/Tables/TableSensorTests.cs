@@ -483,6 +483,69 @@ namespace HSMDataCollector.Tests.Tables
             }
         }
 
+        // A server may state a decompressed limit smaller than one row (TableSensors.MaxDecompressedBytes can be 1). Such a
+        // row is dropped at the pack, counted once on the sensor and in the run's ledger; nothing is put.
+        [Fact]
+        public async Task A_row_larger_than_the_decompressed_limit_on_its_own_is_dropped_at_the_pack()
+        {
+            var sender = new FakeTableSender { BlockLimits = new TableBlockLimits(maxDecompressedBytes: 1) };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+                var run = collector.TablePipeline.CurrentRun;
+
+                for (var i = 0; i < 5; i++)
+                    Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                await collector.TickTablesAsync();
+
+                Assert.Empty(sender.Attempts);
+                Assert.Equal(5, table.RowsDropped);
+                Assert.Equal(5, run.Ledger.TotalOf(TableDropReason.RowTooLarge));
+                Assert.Equal(0, collector.TablePipeline.BacklogBlocks);
+            }
+        }
+
+        // Guard of the delivery loop: a put answered TooLarge for a block that cannot be made smaller is final. However
+        // the channel answers, the loop makes a bounded number of puts: each answer removes the head (one row) or halves
+        // it. The channel here claims the default limits and refuses every block, as a table connection whose hello is
+        // newer than the limits the pipeline read would.
+        [Theory]
+        [InlineData(1)]     // twenty blocks of one row each
+        [InlineData(1000)]  // one block of twenty rows
+        public async Task TooLarge_answers_end_in_dropped_rows_after_a_bounded_number_of_puts(int maxRows)
+        {
+            const int Rows = 20;
+            const int Guard = 1000;
+
+            var puts = 0;
+            var sender = new FakeTableSender
+            {
+                BlockLimits = new TableBlockLimits(maxRows: maxRows),
+                AnswerEvery = _ => Interlocked.Increment(ref puts) > Guard
+                    ? TableBlockAck.NotDelivered("the guard of this test: the delivery loop did not end")
+                    : TableBlockAck.TooLarge("scripted: the table connection takes less than the pipeline was told"),
+            };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+                var run = collector.TablePipeline.CurrentRun;
+
+                for (var i = 0; i < Rows; i++)
+                    Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                await collector.TickTablesAsync();
+
+                // One put per one-row block; a block of n rows takes at most 2n - 1 (a halving tree).
+                Assert.True(sender.Attempts.Count <= 2 * Rows - 1, $"{sender.Attempts.Count} put(s) for {Rows} row(s)");
+                Assert.Equal(Rows, table.RowsDropped);
+                Assert.Equal(Rows, run.Ledger.TotalOf(TableDropReason.RowTooLarge));
+                Assert.Equal(0, collector.TablePipeline.BacklogBlocks);
+            }
+        }
+
         [Fact]
         public async Task The_backlog_bound_drops_the_oldest_blocks_and_counts_their_rows()
         {

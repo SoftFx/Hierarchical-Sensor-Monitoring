@@ -177,9 +177,11 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
    `Pending` sensors, then **packs**: each `Registered` sensor of the run has its buffer swapped for its spare under the
    sensor's lock (writers never wait for packing; a sensor that belongs to another run by now gives nothing), the
    rows are cut into pieces that keep to the block limits, the pieces are grouped into blocks (a table once per block),
-   each block is written with one `TableBlockWriter` (reused) and checked against the frame limit: a block too large is
-   split by tables, then by rows, and packed again. Blocks get the next producer sequence and go to the end of the
-   backlog; the buffer room goes back. A pack observes its token (the run's; at stop the drain budget) before every
+   each block is written with one `TableBlockWriter` (reused) and checked as written against the frame limit and every
+   block limit the table connection checks before a put (decompressed bytes, rows, tables): a block that breaks one is
+   split by tables, then by rows, and packed again; a single row that breaks one on its own (a server may state a
+   decompressed limit smaller than a row) is dropped and counted as too large. Blocks get the next producer sequence
+   and go to the end of the backlog; the buffer room goes back. A pack observes its token (the run's; at stop the drain budget) before every
    compression pass: the rows it has not packed when the token fires are dropped and counted. The tick then signals the
    delivery loop. Nothing is reported while a gate or lock of the pipeline is held: reports are queued and written once
    the gates are released, so a host logger that calls back into the collector (even `Dispose`) cannot deadlock it.
@@ -302,9 +304,13 @@ their own (the server's log names the key as the cause).
 
 **A hello with smaller limits than a block was packed for** (a server reconfigured between two connections, or a
 block packed before the first hello): the put answers `TooLarge` without sending, and the pipeline reads the rows
-back from the block and packs them again into blocks that fit, in the block's place. The new blocks take its
-sequence (the next one when the block may have reached the server), and the blocks behind it, which were never put,
-are numbered after them.
+back from the block and packs them again into blocks that fit, in the block's place, each of at most half the
+block's rows (whatever limits the pipeline reads at that moment: the put may have judged by a newer hello); a row that
+breaks a limit on its own is dropped and counted as too large. A `TooLarge` for a block of one row is final: the row
+is dropped and counted as too large, reported once. So every `TooLarge` removes the head or halves it: the answers
+`TooLarge` to the rows of one block are at most twice its rows, and no answer keeps the delivery loop turning without
+progress or a wait. The new blocks take its sequence (the next one when the block may have reached the server), and
+the blocks behind it, which were never put, are numbered after them.
 
 **Stop.** The table drain ends by closing the table connection (`ITableBlockChannel.CloseAsync`), inside the drain
 budget and before the session is closed: a close frame `1000` (written even when the budget is spent; it is bounded
@@ -364,7 +370,7 @@ counted on its sensor only, and so is a row added before the first `Start`.
 | backlog full | `MaxTableBacklogBytes` passed: the oldest blocks (never the one being sent) are dropped |
 | refused by the server | refused tables of a block, `allRefused`, `400` |
 | not delivered at stop | what a stop could not deliver |
-| row too large / packing failed | a single row larger than a frame; a fault of the packer |
+| row too large / packing failed | a single row larger than a frame or a block limit of the table connection (at the pack, or a `TooLarge` for a block of one row); a fault of the packer |
 | buffer could not grow | an allocation failed while a sensor's buffer grew (out of memory) |
 
 ## Storage / Persistence
