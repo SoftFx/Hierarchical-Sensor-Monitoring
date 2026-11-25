@@ -11,7 +11,7 @@ A **block** is what a collector sends for table sensors at every tick: the rows 
 
 A block is a fixed 44-byte header followed by exactly one zstd frame. Inside the frame: a directory with one entry per table (identifier, schema id, row count, column types), then the columns as raw fixed-width little-endian arrays, column-major: column 0 of every table, then column 1 of every table that has one, and so on, then the null maps of the columns that have a null in this block. No HSM column coders are used.
 
-Every column except the first (the time) may have cells without a value (ADR-0021 point 2, as changed on 2026-11-25). The schema does not say which columns are nullable, all but the time are, so the schema and its id do not change. A column of a table carries a **null map** (glossary: Null map) only in a block where it has at least one null; a block without nulls is byte for byte what it was before nulls existed.
+Every column except the first (the time) may have cells without a value (ADR-0021 point 2, as changed on 2026-11-24). The schema does not say which columns are nullable, all but the time are, so the schema and its id do not change. A column of a table carries a **null map** (glossary: Null map) only in a block where it has at least one null; a block without nulls is byte for byte what it was before nulls existed.
 
 `HSMTableBlocks` (`src/api/HSMTableBlocks`, netstandard2.0) is a pure library: no storage, no transport, no server or collector dependency. The server uses `TableSchema` for table sensors (#1844, `aicontext/features/server/table-sensors/feature.md`); the server's block store, its read path and the collectors will use the block reader and writer.
 
