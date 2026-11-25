@@ -137,6 +137,63 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             Assert.Throws<ArchiveFormatException>(() => _writer.OpenEntry(new MemoryStream(TestContent.Random(10_000, seed: 1)), Password));
         }
 
+        [Theory]
+        [InlineData(1, false)]
+        [InlineData(1, true)]
+        [InlineData(0, false)]
+        public void WithoutAPassword_RoundTripsUnencrypted_AndOpensOnlyWithoutAPassword(int level, bool seekableOutput)
+        {
+            var content = TestContent.Compressible(1024 * 1024 + 5);
+
+            var archive = Write(content, "trace.log", level, seekableOutput, password: null);
+
+            using (var entry = _writer.OpenEntry(new MemoryStream(archive), null))
+            {
+                Assert.Equal("trace.log", entry.Name);
+                Assert.Equal(content.Length, entry.Size);
+                Assert.Equal(_time, entry.EntryTime);
+                Assert.Equal(content, ReadAll(entry.Content));
+            }
+
+            // An unencrypted entry is never taken for a secure one.
+            var ex = Assert.Throws<ArchiveFormatException>(() => _writer.OpenEntry(new MemoryStream(archive), Password));
+            Assert.Contains("not encrypted with AES-256", ex.Message);
+        }
+
+        [Fact]
+        public void AnEncryptedEntry_IsRefusedWithoutAPassword()
+        {
+            var archive = Write(TestContent.Compressible(10_000), "dump.dmp");
+
+            var ex = Assert.Throws<ArchiveFormatException>(() => _writer.OpenEntry(new MemoryStream(archive), null));
+
+            Assert.Contains("is encrypted", ex.Message);
+        }
+
+        [Fact]
+        public void TinyFileWithoutAPassword_CarriesTheZip64Field_AndNoEncryption()
+        {
+            var archive = Write([1, 2, 3], "tiny.bin", password: null);
+
+            using var zip = new ZipFile(new MemoryStream(archive), leaveOpen: false);
+            var entry = zip[0];
+            var extra = new ZipExtraData(entry.ExtraData);
+
+            Assert.False(entry.IsCrypted);
+            Assert.Equal(0, entry.AESKeySize);
+            Assert.True(extra.Find(0x0001), "Zip64 extended information field");
+            Assert.False(extra.Find(0x9901), "WinZip AES field");
+            Assert.Equal(CompressionMethod.Deflated, entry.CompressionMethod);
+        }
+
+        [Fact]
+        public void AnEmptyPassword_IsRefused_ItIsNeitherSecureNorNot()
+        {
+            Assert.Throws<ArgumentException>(() =>
+                _writer.Write(new MemoryStream(), "a.bin", _time, 3, new MemoryStream([1, 2, 3]), string.Empty, 1, CancellationToken.None));
+            Assert.Throws<ArgumentException>(() => _writer.OpenEntry(new MemoryStream(), string.Empty));
+        }
+
         [Fact]
         public void Cancellation_StopsTheWrite()
         {
@@ -148,12 +205,12 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
 
-        private byte[] Write(byte[] content, string name, int level = 1, bool seekableOutput = false)
+        private byte[] Write(byte[] content, string name, int level = 1, bool seekableOutput = false, string password = Password)
         {
             var buffer = new MemoryStream();
             Stream output = seekableOutput ? buffer : new ForwardOnlyStream(buffer);
 
-            _writer.Write(output, name, _time, content.Length, new MemoryStream(content), Password, level, CancellationToken.None);
+            _writer.Write(output, name, _time, content.Length, new MemoryStream(content), password, level, CancellationToken.None);
 
             return buffer.ToArray();
         }

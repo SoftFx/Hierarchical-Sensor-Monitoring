@@ -7,7 +7,8 @@ using System.Threading;
 namespace HSMServer.Core.LargeFiles.Archives
 {
     /// <summary>
-    /// <see cref="IArchiveWriter"/> over SharpZipLib: one entry, WinZip AES-256 (AE-2), Zip64 always on, Deflate.
+    /// <see cref="IArchiveWriter"/> over SharpZipLib: one entry, Zip64 always on, Deflate; WinZip AES-256 (AE-2) under a
+    /// password, no encryption without one.
     /// </summary>
     public sealed class SharpZipArchiveWriter : IArchiveWriter
     {
@@ -23,7 +24,7 @@ namespace HSMServer.Core.LargeFiles.Archives
             ArgumentNullException.ThrowIfNull(output);
             ArgumentNullException.ThrowIfNull(content);
             ArgumentException.ThrowIfNullOrEmpty(entryName);
-            ArgumentException.ThrowIfNullOrEmpty(password);
+            ThrowIfEmpty(password);
             ArgumentOutOfRangeException.ThrowIfNegative(size);
             ArgumentOutOfRangeException.ThrowIfLessThan(deflateLevel, 0);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(deflateLevel, 9);
@@ -35,7 +36,7 @@ namespace HSMServer.Core.LargeFiles.Archives
             {
                 IsStreamOwner = false,
                 UseZip64 = UseZip64.On,
-                Password = password,
+                Password = password, // null: the entry is not encrypted
             };
 
             var finished = false;
@@ -45,7 +46,7 @@ namespace HSMServer.Core.LargeFiles.Archives
 
                 var entry = new ZipEntry(entryName)
                 {
-                    AESKeySize = 256,
+                    AESKeySize = password is null ? 0 : 256,
                     CompressionMethod = deflateLevel == 0 ? CompressionMethod.Stored : CompressionMethod.Deflated,
                     // A zip entry keeps a local DOS time without a zone: the UTC value is written as it is, so an archiver
                     // shows the source's UTC time.
@@ -84,7 +85,7 @@ namespace HSMServer.Core.LargeFiles.Archives
         public ArchiveEntryReader OpenEntry(Stream archive, string password)
         {
             ArgumentNullException.ThrowIfNull(archive);
-            ArgumentException.ThrowIfNullOrEmpty(password);
+            ThrowIfEmpty(password);
 
             ZipFile zip = null;
             try
@@ -97,7 +98,13 @@ namespace HSMServer.Core.LargeFiles.Archives
                 var entry = zip[0];
                 if (!entry.IsFile)
                     throw new ArchiveFormatException("The only entry of the archive is not a file.");
-                if (entry.AESKeySize != 256)
+                // A secure file is never read from an unencrypted archive, nor a file that is not secure from an encrypted one.
+                if (password is null)
+                {
+                    if (entry.IsCrypted)
+                        throw new ArchiveFormatException("The entry of the archive is encrypted, but no password was given.");
+                }
+                else if (entry.AESKeySize != 256)
                     throw new ArchiveFormatException("The entry of the archive is not encrypted with AES-256.");
 
                 var content = new GuardedEntryStream(zip.GetInputStream(entry));
@@ -116,6 +123,13 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
         }
 
+
+        // Null means "no encryption"; an empty password is neither and is refused.
+        private static void ThrowIfEmpty(string password)
+        {
+            if (password is { Length: 0 })
+                throw new ArgumentException("The password is empty: pass null for an archive without encryption.", nameof(password));
+        }
 
         private static DateTime ToDosRange(DateTime time)
         {
