@@ -85,6 +85,11 @@ jobs:
         working-directory: src/tests/Autotests
         run: npx playwright install-deps chromium
 
+      # The table sensor spec (home/table_sensor_page.spec.ts) sends rows with this .NET tool through
+      # `dotnet run`; building it once here keeps the build out of the spec's timeout.
+      - name: Build the table seeder
+        run: dotnet build src/tests/Autotests/tools/TableSeeder/TableSeeder.csproj -c Release
+
       - name: Run Playwright tests
         working-directory: src/tests/Autotests
         env:

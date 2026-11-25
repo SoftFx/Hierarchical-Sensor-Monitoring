@@ -247,6 +247,7 @@ namespace HSMServer.ServiceExtensions
                         provider.GetRequiredService<ISensorApiTelemetry>(), config.TableSensors.ToOptions().Limits))
                     .AddSingleton<AgentDirectives>()
                     .AddSingleton<TableReadService>()
+                    .AddSingleton<HSMServer.TablePages.TablePageService>()
                     .AddSingleton<CollectorSessionRegistry>()
                     .AddSingleton<CollectorSessionHandler>()
                     // The clock of the session's silence limit, replaceable in tests.

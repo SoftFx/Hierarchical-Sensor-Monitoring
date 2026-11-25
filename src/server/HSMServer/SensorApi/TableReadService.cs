@@ -347,11 +347,13 @@ namespace HSMServer.SensorApi
 
         // RFC 4180: CRLF line ends, a header line with the column names, a name quoted when it holds a comma, a quote or
         // a line break. A null cell is empty.
-        public static async Task WriteCsvAsync(PipeWriter output, TableRows rows, CancellationToken token)
+        // Without the header line for the pages after the first of a download from the web UI (#1847).
+        public static async Task WriteCsvAsync(PipeWriter output, TableRows rows, CancellationToken token, bool header = true)
         {
             var text = new StringBuilder();
 
-            text.AppendJoin(',', rows.Columns.Select(column => Quote(column.Name))).Append("\r\n");
+            if (header)
+                text.AppendJoin(',', rows.Columns.Select(column => Quote(column.Name))).Append("\r\n");
 
             for (var row = 0; row < rows.RowCount; row++)
             {

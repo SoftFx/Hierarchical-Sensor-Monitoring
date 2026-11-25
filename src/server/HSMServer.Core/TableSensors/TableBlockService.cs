@@ -269,7 +269,7 @@ namespace HSMServer.Core.TableSensors
                 return TaskResult<TableChart>.FromError($"Sensor {sensorId} was not found.");
 
             if (sensor is not TableSensorModel table)
-                return TaskResult<TableChart>.FromError($"Sensor '{sensor.FullPath}' is not a table sensor.");
+                return TaskResult<TableChart>.FromError($"Sensor {sensorId} is not a table sensor.");
 
             var fromTicks = Utc(from).Ticks;
             var toTicks = Utc(to).Ticks;
@@ -287,7 +287,12 @@ namespace HSMServer.Core.TableSensors
             foreach (var column in columns)
             {
                 if (column < 1 || column >= schema.Count)
-                    return TaskResult<TableChart>.FromError($"Column {column} is not a value column of '{table.FullPath}': its value columns are 1..{schema.Count - 1}.");
+                    return TaskResult<TableChart>.FromError($"Column {column} is not a value column: the value columns are 1..{schema.Count - 1}.");
+
+                // A time column after the first is legal in a schema, but it is not a value to plot: a chart has minima and
+                // maxima of int64 and double columns only.
+                if (schema[column].Type == TableColumnType.Time)
+                    return TaskResult<TableChart>.FromError($"Column {column} is not a value column: it is a time column.");
 
                 if (!seen.Add(column))
                     return TaskResult<TableChart>.FromError($"Column {column} is named twice.");
