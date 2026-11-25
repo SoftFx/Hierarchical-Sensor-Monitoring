@@ -49,12 +49,15 @@ namespace HSMServer.Model.ManagementApi.Chats
             var stamped = Stamp(update, initiator);
             var withId = stamped.Id == Guid.Empty ? stamped with { Id = Guid.NewGuid() } : stamped;
 
-            if (Validate(withId, nameRequired: true) is { } invalid)
+            _chats.TryGetValue(withId.Id, out var existing);
+
+            // The row may already exist (pre-created by /start): a name it already holds is no clash.
+            if (Validate(withId, nameRequired: true, existing?.Name) is { } invalid)
                 return invalid;
 
             Chat chat;
 
-            if (_chats.TryGetValue(withId.Id, out var existing))
+            if (existing is not null)
             {
                 if (!await _chats.TryUpdate(withId))
                     return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
@@ -82,11 +85,11 @@ namespace HSMServer.Model.ManagementApi.Chats
         {
             var stamped = Stamp(update, initiator);
 
-            if (Validate(stamped) is { } invalid)
-                return invalid;
-
             if (!_chats.TryGetValue(stamped.Id, out var chat))
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
+
+            if (Validate(stamped, currentName: chat.Name) is { } invalid)
+                return invalid;
 
             if (!await _chats.TryUpdate(stamped))
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
@@ -121,19 +124,20 @@ namespace HSMServer.Model.ManagementApi.Chats
 
         // The write rules of both surfaces: the chat name (#1829 — required on a creation,
         // at most 100 characters, unique per server ignoring case; an omitted name, a
-        // partial update, is not checked) and the webhook URL-shape rule the web form
-        // enforced (NotificationsController's ValidateWebhooks, #1329): a non-null webhook
-        // field of a write must be an absolute http/https URL. Null means "no change" and
-        // passes. Every problem answers in one body; field keys match the form's property
-        // names, so the web re-render finds its spans. Internal: the management surface
-        // runs the same validation first, to answer a request's every problem in one body
-        // before the engine applies anything.
-        internal PolicyWriteResult Validate(ChatUpdate update, bool nameRequired = false)
+        // partial update, is not checked, and a row keeping its own name breaks nothing)
+        // and the webhook URL-shape rule the web form enforced
+        // (NotificationsController's ValidateWebhooks, #1329): a non-null webhook field of
+        // a write must be an absolute http/https URL. Null means "no change" and passes.
+        // Every problem answers in one body; field keys match the form's property names, so
+        // the web re-render finds its spans. Internal: the management surface runs the same
+        // validation first, to answer a request's every problem in one body before the
+        // engine applies anything — it passes the row's current name as the engine does.
+        internal PolicyWriteResult Validate(ChatUpdate update, bool nameRequired = false, string currentName = null)
         {
             Dictionary<string, string[]> errors = null;
             var name = nameRequired ? update.Name ?? string.Empty : update.Name;
 
-            if (name is not null && ChatNameValidator.FindError(name, update.Id, _chats.GetValues() ?? []) is { } nameError)
+            if (name is not null && ChatNameValidator.FindError(name, update.Id, _chats.GetValues() ?? [], currentName) is { } nameError)
                 (errors ??= []).Add(nameof(ChatUpdate.Name), [nameError]);
 
             ValidateWebhook(update.SlackWebhookUrl, nameof(ChatUpdate.SlackWebhookUrl));

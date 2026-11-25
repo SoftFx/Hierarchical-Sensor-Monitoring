@@ -286,6 +286,21 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
         [Fact]
+        public async Task UpdateChat_OfAChatDuplicatedBeforeTheRule_KeepingItsName_IsAccepted()
+        {
+            // Two chats named alike exist from before names were unique (the form always
+            // posts the name, even unchanged): the rule guards changes, not history — the
+            // chat's other settings stay editable while it keeps its name.
+            var chat = AddChat("Ops alerts");
+            AddChat("OPS ALERTS");
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "Ops alerts", Description = "on-call" }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal("on-call", result.Value.Description);
+        }
+
+        [Fact]
         public async Task UpdateChat_NameWithABidiOverride_IsRejectedUnderName_AndChangesNothing()
         {
             var chat = AddChat("Ops alerts");
@@ -302,54 +317,79 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
 
         [Fact]
-        public async Task UpdateChat_UnknownChat_IsNotFound()
+        public async Task UpdateChat_UnknownChat_IsNotFound_WithoutAskingTheEvaluator()
         {
+            // An unknown id is the plain 404 with no evaluator call — nothing is disclosed.
             var result = await Service.UpdateChat(Guid.NewGuid(), new UpdateChatRequestDto { Name = "Ops alerts" }, Token);
 
             Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
+            _world.Authorization.Verify(a => a.AuthorizeChatWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyCollection<Guid>>()), Times.Never);
         }
 
         [Fact]
-        public async Task UpdateChat_ChatBoundOnlyToAnInvisibleFolder_IsNotFound_LikeAnUnknownOne()
+        public async Task UpdateChat_AdmissionAsksTheEvaluatorForTheChatAndItsBindings()
         {
-            // The area's anti-enumeration rule: a chat outside the caller's sight and an
-            // unknown id answer the same 404.
-            var chat = AddChat("Ops alerts", global: false);
-            _world.Authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
-                .Returns(false);
+            // The sight and the change gate are the evaluator's (AuthorizeChatWrite, its
+            // matrix lives in ApiTokenAuthorizationServiceTests): the service hands it the
+            // chat and a snapshot of its bindings, before anything of the request is read.
+            var chat = AddChat("Ops alerts");
+            var folder = AddFolder(chat.Id);
 
-            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "Ops alerts 2" }, Token);
+            await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Description = "on-call" }, Token);
 
-            Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
-            Assert.Equal("Ops alerts", _world.Store.Single(c => c.Id == chat.Id).Name);
+            _world.Authorization.Verify(a => a.AuthorizeChatWrite(Token, chat.Id,
+                It.Is<IReadOnlyCollection<Guid>>(folders => folders.SequenceEqual(new[] { folder.Id }))), Times.Once);
         }
 
-        [Fact]
-        public async Task UpdateChat_VisibleChatTheCallerCannotChange_IsForbidden()
+        [Theory]
+        [InlineData(ApiTokenAuthorization.NotFound, PolicyWriteOutcome.NotFound)]
+        [InlineData(ApiTokenAuthorization.Forbidden, PolicyWriteOutcome.Forbidden)]
+        public async Task UpdateChat_RefusedByTheEvaluator_AnswersTheRefusal_AndChangesNothing(
+            ApiTokenAuthorization decision, PolicyWriteOutcome outcome)
         {
-            // The caller sees the folder the chat is bound to but does not manage it.
+            // NotFound: the chat is outside the caller's sight — the same 404 as an unknown
+            // id. Forbidden: the caller sees the chat but may not change it.
             var chat = AddChat("Ops alerts", global: false);
-            _world.Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>()))
-                .Returns(false);
+            _world.RefuseChatWrites(decision);
 
             var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "Ops alerts 2" }, Token);
 
-            Assert.Equal(PolicyWriteOutcome.Forbidden, result.Failure.Outcome);
-            Assert.Equal(PolicyWriteResult.WriteDeniedMessage, result.Failure.Message);
+            Assert.Equal(outcome, result.Failure.Outcome);
             Assert.Equal("Ops alerts", _world.Store.Single(c => c.Id == chat.Id).Name);
         }
 
         [Fact]
         public async Task UpdateChat_AdmissionPrecedesValidation()
         {
-            // A body-shape error must not reveal that a chat exists outside the caller's reach.
-            _world.Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>()))
-                .Returns(false);
+            // A body-shape error must not reveal that a chat exists beyond the caller's reach.
+            _world.RefuseChatWrites(ApiTokenAuthorization.Forbidden);
             var chat = AddChat("Ops alerts", global: false);
 
             var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = new string('x', 101) }, Token);
 
             Assert.Equal(PolicyWriteOutcome.Forbidden, result.Failure.Outcome);
+        }
+
+        [Fact]
+        public async Task UpdateChat_ThatLeavesTheChatOutsideTheCallersSight_EchoesNoBindings()
+        {
+            // The caller unbinds their own folder; the chat stays bound to a folder they
+            // cannot see. The echo cannot name that folder, so its `folders` is empty — and
+            // the chat is out of the caller's sight from here on (a later read is a 404).
+            var chat = AddChat("Ops alerts");
+            var ownFolder = AddFolder(chat.Id);
+            var unseenFolder = AddFolder(chat.Id);
+            _world.Unmanaged.Add(unseenFolder.Id);
+            _world.Authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Id != unseenFolder.Id);
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Folders = [] }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Empty(result.Value.Folders);
+            Assert.Contains(chat.Id, _world.FolderStore.Single(f => f.Id == unseenFolder.Id).Chats);
+            Assert.DoesNotContain(chat.Id, _world.FolderStore.Single(f => f.Id == ownFolder.Id).Chats);
         }
 
 
@@ -483,17 +523,10 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 && r.Initiator.Info == "admin")), Times.Once);
         }
 
-        [Fact]
-        public async Task DeleteChat_Applied_PrunesTheFolderBindings()
-        {
-            var chat = AddChat("Ops alerts");
-            var folder = AddFolder(chat.Id);
-
-            var result = await Service.DeleteChat(chat.Id, Token, dryRun: false);
-
-            Assert.True(result.Success, result.Failure?.Message);
-            Assert.DoesNotContain(chat.Id, _world.FolderStore.Single(f => f.Id == folder.Id).Chats);
-        }
+        // The applied delete goes through IChatsManager.TryRemove — the entry whose
+        // removal event prunes the chat from its folders and their policies; that the web
+        // list's remove runs the same entry is what makes the pruning the same (it is the
+        // manager's own behavior, pinned on the manager's side).
 
         [Fact]
         public async Task DeleteChat_RemovalThatNeverReachedTheStore_IsConflict_NeverAGhostSuccess()
@@ -524,37 +557,42 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
 
 
         [Fact]
-        public async Task DeleteChat_UnknownChat_IsNotFound()
+        public async Task DeleteChat_UnknownChat_IsNotFound_WithoutAskingTheEvaluator()
         {
             var result = await Service.DeleteChat(Guid.NewGuid(), Token, dryRun: false);
 
             Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
+            _world.Authorization.Verify(a => a.AuthorizeChatWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyCollection<Guid>>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(ApiTokenAuthorization.NotFound, PolicyWriteOutcome.NotFound)]
+        [InlineData(ApiTokenAuthorization.Forbidden, PolicyWriteOutcome.Forbidden)]
+        public async Task DeleteChat_RefusedByTheEvaluator_AnswersTheRefusal_AndRemovesNothing(
+            ApiTokenAuthorization decision, PolicyWriteOutcome outcome)
+        {
+            var chat = AddChat("Ops alerts", global: false);
+            _world.RefuseChatWrites(decision);
+
+            var result = await Service.DeleteChat(chat.Id, Token, dryRun: false);
+
+            Assert.Equal(outcome, result.Failure.Outcome);
+            Assert.Single(_world.Store);
         }
 
         [Fact]
-        public async Task DeleteChat_ChatOutsideTheCallersSight_IsNotFound_LikeAnUnknownOne()
+        public async Task DeleteChat_RefusedByTheEvaluator_AnswersNotFoundOnADryRunToo()
         {
+            // The preview is a read of the chat's bindings: it gets no sight beyond the
+            // applied delete's.
             var chat = AddChat("Ops alerts", global: false);
-            _world.Authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
-                .Returns(false);
+            _world.RefuseChatWrites(ApiTokenAuthorization.NotFound);
 
-            var result = await Service.DeleteChat(chat.Id, Token, dryRun: false);
+            var result = await Service.DeleteChat(chat.Id, Token, dryRun: true);
 
             Assert.Equal(PolicyWriteOutcome.NotFound, result.Failure.Outcome);
-            Assert.Single(_world.Store);
-        }
-
-        [Fact]
-        public async Task DeleteChat_VisibleChatTheCallerCannotChange_IsForbidden_AndRemovesNothing()
-        {
-            var chat = AddChat("Ops alerts", global: false);
-            _world.Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>()))
-                .Returns(false);
-
-            var result = await Service.DeleteChat(chat.Id, Token, dryRun: false);
-
-            Assert.Equal(PolicyWriteOutcome.Forbidden, result.Failure.Outcome);
-            Assert.Single(_world.Store);
+            Assert.False(result.IsDryRun);
         }
     }
 }

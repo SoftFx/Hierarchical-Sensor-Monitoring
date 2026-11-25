@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
+using HSMServer.Filters;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
@@ -173,6 +174,7 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="id">Chat id.</param>
         [HttpDelete("{id:guid}")]
+        [DryRunHeader]
         [ProducesResponseType(typeof(ChatDeletePreviewDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]

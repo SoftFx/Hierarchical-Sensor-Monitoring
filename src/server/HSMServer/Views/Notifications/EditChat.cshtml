@@ -79,6 +79,10 @@
                     </div>
                     <div class="col-12 col-md-7">
                         <input type="text" class="form-control" asp-for="Name" />
+                        @* The write engine's name rule (#1829: required, at most 100 characters, unique per
+                           server) lands under this key on a rejected save. Without the span the form came
+                           back with no visible error, and the save looked like a silent no-op. *@
+                        <span class="text-danger small d-block mt-1" asp-validation-for="Name"></span>
                     </div>
                 </div>
 

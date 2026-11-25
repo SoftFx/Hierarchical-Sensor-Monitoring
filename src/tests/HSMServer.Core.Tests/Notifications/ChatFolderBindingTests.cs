@@ -280,6 +280,36 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(654321L, created.TelegramChatId?.Identifier);
         }
 
+        // #1829: chat names are unique per server, and the /start flow names a chat after
+        // the Telegram chat — two groups may share a title. A name another chat holds gets
+        // " (2)" appended: nobody is there to pick another name.
+        [Fact]
+        public async Task TryConnect_FolderInvitation_SecondGroupWithTheSameTitle_GetsADisambiguatedName()
+        {
+            var manager = BuildManager();
+            manager.ConnectChatToFolder += (_, _, _) => Task.FromResult("Production");
+
+            await manager.TryConnect(BuildGroupMessage(chatId: 1001, title: "On-call"), new InvitationToken(Guid.NewGuid(), new User("test-user")));
+            await manager.TryConnect(BuildGroupMessage(chatId: 1002, title: "On-call"), new InvitationToken(Guid.NewGuid(), new User("test-user")));
+
+            Assert.Equal(
+                ["On-call", "On-call (2)"],
+                manager.GetValues().Select(chat => chat.Name).OrderBy(name => name, StringComparer.Ordinal));
+        }
+
+        [Fact]
+        public async Task TryConnect_PreAllocatedChat_SecondGroupWithTheSameTitle_GetsADisambiguatedName()
+        {
+            var manager = BuildManager();
+
+            var first = await manager.TryConnect(BuildGroupMessage(chatId: 2001, title: "Dev team"), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: new User("test-user")));
+            var second = await manager.TryConnect(BuildGroupMessage(chatId: 2002, title: "DEV TEAM"), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: new User("test-user")));
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, first.Outcome);
+            Assert.Equal(ChatConnectOutcome.ChatBound, second.Outcome);
+            Assert.Equal("DEV TEAM (2)", second.Name); // its own title, disambiguated: the clash ignores case, as the rule does
+        }
+
         // #1304 conflict policy — target Chat already bound to a different Telegram chat.
         // Strict refuse: TelegramChatId on the record must not be overwritten.
         [Fact]
@@ -529,6 +559,13 @@ namespace HSMServer.Core.Tests.Notifications
             new()
             {
                 Chat = new() { Id = chatId, Type = Telegram.Bot.Types.Enums.ChatType.Private },
+                From = new() { Id = 789, Username = "tg-user", FirstName = "Test" },
+            };
+
+        private static Telegram.Bot.Types.Message BuildGroupMessage(long chatId, string title) =>
+            new()
+            {
+                Chat = new() { Id = chatId, Type = Telegram.Bot.Types.Enums.ChatType.Group, Title = title },
                 From = new() { Id = 789, Username = "tg-user", FirstName = "Test" },
             };
 

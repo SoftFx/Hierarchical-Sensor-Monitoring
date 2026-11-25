@@ -68,7 +68,8 @@
 - `CreateChat_NonAdmin_IsAToolError_CarryingTheRefusalOfTheRestTwin` — the exact REST 403 text, nothing stored.
 - `CreateChat_DuplicateName_IsAToolError_NamingTheField` / `CreateChat_FolderTheOwnerDoesNotManage_IsAToolError_NamingFolders` — the field-keyed 422s flattened with their keys (`name: …`, `folders: …`).
 - `UpdateChat_ChangesOnlyTheGivenFields_AndAnswersTheStoredChat` / `UpdateChat_ClearFlags_RemoveTheChannels` — the partial update and the clear flags through the tool.
-- `UpdateChat_UnknownChat_IsAToolError_TheNotFoundText` / `UpdateChat_VisibleChatTheCallerCannotChange_IsAToolError_CarryingTheRefusal` — the 404/403 split as tool errors.
+- `UpdateChat_UnknownChat_IsAToolError_TheNotFoundText` — the 404 as tool error.
+- `ChatWriteTools_VisibleChatTheCallerCannotChange_AreToolErrors_CarryingTheRefusal` — `update_chat` and `delete_chat` answer the exact REST 403 text (`delete_chat` included: its dry run takes the same admission).
 - `DeleteChat_Applied_AnswersTheRemovedId` — the envelope's `value` arm; `DeleteChat_DryRun_AnswersTheUsagePreview_AndRemovesNothing` — the `preview` arm with the usage count; `DeleteChat_UnknownChat_IsAToolError_TheNotFoundText`.
 - `ChatWriteTools_AreWrites_WithTheIdempotenceOfTheirName` — `ReadOnly=false` on all three; `Idempotent=false` for the create and the delete, `true` for the update.
 

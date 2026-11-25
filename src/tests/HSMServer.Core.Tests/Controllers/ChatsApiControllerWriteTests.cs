@@ -1,7 +1,9 @@
 using HSMServer.Authentication;
 using HSMServer.Controllers;
 using HSMServer.Core.Tests.Model.ManagementApi.Chats;
+using HSMServer.Filters;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Chats;
 using Microsoft.AspNetCore.Http;
@@ -9,6 +11,8 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
@@ -128,6 +132,36 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(ManagementApiErrors.NotFoundCode, ErrorBodyOf(result).Error);
         }
 
+        [Fact]
+        public async Task UpdateChat_VisibleChatTheCallerMayNotChange_Is403_WithTheAreasSingleMessage()
+        {
+            var chat = _world.AddChat("Ops alerts", global: false);
+            _world.RefuseChatWrites(ApiTokenAuthorization.Forbidden);
+
+            var result = await CreateController().UpdateChat(chat.Id, new UpdateChatRequestDto { Description = "on-call" });
+
+            Assert.Equal(403, StatusCodeOf(result));
+            var body = ErrorBodyOf(result);
+            Assert.Equal(ManagementApiErrors.ForbiddenCode, body.Error);
+            Assert.Equal(PolicyWriteResult.WriteDeniedMessage, body.Message);
+            Assert.Null(_world.Store.Single().Description);
+        }
+
+        [Fact]
+        public async Task UpdateChat_OutsideTheCallersSight_AnswersTheSame404_AsAnUnknownChat()
+        {
+            // Anti-enumeration, at the body level: status, code and message are one.
+            var chat = _world.AddChat("Ops alerts", global: false);
+            _world.RefuseChatWrites(ApiTokenAuthorization.NotFound);
+
+            var request = new UpdateChatRequestDto { Description = "on-call" };
+            var invisible = await CreateController().UpdateChat(chat.Id, request);
+            var unknown = await CreateController().UpdateChat(Guid.NewGuid(), request);
+
+            Assert.Equal(StatusCodeOf(unknown), StatusCodeOf(invisible));
+            Assert.Equal(ErrorBodyOf(unknown), ErrorBodyOf(invisible));
+        }
+
 
         // ---- delete -----------------------------------------------------------------
 
@@ -141,6 +175,31 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(204, StatusCodeOf(result));
             Assert.Empty(_world.Store);
+        }
+
+        [Fact]
+        public async Task DeleteChat_VisibleChatTheCallerMayNotChange_Is403_WithTheAreasSingleMessage()
+        {
+            var chat = _world.AddChat("Ops alerts", global: false);
+            _world.RefuseChatWrites(ApiTokenAuthorization.Forbidden);
+
+            var result = await CreateController().DeleteChat(chat.Id);
+
+            Assert.Equal(403, StatusCodeOf(result));
+            var body = ErrorBodyOf(result);
+            Assert.Equal(ManagementApiErrors.ForbiddenCode, body.Error);
+            Assert.Equal(PolicyWriteResult.WriteDeniedMessage, body.Message);
+            Assert.Single(_world.Store);
+        }
+
+        [Fact]
+        public void DeleteChat_CarriesTheDryRunHeaderMarker()
+        {
+            // The marker is what publishes X-HSM-Dry-Run in the OpenAPI document
+            // (DryRunHeaderSwaggerFilter) — without it the header is invisible to an agent
+            // reading only the spec.
+            Assert.NotNull(typeof(ChatsApiController).GetMethod(nameof(ChatsApiController.DeleteChat))
+                ?.GetCustomAttribute<DryRunHeaderAttribute>());
         }
 
         [Fact]

@@ -133,7 +133,7 @@ their twins: `create_product` → `POST /api/v1/products`; `list_access_keys` �
 | `src/server/HSMServer/Mcp/SensorTreeMcpTools.cs` | The five sensor-tree tools — rendering of `SensorTreeReadService` |
 | `src/server/HSMServer/Mcp/ProductsMcpTools.cs` | The create-product tool (#1786) — a delegation to `ProductAdministrationService`, the same engine the REST create endpoint runs on |
 | `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — a thin rendering of `AlertReadService` (#1393) |
-| `src/server/HSMServer/Mcp/ChatsMcpTools.cs` | The two chat tools — a thin rendering of `ChatsReadService` (the #1393 pattern) |
+| `src/server/HSMServer/Mcp/ChatsMcpTools.cs` | The chat tools — `list_chats`/`get_chat` as a thin rendering of `ChatsReadService` (the #1393 pattern), the #1826 verification pair of `ChatVerificationService`, and the #1829 write trio of `ChatWriteService` |
 | `src/server/HSMServer/Mcp/FoldersMcpTools.cs` | The two folder tools — a thin rendering of `FoldersReadService` |
 | `src/server/HSMServer/Mcp/PoliciesMcpTools.cs` | The policy tools: the two list reads over `AlertReadService` (#1615, the id discovery half of the surface) and the six write tools — delegations to `PolicyAdministrationService` |
 | `src/server/HSMServer/Mcp/SensorMoveMcpTools.cs` | The two sensor-move tools (#1721) — delegations to `SensorMoveAdministrationService` |
@@ -143,7 +143,7 @@ their twins: `create_product` → `POST /api/v1/products`; `list_access_keys` �
 | `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorDeletionAdministrationService.cs` | The sensor-deletion write engine shared with the REST `SensorsApiController` DELETE (#1637) |
 | `src/server/HSMServer/Mcp/McpToolWriteErrors.cs` | `PolicyWriteResult` -> tool error text, the same strings the REST arm produces (conflict detail pointers included) |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
-| `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes, the compact `McpSensorSummary`, the write-tool `McpWriteResult` envelope (#1605) and the `McpSensorDeleteResult` twin with the typed deletion preview (#1637); item DTOs are the REST ones |
+| `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes, the compact `McpSensorSummary`, the write-tool `McpWriteResult` envelope (#1605), the `McpSensorDeleteResult` twin with the typed deletion preview (#1637) and the chat deletion's `McpChatDeleteResult` (#1829); item DTOs are the REST ones |
 | `src/server/HSMServer/Model/ManagementApi/AlertSchedules/AlertScheduleYamlDocs.cs` | The schedule YAML grammar text (`[Description]` payload) shared by the schedule upsert/read DTOs — keep in sync with `AlertScheduleParser` |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertVariablesDocs.cs` | The alert-template variable table (`[Description]` payload) shared by both template-bearing DTOs — keep in sync with `AlertState`'s `[AlertVariable]s` (#1556) |
 | `src/server/HSMServer/Model/ManagementApi/Alerts/AlertPropertyMatrixDocs.cs` | The condition-property x sensor-type availability matrix (`[Description]` payload) shared by both condition DTOs — keep in sync with `AlertPolicyConditionRules` (#1556) |

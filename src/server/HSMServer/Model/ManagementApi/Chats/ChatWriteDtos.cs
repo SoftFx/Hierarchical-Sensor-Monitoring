@@ -88,9 +88,12 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// The complete list of folders to bind the chat to — a full replace among the
         /// folders the token's owner manages: a managed binding not listed is removed, a
         /// binding to a folder the owner cannot manage stays, every listed id must be a
-        /// folder the owner manages. Null (omitted): the bindings stay as they are.
+        /// folder the owner manages. Null (omitted): the bindings stay as they are. When
+        /// the update leaves the chat bound only to folders the caller cannot see, the echo
+        /// shows an empty <c>folders</c> and the chat is no longer in the caller's sight (a
+        /// later read answers 404).
         /// </summary>
-        [Description("The complete list of folders to bind the chat to: a full replace among the folders the token's owner manages. A managed binding not listed is removed; a binding to a folder the owner cannot manage stays; every listed id must be a folder the owner manages. Omitted: the bindings stay as they are.")]
+        [Description("The complete list of folders to bind the chat to: a full replace among the folders the token's owner manages. A managed binding not listed is removed; a binding to a folder the owner cannot manage stays; every listed id must be a folder the owner manages. Omitted: the bindings stay as they are. If the update leaves the chat bound only to folders you cannot see, the echo shows an empty `folders` and the chat leaves your sight (a later read answers 404).")]
         public List<Guid> Folders { get; init; }
     }
 

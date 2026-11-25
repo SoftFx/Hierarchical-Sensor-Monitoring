@@ -24,14 +24,17 @@ namespace HSMServer.Model.ManagementApi.Chats
     /// re-implements no write rule. Transport-agnostic: the REST controller and the MCP
     /// tools both call it and get the area's write envelope back, never an IActionResult.
     /// </summary>
-    // Admission mirrors the web editor's gates (TelegramRoleFilterBase):
+    // Admission mirrors the web editor's gates (TelegramRoleFilterBase), and both of its
+    // decisions are the evaluator's, recorded like every write denial of the area:
     //  - create is admin-only (AuthorizeChatCreate) — a chat created with an attacker-
-    //    supplied webhook would exfiltrate every alert sent to it;
-    //  - update and delete take the chat's detail rule — an admin or the manager of a
-    //    folder the chat is bound to — so a global chat is admin-only. The area's
-    //    anti-enumeration split holds: an INVISIBLE chat (unknown, or bound only to
-    //    folders the owner cannot see) answers the same 404 as an unknown one; only a
-    //    visible chat the caller may not change answers 403.
+    //    supplied webhook would exfiltrate every alert sent to it. A non-admin answers 403,
+    //    never 404: a creation has no target whose existence a 403 could disclose;
+    //  - update and delete take the chat's detail rule (AuthorizeChatWrite) — an admin or
+    //    the manager of a folder the chat is bound to — behind the read surface's sight
+    //    rule, so a global chat is admin-only. The area's anti-enumeration split holds: an
+    //    INVISIBLE chat (unknown, or bound only to folders the owner cannot see) answers
+    //    the same 404 as an unknown one; only a visible chat the caller may not change
+    //    answers 403.
     // Every write carries the token's owner: as the author of a new row, and as the
     // initiator the storage journals (the chat records of #1828).
     public sealed class ChatWriteService
@@ -68,20 +71,24 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         public async Task<PolicyWriteResult<ChatDto>> CreateChat(CreateChatRequestDto request, ClaimsPrincipal caller)
         {
-            if (_authorization.AuthorizeChatCreate(caller) != ApiTokenAuthorization.Allowed || OwnerOf(caller) is not { } owner)
-                return Forbidden<ChatDto>();
+            if (_authorization.AuthorizeChatCreate(caller) != ApiTokenAuthorization.Allowed)
+                return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Forbidden, message: PolicyWriteResult.WriteDeniedMessage);
 
             var chatId = Guid.NewGuid();
             var update = ToUpdate(chatId, request);
             var folders = request?.Folders ?? [];
 
-            if (Validate(update, nameRequired: true, folders, caller) is { } errors)
+            if (RequestProblems(update, nameRequired: true, currentName: null, folders, caller) is { } errors)
                 return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             // A new chat has no binding to keep: the requested folders ARE its bindings. The
-            // engine only ever touches the folders the owner manages.
+            // engine only ever touches the folders the owner manages. The author of the row
+            // is the token's owner; Guid.Empty is the unreachable defensive arm of a claim
+            // the evaluator already resolved.
+            var authorId = Guid.TryParse(caller?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value, out var ownerId) ? ownerId : Guid.Empty;
+
             var result = await _engine.CreateChatAsync(update, new ChatFolderBinding(Keep: folders, Add: folders, Managed: ManagedFoldersOf(caller)),
-                owner.Id, InitiatorInfo.AsUser(owner.Name));
+                authorId, InitiatorOf(caller));
 
             if (!result.Success)
                 return PolicyWriteResult<ChatDto>.Fail(result.Failure.Outcome, ToWireKeys(result.Failure.Errors), result.Failure.Message);
@@ -95,24 +102,22 @@ namespace HSMServer.Model.ManagementApi.Chats
 
         /// <summary>
         /// Change a chat: a partial update — an omitted field does not change — for an
-        /// admin or the manager of a folder the chat is bound to.
+        /// admin or the manager of a folder it is bound to.
         /// </summary>
         public async Task<PolicyWriteResult<ChatDto>> UpdateChat(Guid chatId, UpdateChatRequestDto request, ClaimsPrincipal caller)
         {
-            // Admission first (the area's rule: it precedes body validation), in the
-            // anti-enumeration split: a chat outside the caller's sight is the same 404 as
-            // an unknown one.
-            if (_chats[chatId] is not { } chat || !ChatSight.IsVisible(caller, chat, _authorization))
+            // Admission first (the area's rule: it precedes body validation).
+            if (_chats[chatId] is not { } chat)
                 return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.NotFound);
 
-            if (!ChatSight.CanOperate(caller, chat, _authorization) || OwnerOf(caller) is not { } owner)
-                return Forbidden<ChatDto>();
+            if (RefusalOf(caller, chat) is { } refusal)
+                return PolicyWriteResult<ChatDto>.Fail(refusal);
 
             var update = ToUpdate(chatId, request);
             var current = StableCopy.Of(() => chat.Folders);
             var listed = request?.Folders;
 
-            if (Validate(update, nameRequired: false, listed ?? [], caller) is { } errors)
+            if (RequestProblems(update, nameRequired: false, chat.Name, listed ?? [], caller) is { } errors)
                 return PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             // Folders omitted: nothing is added and nothing removed. Listed: the list is the
@@ -121,7 +126,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             var binding = new ChatFolderBinding(Keep: listed is { } desired ? desired : current, Add: listed ?? [],
                 Managed: ManagedFoldersOf(caller));
 
-            var result = await _engine.UpdateChatAsync(update, binding, InitiatorInfo.AsUser(owner.Name));
+            var result = await _engine.UpdateChatAsync(update, binding, InitiatorOf(caller));
 
             if (!result.Success)
                 return PolicyWriteResult<ChatDto>.Fail(result.Failure.Outcome, ToWireKeys(result.Failure.Errors), result.Failure.Message);
@@ -139,16 +144,16 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         public async Task<PolicyWriteResult> DeleteChat(Guid chatId, ClaimsPrincipal caller, bool dryRun = false)
         {
-            if (_chats[chatId] is not { } chat || !ChatSight.IsVisible(caller, chat, _authorization))
+            if (_chats[chatId] is not { } chat)
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
-            if (!ChatSight.CanOperate(caller, chat, _authorization) || OwnerOf(caller) is not { } owner)
-                return PolicyWriteResult.Fail(PolicyWriteOutcome.Forbidden, message: PolicyWriteResult.WriteDeniedMessage);
+            if (RefusalOf(caller, chat) is { } refusal)
+                return PolicyWriteResult.Fail(refusal);
 
             if (dryRun)
                 return PolicyWriteResult.OkPreview(PreviewOf(chat, caller));
 
-            if (!await _chats.TryRemove(new RemoveRequest(chatId, InitiatorInfo.AsUser(owner.Name))))
+            if (!await _chats.TryRemove(new RemoveRequest(chatId, InitiatorOf(caller))))
             {
                 // The honest-verification arm of the deletion pattern: a chat that vanished
                 // on the way is the plain 404, anything else the fixed-message conflict.
@@ -159,6 +164,19 @@ namespace HSMServer.Model.ManagementApi.Chats
 
             return PolicyWriteResult.Ok();
         }
+
+        // The admission of a change to an existing chat, in the anti-enumeration split:
+        // the evaluator's NotFound (the chat is outside the caller's sight) and Forbidden
+        // (visible, but the caller may not change it) pass through as they are; null when
+        // the write may go on. An unknown id never reaches the evaluator — the caller
+        // answers it the same 404 directly.
+        private PolicyWriteOutcome? RefusalOf(ClaimsPrincipal caller, Chat chat) =>
+            _authorization.AuthorizeChatWrite(caller, chat.Id, StableCopy.Of(() => chat.Folders)) switch
+            {
+                ApiTokenAuthorization.NotFound => PolicyWriteOutcome.NotFound,
+                ApiTokenAuthorization.Forbidden => PolicyWriteOutcome.Forbidden,
+                _ => null,
+            };
 
         // The counter behind the web chat list's usage badge (skipped sensors make it a
         // lower bound, as on the badge) and the bindings the deletion would take with it —
@@ -191,6 +209,16 @@ namespace HSMServer.Model.ManagementApi.Chats
             };
         }
 
+        private static ChatUpdate ToUpdate(Guid chatId, CreateChatRequestDto request) => new()
+        {
+            Id = chatId,
+            Name = request?.Name?.Trim(),
+            Description = request?.Description,
+            SendMessages = request?.SendMessages,
+            MessagesAggregationTimeSec = request?.MessagesAggregationTimeSec,
+            SlackWebhookUrl = WebhookOf(request?.SlackWebhookUrl),
+            MattermostWebhookUrl = WebhookOf(request?.MattermostWebhookUrl),
+        };
 
         private static ChatUpdate ToUpdate(Guid chatId, UpdateChatRequestDto request) => new()
         {
@@ -206,28 +234,18 @@ namespace HSMServer.Model.ManagementApi.Chats
             ClearTelegramBinding = request?.ClearTelegramBinding,
         };
 
-
-        private static ChatUpdate ToUpdate(Guid chatId, CreateChatRequestDto request) => new()
-        {
-            Id = chatId,
-            Name = request?.Name?.Trim(),
-            Description = request?.Description,
-            SendMessages = request?.SendMessages,
-            MessagesAggregationTimeSec = request?.MessagesAggregationTimeSec,
-            SlackWebhookUrl = WebhookOf(request?.SlackWebhookUrl),
-            MattermostWebhookUrl = WebhookOf(request?.MattermostWebhookUrl),
-        };
-
         // An empty webhook value never clears a stored one (a read never returns the URL, so
         // there is nothing to echo back): it means "no change", like an omitted field.
         private static string WebhookOf(string url) => string.IsNullOrWhiteSpace(url) ? null : url.Trim();
 
         // Every problem of a request in one map, keyed by the wire names; null when the
         // request is clean. The write rules are the engine's (the name, the webhook URL
-        // shape); this surface adds the two that have no meaning for a cookie user — the
-        // #1705 character rule of a name, on the API/MCP paths only, and the folder scope.
-        private Dictionary<string, string[]> Validate(ChatUpdate update, bool nameRequired, IReadOnlyCollection<Guid> folders,
-            ClaimsPrincipal caller)
+        // shape) — the same validation the engine runs before it applies, with the row's
+        // current name so a chat keeping its own name is no clash; this surface adds the two
+        // rules that have no meaning for a cookie user — the #1705 character rule of a name,
+        // on the API/MCP paths only, and the folder scope.
+        private Dictionary<string, string[]> RequestProblems(ChatUpdate update, bool nameRequired, string currentName,
+            IReadOnlyCollection<Guid> folders, ClaimsPrincipal caller)
         {
             var errors = new Dictionary<string, List<string>>();
 
@@ -242,7 +260,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             if (folders.Any(folderId => !_folders.TryGetValue(folderId, out _) || !_authorization.CanSeeFolderDetail(caller, folderId)))
                 Add("folders", FolderNotManagedMessage);
 
-            if (_engine.Validate(update, nameRequired)?.Failure?.Errors is { } engineErrors)
+            if (_engine.Validate(update, nameRequired, currentName)?.Failure?.Errors is { } engineErrors)
                 foreach (var (field, messages) in ToWireKeys(engineErrors))
                     errors[field] = [.. errors.GetValueOrDefault(field, []), .. messages];
 
@@ -257,11 +275,8 @@ namespace HSMServer.Model.ManagementApi.Chats
         private ChatDto Echo(Chat chat, ClaimsPrincipal caller) =>
             ChatDtoMapper.ToDto(chat, folderId => _authorization.IsVisible(caller, ApiTokenResource.Folder(folderId)), includeDetail: true);
 
-        private User OwnerOf(ClaimsPrincipal caller) =>
-            Guid.TryParse(caller?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value, out var ownerId) ? _users[ownerId] : null;
-
-        private static PolicyWriteResult<T> Forbidden<T>() =>
-            PolicyWriteResult<T>.Fail(PolicyWriteOutcome.Forbidden, message: PolicyWriteResult.WriteDeniedMessage);
+        // The area's one rule for a journal author string: the token's owner, by name.
+        private InitiatorInfo InitiatorOf(ClaimsPrincipal caller) => ChangeSetRecorder.InitiatorOf(caller, _users);
 
         // The engine keys a rejection by the update's property names, which are the web
         // form's field keys; the wire names the same properties in camelCase.

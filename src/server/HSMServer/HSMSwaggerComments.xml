@@ -3297,27 +3297,6 @@
             at all, so a non-empty unfiltered case cannot arise.
             </summary>
         </member>
-        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatSight">
-            <summary>
-            The two chat predicates every management-surface service composes from the
-            evaluator's primitives — chats carry no resource kind of their own. One home, so the
-            verification and the write surfaces cannot drift apart.
-            </summary>
-        </member>
-        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatSight.IsVisible(System.Security.Claims.ClaimsPrincipal,HSMServer.Notifications.Chats.Chat,HSMServer.Authentication.IApiTokenAuthorizationService)">
-            <summary>
-            The caller sees the chat when it is GLOBAL (bound to no folder — attachable from
-            every node's policies) or bound to at least one folder the caller can see; the
-            read service's list predicate (ChatsReadService.IsChatVisible).
-            </summary>
-        </member>
-        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatSight.CanOperate(System.Security.Claims.ClaimsPrincipal,HSMServer.Notifications.Chats.Chat,HSMServer.Authentication.IApiTokenAuthorizationService)">
-            <summary>
-            The caller may CHANGE the chat — its detail rule, the token-side twin of the web
-            editor's gate (TelegramRoleFilterById): an admin or the manager of a folder the
-            chat is bound to. A global chat passes no folders, so changing it is admin-only.
-            </summary>
-        </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService">
             <summary>
             The read surface for notification chats: list and item, with the
@@ -3458,7 +3437,10 @@
             The complete list of folders to bind the chat to — a full replace among the
             folders the token's owner manages: a managed binding not listed is removed, a
             binding to a folder the owner cannot manage stays, every listed id must be a
-            folder the owner manages. Null (omitted): the bindings stay as they are.
+            folder the owner manages. Null (omitted): the bindings stay as they are. When
+            the update leaves the chat bound only to folders the caller cannot see, the echo
+            shows an empty <c>folders</c> and the chat is no longer in the caller's sight (a
+            later read answers 404).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDeletePreviewDto">
@@ -3493,7 +3475,7 @@
         <member name="M:HSMServer.Model.ManagementApi.Chats.ChatWriteService.UpdateChat(System.Guid,HSMServer.Model.ManagementApi.Chats.UpdateChatRequestDto,System.Security.Claims.ClaimsPrincipal)">
             <summary>
             Change a chat: a partial update — an omitted field does not change — for an
-            admin or the manager of a folder the chat is bound to.
+            admin or the manager of a folder it is bound to.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.Chats.ChatWriteService.DeleteChat(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Boolean)">
@@ -4489,10 +4471,25 @@
             promised the uniqueness that nothing enforced.
             </summary>
         </member>
-        <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.FindError(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
+        <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.FindError(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat},System.String)">
             <summary>
             The message of the first rule the name breaks, or null when the name is valid.
-            The name arrives trimmed (the write engine trims it).
+            The name arrives trimmed (the write engine trims it). A row that KEEPS its own
+            name breaks nothing: the rule guards changes, not history — chats duplicated
+            before the rule existed, or named by the Telegram flow under one long group
+            title, stay editable until someone renames them.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.IsTaken(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
+            <summary>Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring case.</summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.UniqueIn(System.String,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
+            <summary>
+            A name no stored chat holds yet: the proposed one, or it with " (2)", " (3)"…
+            appended — for the rows the Telegram /start flow creates, named after the chat
+            title or the username, where nobody is there to pick another name. A proposal
+            the rule could not have written (blank, or longer than the rule allows) is
+            left as it is.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

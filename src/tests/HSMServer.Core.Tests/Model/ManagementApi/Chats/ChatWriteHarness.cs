@@ -108,8 +108,14 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             });
 
             // An admin owner entitled by default; the refusal scenarios override one decision.
+            // The chat admission itself (sight and the change gate) is the evaluator's, pinned
+            // in ApiTokenAuthorizationServiceTests: here its decision is an input.
             Authorization.Setup(a => a.AuthorizeChatCreate(It.IsAny<ClaimsPrincipal>()))
                 .Returns(ApiTokenAuthorization.Allowed);
+            Authorization.Setup(a => a.AuthorizeChatWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>(), It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+            // Every folder is in the caller's sight by default (the echo and the delete
+            // preview list only visible bindings).
             Authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
             Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>()))
@@ -117,6 +123,12 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Authorization.Setup(a => a.CanSeeFolderDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>()))
                 .Returns((ClaimsPrincipal _, Guid folderId) => FolderStore.Any(f => f.Id == folderId) && !Unmanaged.Contains(folderId));
         }
+
+        // The evaluator refuses the change of a chat: the admission decision a non-manager
+        // (Forbidden) or a chat outside the owner's sight (NotFound) produces.
+        public void RefuseChatWrites(ApiTokenAuthorization decision) =>
+            Authorization.Setup(a => a.AuthorizeChatWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<Guid>(), It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(decision);
 
 
         public ChatWriteService CreateWriter() => new(Chats.Object, new ChatAdministrationService(Chats.Object, Folders.Object),

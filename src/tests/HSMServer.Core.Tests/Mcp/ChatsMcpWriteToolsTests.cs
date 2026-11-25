@@ -136,17 +136,21 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal(ManagementApiErrors.NotFoundMessage, error.Message);
         }
 
-        [Fact]
-        public async Task UpdateChat_VisibleChatTheCallerCannotChange_IsAToolError_CarryingTheRefusal()
+        [Theory]
+        [InlineData("update_chat")]
+        [InlineData("delete_chat")]
+        public async Task ChatWriteTools_VisibleChatTheCallerCannotChange_AreToolErrors_CarryingTheRefusal(string toolName)
         {
+            // The refusal reaches the agent as the same text the REST twin answers with.
             var chat = _world.AddChat("Ops alerts", global: false);
-            _world.Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<System.Security.Claims.ClaimsPrincipal>(),
-                    It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
-                .Returns(false);
+            _world.RefuseChatWrites(ApiTokenAuthorization.Forbidden);
 
-            var error = await Assert.ThrowsAsync<McpException>(() => CreateTools().UpdateChat(chat.Id, description: "on-call"));
+            var error = toolName == "update_chat"
+                ? await Assert.ThrowsAsync<McpException>(() => CreateTools().UpdateChat(chat.Id, description: "on-call"))
+                : await Assert.ThrowsAsync<McpException>(() => CreateTools().DeleteChat(chat.Id));
 
             Assert.Equal(PolicyWriteResult.WriteDeniedMessage, error.Message);
+            Assert.Single(_world.Store);
         }
 
 

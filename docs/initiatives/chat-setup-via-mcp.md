@@ -67,10 +67,13 @@ engine and gates). What remains of the problem above is the bot credential (#183
   ("Folder chats update", kind `folder`).
 - Validation: the name is required and at most 100 characters; since #1829 it is also unique per server
   ignoring case (excluding the chat itself) — `ChatNameValidator` behind `ChatAdministrationService.Validate`,
-  one rule for the API and the web form. Before, nothing enforced the uniqueness the
+  one rule for the API and the web form, and for the names the Telegram `/start` flow gives the chats it
+  creates. The rule guards changes, not history: a chat that keeps its own name breaks nothing, so duplicates
+  that predate it stay editable. Before, nothing enforced the uniqueness the
   `ChatDto` doc promises and alert import relies on (it resolves chats by name). A webhook must be an
-  absolute http/https URL (the same `Validate`, #1825); nothing else is
-  checked. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
+  absolute http/https URL (the same `Validate`, #1825); on the API/MCP paths #1829 adds the folder scope
+  (every listed folder must exist and be managed by the token's owner) and #1705's character rule on the
+  name; the web form checks nothing else. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
   `ClearTelegramBinding`): at the model an
   empty value means "no change", and the web form refuses an empty field for a stored webhook, pointing
   at the per-channel Remove button.

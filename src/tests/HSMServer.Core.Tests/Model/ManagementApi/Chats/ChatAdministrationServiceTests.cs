@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.TableOfChanges;
@@ -8,6 +10,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications.Chats;
 using Moq;
 using Xunit;
@@ -450,6 +453,84 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
 
             Assert.True(result.Success);
+        }
+
+
+        // The rule guards changes, not history: chats duplicated before names were unique
+        // (two Telegram groups under one title, say) keep their other settings editable
+        // while they keep their names — the web form always posts the name, even unchanged.
+        [Fact]
+        public async Task UpdateChat_KeepingANameAnotherChatAlsoHolds_IsAccepted()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops alerts")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Ops alerts")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "OPS ALERTS")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Ops alerts", Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+        [Fact]
+        public async Task CreateChat_OnAPreCreatedRowThatKeepsANameAnotherChatHolds_IsAccepted()
+        {
+            // The Add-chat form saving a row the /start flow pre-created.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Dev team")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "Dev team")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.True(result.Success);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateChat_OverlongNameOfAnOldRow_IsEditableUntilRenamed()
+        {
+            // Telegram allows group titles far beyond 100 characters: a row named after
+            // one keeps working while it keeps its name, and meets the length rule only
+            // when someone renames it.
+            var chatId = Guid.NewGuid();
+            var longTitle = new string('t', 120);
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: longTitle)));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var kept = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = longTitle, Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+            var renamed = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = new string('u', 120) },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(kept.Success);
+            Assert.Equal(PolicyWriteOutcome.Invalid, renamed.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameLengthMessage], renamed.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        // One rule, one text: the form formats its length message from the attribute's
+        // arguments and holds the name trimmed (the length rule measures the same value
+        // the engine measures); the engine carries the text as a constant.
+        [Fact]
+        public void TheWebFormAndTheEngine_SayTheSameAboutTheName()
+        {
+            var formName = typeof(ChatViewModel).GetProperty(nameof(ChatViewModel.Name));
+            var length = formName.GetCustomAttribute<StringLengthAttribute>();
+
+            Assert.Equal(ChatNameValidator.NameMaxLength, length.MaximumLength);
+            Assert.Equal(ChatNameValidator.NameLengthMessage, length.FormatErrorMessage("Name"));
+            Assert.Equal(ChatNameValidator.NameRequiredMessage, formName.GetCustomAttribute<RequiredAttribute>().ErrorMessage);
+            Assert.Equal("Ops alerts", new ChatViewModel { Name = "  Ops alerts  " }.Name);
         }
 
 

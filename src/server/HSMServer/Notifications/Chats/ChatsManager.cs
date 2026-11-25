@@ -200,7 +200,7 @@ namespace HSMServer.Notifications.Chats
                 chat.Update(new ChatUpdate()
                 {
                     Id = chat.Id,
-                    Name = isUserChat ? message.From.Username : message.Chat.Title
+                    Name = TelegramChatName(isUserChat ? message.From.Username : message.Chat.Title)
                 });
             }
 
@@ -243,7 +243,7 @@ namespace HSMServer.Notifications.Chats
                 Id = chatId.ToByteArray(),
                 Author = user.Id.ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                Name = isUserChat ? message.From?.Username : incomingChat.Title,
+                Name = TelegramChatName(isUserChat ? message.From?.Username : incomingChat.Title),
                 SendMessages = Chat.DefaultSendMessages,
                 MessagesAggregationTimeSec = Chat.DefaultMessagesAggregationTimeSec,
                 TelegramChatId = incomingChat.Id,
@@ -261,6 +261,13 @@ namespace HSMServer.Notifications.Chats
 
             return new ChatConnectResult(ChatConnectOutcome.ChatBound, chat.Name);
         }
+
+        // A chat the /start flow creates is named after the Telegram chat — the group
+        // title, or the username of a direct chat. Chat names are unique per server
+        // (#1829) and two groups may share a title, so a name another chat holds gets
+        // " (2)", " (3)"… appended: nobody is there to pick another name.
+        private string TelegramChatName(string proposed) =>
+            ChatNameValidator.UniqueIn(proposed, GetValues());
 
         // Strict conflict policy: refuse if (a) the target Chat already has a different TelegramChatId
         // (rebind — admin must explicitly Remove Telegram via EditChat first), or (b) the incoming
