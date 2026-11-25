@@ -7705,9 +7705,12 @@ namespace
             Require(small.Open(WsUrl(server), {}, "", 5000).ok, "the first upgrade must succeed");
             Require(WaitUntil([&] { return server.Connected(); }), "the server must be serving the first connection");
 
-            Require(server.SendText(std::string(kCap, 'c')), "the server must be able to send a message of exactly the cap");
+            // Written by a thread of the server while this one reads: 1 MiB need not fit the
+            // loopback buffers of an idle reader.
+            server.PushText(std::string(kCap, 'c'));
             Require(small.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text.size() == kCap,
                     ("a message of exactly the cap must be received: " + error).c_str());
+            Require(server.JoinPushes(), "the server must have written the message of exactly the cap");
 
             Require(server.SendBinary("\x01\x02\x03"), "the server must be able to send a binary message");
             Require(small.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Error, "a binary message from the server must still be refused");
@@ -8722,6 +8725,27 @@ namespace
         transport.Start();
         Require(WaitUntilFor([&] { return transport.CurrentSession().generation == 5; }, 10000), "the session after a restart must have generation 5");
         Require(transport.CurrentSession().session_id == "ABCDEF0123456789abcdef0123456789", "an id in upper case is as the server wrote it");
+
+        // Ids of the right length (32 characters once the JSON is decoded) that are not hex digits:
+        // the length check lets them through, the digit check must not. A restart for each, so
+        // the reconnect waits no backoff.
+        const char* const not_hex[] = {
+            "0123456789abcdef0123456789abcd\\r\\n", // 30 hex digits, CR, LF
+            "0123456789abcdef0123456789abcdeg",     // 31 hex digits and a 'g'
+            "0123456789abcdef 123456789abcdef",     // a space
+            "0123456789abcdef0123456789abcde\\u0000" // 31 hex digits and a NUL
+        };
+        uint64_t generation = 5;
+        for (const char* id : not_hex)
+        {
+            transport.Stop(1000);
+            server.SetHelloSessionId(id);
+            transport.Start();
+            ++generation;
+            Require(WaitUntilFor([&] { return transport.CurrentSession().generation == generation; }, 10000),
+                    (std::string("a session whose id is not hex must come up: ") + id).c_str());
+            Require(transport.CurrentSession().session_id.empty(), (std::string("an id that is not hex gives an empty id: ") + id).c_str());
+        }
         transport.Stop(1000);
     }
 
