@@ -35,14 +35,14 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "list_journal_records", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Lists journal records of configuration changes touching entities visible to the token's owner, newest first. Every write of a single request (one tool call, one HTTP request, one form save) shares one undo group. Filter by author, time range, entity kind (sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, other), root product or entity id. Page with limit/offset; a short or empty page is the end of the stream.")]
+        [Description("Lists journal records of configuration changes touching entities visible to the token's owner, newest first. Every write of a single request (one tool call, one HTTP request, one form save) shares one undo group. Filter by author, time range, entity kind (sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, chat, serverSettings, other), root product or entity id. Page with limit/offset; a short or empty page is the end of the stream.")]
         public Task<McpJournalRecordsResult> ListJournalRecordsAsync(
             [Description("Author substring filter (case-insensitive).")] string author = null,
             [Description("Recorded at or after, UTC ISO 8601 (default now - 30 days).")] DateTime? fromUtc = null,
             [Description("Recorded at or before, UTC ISO 8601.")] DateTime? toUtc = null,
-            [Description("Entity kind filter: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder or other.")] string kind = null,
+            [Description("Entity kind filter: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, chat, serverSettings or other.")] string kind = null,
             [Description("Only records of this root product id.")] Guid? productId = null,
-            [Description("Only records keyed by this entity id (sensor, product, folder, template, schedule).")] Guid? entityId = null,
+            [Description("Only records keyed by this entity id (sensor, product, folder, template, schedule, chat).")] Guid? entityId = null,
             [Description("Page size, 1..200 (default 50).")] int limit = 50,
             [Description("Skip count (default 0).")] int offset = 0)
         {

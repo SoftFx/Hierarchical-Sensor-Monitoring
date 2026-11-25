@@ -14,7 +14,9 @@ using NLog;
 using HSMCommon.Extensions;
 using System.Text;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Restore;
+using HSMServer.Core.TableOfChanges;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -23,10 +25,12 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database, IRestoreService restoreService) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService,
+        IDatabaseCore database, IRestoreService restoreService, JournalAppender journal) : Controller
     {
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
         private readonly IRestoreService _restoreService = restoreService;
+        private readonly JournalAppender _journal = journal;
 
         protected readonly Logger _logger = LogManager.GetLogger(typeof(ConfigurationController).Name);
 
@@ -152,18 +156,21 @@ namespace HSMServer.Controllers
         {
             if (ModelState.IsValid)
             {
-                string changes = BuildTelegramChangesText(config.Telegram, settings, GetUserName());
-                if (string.IsNullOrEmpty(changes))
+                var changes = TelegramSettingsChanges.Between(config.Telegram, settings);
+
+                if (changes.Count == 0)
                     _logger.Warn("SaveTelegramSettings: no changes detected");
                 else
                 {
-                    _logger.Info($"SaveTelegramSettings: {changes}");
+                    _logger.Info($"SaveTelegramSettings: {TelegramSettingsChanges.Describe(changes, GetUserName())}");
 
                     config.Telegram.IsRunning = settings.IsEnabled;
                     config.Telegram.BotToken = settings.BotToken;
                     config.Telegram.BotName = settings.BotName;
 
                     config.ResaveSettings();
+
+                    TelegramSettingsChanges.Write(changes, _journal, InitiatorInfo.AsUser(GetUserName()));
                 }
             }
 
@@ -298,29 +305,6 @@ namespace HSMServer.Controllers
 
             return $"{userName} is changing server config:{Environment.NewLine}{sb.ToString()}";
         }
-
-        // internal for the #1824 pin: the change description is what SaveTelegramSettings logs.
-        internal static string BuildTelegramChangesText(TelegramConfig telegramConfig, TelegramSettingsViewModel telegramSettings, string userName)
-        {
-            StringBuilder sb = new StringBuilder();
-
-            if (telegramConfig.IsRunning != telegramSettings.IsEnabled)
-                sb.AppendLine($"IsRunning: {telegramConfig.IsRunning} -> {telegramSettings.IsEnabled}");
-
-            if (telegramConfig.BotToken != telegramSettings.BotToken)
-                sb.AppendLine("BotToken: changed"); // the token is a secret: say THAT it changed, never the value (#1824)
-
-            if (telegramConfig.BotName != telegramSettings.BotName)
-                sb.AppendLine($"BotName: {telegramConfig.BotName} -> {telegramSettings.BotName}");
-
-            string changes = sb.ToString();
-
-            if (string.IsNullOrEmpty(changes))
-                return null;
-
-            return $"{userName} is changing Telegram config:{Environment.NewLine}{sb.ToString()}";
-        }
-
 
         private static string BuildBackupChangesText(BackupDatabaseConfig backupConfig, BackupSettingsViewModel backupSettings, string userName)
         {

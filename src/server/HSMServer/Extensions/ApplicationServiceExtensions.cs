@@ -64,7 +64,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
-                    .AddSingleton<IJournalService, JournalService>();
+                    .AddSingleton<IJournalService, JournalService>()
+                    .AddSingleton<HSMServer.Core.Journal.JournalAppender>();
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.

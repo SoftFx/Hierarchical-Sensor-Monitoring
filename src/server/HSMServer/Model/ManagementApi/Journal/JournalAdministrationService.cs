@@ -309,7 +309,7 @@ namespace HSMServer.Model.ManagementApi.Journal
             // group stamp from its request without being undoable itself).
             if (!JournalKinds.IsRollbackable(record.Kind) || !Guid.TryParse(record.ChangeSetId, out var changeSetId))
                 return Task.FromResult(PolicyWriteResult<RollbackResultDto>.Fail(PolicyWriteOutcome.Conflict,
-                    message: "The journal record is not rollbackable: its kind has no undo entry (tree CRUD, node settings) or its write predates the unified journal."));
+                    message: "The journal record is not rollbackable: its kind has no undo entry (tree CRUD, node settings, chats, server settings) or its write predates the unified journal."));
 
             // The cookie twin rides the engine's compensating writes; the
             // token default flows through the evaluator verbatim.

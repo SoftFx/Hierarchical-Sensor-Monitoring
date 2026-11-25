@@ -373,7 +373,7 @@
             <param name="author">Author substring filter (case-insensitive).</param>
             <param name="fromUtc">Recorded at or after (UTC ISO 8601; default now - 30 days).</param>
             <param name="toUtc">Recorded at or before (UTC ISO 8601).</param>
-            <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder or other.</param>
+            <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, chat, serverSettings or other.</param>
             <param name="productId">Only records of this root product.</param>
             <param name="entityId">Only records keyed by this entity id.</param>
             <param name="limit">Page size, 1..200 (default 100).</param>
@@ -1839,6 +1839,35 @@
             <paramref name="servedCertificate"/> returns the certificate Kestrel serves and whether it is the
             bundled default; it is only evaluated when the server terminates TLS.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges">
+            <summary>
+            What one save of the Telegram bot settings changes (#1824, #1828). The same list
+            feeds the log line of the save and the journal. The bot token is a secret: both say
+            THAT it changed, never the old or the new value.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges.Change">
+            <summary>
+            One changed setting. Property, OldValue and NewValue are the journal's cells;
+            LogLine is the save's log line for it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Change.#ctor(System.String,System.String,System.String,System.String)">
+            <summary>
+            One changed setting. Property, OldValue and NewValue are the journal's cells;
+            LogLine is the save's log line for it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.ServerConfiguration.TelegramConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel)">
+            <summary>
+            The changed settings of the save, in the order the log always listed them. An
+            absent and an empty value are the same setting: a server that was never
+            configured holds nulls, and the form posts an empty field as an empty string.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
         </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
             <summary>
@@ -4154,6 +4183,14 @@
             The outcome of a chat test message (#1826): delivered, or the same error text the
             channel logs. The web test actions ignore it (they answer OK as before); the
             management surface renders it to the caller.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatJournal">
+            <summary>
+            The journal's view of a chat (#1828): the state of its journaled settings at one
+            moment, and the records one write leaves between two such states. A record carries
+            a setting's old and new value — except where the value is a secret: a webhook reads
+            as the state of its channel, and the Telegram binding as not bound, bound or removed.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

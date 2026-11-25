@@ -551,7 +551,8 @@ namespace HSMServer.Core.Tests.Notifications
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = botName });
 
-            return new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, config.Object);
+            return new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, config.Object,
+                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
         }
 
         private static Chat BuildChat() =>
