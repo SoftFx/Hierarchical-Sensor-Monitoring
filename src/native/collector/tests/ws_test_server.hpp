@@ -268,6 +268,8 @@ namespace hsm::test
         ~WebSocketTestServer()
         {
             stop_.store(true, std::memory_order_release);
+            // A push ends once its frame is written or the client has gone.
+            JoinPushes();
             if (worker_.joinable())
                 worker_.join();
             // Every connection thread sees stop_ within one 20 ms poll and closes its socket.
@@ -349,6 +351,29 @@ namespace hsm::test
 
         // Server-initiated text message as ONE frame. False when no client is connected.
         bool SendText(const std::string& text) { return SendFrame(0x1, /*fin=*/true, text); }
+
+        // The same text as ONE frame, written by a thread of the server so that the test thread can
+        // read it meanwhile: a write larger than what the loopback socket buffers hold completes
+        // only while the client reads. JoinPushes() waits for every push and says whether all of
+        // them were written; the destructor joins any left.
+        void PushText(const std::string& text)
+        {
+            push_threads_.emplace_back([this, text] {
+                if (!SendText(text))
+                    push_failures_.fetch_add(1, std::memory_order_release);
+            });
+        }
+
+        bool JoinPushes()
+        {
+            for (auto& push : push_threads_)
+            {
+                if (push.joinable())
+                    push.join();
+            }
+            push_threads_.clear();
+            return push_failures_.load(std::memory_order_acquire) == 0;
+        }
 
         // The same text split into two frames (first not final, then a continuation).
         bool SendFragmented(const std::string& first, const std::string& second)
@@ -1287,6 +1312,9 @@ namespace hsm::test
         bool scripted_session_id_ = false;             // guarded by mutex_
         std::string session_id_;                       // guarded by mutex_
         std::vector<std::string> hello_session_ids_;   // guarded by mutex_
+
+        std::vector<std::thread> push_threads_; // PushText; touched by the test thread, then the destructor
+        std::atomic<int> push_failures_{ 0 };
 
         // Side connections. The threads are started by the accept loop and joined by the destructor.
         const std::atomic<bool> never_dropped_{ false };
