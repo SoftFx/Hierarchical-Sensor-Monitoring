@@ -438,6 +438,9 @@ namespace
         CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_table_sensor_add_rows(table.value, nullptr, nullptr, nullptr, 0, &taken)), "zero rows");
         CheckEqual(size_t{ 0 }, taken, "zero rows taken");
         CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_rows(table.value, nullptr, cells, nullptr, 1, &taken)), "null times");
+        // A row count no array can have (SIZE_MAX: an n - 1 below zero) is a wrong shape too.
+        std::int64_t time = 0;
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_rows(table.value, &time, cells, nullptr, SIZE_MAX, &taken)), "SIZE_MAX rows");
         CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "a wrong shape counted");
 
         // After dispose: a row is refused (and counted on the sensor), a create is refused.
@@ -1664,6 +1667,38 @@ namespace
         Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
+    // A row count that cannot be a real array (its rows would take more than INT64_MAX bytes) is a wrong
+    // shape on a sensor that accepts rows: refused, counted nowhere (not as a full buffer).
+    void ImpossibleRowCountIsAWrongShape()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(table).state), "registered");
+        std::int64_t time = 0;
+        hsm_table_cell_t cell;
+        cell.f64 = 1;
+        // 16 bytes a row: INT64_MAX / 16 + 1 rows pass INT64_MAX bytes; SIZE_MAX is an n - 1 below zero.
+        const std::size_t counts[] = { SIZE_MAX, static_cast<std::size_t>((std::numeric_limits<std::int64_t>::max)() / 16) + 1,
+                                       static_cast<std::size_t>((std::numeric_limits<std::int64_t>::max)()) };
+        for (const std::size_t count : counts)
+        {
+            std::size_t taken = 99;
+            CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_rows(table.value, &time, &cell, nullptr, count, &taken)),
+                       "rows " + std::to_string(count));
+            CheckEqual(std::size_t{ 0 }, taken, "taken");
+        }
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_accepted, "accepted");
+        CheckEqual(std::int64_t{ 0 }, tables::test::Pipeline(collector.value)->Ledger().Total(tables::TableDropReason::BufferFull), "buffer full");
+        CheckEqual(std::int64_t{ 0 }, tables::test::Pipeline(collector.value)->ReservedBytes(), "reserved");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+    }
+
     // A table run whose threads cannot be made (the host's thread limit: std::thread throws) is rolled
     // back: the collector's Start returns OK and runs, no thread of the table run is left, rows are
     // refused and counted, the sensors say why; the stop and the next Start work as usual. For the tick's
@@ -2164,6 +2199,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
         { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
         { "native_table_over_connection_limits", [](const std::string&) { TableOverConnectionLimits(); } },
+        { "native_table_impossible_row_count_is_a_wrong_shape", [](const std::string&) { ImpossibleRowCountIsAWrongShape(); } },
         { "native_table_start_failure_rolls_back", [](const std::string&) { StartFailureRollsBack(); } },
         { "native_table_stop_failure_completes", [](const std::string&) { StopFailureCompletes(); } },
         { "native_table_reports_reach_the_host_with_no_lock_held", [](const std::string&) { ReportsReachTheHostWithNoLockHeld(); } },

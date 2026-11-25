@@ -1274,7 +1274,9 @@ hsm_result_t hsm_table_sensor_add_row(hsm_table_sensor_t* sensor, int64_t time_u
 /* Adds `row_count` rows at once, all or nothing. `cells` is row-major (row_count x column count);
    `nulls` is NULL or a bit map in which bit r * column count + c marks row r, column c. The result
    codes are those of hsm_table_sensor_add_row. `out_rows_taken` (may be NULL) receives row_count or 0.
-   A row_count of 0 takes nothing and returns HSM_RESULT_OK. */
+   A row_count of 0 takes nothing and returns HSM_RESULT_OK. A row_count no array can have (its rows
+   would take more than INT64_MAX bytes, for example SIZE_MAX from an n - 1 below zero) is a wrong
+   shape: HSM_RESULT_INVALID_ARGUMENT, nothing counted. */
 hsm_result_t hsm_table_sensor_add_rows(hsm_table_sensor_t* sensor, const int64_t* times_unix_ns, const hsm_table_cell_t* cells, const uint8_t* nulls, size_t row_count, size_t* out_rows_taken);
 
 typedef enum hsm_table_sensor_state_t HSM_ENUM_INT32

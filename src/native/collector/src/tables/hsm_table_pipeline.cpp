@@ -245,6 +245,11 @@ namespace hsm::collector::tables
 
     hsm_result_t TableSensor::Add(const std::int64_t* times_unix_ns, const hsm_table_cell_t* cells, const std::uint8_t* nulls, std::size_t rows) noexcept
     {
+        // A count whose rows would take more than INT64_MAX bytes cannot be a real array (an n - 1 that
+        // went below zero, say): a wrong shape, refused and counted nowhere. Below it every count and
+        // every byte figure fits an int64.
+        if (static_cast<std::uint64_t>(rows) > static_cast<std::uint64_t>((std::numeric_limits<std::int64_t>::max)() / row_bytes_))
+            return HSM_RESULT_INVALID_ARGUMENT;
         const auto count = static_cast<std::int64_t>(rows);
         if (shared_->disposed.load(std::memory_order_acquire))
         {
@@ -265,11 +270,6 @@ namespace hsm::collector::tables
             return HSM_RESULT_INVALID_STATE;
         }
 
-        if (rows > static_cast<std::size_t>((std::numeric_limits<std::int64_t>::max)() / row_bytes_))
-        {
-            Drop(count, TableDropReason::BufferFull);
-            return HSM_RESULT_LIMIT_EXCEEDED;
-        }
         const std::int64_t bytes = count * row_bytes_;
         if (!shared_->TryReserve(bytes))
         {

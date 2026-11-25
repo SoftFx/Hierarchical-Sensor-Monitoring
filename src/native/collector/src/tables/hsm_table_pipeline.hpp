@@ -145,7 +145,9 @@ namespace hsm::collector::tables
         /// The bytes one buffered row counts against the buffer bound: 8 per column, the time included.
         std::int64_t RowBytes() const noexcept { return row_bytes_; }
 
-        /// One add call, all or nothing. The shape was checked by the caller. Never throws.
+        /// One add call, all or nothing. The pointers and the cell count were checked by the caller; a
+        /// row count that cannot be a real array is refused here (HSM_RESULT_INVALID_ARGUMENT, counted
+        /// nowhere). Never throws.
         hsm_result_t Add(const std::int64_t* times_unix_ns, const hsm_table_cell_t* cells, const std::uint8_t* nulls, std::size_t rows) noexcept;
 
         hsm_table_sensor_state_t State() const noexcept { return static_cast<hsm_table_sensor_state_t>(state_.load(std::memory_order_acquire)); }

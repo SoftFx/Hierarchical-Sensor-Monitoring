@@ -475,7 +475,8 @@ hsm_collector_stop(c); hsm_table_sensor_release(t);
   is read as the double with those bits). A cell without a value is a bit in `nulls`: bit `c` for
   `add_row`, bit `r * columns + c` for `add_rows`.
 - **Result codes** (existing values only): a wrong shape (NULL sensor or cells, a cell count other
-  than the column count) is `HSM_RESULT_INVALID_ARGUMENT` and counts nothing; a row the collector does
+  than the column count, a `row_count` no array can have: its rows would take more than `INT64_MAX`
+  bytes, as `SIZE_MAX` from an `n - 1` below zero) is `HSM_RESULT_INVALID_ARGUMENT` and counts nothing; a row the collector does
   not take is dropped and counted on the sensor (`rows_dropped`) and, while the collector runs, in the
   run's losses: `HSM_RESULT_INVALID_STATE` (not running, destroyed, `REFUSED`, `UNAVAILABLE`),
   `HSM_RESULT_LIMIT_EXCEEDED` (`max_buffer_bytes` reached, or the buffer could not grow). The add calls
