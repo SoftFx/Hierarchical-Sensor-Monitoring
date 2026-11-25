@@ -54,8 +54,41 @@ namespace HSMServer.Core.LargeFiles.Archives
     }
 
 
-    /// <summary>An archive being built: its new id and the temporary path to write it to (same volume as the archives).</summary>
-    public sealed record LargeArchiveTarget(Guid FileId, Guid ArchiveId, string TempPath);
+    /// <summary>
+    /// An archive being built: its new id, the archive the record named when the build began (null for a first pack: the
+    /// compare-and-swap value of the commit) and the temporary path to write it to (same volume as the archives).
+    /// </summary>
+    public sealed record LargeArchiveTarget(Guid FileId, Guid ArchiveId, Guid? ExpectedArchiveId, string TempPath);
+
+
+    public enum ArchiveBeginOutcome : byte
+    {
+        Started,
+
+        /// <summary>The store's volume cannot hold the archive now (a re-encryption reserves the current archive's length + 1 MiB).</summary>
+        NoRoom,
+
+        /// <summary>The file is unknown or was removed.</summary>
+        NotFound,
+
+        /// <summary>The file is neither verified nor packed.</summary>
+        WrongState,
+    }
+
+
+    public sealed record ArchiveBeginResult(ArchiveBeginOutcome Outcome, LargeArchiveTarget Target, TimeSpan? RetryAfter);
+
+
+    public enum ArchiveCommitOutcome : byte
+    {
+        Committed,
+
+        /// <summary>Another build committed first (the record no longer names the expected archive): the temporary file is deleted, nothing changes.</summary>
+        Superseded,
+
+        /// <summary>The file was removed during the build: the temporary file is deleted.</summary>
+        Removed,
+    }
 
 
     /// <summary>
@@ -85,19 +118,19 @@ namespace HSMServer.Core.LargeFiles.Archives
         string ArchivePath(LargeArchiveFile file);
 
         /// <summary>
-        /// True when the store's volume can take an archive of <paramref name="archiveBytes"/> for this file now, after its
-        /// minimum free space and the reservations of the other files.
+        /// Starts a build for a verified (first pack) or packed (re-encryption) file: a new archive id and its temporary path,
+        /// with the free space for it reserved until the commit or the abandon; or why not.
         /// </summary>
-        bool HasRoomForArchive(LargeArchiveFile file, long archiveBytes);
+        ArchiveBeginResult BeginArchive(Guid fileId);
 
-        /// <summary>A new archive id and its temporary path, for a verified (first pack) or packed (re-encryption) file.</summary>
-        LargeArchiveTarget BeginArchive(Guid fileId);
+        /// <summary>
+        /// Syncs the temporary file, renames it into the archives durably, writes the record as packed, then removes the part
+        /// (first pack) or the replaced archive (re-encryption). Superseded or Removed delete the temporary file and change
+        /// nothing. Only I/O faults throw.
+        /// </summary>
+        ArchiveCommitOutcome CommitArchive(LargeArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveSha256);
 
-        /// <summary>Syncs the temporary file, renames it into the archives durably, writes the record as packed, then
-        /// removes the part (first pack) or the replaced archive (re-encryption).</summary>
-        void CommitArchive(LargeArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveSha256);
-
-        /// <summary>Deletes the temporary file of a build; the record is unchanged.</summary>
+        /// <summary>Deletes the temporary file of a build and releases its reservation; the record is unchanged.</summary>
         void AbandonArchive(LargeArchiveTarget target);
     }
 
