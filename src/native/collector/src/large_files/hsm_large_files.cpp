@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <utility>
 
 namespace hsm::collector::large_files
@@ -280,8 +281,12 @@ namespace hsm::collector::large_files
         }
 
         // Waits `ms` on the collector's clock, servicing the file connection; false when stopping.
-        bool Wait(std::int64_t ms, const std::string& what, const Item* item)
+        // `idle`: the wait for nothing in particular also ends at a wake (a new watch or file, a scan, a
+        // cancel), so they are acted on at once.
+        bool Wait(std::int64_t ms, const std::string& what, const Item* item, bool idle = false)
         {
+            // The deadline first: a test's hook may move the manual clock by the wait.
+            const std::int64_t until = Now() + (std::max<std::int64_t>)(ms, 0);
             if (owner_.on_wait_for_tests)
             {
                 try
@@ -292,7 +297,11 @@ namespace hsm::collector::large_files
                 {
                 }
             }
-            const std::int64_t until = Now() + (std::max<std::int64_t>)(ms, 0);
+            std::uint64_t first = 0;
+            {
+                std::lock_guard<std::mutex> guard(shared_.mutex);
+                first = shared_.wakes;
+            }
             for (;;)
             {
                 if (Stopping(item))
@@ -301,6 +310,8 @@ namespace hsm::collector::large_files
                     return true;
                 ServiceConnection();
                 std::unique_lock<std::mutex> lock(shared_.mutex);
+                if (idle && shared_.wakes != first)
+                    return true;
                 const std::uint64_t seen = shared_.wakes;
                 shared_.cv.wait_for(lock, std::chrono::milliseconds(kSliceMs), [&] { return stop_.load() || shared_.wakes != seen; });
             }
@@ -528,6 +539,9 @@ namespace hsm::collector::large_files
         {
             if (!context_.unavailable_reason.empty())
                 return Outcome{ Result::Final, context_.unavailable_reason, 0 };
+            // A handed-over file refused in this run is not tried again before the next Start.
+            if (item.file && final_this_run_.count(item.path + "|" + item.name) != 0)
+                return Outcome{ Result::Final, "it was refused earlier in this run", 0 };
 
             Outcome outcome;
             if (!EnsureRegistered(item, outcome))
@@ -1593,7 +1607,7 @@ namespace hsm::collector::large_files
             {
                 CloseConnection();
                 const std::int64_t now = Now();
-                Wait((std::max<std::int64_t>)(1, (std::min<std::int64_t>)(wake_at - now, 1000)), "nothing to upload", nullptr);
+                Wait((std::max<std::int64_t>)(1, (std::min<std::int64_t>)(wake_at - now, 1000)), "nothing to upload", nullptr, /*idle=*/true);
                 return;
             }
             Outcome outcome;

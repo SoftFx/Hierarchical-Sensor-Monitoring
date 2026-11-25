@@ -357,7 +357,8 @@ add_executable(hsm_collector_tests
 if(HSM_COLLECTOR_LARGE_FILES)
     target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_LARGE_FILES=1)
     # The file connection against the scripted file side of tests/ws_test_server.hpp (#1887).
-    target_sources(hsm_collector_tests PRIVATE tests/hsm_file_connection_tests.cpp)
+    target_sources(hsm_collector_tests PRIVATE tests/hsm_file_connection_tests.cpp
+        tests/hsm_large_file_upload_tests.cpp) # the uploads end to end through the C ABI
 endif()
 
 target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
@@ -393,6 +394,32 @@ if(HSM_COLLECTOR_LARGE_FILES)
             native_large_file_hello_is_checked)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
+    # The uploads end to end: the C ABI, a collector on the session, the scripted file side.
+    foreach(name
+            native_large_file_mask_matches_both_collectors_rule
+            native_large_file_handed_file_is_stored_and_deleted
+            native_large_file_keep_mode_is_not_sent_again
+            native_large_file_settle_rule_on_a_growing_file
+            native_large_file_files_found_at_start_go_oldest_first
+            native_large_file_speed_limit_waits_between_frames
+            native_large_file_continues_after_a_drop
+            native_large_file_continues_after_a_restart
+            native_large_file_final_refusals_are_final_for_the_run
+            native_large_file_no_room_is_tried_again
+            native_large_file_three_discards_give_up
+            native_large_file_close_1008_is_final
+            native_large_file_empty_file_is_stored
+            native_large_file_http_transport_is_unavailable
+            native_large_file_argument_mistakes_and_dispose
+            native_large_file_stop_and_dispose_in_the_middle)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    if(WIN32)
+        add_test(NAME native_large_file_writer_holds_the_file COMMAND hsm_collector_tests native_large_file_writer_holds_the_file)
+    else()
+        add_test(NAME native_large_file_changed_file_is_discarded_and_sent_again
+            COMMAND hsm_collector_tests native_large_file_changed_file_is_discarded_and_sent_again)
+    endif()
     foreach(name
             native_file_connection_open_sends_the_upgrade_hello_and_probe
             native_file_connection_whole_upload_is_stored

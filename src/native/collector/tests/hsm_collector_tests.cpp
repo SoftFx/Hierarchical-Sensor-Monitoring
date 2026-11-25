@@ -11579,6 +11579,8 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileT
 #if defined(HSM_COLLECTOR_LARGE_FILES)
 // Defined in hsm_file_connection_tests.cpp (#1887).
 const std::map<std::string, std::function<void(const std::string&)>>& FileConnectionTests();
+// Defined in hsm_large_file_upload_tests.cpp (#1887).
+const std::map<std::string, std::function<void(const std::string&)>>& LargeFileUploadTests();
 #endif
 
 int main(int argc, char** argv)
@@ -11626,6 +11628,14 @@ int main(int argc, char** argv)
                 if (file_connection_test != file_connection_tests.end())
                 {
                     file_connection_test->second(argument);
+                    return 0;
+                }
+                // The uploads end to end live in hsm_large_file_upload_tests.cpp (#1887).
+                const auto& upload_tests = LargeFileUploadTests();
+                const auto upload_test = upload_tests.find(argv[1]);
+                if (upload_test != upload_tests.end())
+                {
+                    upload_test->second(argument);
                     return 0;
                 }
 #endif
