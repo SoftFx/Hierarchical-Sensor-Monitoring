@@ -38,7 +38,7 @@ namespace HSMServer.Controllers
 
         // What the import answers for a group it could not place. The same for an unknown id or name and
         // for one the user does not manage.
-        internal const string ImportTargetNotFound = "No node to import into: the file names no products, and the selected item is not a node you manage";
+        internal const string ImportTargetNotFound = "This file names no products: select a node you manage to import it";
         internal const string ProductNotFound = "No product you manage has this name";
 
         private static readonly JsonSerializerOptions _deserializeOptions = new()

@@ -189,6 +189,20 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task Import_ReportsEachProductNameOnce_HoweverManyGroupsNameIt()
+        {
+            // A folder file holds one group per alert, each listing its products: a name the user does not
+            // manage is reported once, so the limited list of names keeps room for the others.
+            var tree = new WebAccessFixture();
+            var groups = Enumerable.Range(0, 15).Select(i => Group(["cpu"], ["sibling"])).Append(Group(["cpu"], ["sibling", "foreign"]));
+
+            var answer = await tree.Alerts(tree.Manager).ImportAlerts(Import(tree.Folder.Id, System.Text.Json.JsonSerializer.Serialize(groups)));
+
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(answer, "sibling").Count);
+            Assert.Contains("foreign", answer);
+        }
+
+        [Fact]
         public async Task Import_ByProductName_ByAUserWhoManagesNoneOfThem_IsAnsweredLikeUnknownNames()
         {
             var tree = new WebAccessFixture();

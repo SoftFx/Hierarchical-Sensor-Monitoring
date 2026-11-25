@@ -75,18 +75,19 @@ namespace HSMServer.Core.Tests.Controllers
 
         /// <summary>An exported alerts file with one alert for the given relative sensor paths.</summary>
         internal static string File(string[] sensors, string[] products = null, string operation = "GreaterThan", string target = "10") =>
-            JsonSerializer.Serialize(new[]
+            JsonSerializer.Serialize(new[] { Group(sensors, products, operation, target) });
+
+        /// <summary>One alert group of an exported alerts file.</summary>
+        internal static object Group(string[] sensors, string[] products = null, string operation = "GreaterThan", string target = "10") =>
+            new
             {
-                new
-                {
-                    Products = products,
-                    Sensors = sensors,
-                    Conditions = new[] { new { Property = "Value", Operation = operation, Target = target } },
-                    Template = "imported",
-                    Icon = "!",
-                    Chats = new[] { "#empty" },
-                },
-            });
+                Products = products,
+                Sensors = sensors,
+                Conditions = new[] { new { Property = "Value", Operation = operation, Target = target } },
+                Template = "imported",
+                Icon = "!",
+                Chats = new[] { "#empty" },
+            };
 
         /// <summary>The policy list writes the cache has received.</summary>
         internal static List<SensorUpdate> ImportedPolicies(WebAccessFixture tree) =>
