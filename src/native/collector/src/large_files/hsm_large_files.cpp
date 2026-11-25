@@ -1615,6 +1615,12 @@ namespace hsm::collector::large_files
             if (!Pick(item, wake_at))
             {
                 CloseConnection();
+                // The piece buffers (about two pieces) are held only while files are uploaded.
+                if (!source_.empty() || frame_.capacity() != 0)
+                {
+                    std::vector<std::uint8_t>().swap(source_);
+                    std::vector<std::uint8_t>().swap(frame_);
+                }
                 const std::int64_t now = Now();
                 Wait((std::max<std::int64_t>)(1, (std::min<std::int64_t>)(wake_at - now, 1000)), "nothing to upload", nullptr, /*idle=*/true);
                 return;
