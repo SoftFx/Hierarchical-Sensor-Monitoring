@@ -292,7 +292,7 @@ services:
       - '${HSM_LARGE_FILES:-./LargeFiles}:/app/LargeFiles'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-8'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-9'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
