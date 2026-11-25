@@ -51,7 +51,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void AddDefault(DefaultAlertsOptions options);
 
+        internal abstract void AddLargeFileAlert(InitiatorInfo initiator);
+
         internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);
+
+        /// <summary>The message of the default alert of a File sensor created for large files (#1886).</summary>
+        public const string LargeFileAlertTemplate = "[$product]$path new file $fileName ($fileSize) $link $fileNote";
 
         internal bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error) =>
             TryUpdate(updates, initiator, out error, null);
@@ -548,6 +553,37 @@ namespace HSMServer.Core.Model.Policies
             if (policy.TryUpdate(statusUpdate, out _, _sensor))
             {
                 AddPolicy(policy);
+                Uploaded?.Invoke(ActionType.Add, policy);
+            }
+        }
+
+        // The default alert of a File sensor created for large files (#1886): "new data has been received", sent where
+        // the product's other alerts go, with the file's name, size and page. A policy like any other: persisted through
+        // Uploaded and journaled; the user may change or remove it, and nothing adds it again.
+        internal override void AddLargeFileAlert(InitiatorInfo initiator)
+        {
+            var policy = new PolicyType();
+
+            var update = new PolicyUpdate
+            {
+                Id = Guid.NewGuid(),
+                Status = SensorStatus.Ok,
+                Template = LargeFileAlertTemplate,
+                Destination = new PolicyDestinationUpdate(PolicyDestinationMode.FromParent),
+                Conditions =
+                [
+                    new PolicyConditionUpdate(
+                        PolicyOperation.ReceivedNewValue,
+                        PolicyProperty.NewSensorData,
+                        new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
+                ],
+            };
+
+            if (policy.TryUpdate(update, out _, _sensor))
+            {
+                AddPolicy(policy);
+
+                CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator);
                 Uploaded?.Invoke(ActionType.Add, policy);
             }
         }

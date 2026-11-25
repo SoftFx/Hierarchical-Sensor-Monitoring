@@ -32,7 +32,7 @@ namespace HSMServer.Model.FileSensors
         }
 
 
-        internal static bool IsLarge(FileValue file) => false;
+        internal static bool IsLarge(FileValue file) => file.IsLargeFile();
 
         /// <summary>A text preview for an ordinary csv or txt file small enough to show; never for a large value.</summary>
         internal static bool IsPreviewEnabled(FileValue file) =>

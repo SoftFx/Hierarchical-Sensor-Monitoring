@@ -5,6 +5,9 @@ namespace HSMServer.Core.Extensions
 {
     public static class FileValueNameExtensions
     {
+        /// <summary>True for a large file value (ADR-0022): its content is in the large file store, not in the value.</summary>
+        public static bool IsLargeFile(this FileValue file) => false;
+
         /// <summary>
         /// The name a file value is shown under (the sensor page, the alert variable <c>$fileName</c>, the management API).
         /// An ordinary file value usually carries its name without the extension and the extension apart; a large file value

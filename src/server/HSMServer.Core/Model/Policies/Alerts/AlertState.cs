@@ -115,6 +115,22 @@ namespace HSMServer.Core.Model.Policies
         public string Target { get; set; }
 
 
+        // The File sensor variables (#1886). Appended after every older variable, here and in BuildComment, so the
+        // positions of the older ones never move; no name contains another (a template is substituted by substring).
+
+        [AlertVariable("$fileName", "File sensor: the file name")]
+        public string FileName { get; private set; }
+
+        [AlertVariable("$fileSize", "File sensor: the file size")]
+        public string FileSize { get; private set; }
+
+        [AlertVariable("$link", "File sensor: a link to the sensor page")]
+        public string Link { get; private set; }
+
+        [AlertVariable("$fileNote", "File sensor: why a large file cannot be downloaded yet, empty otherwise")]
+        public string FileNote { get; private set; }
+
+
         static AlertState()
         {
             int index = 0;
@@ -178,7 +194,7 @@ namespace HSMServer.Core.Model.Policies
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
             Product, Path, Sensor, Unit, Status, Time, Comment, PrevStatus, PrevComment, PrevValue, ValueSingle, EmaValueSingle,
             MinValueBar, MaxValueBar, MeanValueBar, FirstValueBar, LastValueBar, CountBar, EmaMin, EmaMax, EmaMean, EmaCount,
-            Property, Operation, GetCorrectTarget());
+            Property, Operation, GetCorrectTarget(), FileName, FileSize, Link, FileNote);
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
@@ -212,6 +228,24 @@ namespace HSMServer.Core.Model.Policies
 
             if (sensor.LastValue is BaseValue<T> lastValue)
                 state.PrevValue = GetReadableValue(lastValue);
+
+            return state;
+        }
+
+        /// <summary>A File sensor's state: the generic one plus the file variables, which never carry the content.</summary>
+        public static AlertState Build(FileValue value, BaseSensorModel sensor)
+        {
+            var state = Build<byte[]>(value, sensor);
+
+            // $value and $prevValue of a file printed its byte array's type name; they stay as they were.
+            state.Link = sensor is null ? null : FileAlertContext.Current.SensorPageLink(sensor.Id);
+
+            if (value is not null)
+            {
+                state.FileName = FileAlertVariables.FileName(value);
+                state.FileSize = value.FileSizeToNormalString();
+                state.FileNote = FileAlertVariables.FileNote(value, sensor);
+            }
 
             return state;
         }

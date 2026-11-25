@@ -192,6 +192,11 @@ namespace HSMServer.ServiceExtensions
             // The file values of a File sensor for its page (#1886); stateless over the cache.
             services.AddSingleton<HSMServer.Model.FileSensors.FileSensorPageService>();
 
+            // The alert variables of File sensors (#1886): the link to the sensor page and whether a product's large
+            // files wait for its dump password (the dump password arrives with the download step, #1885).
+            services.AddSingleton<HSMServer.Core.Model.Policies.IFileAlertContext>(provider =>
+                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, _ => true));
+
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its
             // readers; every stateful collaborator it touches (the journal,
@@ -466,6 +471,9 @@ namespace HSMServer.ServiceExtensions
 
         public static async Task InitStorages(this IServiceProvider services)
         {
+            // Before the tree loads: every File policy reads it, whatever creates the policy.
+            HSMServer.Core.Model.Policies.FileAlertContext.Use(services.GetRequiredService<HSMServer.Core.Model.Policies.IFileAlertContext>());
+
             services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
 
             foreach (var type in _asyncStorageTypes)

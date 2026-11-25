@@ -2053,6 +2053,16 @@
             <paramref name="olderThanTicks"/>. No limit on how far back the pages go.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.FileSensors.ServerFileAlertContext">
+            <summary>
+            The server's <see cref="T:HSMServer.Core.Model.Policies.IFileAlertContext"/> (#1886). The base of <c>$link</c>: <c>HSM_DOMAIN</c> (the address the
+            bundled Caddy serves the web UI on), else <c>Agent.ExternalConnectionUrl</c>, else none: the link is then the path
+            of the page alone, which a chat does not make clickable.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.BaseAddress">
+            <summary>Scheme, host and an explicit port, without a trailing slash; empty when none is known.</summary>
+        </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
             <summary>
             Request for the node-level overlay chart (issue #1235): one node id plus the operator-chosen

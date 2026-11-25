@@ -4373,6 +4373,11 @@ namespace HSMServer.Core.Cache
 
                 //sensor.Policies.AddDefault(options);
 
+                // A File sensor created by a registration for large files (#1886) gets "new data has been received". Only
+                // at creation: a sensor that exists already gets nothing from a later registration with the flag.
+                if (type is SensorType.File && options.HasFlag(DefaultAlertsOptions.LargeFiles))
+                    sensor.Policies.AddLargeFileAlert(server is null ? InitiatorInfo.System : InitiatorInfo.AsSystemInfo(server.Initiator));
+
                 // Persist first so a DB failure can't leave an orphan in the in-memory
                 // caches. Any later failure (ChangeSensorEvent, ApplyTemplateToSensor,
                 // UpdateProduct, journal) must roll the row back too — tracked by
