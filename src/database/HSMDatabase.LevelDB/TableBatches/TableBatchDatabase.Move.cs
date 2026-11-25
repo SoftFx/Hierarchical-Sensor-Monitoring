@@ -63,15 +63,22 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 try
                 {
-                    RefuseDropped(product, [to]);
+                    // A refusal, not a fault: a repeat cannot write into a database retention dropped (its period has
+                    // passed: the caller deletes the source as expired instead).
+                    if (product.Dropped.Contains(to))
+                        throw new TableBatchRefusedException($"The table batch database {WeekName(to.WeekStartTicks, to.PeriodWeeks)} of product {productId} " +
+                                                             "was dropped by retention: nothing is copied into it.");
 
-                    var hours = ReadSensorHours(product, sensorId, from, firstHour, endHour);
-                    bool any = hours.Any(h => h.Records.Count > 0);
+                    // A copy never touches the target for an hour the source has nothing of: there, the target's moved rows
+                    // may be the sensor's only copy (a step repeated after it completed: copied, switched, its source
+                    // deleted). Only the hours the source holds records of are copied, each replacing the target's moved
+                    // keys of the sensor of that hour; with none, nothing is written at all.
+                    var hours = ReadSensorHours(product, sensorId, from, firstHour, endHour).Where(h => h.Records.Count > 0).ToList();
+                    if (hours.Count == 0)
+                        return default;
 
                     // Pinned as a part write is when it is the newest week: flushed when the next week starts.
-                    var handle = Acquire((productId, to.WeekStartTicks, to.PeriodWeeks), create: any, pin: to.WeekStartTicks >= product.PinnedWeek);
-                    if (handle is null)
-                        return default;
+                    var handle = Acquire((productId, to.WeekStartTicks, to.PeriodWeeks), create: true, pin: to.WeekStartTicks >= product.PinnedWeek);
 
                     try
                     {
@@ -86,9 +93,8 @@ namespace HSMDatabase.LevelDB.TableBatches
                         // A database created here is on disk from now on, whether or not the write below succeeds. It holds no
                         // row of another sensor (the source is a database of the same week, so the week had one already, and
                         // another sensor's rows of the week went into databases that existed then): only this sensor's
-                        // generation changes, also for a database created (below, once there is something to write: with
-                        // nothing in the source and nothing to delete in the target, no database is created, nothing is
-                        // written and no generation changes).
+                        // generation changes, also for a database created (with nothing in the source, no database is
+                        // created, nothing is written and no generation changes: returned above).
                         if (product.Weeks.Add(to))
                             product.Snapshot = null;
 
@@ -100,8 +106,8 @@ namespace HSMDatabase.LevelDB.TableBatches
                         using (var iterator = handle.Db.CreateIterator())
                             foreach (var hour in hours)
                             {
-                                // Every moved key of the sensor of the hour goes first: a repeat leaves exactly one copy, with
-                                // the ordinals of this write, however the earlier copy was cut.
+                                // Every moved key of the sensor of the hour (one the source holds records of) goes first: a repeat
+                                // leaves exactly one copy, with the ordinals of this write, however the earlier copy was cut.
                                 deletedBytes += DeleteMovedSensorKeys(iterator, sensorId, hour.Hour, batch, ref keys).Bytes;
 
                                 for (int i = 0; i < hour.Records.Count; i++)
@@ -120,12 +126,9 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                                 // Moved batches of an hour never sit in a database without the hour's mark; a mark already
                                 // there is the hour's own record, the same bytes.
-                                if (hour.Records.Count > 0 && handle.Db.Get(HourKey(hour.Hour, TagMark)) is null)
+                                if (handle.Db.Get(HourKey(hour.Hour, TagMark)) is null)
                                     batch.Put(HourKey(hour.Hour, TagMark), hour.Mark);
                             }
-
-                        if (keys == 0)
-                            return default;
 
                         // Before the write: a database it created is on disk whether the write succeeds or not.
                         product.ChangeSensor(sensorId);
@@ -146,7 +149,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                         Release(handle);
                     }
                 }
-                catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
+                catch (Exception ex) when (ex is not TableBatchStoreException and not TableBatchRefusedException and not CheckpointException)
                 {
                     Statistics.Add(ref Statistics.WriteFailures);
                     throw new TableBatchStoreException($"The table batches of sensor {sensorId} of product {productId} could not be copied from " +
@@ -177,7 +180,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                     try
                     {
                         using var batch = new WriteBatch();
-                        int keys = 0;
+                        int keys = 0, damaged = 0;
                         long batches = 0, rows = 0, bytes = 0;
 
                         using (var iterator = handle.Db.CreateIterator())
@@ -192,8 +195,12 @@ namespace HSMDatabase.LevelDB.TableBatches
                                     batch.Delete(key);
                                     keys++;
 
+                                    // A key of another length names no ordinal: deleted all the same (it carries the sensor's
+                                    // id), its batch, if any, left behind and not counted (the copy refuses such a key).
                                     if (key.Length == 37)
                                         batch.Delete(BatchKey(hour, BinaryPrimitives.ReadInt32BigEndian(key.AsSpan(33))));
+                                    else
+                                        damaged++;
 
                                     var (recordRows, recordBytes) = ReadIndexValue(iterator.Value());
                                     batches++;
@@ -218,6 +225,10 @@ namespace HSMDatabase.LevelDB.TableBatches
                         handle.Db.Write(batch, _syncWrite);
                         handle.Dirty = true;
                         product.ChangeSensor(sensorId);
+
+                        if (damaged > 0)
+                            _logger.Warn($"{damaged} index records of sensor {sensorId} in {WeekName(week.WeekStartTicks, week.PeriodWeeks)} of product {productId} had a damaged key " +
+                                         "and were deleted without the batch they may name: such a batch stays, uncounted, until the database is dropped");
 
                         Checkpoint?.Invoke("sensor-deleted");
                         return new TableBatchSensorHours(batches, rows, bytes);
@@ -506,7 +517,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                             {
                                 var key = iterator.Key();
                                 if (key.Length != (moved ? 38 : 37))
-                                    throw new TableBatchStoreException($"An index record of sensor {sensorId} of hour {new DateTime(hour, DateTimeKind.Utc):O} in " +
+                                    throw new TableBatchRefusedException($"An index record of sensor {sensorId} of hour {new DateTime(hour, DateTimeKind.Utc):O} in " +
                                                                        $"{WeekName(from.WeekStartTicks, from.PeriodWeeks)} of product {product.Id} has a key of {key.Length} bytes: it is not copied.");
 
                                 int at = moved ? 26 : 25;
@@ -526,7 +537,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                         {
                             mark = handle.Db.Get(HourKey(hour, TagMark));
                             if (mark is null)
-                                throw new TableBatchStoreException($"The hour {new DateTime(hour, DateTimeKind.Utc):O} in {WeekName(from.WeekStartTicks, from.PeriodWeeks)} of product {product.Id} " +
+                                throw new TableBatchRefusedException($"The hour {new DateTime(hour, DateTimeKind.Utc):O} in {WeekName(from.WeekStartTicks, from.PeriodWeeks)} of product {product.Id} " +
                                                                    $"holds batches of sensor {sensorId} and no mark: it is not copied.");
 
                             try
@@ -535,7 +546,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                             }
                             catch (FormatException ex)
                             {
-                                throw new TableBatchStoreException($"The mark of hour {new DateTime(hour, DateTimeKind.Utc):O} in {WeekName(from.WeekStartTicks, from.PeriodWeeks)} " +
+                                throw new TableBatchRefusedException($"The mark of hour {new DateTime(hour, DateTimeKind.Utc):O} in {WeekName(from.WeekStartTicks, from.PeriodWeeks)} " +
                                                                    $"of product {product.Id} is not the hour's record ({ex.Message}): it is not copied.", ex);
                             }
                         }
@@ -563,12 +574,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                 iterator.Seek(prefix);
 
                 if (iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix))
-                {
-                    Statistics.Add(ref Statistics.WriteFailures);
-                    throw new TableBatchStoreException($"The table batch database {WeekName(target.WeekStartTicks, target.PeriodWeeks)} of product {productId} holds batches of " +
+                    throw new TableBatchRefusedException($"The table batch database {WeekName(target.WeekStartTicks, target.PeriodWeeks)} of product {productId} holds batches of " +
                                                        $"sensor {sensorId} of hour {new DateTime(hour, DateTimeKind.Utc):O} in its hour region: nothing is copied into it " +
                                                        "until they are deleted (when it is not the class that holds the hour) or the copy is not made (when it is).");
-                }
             }
         }
 

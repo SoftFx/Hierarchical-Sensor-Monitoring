@@ -95,6 +95,15 @@ namespace HSMDatabase.AccessManager.TableBatches
     public sealed class TableBatchStoreException(string message, Exception inner = null) : Exception(message, inner);
 
 
+    /// <summary>
+    /// A refusal of the batch store (#1850 part 4c): what is on disk does not allow the call, and a repeat does not change
+    /// that (a target database retention dropped, rows of the sensor in the target's hour region, a source damaged). Nothing
+    /// was written. Not a <see cref="TableBatchStoreException"/> and not counted as a write failure: a caller that repeats
+    /// store faults does not repeat it, and the diagnostics of the disk do not show it.
+    /// </summary>
+    public sealed class TableBatchRefusedException(string message, Exception inner = null) : Exception(message, inner);
+
+
     /// <summary>Counters since the process started, for self-monitoring. Written with <see cref="Interlocked"/>.</summary>
     public sealed class TableBatchStoreStatistics
     {
@@ -338,20 +347,25 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>
         /// Copies a sensor's batches of the hours <c>[firstHour, endHour)</c> (inside the week of <paramref name="from"/>)
         /// from the database <paramref name="from"/> into the region of moved batches of the database of the same week and
-        /// class <paramref name="toClass"/>, in one synced write into that database: first every moved key of the sensor of
-        /// those hours there is deleted (so a repeat leaves exactly one copy), then, per hour, the sensor's index records and
-        /// batches of both regions of the source, in the order a read gives them (hour region before moved region, then by
-        /// ordinal), numbered again 0..n-1, as bytes (an index record whose batch is missing, or a batch that does not decode,
-        /// is carried as it is), and the hour's mark, the source's bytes, where the target has none. Creates the target
-        /// database when there is something to write; refuses (<see cref="TableBatchStoreException"/>, nothing written) a
-        /// target database retention dropped, an hour whose source holds the sensor's records but no mark, and a target that
-        /// holds index records of the sensor of any of those hours in its hour region (they may be the sensor's only rows of
-        /// the hour, in the class that holds it, or a source a move left behind: the store cannot tell, so it deletes nothing
-        /// and the caller, which knows from the placement that the target is not the class of those hours, deletes them first
-        /// with <see cref="DeleteSensorHours"/>; copied beside them, they would be read twice). Nothing written, no generation
-        /// changed. The source is
-        /// not changed. Changes only the sensor's generation. Bytes deleted in the target count in its deleted-bytes counter
+        /// class <paramref name="toClass"/>, in one synced write into that database. Only the hours the source holds records of
+        /// the sensor in are touched: a copy never touches the target for an hour the source has nothing of (there the target's
+        /// moved rows may be the sensor's only copy). For each such hour, every moved key of the sensor there is deleted first
+        /// (a repeat leaves exactly one copy), then the sensor's index records and batches of both regions of the source are put,
+        /// in the order a read gives them (hour region before moved region, then by ordinal), numbered again 0..n-1, as bytes
+        /// (an index record whose batch is missing, or a batch that does not decode, is carried as it is), and the hour's mark,
+        /// the source's bytes, where the target has none. With no such hour nothing is written at all: no database created, no
+        /// generation changed. Creates the target database when there is something to write. The source is not changed. Changes
+        /// only the sensor's generation. Bytes deleted in the target count in its deleted-bytes counter
         /// (<see cref="GetDeletedShare"/>). Answers what was written.
+        /// <para>
+        /// Refuses with <see cref="TableBatchRefusedException"/>, nothing written, no generation changed: a target database
+        /// retention dropped; a source hour with the sensor's records and no mark, a mark that does not decode, or an index key
+        /// of the sensor that does not parse; and a target that holds index records of the sensor of a copied hour in its hour
+        /// region (they may be the sensor's only rows of the hour, in the class that holds it, or a source a move left behind:
+        /// the store cannot tell, so it deletes nothing, and the caller, which knows from the placement that the target is not
+        /// the class of those hours, deletes them first with <see cref="DeleteSensorHours"/>; copied beside them, they would be
+        /// read twice). A fault of the disk or of LevelDB is a <see cref="TableBatchStoreException"/>.
+        /// </para>
         /// </summary>
         TableBatchSensorHours CopySensorHours(Guid productId, Guid sensorId, TableBatchWeek from, int toClass, long firstHour, long endHour);
 

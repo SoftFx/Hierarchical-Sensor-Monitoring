@@ -88,6 +88,66 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(default, store.CopySensorHours(_product, _sensorA, p1, 4, hour, hour + Hour));
             Assert.Equal(before, Generations());
             Assert.Null(store.ReadMark(_product, p4, hour));
+
+            // Nor into a database that holds moved rows of A of that hour: they are left as they are (they may be its only copy).
+            store = PutMoved(store, p4, hour, Mark(hour), Batch(_sensorA, hour + 5, 0), Batch(_sensorA, hour + 15, 1));
+            before = Generations();
+            var moved = store.ReadSensor(_product, _sensorA, 4, [hour]).Select(r => r.Batch).ToList();
+            Assert.Equal(2, moved.Count);
+            Assert.Equal(default, store.CopySensorHours(_product, _sensorA, p1, 4, hour, hour + Hour));
+            Assert.Equal(before, Generations());
+            Assert.Equal(moved, store.ReadSensor(_product, _sensorA, 4, [hour]).Select(r => r.Batch));
+            Assert.Equal(0, store.GetDeletedShare(_product, p4).DeletedBytes);
+        }
+
+        [Fact]
+        public void A_step_repeated_after_it_completed_leaves_the_targets_rows_intact_and_readable()
+        {
+            // A step P1 -> P4 of hours 1 and 2 completes: copied, switched, the source deleted. A's rows of those hours are
+            // only in P4's moved region.
+            var store = Open();
+            long h1 = Week0 + Hour, h3 = Week0 + 3 * Hour;
+            var (p1, p4) = (new TableBatchWeek(Week0, 1), new TableBatchWeek(Week0, 4));
+            store.WriteHour(_product, Commit(h1, 1), [Part(1, (_sensorA, Hour, 2), (_sensorB, Hour, 1))]);
+            store.WriteHour(_product, Commit(h1 + Hour, 2), [Part(1, (_sensorA, 2 * Hour, 1), (_sensorB, 2 * Hour, 1))]);
+            store.SetPlacement(_product, _sensorA, new TablePlacement(4, h1, [new TablePlacementSegment(h1, h3, 1)]));
+            var rows = ReadByPlacement(store, _sensorA, [h1, h1 + Hour]).Select(r => r.Batch).ToList();
+
+            store.CopySensorHours(_product, _sensorA, p1, 4, h1, h3);
+            store.SetPlacement(_product, _sensorA, new TablePlacement(4, h1));
+            store.DeleteSensorHours(_product, _sensorA, p1, h1, h3);
+            Assert.Equal(rows, ReadByPlacement(store, _sensorA, [h1, h1 + Hour]).Select(r => r.Batch));
+
+            // The same step again (a stale record at recovery, a retry, a caller's bug): the source has nothing, so nothing is
+            // written, and the only copy stays.
+            var generation = store.GetGeneration(_product, _sensorA);
+            Assert.Equal(default, store.CopySensorHours(_product, _sensorA, p1, 4, h1, h3));
+            Assert.Equal(rows, ReadByPlacement(store, _sensorA, [h1, h1 + Hour]).Select(r => r.Batch));
+            Assert.Equal(generation, store.GetGeneration(_product, _sensorA));
+            store.Dispose();
+            Assert.Equal(rows, ReadByPlacement(Open(), _sensorA, [h1, h1 + Hour]).Select(r => r.Batch));
+        }
+
+        [Fact]
+        public void A_copy_replaces_the_targets_moved_rows_of_the_hours_the_source_holds_and_leaves_the_other_hours_untouched()
+        {
+            // The target P4 holds moved rows of A of hours 1 and 2 (an earlier copy); the source P1 holds A's rows of hour 1 only.
+            var store = Open();
+            long h1 = Week0 + Hour, h2 = Week0 + 2 * Hour;
+            var (p1, p4) = (new TableBatchWeek(Week0, 1), new TableBatchWeek(Week0, 4));
+            store.WriteHour(_product, Commit(h1, 1), [Part(1, (_sensorA, Hour, 3))]);
+            store.WriteHour(_product, Commit(h2, 2), [Part(1, (_sensorB, 2 * Hour, 1))]);
+            store = PutMoved(store, p4, h1, Mark(h1), Batch(_sensorA, h1 + 7, 0));
+            store = PutMoved(store, p4, h2, Mark(h2), Batch(_sensorA, h2 + 7, 0), Batch(_sensorA, h2 + 17, 1));
+            var sourceH1 = store.ReadSensor(_product, _sensorA, 1, [h1]).Select(r => r.Batch).ToList();
+            var targetH2 = store.ReadSensor(_product, _sensorA, 4, [h2]).Select(r => r.Batch).ToList();
+
+            Assert.Equal(new TableBatchSensorHours(3, 30, 3 * PayloadLength), store.CopySensorHours(_product, _sensorA, p1, 4, h1, h2 + Hour));
+
+            // Hour 1: exactly the source's three batches (the one there before is deleted and counted); hour 2: as it was.
+            Assert.Equal(sourceH1, store.ReadSensor(_product, _sensorA, 4, [h1]).Select(r => r.Batch));
+            Assert.Equal(targetH2, store.ReadSensor(_product, _sensorA, 4, [h2]).Select(r => r.Batch));
+            Assert.Equal((long)PayloadLength, store.GetDeletedShare(_product, p4).DeletedBytes);
         }
 
         [Fact]
@@ -178,7 +238,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             store.WriteHour(_product, Commit(hour), [Part(1, (_sensorA, Hour, 1)), Part(4, (_sensorB, Hour, 1))]);
             store.DropWeek(_product, p4);
 
-            Assert.Throws<TableBatchStoreException>(() => store.CopySensorHours(_product, _sensorA, p1, 4, hour, hour + Hour));
+            Assert.Throws<TableBatchRefusedException>(() => store.CopySensorHours(_product, _sensorA, p1, 4, hour, hour + Hour));
             Assert.False(Directory.Exists(store.WeekPath(_product, Week0, 4)));
 
             Assert.Throws<ArgumentException>(() => store.CopySensorHours(_product, _sensorA, p1, 1, hour, hour + Hour));
@@ -194,7 +254,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
                 db.Delete(TableBatchDatabase.HourKey(hour, TableBatchDatabase.TagMark), new WriteOptions { Sync = true });
 
             store = Open();
-            Assert.Throws<TableBatchStoreException>(() => store.CopySensorHours(_product, _sensorA, p1, 5, hour, hour + Hour));
+            Assert.Throws<TableBatchRefusedException>(() => store.CopySensorHours(_product, _sensorA, p1, 5, hour, hour + Hour));
             Assert.False(Directory.Exists(store.WeekPath(_product, Week0, 5)));
             Assert.Single(store.ReadSensor(_product, _sensorA, 1, [hour]));
         }
@@ -329,9 +389,9 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             // switched a read of P1 would return every row twice. It is refused, with nothing written and no generation changed.
             var generations = (store.GetGeneration(_product), store.GetGeneration(_product, _sensorA));
             var failures = store.Statistics.WriteFailures;
-            Assert.Throws<TableBatchStoreException>(() => store.CopySensorHours(_product, _sensorA, p5, 1, hour, hour + Hour));
+            Assert.Throws<TableBatchRefusedException>(() => store.CopySensorHours(_product, _sensorA, p5, 1, hour, hour + Hour));
             Assert.Equal(generations, (store.GetGeneration(_product), store.GetGeneration(_product, _sensorA)));
-            Assert.Equal(failures + 1, store.Statistics.WriteFailures);
+            Assert.Equal(failures, store.Statistics.WriteFailures); // a refusal, not a fault of the disk
             Assert.Equal([false, false], store.ReadSensor(_product, _sensorA, 1, [hour]).Select(r => r.Moved));
 
             // The job, which knows from the placement that P1 is not the class of the hour, deletes the leftover first; then
