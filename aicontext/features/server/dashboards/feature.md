@@ -20,7 +20,7 @@ This document covers the subscriptions only. Panel layout, chart data and the da
 
 - **Match.** A subscription covers a sensor when all of these hold: the plotted property exists for the sensor's type, an EMA property is asked only of a sensor that has EMA statistics, the path template matches the whole `FullPath` (the semantics are those of alert templates, see `alerts/feature.md`), and the folder filter covers the folder of the sensor's root product.
 - **Folder filter.** No filter (`Folders` is null) covers every product. In a filter, `Guid.Empty` stands for "the product is in no folder". A product in no folder is covered only by a filter that contains `Guid.Empty`; a filter of real folders does not cover it, and the check must not throw for it.
-- **Acceptance by the panel.** A panel takes a source when the sensor type can be plotted, the type and the unit equal those of the sources already on the panel, and the panel has fewer than 100 sources. The first source sets the panel's type and unit; removing the last one clears them.
+- **Acceptance by the panel.** A panel takes a source when the sensor type can be plotted, the type equals the panel's type, the unit matches the panel's unit (a missing unit on either side matches any), and the panel has fewer than 100 sources. The first source sets the panel's type; the first source that has a unit sets the panel's unit. Removing the last source clears both.
 - **A rejected candidate leaves nothing behind.** A subscription builds its candidate source before the panel decides, and a candidate whose plotted property differs from the source's default already listens to the sensor's values. `Panel.TrySaveNewSource` disposes every source it does not add, so no handler stays on the sensor. This holds for both ways of adding.
 - **An automatic add is stored at once.** The dashboard is one entity in the store and is written when it raises `UpdatedEvent` (`DashboardManager`). A source added for a new or a moved sensor raises it: once per sensor and panel, also when several subscriptions of the panel add a source each. A sensor no subscription covers costs no write. Without this the source would be gone after a restart, and it would not come back: the sensor is no longer new, so no subscription is asked about it again.
 - **The handlers must not throw.** `Dashboard` handles `ChangeSensorEvent` and `SensorMovedEvent` on the thread of the cache, inside the creation or the move. An exception that leaves the handler of a new sensor makes the cache roll the sensor back.
@@ -47,7 +47,9 @@ This document covers the subscriptions only. Panel layout, chart data and the da
 
 ## Storage / Persistence
 
-A dashboard is stored whole, with its panels, sources and subscriptions, in the `ServerDashboards` collection. A failed write is logged by the collection and does not throw, so it cannot fail the creation of a sensor.
+A dashboard is stored whole, with its panels, sources and subscriptions, in the `ServerDashboards` collection. A failed database write is logged by the collection and does not throw.
+
+For a new sensor the write runs on the cache's thread under the tree-structure lock, next to the write of the sensor's own row: the whole dashboard is serialized and written once per panel that gained a source. A collector that registers many sensors a subscription covers causes as many dashboard writes.
 
 ## Tests
 
