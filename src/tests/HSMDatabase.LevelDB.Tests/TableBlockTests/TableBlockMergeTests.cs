@@ -62,7 +62,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             _now = T0.AddHours(1);
             Put(store, 4);
 
-            var deleted = store.DeleteMergedHour(Hour0, keep: [2L], [new TableBlockWatermark(_product, _producer, 3)]);
+            var deleted = store.DeleteMergedHour(Hour0, keep: new HashSet<long> { 2L }, [new TableBlockWatermark(_product, _producer, 3)]);
 
             Assert.Equal(3, deleted);
             Assert.Equal([2L, 4], store.GetBlocks(_product).Select(e => e.Sequence));
@@ -122,7 +122,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
                     throw new IOException("crash");
             };
 
-            Assert.Throws<TableBlockStoreException>(() => store.DeleteMergedHour(Hour0, [], []));
+            Assert.Throws<TableBlockStoreException>(() => store.DeleteMergedHour(Hour0, new HashSet<long>(), []));
             store.Dispose();
 
             // The blocks are gone, their index entries are not: the reopened store lists them and their reads fail.
@@ -130,7 +130,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
             Assert.Equal([0L, 1, 2, 3], reopened.GetBlocks(_product).Select(e => e.Sequence));
             Assert.Null(reopened.ReadBlock(reopened.GetBlocks(_product)[0]));
 
-            Assert.Equal(3, reopened.DeleteMergedHour(Hour0, [], []));
+            Assert.Equal(3, reopened.DeleteMergedHour(Hour0, new HashSet<long>(), []));
             Assert.Equal([3L], reopened.GetBlocks(_product).Select(e => e.Sequence));
             reopened.Dispose();
 
@@ -152,12 +152,12 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
                     throw new IOException("crash");
             };
 
-            Assert.Throws<IOException>(() => store.DeleteMergedHour(Hour0, [], [new TableBlockWatermark(_product, _producer, 2)]));
+            Assert.Throws<IOException>(() => store.DeleteMergedHour(Hour0, new HashSet<long>(), [new TableBlockWatermark(_product, _producer, 2)]));
             store.Dispose();
 
             var reopened = Open();
             Assert.Equal([3L], reopened.GetBlocks(_product).Select(e => e.Sequence));
-            Assert.Equal(0, reopened.DeleteMergedHour(Hour0, [], []));
+            Assert.Equal(0, reopened.DeleteMergedHour(Hour0, new HashSet<long>(), []));
         }
 
         [Fact]
@@ -206,7 +206,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         {
             var store = Open();
 
-            Assert.Equal(0, store.DeleteMergedHour(Hour0, [], [new TableBlockWatermark(_product, _producer, 7)]));
+            Assert.Equal(0, store.DeleteMergedHour(Hour0, new HashSet<long>(), [new TableBlockWatermark(_product, _producer, 7)]));
             Assert.False(Directory.Exists(_root));
             Assert.Equal(7L, store.GetWatermark(_product, _producer));
         }

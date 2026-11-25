@@ -57,7 +57,7 @@ The table identifier inside a block is the sensor's path as the collector regist
 
 **What the caller receives.** A refusal is a non-fault error all the way out. `SensorIngestionService.AddOrUpdateSensorAsync` turns only `IsFault` into `RegistrationFaultException` (answered 500, repeated by the collector every cycle) and returns any other error as it is. So a refused registration is answered `406` with the reason as the body on `POST /api/sensors/addOrUpdate`, an entry `{path: reason}` in a `200` on `POST /api/sensors/commands`, and an entry in the errors map of a `200` acknowledgement on the session: a per-command refusal the collector does not send again. Pinned by `RegistrationStatusTests.Registration_RefusedByATableSensor_IsARefusal_NotAFault` and `TableRegistrationWireTests`.
 
-**What the ingestion refuses before the cache (#1845)**, with the same answers and the text `The table sensor registration is refused: …`: `TableColumns` on a registration that is not of type 11; a schema that breaks the rules of `TableSchema` or the configured column limit (the reason is the rule); a column type other than 1, 2, 3 (mapped one by one, so 257 is not read as 1); and **a path that is not in its normalized form**: a block names its table by the registered path byte for byte, so the server takes a table registration only under the form it stores (`a/b`, not `/a/b`, `a//b`, `a/ b`), and the refusal names that form; and **a path longer in UTF-8 than the configured `TableSensors.MaxTableIdLength`** (1,024 bytes by default), which no block could name. These checks live in one place (`SensorIngestionService.FindTableRefusal`), which the move pre-pass of a batch calls too, so a refused table registration moves no sensor. The limits are the configured `TableSensors` section, a required parameter of the service. A table registration may carry `KeepHistory`: it is stored as the sensor's setting (owner decision of 2026-11-24) and applied by #1850; until then retention skips table sensors.
+**What the ingestion refuses before the cache (#1845)**, with the same answers and the text `The table sensor registration is refused: …`: `TableColumns` on a registration that is not of type 11; a schema that breaks the rules of `TableSchema` or the configured column limit (the reason is the rule); a column type other than 1, 2, 3 (mapped one by one, so 257 is not read as 1); and **a path that is not in its normalized form**: a block names its table by the registered path byte for byte, so the server takes a table registration only under the form it stores (`a/b`, not `/a/b`, `a//b`, `a/ b`), and the refusal names that form; and **a path longer in UTF-8 than the configured `TableSensors.MaxTableIdLength`** (1,024 bytes by default), which no block could name. These checks live in one place (`SensorIngestionService.FindTableRefusal`), which the move pre-pass of a batch calls too, so a refused table registration moves no sensor. The limits are the configured `TableSensors` section, a required parameter of the service. A table registration may carry `KeepHistory`: it is stored as the sensor's setting (owner decision of 2026-11-24) and applied by the retention of batches in whole weeks (#1850 part 4a); the per-sensor history cleanup skips table sensors. The sensor page says so under "Keep sensor history" (`_CleanupSettings.cshtml`, for a sensor of type Table): the period is rounded up to whole weeks (10 days are kept as 2 weeks) and rows may stay up to a week longer.
 
 ### What a table sensor refuses
 
@@ -71,7 +71,7 @@ The table identifier inside a block is the sensor's path as the collector regist
 | The alert editor | `HomeController.AddDataPolicy`, `AddAlertCondition`, `GetOperation`; `_MetaInfo.cshtml` hides the alerts block | 400 |
 | A history clear of the sensor | `TreeValuesCache.ClearSensorHistoryAsync` | error "clearing its history is not supported" |
 | A history clear of a node | `ClearNodeHistoryAsync` | the table sensor is skipped |
-| Per-sensor retention (KeepHistory) | `CheckSensorHistory` | skipped here: the setting is stored (a registration may carry it, #1845) and is applied by the retention of batches, in whole weeks (#1850, ADR-0021 point 12) |
+| Per-sensor retention (KeepHistory) | `CheckSensorHistory` | skipped here: the setting is stored (a registration may carry it, #1845) and is applied by the retention of batches in whole weeks: a week's rows go with their week database once the sensor's period, rounded up to whole weeks, has passed after the week's end (#1850 part 4a; `aicontext/features/storage/table-batches/feature.md`, "Retention"; ADR-0021 point 12) |
 | Self-destroy | `BaseSensorModel.ShouldDestroy` | never |
 
 ### Operations that change a table sensor's path
@@ -122,7 +122,7 @@ The schema is part of the sensor's row in the environment database (`SensorEntit
 
 ## UI / Operator Visibility
 
-- The sensor page of a table sensor shows its schema (columns, types, schema id) instead of the history, graph and table tabs (`_Sensor.cshtml`, `_SensorTableSchema.cshtml`); `SensorNodeViewModel.IsChartSupported` and `IsTableFormatSupported` are false, `IsTableSensor` true; `history.js` treats type 11 like File (no history request).
+- The sensor page of a table sensor shows its schema (columns, types, schema id) instead of the history, graph and table tabs (`_Sensor.cshtml`, `_SensorTableSchema.cshtml`); `SensorNodeViewModel.IsChartSupported` and `IsTableFormatSupported` are false, `IsTableSensor` true; `history.js` treats type 11 like File (no history request). Under the schema the page shows the rows: chart, notes and download (`_SensorTableChart.cshtml`, #1847; `aicontext/features/server/table-sensors-ui/feature.md`, "The page").
 - Hidden for a table sensor: the alerts block, the "Aggregate values" switch, the value block of the status edit.
 - The alert template form does not offer the type.
 
@@ -140,7 +140,6 @@ The schema is part of the sensor's row in the environment database (`SensorEntit
 
 ## Known Issues / Limitations
 
-- A table sensor's page does not show rows yet (#1845, #1847).
 - Alerts on a table feed are set on its feed sensors, ordinary sensors under `.tables` of the product: `aicontext/features/server/table-feed-sensors/feature.md` (#1847).
 - Moving a table sensor would need the stored blocks to know the sensor by more than one path; if moves are wanted later, the entity can carry a history of `(path, from sequence)` and no block has to change.
 - A template entity of type 11 written into the database by hand would fail to build (`Policy.BuildPolicy` has no table policy, so `AlertTemplateModel`'s constructor meets a null for each of its policies); every write path refuses the type.

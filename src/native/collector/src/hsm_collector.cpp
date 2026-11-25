@@ -7,6 +7,9 @@
 #include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
 #include "platform/hsm_linux_metric_sources.hpp"   // Linux /proc + statvfs metric-source factory (#1414; __linux__ only)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
+#include "hsm_scheduled_task.hpp"                  // InvokeIsolated + the periodic ScheduledTask
+#include "tables/hsm_table_pipeline.hpp"           // table sensors (#1848): in every build, packing with HSM_COLLECTOR_TABLES
+#include "tables/hsm_table_test_seams.hpp"         // their test-only seams (not in the public header)
 
 #include <algorithm>
 #include <atomic>
@@ -14,7 +17,9 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <condition_variable>
 #include <cstdint>
@@ -721,143 +726,10 @@ namespace
         std::atomic<int64_t> system_;
     };
 
-    // Host-callback isolation: a throwing callback may neither cross the C ABI boundary nor
-    // break the component that invoked it — lifecycle listeners, log sinks, scheduler actions
-    // and onError. overview.md "Callback exception isolation".
-    template <typename Fn>
-    void InvokeIsolated(Fn&& fn) noexcept
-    {
-        try
-        {
-            fn();
-        }
-        catch (...)
-        {
-            // Swallowed by contract.
-        }
-    }
-
-    // Worker threads (the scheduler task and the dispatch worker) are always joined by their owning
-    // object's teardown — never detached. hsm_collector_destroy() disposes the collector, joining every
-    // worker, BEFORE the last shared_ptr is dropped (see the note there), so a worker can never be the
-    // collector's final owner and thus never runs teardown on its own thread. A self-join would
-    // therefore only arise from the forbidden re-entrancy of a lifecycle call inside a callback; that
-    // must fail loudly (a self-join throws EDEADLK) rather than silently detach a live thread onto
-    // freed state — the earlier "self-safe" detach did the latter and caused a heap-use-after-free of
-    // the ScheduledTask (the scheduler thread kept running Loop() and read `stop_` after the free).
-
-    // Single-worker periodic task — the portable ScheduledTaskHandle (issue #1095 §13).
-    // Idempotent Start/Stop; the worker sleeps until the next due time reported by the
-    // injected clock (event-driven, not a busy poll — bounded by kMaxWaitMs so a dynamic
-    // schedule change or virtual-clock jump is still picked up), runs the action with no
-    // overlap (one worker, sequential) and exception isolation, and Stop joins after at
-    // most one in-flight action (bounded wait-for-current-run).
-    class ScheduledTask
-    {
-    public:
-        // now_ms reports the current monotonic time through the collector's (swappable) clock;
-        // next_due_ms reports the next absolute due time; action is the work to run when due.
-        ScheduledTask(std::function<int64_t()> now_ms, std::function<int64_t()> next_due_ms, std::function<void()> action)
-            : now_ms_(std::move(now_ms)), next_due_ms_(std::move(next_due_ms)), action_(std::move(action))
-        {
-        }
-
-        ScheduledTask(const ScheduledTask&) = delete;
-        ScheduledTask& operator=(const ScheduledTask&) = delete;
-
-        ~ScheduledTask()
-        {
-            Stop();
-        }
-
-        void Start()
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (running_)
-                return;
-
-            stop_ = false;
-            running_ = true;
-            worker_ = std::thread([this] { Loop(); });
-        }
-
-        void Stop()
-        {
-            {
-                std::lock_guard<std::mutex> guard(mutex_);
-                if (!running_)
-                    return;
-
-                stop_ = true;
-            }
-
-            cv_.notify_all();
-            if (worker_.joinable())
-                worker_.join();
-
-            std::lock_guard<std::mutex> guard(mutex_);
-            running_ = false;
-        }
-
-        // Re-evaluate the schedule now (e.g. a periodic sensor was added, or virtual time
-        // advanced). Cheap and lock-free against the worker — just nudges the wait.
-        void Wake()
-        {
-            // The flag makes a Wake that lands while the loop is computing its next due time (the
-            // wide window: it walks every sensor) count — the wait predicate sees it instead of
-            // sleeping out kMaxWaitMs. It is NOT stored under mutex_, because callers may hold the
-            // collector lock, which the loop takes under mutex_ (lock-order inversion); so a Wake in
-            // the narrow gap between the predicate check and the block can still be lost, bounded by
-            // kMaxWaitMs as before.
-            wake_requested_.store(true);
-            cv_.notify_all();
-        }
-
-    private:
-        static constexpr int64_t kMaxWaitMs = 1000;
-
-        void Loop()
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-
-            while (!stop_)
-            {
-                const int64_t now = now_ms_();
-                const int64_t due = next_due_ms_();
-
-                if (now >= due)
-                {
-                    lock.unlock();
-                    InvokeIsolated(action_);
-                    lock.lock();
-                    continue;
-                }
-
-                // due > now here. Guard the subtraction against overflow when due is the
-                // "nothing scheduled" sentinel (int64_max) or the (virtual) clock is far
-                // negative — just cap the sleep at kMaxWaitMs.
-                int64_t wait_ms = kMaxWaitMs;
-                if (due < (std::numeric_limits<int64_t>::max)())
-                    wait_ms = std::min<int64_t>(due - now, kMaxWaitMs);
-
-                cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] { return stop_ || wake_requested_.load(); });
-                // Clearing may swallow a Wake that lands right now; harmless, the loop re-reads the
-                // clock and the due time immediately. Do not turn this into a spin on the flag.
-                wake_requested_.store(false);
-            }
-        }
-
-        std::function<int64_t()> now_ms_;
-        std::function<int64_t()> next_due_ms_;
-        std::function<void()> action_;
-
-        std::atomic<bool> wake_requested_{ false };
-        std::mutex mutex_;
-        std::condition_variable cv_;
-        std::thread worker_;
-        bool running_ = false;
-        bool stop_ = false;
-    };
+    // InvokeIsolated and ScheduledTask live in hsm_scheduled_task.hpp: the table pipeline's tick
+    // (src/tables/) is a second ScheduledTask on the collector's clock.
+    using hsm::collector::detail::InvokeIsolated;
+    using hsm::collector::detail::ScheduledTask;
 
     // Built-in rolling file logger (parity with the managed NLog default sink). A background thread
     // drains a queue and appends formatted lines to <dir>/DataCollector_<UTC-date>.txt (every level at
@@ -2674,7 +2546,9 @@ namespace
         uint64_t posted_registration_version_ = 0;
     };
 
-    class NativeCollector : public std::enable_shared_from_this<NativeCollector>
+    namespace tables = hsm::collector::tables;
+
+    class NativeCollector : public std::enable_shared_from_this<NativeCollector>, private tables::TablePipelineHost
     {
     public:
         // 0 selects the managed CollectorOptions default for every numeric field
@@ -3217,6 +3091,116 @@ namespace
                 manual->AdvanceMs(delta_ms);
 
             scheduler_task_->Wake();
+            if (auto* pipeline = TablePipelineForTests())
+                pipeline->WakeTick();
+        }
+
+        // ---- Table sensors (#1848) ---------------------------------------------------------------
+
+        hsm_result_t SetTableOptions(const hsm_table_options_t& options)
+        {
+            constexpr std::size_t tick_end = offsetof(hsm_table_options_t, tick_period_ms) + sizeof(options.tick_period_ms);
+            constexpr std::size_t buffer_end = offsetof(hsm_table_options_t, max_buffer_bytes) + sizeof(options.max_buffer_bytes);
+            constexpr std::size_t backlog_end = offsetof(hsm_table_options_t, max_backlog_bytes) + sizeof(options.max_backlog_bytes);
+            const std::int64_t tick = options.struct_size >= tick_end ? options.tick_period_ms : 0;
+            const std::int64_t buffer = options.struct_size >= buffer_end ? options.max_buffer_bytes : 0;
+            const std::int64_t backlog = options.struct_size >= backlog_end ? options.max_backlog_bytes : 0;
+            if (tick < 0 || (tick > 0 && tick < 1000) || buffer < 0 || backlog < 0)
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Table options: the tick period is at least 1000 ms, and no value is negative.");
+
+            std::lock_guard<std::mutex> guard(tables_mutex_);
+            if (tables_)
+                return SetError(HSM_RESULT_INVALID_STATE, "Table options are set before the first table sensor is created.");
+            table_options_.tick_period_ms = tick > 0 ? tick : 10000;
+            table_options_.max_buffer_bytes = buffer > 0 ? buffer : 64LL * 1024 * 1024;
+            table_options_.max_backlog_bytes = backlog > 0 ? backlog : 64LL * 1024 * 1024;
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
+        hsm_result_t CreateTableSensor(const std::string& path, const std::vector<tables::TableRegistrationColumn>& columns,
+                                       const std::string& description, std::int64_t keep_history_ms, bool at_product,
+                                       std::shared_ptr<tables::TableSensor>& out)
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ == CollectorState::Disposed)
+                    return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
+            }
+
+            // The managed form: the location prefix as for every sensor, then the server's normalization.
+            const std::string full = at_product ? path : computer_name_ + "/" + module_ + "/" + path;
+            const std::string normalized = tables::NormalizeTablePath(full);
+            std::string error;
+            if (!tables::CheckTablePath(normalized, path, tables::TableBlockLimits{}.max_table_id_length, error))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
+
+            // A mistake of the call makes no pipeline.
+            {
+                tables::TableSchema schema;
+                if (!tables::TablePipeline::BuildSchema(columns, schema, error))
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
+            }
+
+            if (before_table_create_lock_for_tests_)
+                before_table_create_lock_for_tests_();
+
+            tables::TablePipeline* pipeline = nullptr;
+            {
+                std::lock_guard<std::mutex> guard(tables_mutex_);
+                // Decided under the lock Dispose takes too: a create racing a dispose is either before it
+                // (and its sensor is disposed with the rest) or after it, refused with nothing made.
+                if (tables_disposed_)
+                    return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
+                // The first table sensor makes the pipeline: a collector without one pays nothing.
+                if (!tables_)
+                    tables_ = std::make_unique<tables::TablePipeline>(static_cast<tables::TablePipelineHost&>(*this), table_options_);
+                pipeline = tables_.get();
+
+                std::string reason;
+                const auto channel = TableChannelFor(reason);
+                if (!pipeline->CreateSensor(normalized, columns, description, keep_history_ms, channel, reason, out, error))
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
+
+                // A table sensor created while the collector runs starts the pipeline's run at once.
+                if (tables_may_run_ && !pipeline->Running())
+                    pipeline->Start(channel, reason);
+            }
+            // Reports reach the host's logger only here, with no lock held: a logger may call back
+            // into the collector (create a table sensor, read its stats) on this thread.
+            pipeline->FlushReports();
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
+        // The last-error string for a table call that the C boundary refuses.
+        hsm_result_t TableFail(hsm_result_t result, std::string message) const
+        {
+            return SetError(result, std::move(message));
+        }
+
+        // Test seams (#1848): a recording channel and a manual tick, both before the first table sensor.
+        void TestInstallTableChannel(std::shared_ptr<tables::ITableChannel> channel)
+        {
+            std::lock_guard<std::mutex> guard(tables_mutex_);
+            test_table_channel_ = std::move(channel);
+        }
+
+        void TestSetManualTableTick(bool manual)
+        {
+            std::lock_guard<std::mutex> guard(tables_mutex_);
+            table_options_.manual_tick = manual;
+        }
+
+        void TestSetBeforeTableCreateLock(std::function<void()> hook)
+        {
+            before_table_create_lock_for_tests_ = std::move(hook);
+        }
+
+        tables::TablePipeline* TablePipelineForTests()
+        {
+            std::lock_guard<std::mutex> guard(tables_mutex_);
+            return tables_.get();
         }
 
         // Drive the error-routing/dedup path directly (the production routes — validation
@@ -3228,6 +3212,9 @@ namespace
 
         ~NativeCollector()
         {
+            // The table pipeline's tick and delivery thread (joined by its Dispose, idempotent).
+            if (tables_)
+                tables_->Dispose();
             // Terminal teardown (destroy without an explicit dispose/stop): reclaim ALL worker
             // threads — there is no observable place left to drain into. Every Stop* is idempotent
             // via its joinable()/stop-flag guard, so this is safe whether or not Dispose() ran. The
@@ -3349,6 +3336,10 @@ namespace
             for (auto& json : start_values)
                 Enqueue(std::move(json));
 
+            // The table sensors' run (#1848), when the collector has a table sensor. Whether they can
+            // send is decided here, at every Start.
+            StartTables();
+
             // Version sensors mark every Start, not just the first (#1433): managed re-Inits and
             // re-Starts every sensor on each collector start, so ProductVersionSensor.StartAsync
             // posts its "Start:" value again after a restart.
@@ -3412,6 +3403,12 @@ namespace
             StopServiceStatusSampler();
             StopSelfMonitor();
 
+            // The table sensors (#1848): rows are refused from now on, the tick is joined, every buffer
+            // is taken and packed, and the losses so far go to the overflow sensor through the fold
+            // below. Their delivery drains beside the value drain further down. One stop budget, from
+            // here, covers their final pack and their delivery.
+            tables::TablePipeline* const tables = BeginTableStop(StopDrainBudgetMs(terminal));
+
             // The self-monitor loop folds overflow once per collect cycle; drops counted since its
             // last pass would otherwise vanish with it. Fold them now, so the flush below carries
             // them (managed adds each drop to the overflow bar at once, and flushes it on stop).
@@ -3429,6 +3426,9 @@ namespace
             {
                 // A stats post must never break Stop.
             }
+            // The overflow sensor's bar of this run is about to be published: later table losses stay
+            // in the table ledger and go to the stop line below.
+            overflow_bar_closed_.store(true, std::memory_order_release);
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
@@ -3464,7 +3464,12 @@ namespace
             // remainder (the graceful stop must not hang on a dead transport) — same contract as
             // the C# stop flush.
             StopWorker();
+            if (tables != nullptr)
+                tables->StartDrain();
             DrainQueueOnStop(terminal);
+            // When it returns, no thread of the table run exists.
+            if (tables != nullptr)
+                tables->FinishDrain();
 
 #if defined(HSM_COLLECTOR_HTTP)
             // After the drain, which used the session if it was up. A graceful stop gives the
@@ -3498,6 +3503,28 @@ namespace
                                " value(s) dropped from the full send queue during this run (Queue overflow sensor "
                                "not registered).");
 
+            // The one stop line of the table sensors: the rows the run lost that are in no published
+            // bar of the Queue overflow sensor. It closes the run's table ledger.
+            if (tables != nullptr)
+            {
+                const std::int64_t table_rows = tables->CloseLedger();
+                if (table_rows > 0)
+                {
+                    try
+                    {
+                        LogMessage(HSM_LOG_LEVEL_ERROR,
+                                   "Collector stop: " + std::to_string(table_rows) +
+                                       " table row(s) were lost during this run and are not in the Queue overflow sensor "
+                                       "(not registered, or reported after it published its last bar).");
+                    }
+                    catch (...)
+                    {
+                        // The rows are counted on their sensors; a line that cannot be built must not
+                        // break the stop (nor a destroy that runs it).
+                    }
+                }
+            }
+
             NotifyLifecycle(CollectorState::Stopped);
             return HSM_RESULT_OK;
         }
@@ -3520,6 +3547,17 @@ namespace
                 std::lock_guard<std::mutex> guard(mutex_);
                 state_ = CollectorState::Disposed;
             }
+
+            // Every later call of a table sensor handle is refused from here on, and every later create.
+            // The pipeline is disposed after the lock: it joins threads, and nothing it does needs the lock.
+            tables::TablePipeline* pipeline = nullptr;
+            {
+                std::lock_guard<std::mutex> guard(tables_mutex_);
+                tables_disposed_ = true;
+                pipeline = tables_.get();
+            }
+            if (pipeline != nullptr)
+                pipeline->Dispose();
             // No listener notification for Disposed — mirrors the managed collector, which
             // fires only ToStopping/ToStopped on dispose-from-active and nothing once stopped.
         }
@@ -4737,6 +4775,96 @@ namespace
             std::lock_guard<std::mutex> guard(error_mutex_);
             last_error_ = std::move(message);
             return result;
+        }
+
+        // Why this collector cannot send tables now, or null-and-empty when it can (#1848). Asked when a
+        // table sensor is created and at every Start.
+        std::shared_ptr<tables::ITableChannel> TableChannelFor(std::string& reason) const
+        {
+#if !defined(HSM_COLLECTOR_TABLES)
+            reason = "this build of the native collector has no table support (it was built with HSM_COLLECTOR_TABLES=OFF)";
+            return nullptr;
+#else
+            if (test_table_channel_)
+            {
+                reason.clear();
+                return test_table_channel_;
+            }
+#if defined(HSM_COLLECTOR_HTTP)
+            if (!use_session_)
+                reason = "table sensors need the collector session transport (hsm_collector_use_session_transport)";
+            else
+                reason = "this version of the native collector cannot deliver table blocks yet: the table connection of the "
+                         "collector session is not implemented (#1848)";
+#else
+            reason = "table sensors need the collector session transport, and this build has no network transport "
+                     "(HSM_COLLECTOR_HTTP=OFF)";
+#endif
+            return nullptr;
+#endif
+        }
+
+        // Never throws: a table run that cannot start leaves the collector's Start as it is (the managed
+        // pipeline's Start does not throw either); its sensors say why and refuse their rows.
+        void StartTables() noexcept
+        {
+            overflow_bar_closed_.store(false, std::memory_order_release);
+            tables::TablePipeline* pipeline = nullptr;
+            try
+            {
+                std::lock_guard<std::mutex> guard(tables_mutex_);
+                tables_may_run_ = true;
+                if (!tables_)
+                    return;
+                pipeline = tables_.get();
+                std::string reason;
+                const auto channel = TableChannelFor(reason);
+                pipeline->Start(channel, reason);
+            }
+            catch (...)
+            {
+                // Only the reason's text can fail before the pipeline's own (non-throwing) Start: the
+                // run is not started, so its rows are refused and counted.
+                if (pipeline != nullptr)
+                    pipeline->Fault(tables::TableFault::StartFailed);
+            }
+            // With no lock held (see CreateTableSensor).
+            if (pipeline != nullptr)
+                pipeline->FlushReports();
+        }
+
+        // The first half of the table stop; null when the collector has no table sensor.
+        tables::TablePipeline* BeginTableStop(std::int64_t budget_ms) noexcept
+        {
+            tables::TablePipeline* pipeline = nullptr;
+            {
+                std::lock_guard<std::mutex> guard(tables_mutex_);
+                tables_may_run_ = false;
+                pipeline = tables_.get();
+            }
+            if (pipeline != nullptr)
+                pipeline->BeginStop(budget_ms);
+            return pipeline;
+        }
+
+        // TablePipelineHost: called by the pipeline with none of its locks held.
+        std::int64_t TableSteadyNowMs() override
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return clock_->SteadyNowMs();
+        }
+
+        void ReportTableError(const std::string& message) override
+        {
+            LogError(message);
+        }
+
+        bool TryReportDroppedTableRows(std::int64_t rows) override
+        {
+            if (!queue_overflow_registered_.load(std::memory_order_acquire) || overflow_bar_closed_.load(std::memory_order_acquire))
+                return false;
+            queue_overflow_count_.fetch_add(rows, std::memory_order_relaxed);
+            return true;
         }
 
         void ClearError() const
@@ -6547,6 +6675,19 @@ namespace
         // dispose racing a stop joins the in-flight transition rather than duplicating
         // it. Listeners are invoked under it (after state_ flips) for consistent order.
         std::mutex op_mutex_;
+
+        // Table sensors (#1848). The pipeline is made by the first table sensor and lives until the
+        // collector is destroyed; its run is started by Start and stopped by Stop. tables_mutex_ is NOT
+        // op_mutex_: a lifecycle listener runs under op_mutex_ and may create a table sensor.
+        std::mutex tables_mutex_;
+        std::unique_ptr<tables::TablePipeline> tables_;
+        bool tables_may_run_ = false;  // from Start until a stop begins, under tables_mutex_
+        bool tables_disposed_ = false; // set by Dispose under tables_mutex_; a later create is refused
+        std::function<void()> before_table_create_lock_for_tests_;
+        tables::TablePipelineOptions table_options_;
+        std::shared_ptr<tables::ITableChannel> test_table_channel_;
+        // Set when the stop has folded the run's last Queue overflow bar; cleared by Start.
+        std::atomic<bool> overflow_bar_closed_{ false };
 
         // Lifecycle listeners have their own lock: NotifyLifecycle snapshots under it and
         // invokes callbacks outside it, so a callback may add a listener without deadlocking.
@@ -9497,3 +9638,226 @@ extern "C" hsm_result_t hsm_collector_test_create_sampled_bar_sensor(
         (*out_sensor)->impl->MarkMetricCandidate(post_period_ms, bar_tick_ms);
     return result;
 }
+
+// ---- Table sensors (#1848) ----------------------------------------------------------------------------
+//
+// The handle holds the sensor (shared with the pipeline); the sensor holds only the pipeline's shared
+// block, never the collector: an application thread in an add call can never become the collector's
+// last owner, and once the collector is disposed every call on the handle is refused.
+struct hsm_table_sensor_t
+{
+    std::shared_ptr<hsm::collector::tables::TableSensor> impl;
+};
+
+namespace
+{
+    // True when a struct of `struct_size` bytes (as the caller knows it) holds `field_end` bytes.
+    bool Holds(size_t struct_size, size_t field_end)
+    {
+        return struct_size >= field_end;
+    }
+} // namespace
+
+hsm_table_sensor_options_t hsm_table_sensor_options_default(void)
+{
+    hsm_table_sensor_options_t options{};
+    options.struct_size = sizeof(hsm_table_sensor_options_t);
+    options.description = nullptr;
+    options.keep_history_ms = 0;
+    options.sensor_location = 0;
+    return options;
+}
+
+hsm_result_t hsm_collector_set_table_options(hsm_collector_t* collector, const hsm_table_options_t* options)
+{
+    if (collector == nullptr || options == nullptr || options->struct_size == 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    try
+    {
+        // Only the bytes the caller says it has are read: a copy of them, the rest zero (the defaults).
+        hsm_table_options_t copy{};
+        std::memcpy(&copy, options, (std::min)(options->struct_size, sizeof copy));
+        copy.struct_size = options->struct_size;
+        return collector->impl->SetTableOptions(copy);
+    }
+    catch (...)
+    {
+        return HSM_RESULT_INTERNAL_ERROR;
+    }
+}
+
+hsm_result_t hsm_collector_create_table_sensor(hsm_collector_t* collector, const char* path, const hsm_table_column_t* columns, size_t column_count, const hsm_table_sensor_options_t* options, hsm_table_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    try
+    {
+        auto& impl = *collector->impl;
+        if (path == nullptr || out_sensor == nullptr)
+            return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT, "A table sensor needs a path and a place for its handle.");
+        if (column_count > 0 && columns == nullptr)
+            return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT, "The columns of the table sensor are NULL.");
+
+        std::string description;
+        std::int64_t keep_history_ms = 0;
+        bool at_product = false;
+        if (options != nullptr)
+        {
+            const size_t size = options->struct_size;
+            if (size == 0)
+                return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT, "hsm_table_sensor_options_t.struct_size is 0.");
+            if (Holds(size, offsetof(hsm_table_sensor_options_t, description) + sizeof(options->description)) && options->description != nullptr)
+                description = options->description;
+            if (Holds(size, offsetof(hsm_table_sensor_options_t, keep_history_ms) + sizeof(options->keep_history_ms)))
+                keep_history_ms = options->keep_history_ms;
+            if (Holds(size, offsetof(hsm_table_sensor_options_t, sensor_location) + sizeof(options->sensor_location)))
+            {
+                if (options->sensor_location != 0 && options->sensor_location != 1)
+                    return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT, "sensor_location is 0 (Module) or 1 (Product).");
+                at_product = options->sensor_location == 1;
+            }
+            if (keep_history_ms < 0)
+                return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT, "keep_history_ms is negative.");
+        }
+
+        std::vector<hsm::collector::tables::TableRegistrationColumn> list;
+        list.reserve(column_count);
+        for (size_t i = 0; i < column_count; ++i)
+        {
+            if (columns[i].name == nullptr)
+                return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT, "Column " + std::to_string(i) + " has no name.");
+            const auto type = static_cast<int32_t>(columns[i].type);
+            if (type != HSM_TABLE_COLUMN_INT64 && type != HSM_TABLE_COLUMN_DOUBLE)
+                return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT,
+                                      std::string("Column '") + columns[i].name + "' has the type " + std::to_string(type) +
+                                          "; a value column is HSM_TABLE_COLUMN_DOUBLE or HSM_TABLE_COLUMN_INT64.");
+            list.push_back({ columns[i].name, static_cast<hsm::collector::tables::TableColumnType>(type) });
+        }
+
+        std::shared_ptr<hsm::collector::tables::TableSensor> sensor;
+        const hsm_result_t result = impl.CreateTableSensor(path, list, description, keep_history_ms, at_product, sensor);
+        if (result != HSM_RESULT_OK)
+            return result;
+
+        *out_sensor = new hsm_table_sensor_t{ std::move(sensor) };
+        return HSM_RESULT_OK;
+    }
+    catch (...)
+    {
+        return HSM_RESULT_INTERNAL_ERROR;
+    }
+}
+
+void hsm_table_sensor_release(hsm_table_sensor_t* sensor)
+{
+    delete sensor;
+}
+
+hsm_result_t hsm_table_sensor_add_row(hsm_table_sensor_t* sensor, int64_t time_unix_ns, const hsm_table_cell_t* cells, size_t cell_count, const uint8_t* nulls)
+{
+    if (sensor == nullptr || !sensor->impl || cells == nullptr || cell_count != sensor->impl->ColumnCount())
+        return HSM_RESULT_INVALID_ARGUMENT;
+    return sensor->impl->Add(&time_unix_ns, cells, nulls, 1);
+}
+
+hsm_result_t hsm_table_sensor_add_rows(hsm_table_sensor_t* sensor, const int64_t* times_unix_ns, const hsm_table_cell_t* cells, const uint8_t* nulls, size_t row_count, size_t* out_rows_taken)
+{
+    if (out_rows_taken != nullptr)
+        *out_rows_taken = 0;
+    if (sensor == nullptr || !sensor->impl)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    if (row_count == 0)
+        return HSM_RESULT_OK;
+    if (times_unix_ns == nullptr || cells == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = sensor->impl->Add(times_unix_ns, cells, nulls, row_count);
+    if (result == HSM_RESULT_OK && out_rows_taken != nullptr)
+        *out_rows_taken = row_count;
+    return result;
+}
+
+hsm_result_t hsm_table_sensor_get_stats(const hsm_table_sensor_t* sensor, hsm_table_sensor_stats_t* out)
+{
+    if (sensor == nullptr || !sensor->impl || out == nullptr || out->struct_size == 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const size_t size = out->struct_size;
+    const auto& impl = *sensor->impl;
+    if (Holds(size, offsetof(hsm_table_sensor_stats_t, state) + sizeof(out->state)))
+        out->state = impl.State();
+    if (Holds(size, offsetof(hsm_table_sensor_stats_t, rows_accepted) + sizeof(out->rows_accepted)))
+        out->rows_accepted = impl.RowsAccepted();
+    if (Holds(size, offsetof(hsm_table_sensor_stats_t, rows_dropped) + sizeof(out->rows_dropped)))
+        out->rows_dropped = impl.RowsDropped();
+    return HSM_RESULT_OK;
+}
+
+size_t hsm_table_sensor_state_reason(const hsm_table_sensor_t* sensor, char* buffer, size_t size)
+{
+    if (buffer != nullptr && size > 0)
+        buffer[0] = '\0';
+    if (sensor == nullptr || !sensor->impl)
+        return 0;
+
+    try
+    {
+        const std::string reason = sensor->impl->Reason();
+        if (buffer != nullptr && size > 0)
+        {
+            const size_t copied = (std::min)(reason.size(), size - 1);
+            std::memcpy(buffer, reason.data(), copied);
+            buffer[copied] = '\0';
+        }
+        return reason.size();
+    }
+    catch (...)
+    {
+        return 0;
+    }
+}
+
+const char* hsm_table_sensor_path(const hsm_table_sensor_t* sensor)
+{
+    if (sensor == nullptr || !sensor->impl)
+        return nullptr;
+    return sensor->impl->Path().c_str();
+}
+
+namespace hsm::collector::tables::test
+{
+    void InstallChannel(hsm_collector_t* collector, std::shared_ptr<ITableChannel> channel)
+    {
+        collector->impl->TestInstallTableChannel(std::move(channel));
+    }
+
+    void SetManualTick(hsm_collector_t* collector, bool manual)
+    {
+        collector->impl->TestSetManualTableTick(manual);
+    }
+
+    void RunTick(hsm_collector_t* collector)
+    {
+        if (auto* pipeline = collector->impl->TablePipelineForTests())
+            pipeline->RunTickNow();
+    }
+
+    TablePipeline* Pipeline(hsm_collector_t* collector)
+    {
+        return collector->impl->TablePipelineForTests();
+    }
+
+    TableSensor* Sensor(hsm_table_sensor_t* sensor)
+    {
+        return sensor == nullptr ? nullptr : sensor->impl.get();
+    }
+
+    void SetBeforeCreateLock(hsm_collector_t* collector, std::function<void()> hook)
+    {
+        collector->impl->TestSetBeforeTableCreateLock(std::move(hook));
+    }
+} // namespace hsm::collector::tables::test

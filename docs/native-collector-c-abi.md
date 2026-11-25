@@ -156,6 +156,22 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.15.0** (#1848, ADR-0021) — additive: table sensors. New handle `hsm_table_sensor_t`, enums
+  `hsm_table_column_type_t` and `hsm_table_sensor_state_t`, the union `hsm_table_cell_t`, the
+  structs `hsm_table_column_t`, `hsm_table_sensor_options_t`, `hsm_table_options_t`,
+  `hsm_table_sensor_stats_t` (each struct except the column starts with `struct_size`; the library
+  never reads or writes past it), and the functions `hsm_table_sensor_options_default`,
+  `hsm_collector_set_table_options`, `hsm_collector_create_table_sensor`, `hsm_table_sensor_release`,
+  `hsm_table_sensor_add_row`, `hsm_table_sensor_add_rows`, `hsm_table_sensor_get_stats`,
+  `hsm_table_sensor_state_reason`, `hsm_table_sensor_path`. No existing struct or function changed.
+  They exist in every build; see "Table sensors" below. **In 0.15.0 a real host cannot deliver
+  tables yet** (the table connection of the session is the next step of #1848): every table sensor
+  is `UNAVAILABLE` and counts its rows as dropped.
+- **0.14.2** (#1848, table sensors step 6, part 2) — no ABI change and no change in what the
+  collector sends: internal pieces of the session for a second connection tied to it (binary WebSocket
+  frames, a receive cap per connection, the hello's `sessionId` and a session generation, the
+  reconnect backoff as a shared helper). See
+  `aicontext/features/collector/http-client/feature.md`.
 - **0.14.0** (#1660 steps 2b and 5, #1666) — no new entry point, behaviour changes:
   - `hsm_sensor_add_file*` return `HSM_RESULT_OK` on a collector session (they returned
     `HSM_RESULT_INVALID_STATE`): a file value travels as an element of a `list` frame, and one
@@ -435,6 +451,54 @@ Version history:
   registration was emitted; since 0.9.1 an attach while running re-registers the sensor).
 - **0.2.0** (#1096) — HTTP transport options consumed; wire serialization.
 - **0.1.0** (#1095) — initial lifecycle, scheduler, logging, registration core.
+
+## Table sensors (0.15.0)
+
+A table sensor holds rows of a fixed schema: the time first (implicit, named `time`), then value
+columns of `int64` or `double`, each nullable (ADR-0021). The behaviour is the managed collector's
+(`aicontext/features/collector/table-sensors/feature.md`, section "Native collector" for what
+differs).
+
+```c
+hsm_table_column_t cols[] = { { "bid", HSM_TABLE_COLUMN_DOUBLE }, { "ask", HSM_TABLE_COLUMN_DOUBLE } };
+hsm_table_sensor_options_t o = hsm_table_sensor_options_default();
+o.sensor_location = 1;                                   /* Product: the path at the root */
+hsm_table_sensor_t* t = NULL;
+hsm_collector_use_session_transport(c);
+hsm_collector_create_table_sensor(c, "quotes/EURUSD", cols, 2, &o, &t);
+hsm_collector_start(c);
+hsm_table_cell_t row[2]; row[0].f64 = 1.0841; row[1].f64 = 1.0843;
+if (hsm_table_sensor_add_row(t, provider_time_ns, row, 2, NULL) != HSM_RESULT_OK) { /* dropped and counted */ }
+hsm_table_sensor_add_rows(t, times_ns, cells, NULL, n, &taken);   /* all or nothing */
+hsm_table_sensor_stats_t s = { sizeof s }; hsm_table_sensor_get_stats(t, &s);
+hsm_collector_stop(c); hsm_table_sensor_release(t);
+```
+
+- **Time** is Unix nanoseconds (`int64`), kept as the block's 100 ns ticks, rounded down; every
+  `int64` value lies in the block's time range.
+- **Cells** are 8-byte unions read by the column's type (no conversion: an `i64` in a double column
+  is read as the double with those bits). A cell without a value is a bit in `nulls`: bit `c` for
+  `add_row`, bit `r * columns + c` for `add_rows`.
+- **Result codes** (existing values only): a wrong shape (NULL sensor or cells, a cell count other
+  than the column count, a `row_count` no array can have: its rows would take more than `INT64_MAX`
+  bytes, as `SIZE_MAX` from an `n - 1` below zero) is `HSM_RESULT_INVALID_ARGUMENT` and counts nothing; a row the collector does
+  not take is dropped and counted on the sensor (`rows_dropped`) and, while the collector runs, in the
+  run's losses: `HSM_RESULT_INVALID_STATE` (not running, destroyed, `REFUSED`, `UNAVAILABLE`),
+  `HSM_RESULT_LIMIT_EXCEEDED` (`max_buffer_bytes` reached, or the buffer could not grow). The add calls
+  never write `hsm_collector_last_error`.
+- **Create** refuses a mistake of the call with `HSM_RESULT_INVALID_ARGUMENT` and the reason in
+  `hsm_collector_last_error` (no column, `time`, a duplicate or invalid name, an unknown type, a path
+  with no segment, a backslash or a tab, over 1,024 UTF-8 bytes normalized, the path created before
+  with other columns). The same path with the same columns returns a new handle to the same sensor.
+  It never fails because tables cannot be sent: that sensor is `UNAVAILABLE` with the reason in
+  `hsm_table_sensor_state_reason`, decided at creation and again at every Start.
+- **Lifetime.** A handle holds the sensor, never the collector: it may be released before or after
+  the collector is destroyed; after the collector is disposed its add calls return
+  `HSM_RESULT_INVALID_STATE` (counted on the sensor) and `get_stats`, `state_reason` and `path` still
+  answer. The functions are exported by the legacy wrapper DLL with the rest of the header.
+- **Threads.** The first table sensor makes the collector's table pipeline; from Start to Stop it has
+  a tick thread (`tick_period_ms`) and, when the collector can send tables, a delivery thread. Stop
+  joins both before it returns. A collector without table sensors has neither, and no zstd context.
 
 ## Alerts (registration payload)
 

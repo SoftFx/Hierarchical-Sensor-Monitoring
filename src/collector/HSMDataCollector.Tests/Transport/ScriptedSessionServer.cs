@@ -29,7 +29,7 @@ namespace HSMDataCollector.Tests.Transport
     /// Used by the session tests of both collector test projects and by the managed
     /// conformance driver.
     /// </summary>
-    public sealed class ScriptedSessionServer : IDisposable
+    public sealed partial class ScriptedSessionServer : IDisposable
     {
         public const string Subprotocol = "hsm.sensors.v1";
 
@@ -39,6 +39,8 @@ namespace HSMDataCollector.Tests.Transport
         private readonly ConcurrentQueue<string> _httpRequests = new ConcurrentQueue<string>();
         private readonly ConcurrentQueue<int> _closes = new ConcurrentQueue<int>();
         private readonly ConcurrentDictionary<int, WebSocket> _open = new ConcurrentDictionary<int, WebSocket>();
+        // The HTTP context of each open session: dropping a session also drops its TCP connection through it.
+        private readonly ConcurrentDictionary<int, HttpListenerContext> _openContexts = new ConcurrentDictionary<int, HttpListenerContext>();
         // The open sessions that have had their hello: what a push goes to.
         private readonly ConcurrentDictionary<int, WebSocket> _greeted = new ConcurrentDictionary<int, WebSocket>();
         // A WebSocket takes one send at a time; acks come from the session loops, pushes from the test.
@@ -105,6 +107,47 @@ namespace HSMDataCollector.Tests.Transport
 
         /// <summary>Requests of <paramref name="op"/> are acknowledged with this status from now on (200 by default).</summary>
         public void AckWith(string op, int status) => _ackStatus[op] = status;
+
+        private readonly ConcurrentDictionary<string, string> _registrationErrors = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// A successful ack of a <c>commands</c> request that carries <paramref name="path"/> names it with
+        /// <paramref name="error"/>, as the server names a registration it refuses.
+        /// </summary>
+        public void RefuseRegistrationOf(string path, string error) => _registrationErrors[path] = error;
+
+        private readonly ConcurrentDictionary<string, int> _faultingPaths = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+
+        /// <summary>A <c>commands</c> request whose body carries <paramref name="path"/> is answered <paramref name="status"/>, every time.</summary>
+        public void FaultCommandsCarrying(string path, int status) => _faultingPaths[path] = status;
+
+        private int? FaultFor(string op, string body)
+        {
+            if (op != "commands" || _faultingPaths.IsEmpty || string.IsNullOrEmpty(body))
+                return null;
+
+            foreach (var fault in _faultingPaths)
+                if (body.Contains("\"Path\":\"" + fault.Key + "\""))
+                    return fault.Value;
+
+            return null;
+        }
+
+        // The per-path errors of a commands ack: the scripted refusals of the paths the request carries.
+        private string RegistrationErrorsFor(string op, string body)
+        {
+            if (op != "commands" || _registrationErrors.IsEmpty || string.IsNullOrEmpty(body))
+                return "{}";
+
+            var errors = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            using (var document = JsonDocument.Parse(body))
+                foreach (var element in document.RootElement.EnumerateArray())
+                    if (element.TryGetProperty("Path", out var path) && _registrationErrors.TryGetValue(path.GetString() ?? string.Empty, out var error))
+                        errors[path.GetString()] = error;
+
+            return JsonSerializer.Serialize(errors);
+        }
 
         /// <summary>
         /// Accepts this many more <c>list</c> frames, then answers every later one with
@@ -176,7 +219,19 @@ namespace HSMDataCollector.Tests.Transport
             {
                 try { session.Value.Abort(); }
                 catch (Exception) { }
+
+                // Aborting the WebSocket alone leaves the TCP connection open under the managed HttpListener of
+                // .NET on Linux and macOS (http.sys on Windows closes it): the collector would see nothing until its
+                // heartbeat gave the session up. Aborting the response closes the connection on every platform.
+                if (_openContexts.TryGetValue(session.Key, out var context))
+                    DropConnection(context);
             }
+        }
+
+        private static void DropConnection(HttpListenerContext context)
+        {
+            try { context.Response.Abort(); }
+            catch (Exception) { }
         }
 
         // --- what the collector did ---
@@ -262,11 +317,18 @@ namespace HSMDataCollector.Tests.Transport
                 foreach (var name in context.Request.Headers.AllKeys)
                     headers[name] = context.Request.Headers[name];
 
+                // A table connection (#1845) asks for its own subprotocol.
+                if (IsTableUpgrade(context))
+                {
+                    await HandleTableUpgradeAsync(context, headers).ConfigureAwait(false);
+                    return;
+                }
+
                 Volatile.Write(ref _upgradeHeaders, headers);
 
                 var upgraded = await context.AcceptWebSocketAsync(Subprotocol).ConfigureAwait(false);
 
-                await ServeAsync(upgraded.WebSocket).ConfigureAwait(false);
+                await ServeAsync(upgraded.WebSocket, context).ConfigureAwait(false);
             }
             catch (Exception)
             {
@@ -274,14 +336,20 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
-        private async Task ServeAsync(WebSocket socket)
+        private async Task ServeAsync(WebSocket socket, HttpListenerContext context)
         {
             var index = Interlocked.Increment(ref _sessions);
+            var sessionId = Guid.NewGuid().ToString("N");
+            _openContexts[index] = context;
             _open[index] = socket;
+            _liveSessions[sessionId] = index;
+            _sessionIds.Enqueue(sessionId);
 
             try
             {
-                await SendAsync(socket, $"{{\"op\":\"hello\",\"body\":{{\"maxFrameBytes\":{MaxFrameBytes},\"heartbeatSeconds\":{HeartbeatSeconds}}}}}").ConfigureAwait(false);
+                var idField = SendSessionId ? $",\"sessionId\":\"{sessionId}\"" : string.Empty;
+
+                await SendAsync(socket, $"{{\"op\":\"hello\",\"body\":{{\"maxFrameBytes\":{MaxFrameBytes},\"heartbeatSeconds\":{HeartbeatSeconds}{idField}}}}}").ConfigureAwait(false);
 
                 _greeted[index] = socket;
 
@@ -302,6 +370,9 @@ namespace HSMDataCollector.Tests.Transport
                             if (result.MessageType == WebSocketMessageType.Close)
                             {
                                 _closes.Enqueue((int)(result.CloseStatus ?? 0));
+
+                                try { SessionCloseReceived?.Invoke(); }
+                                catch (Exception) { }
 
                                 // Nothing to answer when the close is itself the answer to
                                 // CloseSessions.
@@ -325,7 +396,12 @@ namespace HSMDataCollector.Tests.Transport
             {
                 _greeted.TryRemove(index, out _);
                 _open.TryRemove(index, out _);
+                _openContexts.TryRemove(index, out _);
+                _liveSessions.TryRemove(sessionId, out _);
                 socket.Dispose();
+
+                // As the server does: a table connection lives as long as its session.
+                CloseTableConnectionOf(sessionId);
             }
         }
 
@@ -361,7 +437,7 @@ namespace HSMDataCollector.Tests.Transport
             if (!id.HasValue)
                 return;
 
-            var status = _ackStatus.TryGetValue(op ?? string.Empty, out var scripted) ? scripted : 200;
+            var status = FaultFor(op, body) ?? (_ackStatus.TryGetValue(op ?? string.Empty, out var scripted) ? scripted : 200);
 
             lock (_script)
             {
@@ -390,7 +466,7 @@ namespace HSMDataCollector.Tests.Transport
             try
             {
                 await SendAsync(socket, status >= 200 && status < 300
-                    ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{{}}}}"
+                    ? $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{RegistrationErrorsFor(op, body)}}}"
                     : $"{{\"ack\":{id.Value},\"status\":{status},\"error\":\"scripted refusal\"}}").ConfigureAwait(false);
             }
             catch (Exception)

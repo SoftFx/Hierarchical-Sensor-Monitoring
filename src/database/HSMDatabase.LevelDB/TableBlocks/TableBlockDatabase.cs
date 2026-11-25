@@ -520,7 +520,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             }
         }
 
-        public int DeleteMergedHour(long hourTicks, IReadOnlyCollection<long> keep, IEnumerable<TableBlockWatermark> watermarks)
+        public int DeleteMergedHour(long hourTicks, IReadOnlySet<long> keep, IEnumerable<TableBlockWatermark> watermarks)
         {
             ArgumentNullException.ThrowIfNull(keep);
             ArgumentNullException.ThrowIfNull(watermarks);
@@ -613,7 +613,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
         }
 
         /// <summary>Deletes every block of one arrival hour (the benchmark's hourly delete): <see cref="DeleteMergedHour"/> keeping nothing.</summary>
-        internal int DeleteArrivalHour(long hourTicks) => DeleteMergedHour(hourTicks, Array.Empty<long>(), Array.Empty<TableBlockWatermark>());
+        internal int DeleteArrivalHour(long hourTicks) => DeleteMergedHour(hourTicks, new HashSet<long>(), Array.Empty<TableBlockWatermark>());
 
         public void Dispose()
         {

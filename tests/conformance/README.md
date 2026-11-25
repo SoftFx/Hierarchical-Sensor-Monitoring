@@ -411,6 +411,38 @@ collector does not compute a bar StdDev by owner decision); only the native-only
 fixture `collector/native/bar_stddev_contract.hsmtest` uses it. (The previous one,
 `set_sensor_description`, gained its managed counterpart in #1482.)
 
+The table sensor verbs (`collector/table_sensor_contract.hsmtest`, #1846; listed in its header) run in both drivers
+(native since #1848). In each, the table side is a scripted table channel (managed: the recording sender's; native: a
+recording channel installed through an internal test seam, `src/tables/hsm_table_test_seams.hpp`), and the table
+tick runs only through `table_tick`, which also does the tick's registration and delivery on the driver's thread. The
+native driver registers the fixture and its must-fail `meta/meta_table_rows_wrong_count.hsmtest` in the tables build
+only (`HSM_COLLECTOR_TABLES`): the rows are decoded with the test block reader, which needs libzstd.
+
+The table connection verbs (`collector/table_connection_contract.hsmtest`, #1846 part 2; listed in its header) are in
+the same state in the native driver, under the same issue. In the managed driver the collector of those cases is on
+the scripted session server (`create_collector_on_session`), which also takes the table connection (the upgrade with
+`hsm.tables.v1` and `X-Hsm-Session`, the table hello, the probe, block frames, one ack each); on such a collector the
+block verbs of the table fixture (`table_server_frame_limit`, `table_server_answer_next`, `expect_table_sequences`,
+`expect_table_rows`, ...) read the scripted server instead of the recording sender.
+
+No case of that fixture is decided by a duration, and a driver keeps it so with three rules (each a few lines in a
+driver; the native driver implements them with the verbs in step 6):
+
+- **`table_wait_connection_up|count|timeout_s` reads the collector's own state**: the table connection numbered `count`
+  (1 = the first the collector opened) is open, its hello read and its probe answered, so a put sends on it at once;
+  then exactly `count` were opened. The server's count of accepted upgrades is not enough: the collector may still be
+  reading the hello. The timeout only fails the case. The fixture waits so before every tick that must send and after
+  every connection its script ends, and then ticks again; a driver adds nothing of its own.
+- **The wait for a block's ack ends as "no ack in time" when the scripted server has decided not to answer that frame**
+  (`store_without_ack`, `no_answer`), by the frame's request id, and never by the request timeout: the managed driver
+  sets the collector's ack-deadline seam (`TableConnection.AckDeadlineForTests`) to a task the scripted server
+  completes for that request id; a frame that is answered never ends its wait that way.
+- **The long waits of the table connection may be shortened, and decide nothing**: the pause after an upgrade refused
+  with 404 or 400 (shortened so a case that waits for a second refusal is quick), and how long a put waits for a table
+  connection before it answers "not delivered" (a put that gives up leaves its block at the head with its sequence;
+  the case's next tick, after `table_wait_connection_up`, sends it). A bound on a whole tick (the managed driver: one
+  minute) only fails a case whose tick hangs.
+
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced
 in CI by [`scripts/conformance-unsupported-triage.ps1`](../../scripts/conformance-unsupported-triage.ps1)

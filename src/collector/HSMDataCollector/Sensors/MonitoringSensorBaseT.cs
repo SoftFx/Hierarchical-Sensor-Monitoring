@@ -10,6 +10,17 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.DefaultSensors
 {
+    /// <summary>The points of a monitoring sensor's send loop a test can stop at.</summary>
+    internal enum MonitoringSendStage
+    {
+        /// <summary>A send built its value (a bar sensor: took its snapshot) and has not published it yet.</summary>
+        ValueBuilt,
+
+        /// <summary>The send loop is being stopped; the wait for a send in flight has not begun.</summary>
+        LoopStopping,
+    }
+
+
     public abstract class MonitoringSensorBase<T, TDisplayUnit> : SensorBase<T, TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly IMonitoringOptions _options;
@@ -120,6 +131,8 @@ namespace HSMDataCollector.DefaultSensors
 
                 var value = BuildSensorValue();
 
+                SendStageForTests?.Invoke(MonitoringSendStage.ValueBuilt);
+
                 if (Interlocked.Read(ref _lifecycleEpoch) != capturedEpoch)
                     return false;
 
@@ -162,7 +175,25 @@ namespace HSMDataCollector.DefaultSensors
         /// </summary>
         protected long LifecycleEpoch => Interlocked.Read(ref _lifecycleEpoch);
 
-        private ValueTask StopInternalAsync(bool waitForCurrentRun) => _sendHandle.StopAsync(waitForCurrentRun);
+        /// <summary>For tests: runs at the stages of the send loop named by <see cref="MonitoringSendStage"/>.</summary>
+        internal Action<MonitoringSendStage> SendStageForTests { get; set; }
+
+        /// <summary>For tests: true while a send holds the reentrancy guard.</summary>
+        internal bool IsSendInProgress => Volatile.Read(ref _sendValueInProgress) == 1;
+
+        /// <summary>
+        /// Stops the periodic send loop and waits (bounded, as every wait of a sensor stop) for a send in flight.
+        /// Idempotent: <see cref="StopAsync"/> finds the loop stopped and does not wait again. For a sensor that
+        /// publishes a last value at its stop and must not lose it to a send in flight (the bar sensors).
+        /// </summary>
+        internal ValueTask StopSendLoopAsync() => StopInternalAsync(waitForCurrentRun: true);
+
+        private ValueTask StopInternalAsync(bool waitForCurrentRun)
+        {
+            SendStageForTests?.Invoke(MonitoringSendStage.LoopStopping);
+
+            return _sendHandle.StopAsync(waitForCurrentRun);
+        }
 
         private void StartSendTask() => _sendHandle.Start(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
 
