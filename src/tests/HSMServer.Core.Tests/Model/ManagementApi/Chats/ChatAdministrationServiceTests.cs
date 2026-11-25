@@ -250,6 +250,47 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
         [Fact]
+        public async Task UpdateChat_FolderBinding_DesiredListInBothHalves_AddsAndRemovesOnlyManagedFolders()
+        {
+            // The shape of a caller holding ONE desired list — the API/MCP surface of #1829:
+            // the list is passed as both Keep and Add. Among the managed folders the chat ends
+            // up bound to exactly the desired ones (B is added, A is removed); the unmanaged
+            // folders are never touched, bound (C) or only desired (D) alike.
+            var chatId = Guid.NewGuid();
+            var folderA = new FolderModel(BuildFolderEntity(Guid.NewGuid(), chatId)); // managed, bound, not desired
+            var folderB = new FolderModel(BuildFolderEntity(Guid.NewGuid()));          // managed, desired, unbound
+            var folderC = new FolderModel(BuildFolderEntity(Guid.NewGuid(), chatId)); // unmanaged, bound
+            var folderD = new FolderModel(BuildFolderEntity(Guid.NewGuid()));          // unmanaged, desired
+
+            var existing = new Chat(BuildChatEntity(chatId));
+            existing.Folders.Add(folderA.Id);
+            existing.Folders.Add(folderC.Id);
+
+            SetupChat(chatId, existing);
+            SetupFolder(folderA);
+            SetupFolder(folderB);
+            SetupFolder(folderC);
+            SetupFolder(folderD);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+            SetupFolderUpdate(ok: true);
+
+            List<Guid> desired = [folderB.Id, folderD.Id];
+            var binding = new ChatFolderBinding(Keep: desired, Add: desired, Managed: [folderA.Id, folderB.Id]);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId }, binding, _initiator);
+
+            Assert.True(result.Success);
+            _folders.Verify(m => m.TryUpdate(It.Is<FolderUpdate>(u =>
+                u.Id == folderB.Id
+                && u.Chats.Contains(chatId))), Times.Once);
+            _folders.Verify(m => m.TryUpdate(It.Is<FolderUpdate>(u =>
+                u.Id == folderA.Id
+                && !u.Chats.Contains(chatId))), Times.Once);
+            _folders.Verify(m => m.TryUpdate(It.Is<FolderUpdate>(u => u.Id == folderC.Id)), Times.Never);
+            _folders.Verify(m => m.TryUpdate(It.Is<FolderUpdate>(u => u.Id == folderD.Id)), Times.Never);
+        }
+
+        [Fact]
         public async Task UpdateChat_StaleKeptRow_UnboundInTheMeantime_IsNotRebound()
         {
             // Two-admin race (#1840 review round 2): B removed the binding while A's form
