@@ -309,7 +309,7 @@ A collector sends a large file (a dump, up to `fileLimits.maxFileBytes`, 64 GB b
 - **The pair.** As the table connection: no slot, one per session (a new one replaces the old; the old is closed with `1000`, reason `replaced by a new file connection of its session`, and gives its upload back **before the new one's hello**: a close the collector does not answer within 3 s is cut off), closed with `1000` `its session ended` when its session ends. A session holds at most three sockets (session, table connection, file connection), so a server holds at most three times `MaxSessions` sockets.
 - **Hello.** `{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"fileLimits":{"maxFileBytes":68719476736,"pieceBytes":4173824}}}`. `maxFrameBytes` is `CollectorSessions.MaxFileFrameBytes`. **`pieceBytes`** is the largest multiple of 4 KiB with `88 + ZSTD_compressBound(pieceBytes) ≤ maxFrameBytes`: a piece of that size always fits a frame, however badly it compresses (4,173,824 bytes at the default 4 MiB frame; 16,465 pieces for 64 GiB).
 - **Text frames** are those of the session: `ping` / `pong`, acks, `1007` for a frame that is not a JSON object, `1002` for a request without `id`. The requests are `begin`, `end` and `discard`; any other `op` is `400 unknown op`.
-- **An answer with `retryAfter` is not final** (whole seconds, at least 1): the collector tries the same request again after it. Any other 4xx is final for that file until the collector restarts, except where a row below says what to do instead.
+- **An answer with `retryAfter` is not final** (whole seconds, at least 1): the collector tries again after it, with the same request unless a row below names another (`503` to `end`, `409` to `discard`: `begin`). Any other 4xx is final for that file until the collector restarts, except where a row below says what to do instead.
 
 **begin** (text): names the file and how it is cut.
 
@@ -410,7 +410,7 @@ It names the upload this connection holds. After a cut, the collector first send
 | Answer to `discard` | Meaning |
 |---|---|
 | `200 {"upload","state":"discarded"}` | The part, its reserved space and its upload slot are gone; the connection holds no upload. |
-| `409 {"upload","state":"checking"}` + `retryAfter` | `end` was sent and its check is running: the check settles the upload. Send `begin` after `retryAfter`: `stored`, or `next` after a failed check (then discard it). |
+| `409 {"upload","state":"checking"}` + `retryAfter` | `end` was sent and its check is running: the check settles the upload. Send `begin` after `retryAfter`: `stored`, or `next` after a failed check (then discard it). Sending `discard` again instead is harmless: `409` while the check runs, `404` after it, then `begin`. |
 | `404` | This connection holds no such upload: `begin` it first. |
 | `503` + `retryAfter` | The store could not remove it: nothing changed, the connection still holds it; send the same `discard` again. |
 | `400` | A malformed body. |

@@ -696,6 +696,7 @@ namespace HSMServer.Core.Tests.SensorApi
             var data = TestFile.Random("a.dmp", 200_000);
 
             var begun = await file.BeginAsync(data, _path);
+            await file.SendPieceAsync(data.Piece(0), begun.Upload);
 
             _store.DiscardFaults = true;
             var fault = await file.DiscardAsync(begun.Upload);
@@ -703,10 +704,14 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(503, fault.Status);
             Assert.Equal(60, fault.RetryAfter);
             Assert.Equal(1, _store.LiveLeases);
+            Assert.Single(_store.Find("a.dmp").Pieces);
 
             _store.DiscardFaults = false;
+            var entry = _store.Find("a.dmp");
+
             Assert.Equal("discarded", (await file.DiscardAsync(begun.Upload)).State);
             Assert.Null(_store.Find("a.dmp"));
+            Assert.Equal("the collector discarded it: its source file changed", entry.DiscardReason);
         }
 
         // A discard that does not complete (cut short, faulted) still gives the lease back: a lease left
