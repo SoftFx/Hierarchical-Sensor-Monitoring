@@ -53,6 +53,7 @@ namespace HSMDatabase.LevelDB.TableBatches
         private readonly string _root;
         private readonly long _writeBufferSize;
         private readonly Func<string, Options, DB> _open;
+        private readonly Action<TimeSpan> _pause;
 
         private readonly object _productsLock = new();
         private readonly Dictionary<Guid, ProductState> _products = [];
@@ -69,11 +70,12 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         public TableBatchDatabase(string tablesFolder) : this(tablesFolder, 8L * 1024 * 1024) { }
 
-        internal TableBatchDatabase(string tablesFolder, long writeBufferSize, Func<string, Options, DB> open = null)
+        internal TableBatchDatabase(string tablesFolder, long writeBufferSize, Func<string, Options, DB> open = null, Action<TimeSpan> pause = null)
         {
             _root = Path.Combine(tablesFolder, FolderName);
             _writeBufferSize = writeBufferSize;
             _open = open;
+            _pause = pause;
         }
 
 
@@ -549,7 +551,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             try
             {
-                product.HoursDb = LevelDbOpen.Open(hoursPath, Options(), _open);
+                product.HoursDb = OpenDb(hoursPath, Options());
                 LoadCommits(product);
             }
             catch (Exception ex) when (existed && (ex is FormatException || ex.Message?.Contains("Corruption", StringComparison.OrdinalIgnoreCase) == true))
@@ -560,7 +562,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 Directory.Move(hoursPath, aside);
                 _logger.Warn($"The merged hours of product {productId} could not be read ({ex.Message}); moved to {aside} and rebuilt from the week databases");
 
-                product.HoursDb = LevelDbOpen.Open(hoursPath, Options(), _open);
+                product.HoursDb = OpenDb(hoursPath, Options());
                 product.Hours.Clear();
                 existed = false;
             }
@@ -678,7 +680,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     var options = Options();
                     options.CreateIfMissing = create;
-                    db = LevelDbOpen.Open(path, options, _open);
+                    db = OpenDb(path, options);
                 }
                 catch (Exception ex)
                 {
@@ -792,6 +794,10 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
+
+        // Through the shared retry of a transient file error at an open (LevelDbOpen), with a Warn line per retry.
+        private DB OpenDb(string path, Options options) =>
+            LevelDbOpen.Open(path, options, _open, _pause, ex => _logger.Warn($"Table batch database {path}: an open retried after a transient file error: {ex.Message}"));
 
         // === Paths, keys, values ===
 

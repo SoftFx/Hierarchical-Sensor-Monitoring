@@ -177,7 +177,7 @@ Per product opened: the merged hours with, per class, the minimum and maximum ro
 - The databases of a product's newest week written are pinned. When a later week is written, the databases of the earlier ones are flushed (a `CompactRange` over an empty key range writes the memtable out and merges no file) and unpinned: a closed week has no log to replay when it is opened again.
 - Every other database is opened on demand (a read, retention, a rebuild) through one cache for the whole store, at most `MaxOpenDatabases` open (`TableSensors.MaxOpenBatchDatabases`, 32 by default), least recently used closed first. A database is held only while a read or a write uses it; a read of many weeks holds one week at a time. Pinned and held databases are never closed, so the count can be above the bound while they are more than it.
 - A database is opened with `MaxOpenFiles` 100.
-- Opens go through `LevelDbOpen.Open` (`src/database/HSMDatabase.LevelDB/LevelDbOpen.cs`), which retries up to five times on LevelDB's transient Windows failure to replace CURRENT through its `.dbtmp` file and on nothing else; the block store's own retry (#1861) is meant to move onto it.
+- Opens go through `LevelDbOpen.Open` (`src/database/HSMDatabase.LevelDB/LevelDbOpen.cs`), the block store's retry made shared: an IO error that names the temporary `.dbtmp` file (in practice the replace of `CURRENT`) is retried four times with pauses of 10, 30, 60 and 120 ms, any other error fails at once; a Warn line per retry.
 
 ### Reading
 
