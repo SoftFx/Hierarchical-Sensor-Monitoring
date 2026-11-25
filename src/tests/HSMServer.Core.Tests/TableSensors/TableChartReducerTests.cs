@@ -277,6 +277,20 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.True(chart.IsIncomplete);
         }
 
+        [Fact]
+        public void An_answer_with_a_failed_batch_carries_no_rows_even_when_the_range_is_short()
+        {
+            var reducer = Reducer(0, 100, [1], 10);
+            Assert.True(reducer.AddBatch(Batch([Row(1, 1.0)]), 0, 0, false));
+            reducer.BatchFailed();
+
+            var chart = reducer.Build();
+
+            Assert.True(chart.IsIncomplete);
+            Assert.Null(chart.Rows);
+            Assert.Equal(1, chart.RowCount);
+        }
+
         // === Configuration ===
 
         [Fact]

@@ -108,8 +108,9 @@ namespace HSMServer.Core.TableSensors
 
             Accumulate(table.Time);
 
-            _rows?.AddRows(entry, table);
+            // Past the limit the rows are not needed: dropped before they are copied and sorted.
             DropRowsPastLimit();
+            _rows?.AddRows(entry, table);
         }
 
         public bool AddBatch(TableBatch batch, long hourTicks, int ordinal, bool moved)
@@ -138,8 +139,8 @@ namespace HSMServer.Core.TableSensors
 
             Accumulate(batch.Time);
 
-            _rows?.AddBatch(batch, hourTicks, ordinal, moved);
             DropRowsPastLimit();
+            _rows?.AddBatch(batch, hourTicks, ordinal, moved);
 
             return true;
         }
@@ -264,7 +265,8 @@ namespace HSMServer.Core.TableSensors
                 BatchesRead = BatchesRead,
                 BatchesFailed = BatchesFailed,
                 Columns = columns,
-                Rows = completeTo is null && _rows is not null ? _rows.Build() : null,
+                // The rows only of a complete answer: no stop, no block or batch that could not be read.
+                Rows = completeTo is null && BlocksFailed == 0 && BatchesFailed == 0 && _rows is not null ? _rows.Build() : null,
             };
         }
 
