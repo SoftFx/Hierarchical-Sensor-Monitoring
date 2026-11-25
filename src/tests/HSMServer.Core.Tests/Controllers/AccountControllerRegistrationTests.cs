@@ -43,7 +43,10 @@ namespace HSMServer.Core.Tests.Controllers
         public async Task Registrate_CreatesAUserWithNoRole_WhateverElseThePostCarries()
         {
             var users = new Mock<IUserManager>();
-            var controller = Controller(users);
+            var controller = Controller(users, out var signIn);
+
+            users.Setup(u => u.AddUser(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<List<(Guid, ProductRoleEnum)>>()))
+                .ReturnsAsync(true);
 
             // The request names a product and a role next to the form's own fields. The action receives
             // what the model binder gives it: the view model, built from the posted form.
@@ -67,14 +70,43 @@ namespace HSMServer.Core.Tests.Controllers
             var roles = (List<(Guid, ProductRoleEnum)>)call.Arguments[3];
 
             Assert.True(roles is null || roles.Count == 0);
+            Assert.Equal(["newcomer"], SignedIn(signIn));
+        }
+
+        [Fact]
+        public async Task Registrate_WhenTheUserWasNotCreated_SignsNobodyIn()
+        {
+            // The name was free when the form was validated and taken when the user was added: the
+            // request must not end signed in under a name that now belongs to another user.
+            var users = new Mock<IUserManager>();
+            var controller = Controller(users, out var signIn);
+
+            users.Setup(u => u.AddUser(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<List<(Guid, ProductRoleEnum)>>()))
+                .ReturnsAsync(false);
+
+            var result = await controller.Registrate(new RegistrationViewModel { Username = "taken", Password = "password1", SecondPassword = "password1" });
+
+            Assert.Equal("Registration", Assert.IsType<ViewResult>(result).ViewName);
+            Assert.Empty(SignedIn(signIn));
         }
 
 
-        private static AccountController Controller(Mock<IUserManager> users)
+        // The login names the request was signed in under.
+        private static List<string> SignedIn(Mock<IAuthenticationService> signIn) =>
+            signIn.Invocations
+                .Where(i => i.Method.Name == nameof(IAuthenticationService.SignInAsync))
+                .Select(i => ((System.Security.Claims.ClaimsPrincipal)i.Arguments[2]).Identity?.Name)
+                .ToList();
+
+        private static AccountController Controller(Mock<IUserManager> users, out Mock<IAuthenticationService> signIn)
         {
             var services = new ServiceCollection();
 
-            services.AddSingleton(Mock.Of<IAuthenticationService>());
+            signIn = new Mock<IAuthenticationService>();
+
+            services.AddSingleton(signIn.Object);
+            services.AddSingleton(Mock.Of<Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataDictionaryFactory>(
+                f => f.GetTempData(It.IsAny<HttpContext>()) == Mock.Of<Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataDictionary>()));
             services.AddLogging();
             services.AddControllersWithViews();
 

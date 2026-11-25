@@ -135,7 +135,14 @@ namespace HSMServer.Controllers
             // A self-registered user is not an admin and holds no role: the form carries a name and a
             // password, nothing that grants access. Roles are given afterwards by a Manager of the
             // product or folder, or by an admin.
-            await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), isAdmin: false);
+            // The name may have been taken between the validation above and this call: the cookie names
+            // a user by login, so it is issued only for the user this request created.
+            if (!await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), isAdmin: false))
+            {
+                TempData[TextConstants.TempDataErrorText] = RegistrationValidator.UsernameUniqueMessage;
+                return View("Registration", model);
+            }
+
             await Authenticate(model.Username, true);
 
             return Redirect("/Home");
