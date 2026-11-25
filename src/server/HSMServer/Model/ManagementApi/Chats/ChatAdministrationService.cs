@@ -130,8 +130,9 @@ namespace HSMServer.Model.ManagementApi.Chats
         // The write rules of both surfaces: the chat name (#1829 — required on a creation,
         // at most 100 characters, unique per server ignoring case and surrounding spaces; an
         // omitted name, a partial update, is not checked, and a row keeping its own name
-        // breaks nothing — compared trimmed, like every stored name), the aggregation delay (0..a day — a negative delay never flushes a channel's
-        // accumulator, so a chat holding one drops its alerts in silence), and the webhook
+        // breaks nothing — compared trimmed, like every stored name), the aggregation delay
+        // (0..a day — a negative delay never flushes a channel's accumulator, so a chat
+        // holding one drops its alerts in silence), and the webhook
         // URL-shape rule the web form enforced (NotificationsController's
         // ValidateWebhooks, #1329): a non-null webhook field of a write must be an absolute
         // http/https URL. Null means "no change" and passes. Every problem answers in one
@@ -183,7 +184,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         // kept as it is, so the row is neither refused as a clash with another chat's name
         // nor renamed — and journaled as renamed — behind the user's back.
         private static ChatUpdate KeepingItsStoredName(ChatUpdate update, Chat chat) =>
-            update.Name is not null && string.Equals(update.Name, chat.Name?.Trim(), StringComparison.Ordinal)
+            update.Name is not null && ChatNameValidator.SameName(update.Name, chat.Name)
                 ? update with { Name = chat.Name }
                 : update;
 
@@ -193,7 +194,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         // then the same 422 as up front, naming the field. A refusal whose name is still
         // free is the store's own failure: the fixed-message conflict.
         private PolicyWriteResult RefusedWrite(ChatUpdate update, string currentName) =>
-            ChatNameValidator.FindError(update.Name, update.Id, _chats.GetValues() ?? [], currentName) == ChatNameValidator.NameDuplicateMessage
+            ChatNameValidator.RenamesOntoATakenName(update.Name, update.Id, _chats.GetValues() ?? [], currentName)
                 ? PolicyWriteResult.Fail(PolicyWriteOutcome.Invalid,
                     new Dictionary<string, string[]> { [nameof(ChatUpdate.Name)] = [ChatNameValidator.NameDuplicateMessage] })
                 : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);

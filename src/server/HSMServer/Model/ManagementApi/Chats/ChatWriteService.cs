@@ -150,9 +150,11 @@ namespace HSMServer.Model.ManagementApi.Chats
 
         /// <summary>
         /// Remove a chat — for an admin or the manager of a folder it is bound to — through
-        /// the same removal the web UI's list runs: the storage's own removal events prune
-        /// the chat's references from folders and alert policies. A dry run answers the
-        /// usage preview and removes nothing.
+        /// the same removal the web UI's list runs. The storage's own removal event prunes
+        /// the chat's id from every folder bound to it, and each such folder update from the
+        /// alert policies of its products; a global chat, bound to no folder, leaves its id
+        /// in the alert policies that referenced it. A dry run answers the usage preview and
+        /// removes nothing.
         /// </summary>
         public async Task<PolicyWriteResult> DeleteChat(Guid chatId, ClaimsPrincipal caller, bool dryRun = false)
         {

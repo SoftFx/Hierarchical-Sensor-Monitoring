@@ -332,9 +332,11 @@
         </member>
         <member name="M:HSMServer.Controllers.ChatsApiController.DeleteChat(System.Guid)">
             <summary>
-            Remove a notification chat (#1829): the same removal the web UI's list runs — its
-            references are pruned from folders and alert policies, and every write leaves a
-            journal record. Admin, or the manager of a folder the chat is bound to. With the
+            Remove a notification chat (#1829): the same removal the web UI's list runs. Its
+            folder bindings are pruned, and with them its references from the alert policies
+            of those folders' products; a global chat's id is left in the alert policies that
+            referenced it. Every write leaves a journal record. Admin, or the manager of a
+            folder the chat is bound to. With the
             <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
             preview: how many sensors' alerts reference the chat, and the folder bindings the
             deletion would take with it.
@@ -3483,9 +3485,11 @@
         <member name="M:HSMServer.Model.ManagementApi.Chats.ChatWriteService.DeleteChat(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Boolean)">
             <summary>
             Remove a chat — for an admin or the manager of a folder it is bound to — through
-            the same removal the web UI's list runs: the storage's own removal events prune
-            the chat's references from folders and alert policies. A dry run answers the
-            usage preview and removes nothing.
+            the same removal the web UI's list runs. The storage's own removal event prunes
+            the chat's id from every folder bound to it, and each such folder update from the
+            alert policies of its products; a global chat, bound to no folder, leaves its id
+            in the alert policies that referenced it. A dry run answers the usage preview and
+            removes nothing.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDto">
@@ -4490,11 +4494,25 @@
             for a shorter name first, as it always did.
             </summary>
         </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.SameName(System.String,System.String)">
+            <summary>
+            Whether two names are the same one: equal once trimmed, letter case included —
+            the same name in another case is another name.
+            </summary>
+        </member>
         <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.IsTaken(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
             <summary>
             Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring
             case and surrounding spaces. A blank name is held by no one: rows without a
             name (a Telegram user that has no username) are not each other's duplicates.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.RenamesOntoATakenName(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat},System.String)">
+            <summary>
+            Whether a write renames a chat onto a name another chat holds — the one thing
+            the rule forbids. The engine answers it against a snapshot; the storage repeats
+            it under its write gate and has the last word. A name the chat already holds
+            (<paramref name="storedName"/>) is no rename, and neither is no name.
             </summary>
         </member>
         <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.UniqueIn(System.String,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">

@@ -142,7 +142,7 @@ namespace HSMServer.Mcp
         // Idempotent=false: a delete — re-sent after a network retry it answers
         // the not-found error for an already-removed chat.
         [McpServerTool(Name = "delete_chat", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Removes a notification chat — the same removal the web UI's list runs: the chat's references are pruned from folders and alert policies, and the write leaves a journal record. Needs an admin token, or the manager of a folder the chat is bound to. Use dryRun first to learn how many sensors' alerts reference the chat and which folder bindings the deletion would take with it.")]
+        [Description("Removes a notification chat — the same removal the web UI's list runs. Its folder bindings are pruned, and with them its references from the alert policies of those folders' products; a global chat's id is left in the alert policies that referenced it (senders skip a chat that no longer exists). The write leaves a journal record. Needs an admin token, or the manager of a folder the chat is bound to. Use dryRun first to learn how many sensors' alerts reference the chat and which folder bindings the deletion would take with it.")]
         public async Task<McpChatDeleteResult> DeleteChat(
             [Description("Chat id.")] Guid chatId,
             [Description("Preview the deletion — how many sensors' alerts reference the chat and which folder bindings it would take with it — WITHOUT removing anything; the answer carries `preview` instead of `value`.")] bool dryRun = false)

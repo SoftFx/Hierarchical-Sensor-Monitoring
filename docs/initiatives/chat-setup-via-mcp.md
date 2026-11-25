@@ -1,6 +1,6 @@
 # Initiative: Chat setup via MCP (notifications onboarding by an AI agent)
 
-> Owner: server | Last reviewed: 2026-11-23 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 
 ## Problem
 
@@ -107,7 +107,7 @@ GET    /api/v1/telegram-bot                              status {botName, isEnab
 PATCH  /api/v1/telegram-bot                              partial {botName?, botToken?, isEnabled?} (admin; a token change is probed, applied, then restarts)
 POST   /api/v1/chats                                     create (admin)
 PATCH  /api/v1/chats/{id}                                partial update, clear flags, folders (admin or PM of a bound folder)
-DELETE /api/v1/chats/{id}?dryRun=                        delete with a usage preview (the same gate)
+DELETE /api/v1/chats/{id}   (+ X-HSM-Dry-Run)         delete, with a usage preview on a dry run (the same gate; landed on the area's header, not on a query flag)
 POST   /api/v1/chats/{id}/telegram-invitations           issue {kind: direct|group} → {value, expiresAt, nextSteps} (the same gate)
 POST   /api/v1/chats/{id}/test-message                   {channel: telegram|slack|mattermost} → {delivered, error} (the same gate)
 GET    /api/v1/chats/setup-guide?channel=…                the messenger-side steps for one channel

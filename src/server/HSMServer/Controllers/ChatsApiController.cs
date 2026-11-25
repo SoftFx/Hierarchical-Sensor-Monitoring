@@ -165,9 +165,11 @@ namespace HSMServer.Controllers
             (await _writer.UpdateChat(id, request, User)).ToActionResult();
 
         /// <summary>
-        /// Remove a notification chat (#1829): the same removal the web UI's list runs — its
-        /// references are pruned from folders and alert policies, and every write leaves a
-        /// journal record. Admin, or the manager of a folder the chat is bound to. With the
+        /// Remove a notification chat (#1829): the same removal the web UI's list runs. Its
+        /// folder bindings are pruned, and with them its references from the alert policies
+        /// of those folders' products; a global chat's id is left in the alert policies that
+        /// referenced it. Every write leaves a journal record. Admin, or the manager of a
+        /// folder the chat is bound to. With the
         /// <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
         /// preview: how many sensors' alerts reference the chat, and the folder bindings the
         /// deletion would take with it.

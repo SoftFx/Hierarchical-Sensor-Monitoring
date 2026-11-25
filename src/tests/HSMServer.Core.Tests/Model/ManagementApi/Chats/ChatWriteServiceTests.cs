@@ -435,7 +435,10 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             // cannot see. The echo cannot name that folder, so its `folders` is empty — and
             // the chat is out of the caller's sight from here on (a later read is a 404).
             // The echo is judged like that later read: no binding they cannot see, and no
-            // detail either — they manage none of the chat's folders any more.
+            // detail either — they manage none of the chat's folders any more. Both of the
+            // evaluator's decisions follow the bindings they are given, as the real ones do,
+            // so an echo judged on the chat BEFORE the write would still name the caller's
+            // own folder and carry the detail.
             var chat = AddChat("Ops alerts", description: "on-call");
             var ownFolder = AddFolder(chat.Id);
             var unseenFolder = AddFolder(chat.Id);
@@ -443,7 +446,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             _world.Authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Id != unseenFolder.Id);
             _world.Authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>()))
-                .Returns(false);
+                .Returns((ClaimsPrincipal _, IReadOnlyCollection<Guid> folders) => folders.Contains(ownFolder.Id));
 
             var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Folders = [] }, Token);
 

@@ -45,7 +45,7 @@ namespace HSMServer.Notifications.Chats
 
             // The posted name arrives trimmed — or comes back as the row's own stored one,
             // kept as it is by the engine. Either way, surrounding spaces make no difference.
-            if (string.Equals(name.Trim(), currentName?.Trim(), StringComparison.Ordinal))
+            if (SameName(name, currentName))
                 return null;
 
             if (name.Length > NameMaxLength)
@@ -55,6 +55,13 @@ namespace HSMServer.Notifications.Chats
         }
 
         /// <summary>
+        /// Whether two names are the same one: equal once trimmed, letter case included —
+        /// the same name in another case is another name.
+        /// </summary>
+        public static bool SameName(string left, string right) =>
+            string.Equals(left?.Trim(), right?.Trim(), StringComparison.Ordinal);
+
+        /// <summary>
         /// Whether a chat OTHER than <paramref name="chatId"/> holds the name, ignoring
         /// case and surrounding spaces. A blank name is held by no one: rows without a
         /// name (a Telegram user that has no username) are not each other's duplicates.
@@ -62,6 +69,15 @@ namespace HSMServer.Notifications.Chats
         public static bool IsTaken(string name, Guid chatId, IEnumerable<Chat> existing) =>
             !string.IsNullOrEmpty(name)
             && existing.Any(chat => chat.Id != chatId && string.Equals(chat.Name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// Whether a write renames a chat onto a name another chat holds — the one thing
+        /// the rule forbids. The engine answers it against a snapshot; the storage repeats
+        /// it under its write gate and has the last word. A name the chat already holds
+        /// (<paramref name="storedName"/>) is no rename, and neither is no name.
+        /// </summary>
+        public static bool RenamesOntoATakenName(string name, Guid chatId, IEnumerable<Chat> existing, string storedName) =>
+            name is not null && !SameName(name, storedName) && IsTaken(name, chatId, existing);
 
         /// <summary>
         /// A name no stored chat holds yet: the proposed one trimmed, or it with " (2)",
