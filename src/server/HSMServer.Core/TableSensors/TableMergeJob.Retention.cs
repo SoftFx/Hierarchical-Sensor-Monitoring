@@ -17,10 +17,11 @@ namespace HSMServer.Core.TableSensors
     /// <item>Every week database of the batch store whose period class has passed for its week
     /// (<see cref="TableBatchRetention.IsExpired"/>: the week's end plus the class's whole weeks) is dropped as a folder
     /// (<see cref="ITableBatchStore.DropWeek"/>). A class-0 (for ever) database is never dropped.</item>
-    /// <item>An arrival hour whose blocks are held back from the ordinary deletion (a product that did not commit it, blocks
-    /// the merge could not read) is deleted once every one of those blocks has expired: the period class of every table
-    /// sensor with rows in the block has passed for the hour's week, and none of them is kept for ever. A block whose
-    /// directory cannot be read is judged by every table sensor of its product. The rows are logged as an Error and counted.</item>
+    /// <item>The blocks of an arrival hour that the ordinary deletion holds back for a product (all of them when the product
+    /// did not commit the hour, the ones its merge could not read when it did) are deleted once every one of them has
+    /// expired for every table sensor with rows in it, by the rule below. Per product: another product's blocks of the
+    /// same hour stay as they are. A block whose directory cannot be read is judged by every table sensor of its product.
+    /// The rows are logged as an Error and counted.</item>
     /// </list>
     /// The clock is the pass's; a fault is logged, counted and tried again an hour later.
     /// <para>
@@ -279,26 +280,38 @@ namespace HSMServer.Core.TableSensors
 
                 try
                 {
-                    var held = HeldBlocks(hour, products, utcNow, delay);
-                    if (held is null || held.Count == 0)
-                        continue;
+                    // Per product: its held blocks go when every one of them has expired. Another product's blocks of the
+                    // hour, held or not, stay (the block store deletes by sequence), so one product kept for ever or
+                    // within its delay does not hold the expired blocks of another.
+                    var expired = new List<(Guid Product, TableBlockIndexEntry Entry, bool Unreadable)>();
 
-                    if (!held.All(h => IsBlockExpired(h.Product, h.Entry, h.Unreadable, hour, utcNow)))
+                    foreach (var (product, entries) in products)
+                    {
+                        var held = HeldBlocks(product, entries, hour, utcNow, delay);
+                        if (held is not null && held.Count > 0 && held.All(h => IsBlockExpired(product, h.Entry, h.Unreadable, hour, utcNow)))
+                            expired.AddRange(held.Select(h => (product, h.Entry, h.Unreadable)));
+                    }
+
+                    if (expired.Count == 0)
                         continue;
 
                     RetentionCheckpoint?.Invoke("expired-hour-deleting");
 
-                    using (_gate.Delete())
-                        Blocks.DeleteMergedHour(hour, [], Watermarks(products.Keys));
+                    var going = expired.Select(h => h.Entry.Sequence).ToHashSet();
+                    var keep = products.Values.SelectMany(list => list).Select(e => e.Sequence).Where(s => !going.Contains(s)).ToList();
+                    var owners = expired.Select(h => h.Product).Distinct().ToList();
 
-                    long rows = held.Sum(h => (long)h.Entry.RowCount);
-                    Stats.Add(ref Stats.ExpiredBlocksDeleted, held.Count);
+                    using (_gate.Delete())
+                        Blocks.DeleteMergedHour(hour, keep, Watermarks(owners));
+
+                    long rows = expired.Sum(h => (long)h.Entry.RowCount);
+                    Stats.Add(ref Stats.ExpiredBlocksDeleted, expired.Count);
                     Stats.Add(ref Stats.ExpiredBlockRowsDeleted, rows);
                     deleted++;
 
                     // Rows that were never merged and are gone now: their period has passed, but they were never in a batch.
-                    _logger.Error($"Table retention: the arrival hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} was deleted with {held.Count} blocks " +
-                                  $"never merged into batches ({rows} rows; products {string.Join(", ", held.Select(h => h.Product).Distinct())}): " +
+                    _logger.Error($"Table retention: {expired.Count} blocks of the arrival hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} " +
+                                  $"never merged into batches were deleted ({rows} rows; products {string.Join(", ", owners)}): " +
                                   "the period of every table sensor with rows in them has passed");
                 }
                 catch (Exception ex)
@@ -310,32 +323,21 @@ namespace HSMServer.Core.TableSensors
             return deleted;
         }
 
-        // The blocks of an hour the ordinary deletion holds back: every block of a product that did not commit the hour, and
-        // the blocks a product's commit lists as unreadable. Null when a committed product's deletion delay has not passed
-        // (the hour waits for it, as the ordinary deletion does).
-        private List<(Guid Product, TableBlockIndexEntry Entry, bool Unreadable)> HeldBlocks(long hour, Dictionary<Guid, List<TableBlockIndexEntry>> products,
-            DateTime utcNow, long delay)
+        // The blocks of a product in an hour that the ordinary deletion holds back: every block when the product did not
+        // commit the hour, and the blocks its commit lists as unreadable. Null when the product committed the hour and its
+        // deletion delay has not passed (they wait for it, as the ordinary deletion does).
+        private List<(TableBlockIndexEntry Entry, bool Unreadable)> HeldBlocks(Guid product, List<TableBlockIndexEntry> entries, long hour, DateTime utcNow, long delay)
         {
-            var held = new List<(Guid, TableBlockIndexEntry, bool)>();
+            var record = Batches.GetHour(product, hour);
 
-            foreach (var (product, entries) in products)
-            {
-                var record = Batches.GetHour(product, hour);
+            if (record is null)
+                return entries.Select(e => (e, false)).ToList();
 
-                if (record is null)
-                {
-                    held.AddRange(entries.Select(e => (product, e, false)));
-                    continue;
-                }
+            if (utcNow.Ticks < record.CommitTicks + delay)
+                return null;
 
-                if (utcNow.Ticks < record.CommitTicks + delay)
-                    return null;
-
-                var keep = record.UnreadableBlocks.ToHashSet();
-                held.AddRange(entries.Where(e => keep.Contains(e.Sequence)).Select(e => (product, e, true)));
-            }
-
-            return held;
+            var unreadable = record.UnreadableBlocks.ToHashSet();
+            return entries.Where(e => unreadable.Contains(e.Sequence)).Select(e => (e, true)).ToList();
         }
 
         // Whether a block's rows have expired for every table sensor with rows in it, by the one rule

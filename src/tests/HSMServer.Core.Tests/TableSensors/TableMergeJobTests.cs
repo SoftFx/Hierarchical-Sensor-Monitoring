@@ -174,7 +174,7 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
-        public async Task One_product_committed_and_another_not_reads_the_same_and_the_hour_is_deleted_only_once_both_are()
+        public async Task One_product_committed_and_another_not_reads_the_same_and_nothing_is_deleted_within_the_delay()
         {
             var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
             var a = await RegisterAsync("a");
@@ -201,13 +201,59 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Single(committed);
             Assert.Equal(before, All(a, o));
 
-            // Past the delay of the committed one: nothing deleted, the hour is not merged for every product.
+            // The next pass commits the second product; nothing is deleted within the delay.
             Assert.Equal(1, Pass(merge.AddMinutes(1)).HoursMerged);
             Assert.True(_server.Batches.IsHourMerged(_product, Hour0.Ticks) && _server.Batches.IsHourMerged(other, Hour0.Ticks));
             Assert.Equal(before, All(a, o));
 
             Assert.Equal(1, Pass(merge.AddHours(25)).HoursDeleted);
             Assert.Equal(before, All(a, o));
+        }
+
+        [Fact]
+        public async Task A_product_that_never_merges_holds_no_blocks_of_another_product_of_the_same_hour()
+        {
+            // Product A's sensor a kept for one week; product B's sensor o kept for ever. Every hour of B fails its
+            // verification (never merged in this process), A's hour 0 is committed and its hour 1 does not verify either.
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            var a = await RegisterAsync("a", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            var o = await RegisterAsync("o", other, keep: TimeIntervalModel.None);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            AssertStored(_server.Service.Put(other, _producer, 1, Block(("o", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+
+            _server.Job.AfterDecode = (sensor, batch) =>
+            {
+                if (sensor == o.Id)
+                    batch.Columns[1].DoubleValues[0] += 0.5;
+            };
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).Mismatches);
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.False(_server.Batches.IsHourMerged(other, Hour0.Ticks));
+
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(61), 3.0, 3)]))));
+            AssertStored(_server.Service.Put(other, _producer, 2, Block(("o", [(Hour0.AddMinutes(62), 4.0, 4)]))));
+            _server.Job.AfterDecode = (_, batch) => batch.Columns[1].DoubleValues[0] += 0.5;
+            Assert.Equal(2, Pass(Hour0.AddHours(2).AddMinutes(3)).Mismatches);
+            _server.Job.AfterDecode = null;
+
+            // Past A's delay, A's blocks of hour 0 are deleted; B's stay and still serve its reads.
+            Assert.Equal(1, Pass(Hour0.AddHours(26)).HoursDeleted);
+            Assert.DoesNotContain(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.Ticks);
+            Assert.Contains(_server.Blocks.GetBlocks(other), e => e.ArrivalHourTicks == Hour0.Ticks);
+            Assert.Equal(2, Rows(a).Count);
+            Assert.Equal(2, Rows(o).Count);
+
+            // Once a's period has passed for the week, A's never-merged blocks of hour 1 are deleted as expired; B's, kept for
+            // ever, stay.
+            var report = Pass(new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc));
+            Assert.Equal(1, report.ExpiredHoursDeleted);
+            Assert.Equal(1, _server.Batches.MergeStatistics.ExpiredBlocksDeleted);
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+            Assert.Equal(2, _server.Blocks.GetBlocks(other).Count);
+            Assert.Equal(2, Rows(o).Count);
         }
 
         // === Damage, verification, faults ===
