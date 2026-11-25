@@ -2,9 +2,11 @@ using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
@@ -17,6 +19,12 @@ using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.Core.TreeStateSnapshot.States;
 using HSMServer.Dashboards;
+using HSMServer.Folders;
+using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
+using HSMServer.ServerConfiguration;
 using Moq;
 using System;
 using System.Linq;
@@ -240,17 +248,29 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     Interlocked.Increment(ref bothAttached);
             }
 
+            var followUps = 0;
+            void OnFollowUp(ProductModel changed, System.Collections.Generic.IReadOnlyList<BaseSensorModel> _) => Interlocked.Increment(ref followUps);
+
             _valuesCache.ChangeSensorEvent += OnSensorChanged;
+            _valuesCache.RootProductNameOrFolderChangedEvent += OnFollowUp;
 
             try
             {
-                // An update that names the folder the product is in changes nothing.
-                var same = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = oldFolder }, default);
-                Assert.True(same.IsOk, same.Error);
                 var attached = sensor.Policies.TTLPolicies.Single(t => t.TemplateId == oldFolderTemplate.Id).Id;
+
+                // An update that names the folder the product is in, or none, is not a change of folder.
+                foreach (var sentFolder in new Guid?[] { oldFolder, null })
+                {
+                    var same = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = sentFolder, Description = $"kept {sentFolder}" }, default);
+                    Assert.True(same.IsOk, same.Error);
+                }
+
+                Assert.Equal(0, Volatile.Read(ref followUps));
+                Assert.Equal(attached, sensor.Policies.TTLPolicies.Single(t => t.TemplateId == oldFolderTemplate.Id).Id);
 
                 var moved = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = newFolder }, default);
                 Assert.True(moved.IsOk, moved.Error);
+                Assert.Equal(1, Volatile.Read(ref followUps));
 
                 Assert.Equal(newFolder, product.FolderId);
                 Assert.False(HasTemplate(sensor, oldFolderTemplate), "the old folder's template is detached");
@@ -275,10 +295,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.Null(product.FolderId);
                 Assert.DoesNotContain(sensor.Policies.TTLPolicies, t => t.TemplateId is not null);
                 Assert.DoesNotContain(created.Policies.TTLPolicies, t => t.TemplateId is not null);
+
+                // Out of no folder again: nothing changed.
+                var removedAgain = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = Guid.Empty }, default);
+                Assert.True(removedAgain.IsOk, removedAgain.Error);
+                Assert.Equal(3, Volatile.Read(ref followUps));
             }
             finally
             {
                 _valuesCache.ChangeSensorEvent -= OnSensorChanged;
+                _valuesCache.RootProductNameOrFolderChangedEvent -= OnFollowUp;
             }
 
             await using var restarted = BuildCacheOverTheSameDatabase();
@@ -304,15 +330,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var panelEntity = BuildPanel($"{name}/n/*");
             panelEntity.Subscriptions[0].Folders = [newFolder];
 
+            // The same path, limited to a folder the product never enters.
+            var otherFolderPanelEntity = BuildPanel($"{name}/n/*") with { Name = "other folder" };
+            otherFolderPanelEntity.Subscriptions[0].Folders = [Guid.NewGuid()];
+
             using var dashboard = new Dashboard(new DashboardEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
                 Author = Guid.Empty.ToByteArray(),
                 Name = "Root folder change",
-                Panels = [panelEntity],
+                Panels = [panelEntity, otherFolderPanelEntity],
             }, _valuesCache);
 
-            var panel = Assert.Single(dashboard.Panels.Values);
+            var panel = dashboard.Panels.Values.Single(p => p.Name == $"{name}/n/*");
+            var otherFolderPanel = dashboard.Panels.Values.Single(p => p.Name == "other folder");
 
             var stored = 0;
             dashboard.UpdatedEvent += () => Interlocked.Increment(ref stored);
@@ -321,7 +352,89 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(result.IsOk, result.Error);
 
             Assert.Equal(covered.Id, Assert.Single(panel.Sources).Value.Sensor.Id);
+            Assert.Empty(otherFolderPanel.Sources);
             Assert.Equal(1, Volatile.Read(ref stored));
+        }
+
+        // The product list's "move to folder" is FolderManager.MoveProduct. It took the
+        // product out of the old folder and then put it into the new one, so the
+        // product was in no folder in between: every template alert detached, then
+        // the new folder's applied. The folder changes once now, and the folder the
+        // product is in is not a destination.
+        [Fact]
+        [Trait("Category", "Root folder change")]
+        public async Task MoveProduct_BetweenFolders_IsOneChangeOfFolder_AndTheSameFolderIsNoMove()
+        {
+            var name = UniqueRoot();
+            var user = InitiatorInfo.AsUser("tester");
+
+            using var folders = BuildFolderManager();
+
+            var oldFolder = new FolderModel(EntitiesFactory.BuildFolderEntity());
+            var newFolder = new FolderModel(EntitiesFactory.BuildFolderEntity());
+            Assert.True(await folders.TryAdd(oldFolder, user));
+            Assert.True(await folders.TryAdd(newFolder, user));
+
+            var product = await _valuesCache.AddProductAsync(name, Guid.Empty);
+            var key = _valuesCache.AddAccessKey(new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString()))).Id;
+            var node = new ProductNodeViewModel(product, null, null);
+
+            oldFolder.Products.Add(product.Id, node);
+            await folders.AddProductToFolder(product.Id, oldFolder.Id, user);
+            Assert.Equal(oldFolder.Id, product.FolderId);
+
+            await AddProductAsync(UniqueRoot(), newFolder.Id); // a template needs a product in its folder to be saved
+
+            var oldFolderTemplate = BuildTtlTemplate(oldFolder.Id, $"{name}/n/*");
+            var newFolderTemplate = BuildTtlTemplate(newFolder.Id, $"{name}/n/*");
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(oldFolderTemplate)).Success);
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(newFolderTemplate)).Success);
+
+            var sensor = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/s");
+            var attached = sensor.Policies.TTLPolicies.Single(t => t.TemplateId == oldFolderTemplate.Id).Id;
+
+            var followUps = 0;
+            var foldersSeen = new System.Collections.Concurrent.ConcurrentQueue<Guid?>();
+
+            void OnFollowUp(ProductModel changed, System.Collections.Generic.IReadOnlyList<BaseSensorModel> _) => Interlocked.Increment(ref followUps);
+            void OnProductChanged(ProductModel changed, ActionType _)
+            {
+                if (changed.Id == product.Id)
+                    foldersSeen.Enqueue(changed.FolderId);
+            }
+
+            _valuesCache.RootProductNameOrFolderChangedEvent += OnFollowUp;
+            _valuesCache.ChangeProductEvent += OnProductChanged;
+
+            try
+            {
+                await folders.MoveProduct(node, oldFolder.Id, oldFolder.Id, user);
+
+                Assert.Equal(0, Volatile.Read(ref followUps));
+                Assert.Empty(foldersSeen);
+                Assert.Equal(oldFolder.Id, product.FolderId);
+                Assert.Equal(attached, sensor.Policies.TTLPolicies.Single(t => t.TemplateId == oldFolderTemplate.Id).Id);
+                Assert.True(oldFolder.Products.ContainsKey(product.Id));
+
+                await folders.MoveProduct(node, oldFolder.Id, newFolder.Id, user);
+
+                Assert.Equal(1, Volatile.Read(ref followUps));
+                // Never seen without a folder: in the old one until it is in the new one.
+                Assert.NotEmpty(foldersSeen);
+                Assert.DoesNotContain(null, foldersSeen);
+                Assert.Equal(newFolder.Id, foldersSeen.Last());
+                Assert.All(foldersSeen.SkipWhile(seen => seen == oldFolder.Id), seen => Assert.Equal(newFolder.Id, seen));
+                Assert.Equal(newFolder.Id, product.FolderId);
+                Assert.False(HasTemplate(sensor, oldFolderTemplate));
+                Assert.True(HasTemplate(sensor, newFolderTemplate));
+                Assert.False(oldFolder.Products.ContainsKey(product.Id));
+                Assert.True(newFolder.Products.ContainsKey(product.Id));
+            }
+            finally
+            {
+                _valuesCache.RootProductNameOrFolderChangedEvent -= OnFollowUp;
+                _valuesCache.ChangeProductEvent -= OnProductChanged;
+            }
         }
 
         // The change-ownership rule of a node property: a name a user set is not
@@ -590,6 +703,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             template.TryApplyPathTemplates(out _);
 
             return template;
+        }
+
+        private FolderManager BuildFolderManager()
+        {
+            var chats = new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object,
+                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
+
+            return new FolderManager(_databaseCoreManager.DatabaseCore, _valuesCache, _userManager, _journalService, chats);
         }
 
         private static DashboardPanelEntity BuildPanel(string pathTemplate) => new()
