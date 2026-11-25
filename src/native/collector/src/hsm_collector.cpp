@@ -45,6 +45,10 @@
 #include "hsm_http_endpoints.hpp"
 #include "hsm_http_transport.hpp"
 #include "hsm_session_transport.hpp"
+#include "hsm_ws_connection.hpp"
+#if defined(HSM_COLLECTOR_TABLES)
+#include "tables/hsm_session_table_channel.hpp" // the table connection of the session (#1848)
+#endif
 #endif
 
 namespace
@@ -1776,6 +1780,35 @@ namespace
         return json.str();
     }
 
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+    // The registration of a table sensor (#1845, wire contract "Table sensor registration"): the
+    // AddOrUpdateSensorRequest of BuildWireRegistrationJson with SensorType 11 and its schema in
+    // TableColumns, right after where PreviousPaths would be (a table sensor has none). Byte-identical
+    // to the managed golden Registration_of_a_table_sensor_carries_its_columns_after_previous_paths;
+    // KeepHistory in ticks, null when none; an empty description is null.
+    std::string BuildWireTableRegistrationJson(const hsm::collector::tables::TableRegistration& registration)
+    {
+        std::ostringstream json;
+        json << "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":11"
+             << ",\"Description\":" << (registration.description.empty() ? std::string("null") : "\"" + EscapeJsonWire(registration.description) + "\"")
+             << ",\"DefaultChats\":null"
+             << ",\"KeepHistory\":" << (registration.keep_history_ms > 0 ? std::to_string(registration.keep_history_ms * 10000) : std::string("null"))
+             << ",\"SelfDestroy\":null,\"TTLs\":null,\"TTL\":null,\"Statistics\":null,\"IsSingletonSensor\":null"
+             << ",\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":null,\"DisplayUnit\":null"
+             << ",\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null"
+             << ",\"TableColumns\":[";
+        for (size_t i = 0; i < registration.columns.size(); ++i)
+        {
+            if (i != 0)
+                json << ',';
+            json << "{\"Name\":\"" << EscapeJsonWire(registration.columns[i].name) << "\",\"Type\":" << static_cast<int>(registration.columns[i].type) << "}";
+        }
+        json << "],\"Key\":null"
+             << ",\"Path\":\"" << EscapeJsonWire(registration.path) << "\"}";
+        return json.str();
+    }
+#endif
+
     // C# Math.Round(value, precision, MidpointRounding.AwayFromZero) — std::round is
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
@@ -3164,7 +3197,10 @@ namespace
 
                 // A table sensor created while the collector runs starts the pipeline's run at once.
                 if (tables_may_run_ && !pipeline->Running())
+                {
+                    AttachTableChannel(channel);
                     pipeline->Start(channel, reason);
+                }
             }
             // Reports reach the host's logger only here, with no lock held: a logger may call back
             // into the collector (create a table sensor, read its stats) on this thread.
@@ -3191,6 +3227,22 @@ namespace
             std::lock_guard<std::mutex> guard(tables_mutex_);
             table_options_.manual_tick = manual;
         }
+
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+        // The session table channel when one was made (#1848 part 4), for tests.
+        std::shared_ptr<tables::SessionTableChannel> TestSessionTableChannel()
+        {
+            std::lock_guard<std::mutex> guard(tables_mutex_);
+            return session_table_channel_;
+        }
+
+        // Shortens the channel's pauses in tests; before the first table sensor.
+        void TestSetSessionTableChannelOptions(std::function<void(tables::SessionTableChannelOptions&)> adjust)
+        {
+            std::lock_guard<std::mutex> guard(tables_mutex_);
+            session_table_options_for_tests_ = std::move(adjust);
+        }
+#endif
 
         void TestSetBeforeTableCreateLock(std::function<void()> hook)
         {
@@ -3470,6 +3522,12 @@ namespace
             // When it returns, no thread of the table run exists.
             if (tables != nullptr)
                 tables->FinishDrain();
+
+            // The table connection closes before the session (the server closes a table connection
+            // whose session ended, and would otherwise do it first), within what is left of the
+            // table stop budget, at most a second; with the budget spent the close frame is written
+            // once and nothing is waited for.
+            CloseTableChannel();
 
 #if defined(HSM_COLLECTOR_HTTP)
             // After the drain, which used the session if it was up. A graceful stop gives the
@@ -4779,7 +4837,10 @@ namespace
 
         // Why this collector cannot send tables now, or null-and-empty when it can (#1848). Asked when a
         // table sensor is created and at every Start.
-        std::shared_ptr<tables::ITableChannel> TableChannelFor(std::string& reason) const
+        // Caller holds tables_mutex_. The session's table channel is made here, with the first table
+        // sensor of a collector on the session: a collector without one has no channel, no connection,
+        // no thread and no log line of it.
+        std::shared_ptr<tables::ITableChannel> TableChannelFor(std::string& reason)
         {
 #if !defined(HSM_COLLECTOR_TABLES)
             reason = "this build of the native collector has no table support (it was built with HSM_COLLECTOR_TABLES=OFF)";
@@ -4792,15 +4853,70 @@ namespace
             }
 #if defined(HSM_COLLECTOR_HTTP)
             if (!use_session_)
+            {
                 reason = "table sensors need the collector session transport (hsm_collector_use_session_transport)";
-            else
-                reason = "this version of the native collector cannot deliver table blocks yet: the table connection of the "
-                         "collector session is not implemented (#1848)";
+                return nullptr;
+            }
+            std::string unsupported;
+            if (!hsm::http::WebSocketConnection::Supported(&unsupported))
+            {
+                reason = "table sensors need the collector session, which cannot exist here: " + unsupported;
+                return nullptr;
+            }
+            if (!session_table_channel_)
+            {
+                tables::SessionTableChannelOptions options;
+                options.request_timeout_ms = request_timeout_ms_ > 0 ? request_timeout_ms_ : 30000;
+                options.registration_json = [](const tables::TableRegistration& registration) { return BuildWireTableRegistrationJson(registration); };
+                // Written by WriteReports, with no lock of the pipeline or of the table state held.
+                options.log = [this](bool error, const std::string& message) {
+                    if (error)
+                        LogError(message);
+                    else
+                        LogMessage(HSM_LOG_LEVEL_INFO, message);
+                };
+                if (session_table_options_for_tests_)
+                    session_table_options_for_tests_(options);
+                session_table_channel_ = std::make_shared<tables::SessionTableChannel>(std::move(options));
+            }
+            reason.clear();
+            return session_table_channel_;
 #else
             reason = "table sensors need the collector session transport, and this build has no network transport "
                      "(HSM_COLLECTOR_HTTP=OFF)";
-#endif
             return nullptr;
+#endif
+#endif
+        }
+
+        // Caller holds tables_mutex_; no thread of the table run exists. The session channel serves the
+        // session of this run (a new transport object at every Start).
+        void AttachTableChannel(const std::shared_ptr<tables::ITableChannel>& channel)
+        {
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+            if (channel && channel == session_table_channel_)
+                session_table_channel_->Attach(session_transport_.get());
+#else
+            (void)channel;
+#endif
+        }
+
+        // The stop's close of the table connection, after the table drain joined the delivery thread
+        // and before the session is closed. Never throws.
+        void CloseTableChannel() noexcept
+        {
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+            std::shared_ptr<tables::SessionTableChannel> channel;
+            {
+                std::lock_guard<std::mutex> guard(tables_mutex_);
+                channel = session_table_channel_;
+            }
+            if (!channel)
+                return;
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(table_stop_deadline_ - std::chrono::steady_clock::now()).count();
+            channel->Close((std::max<std::int64_t>)(0, (std::min<std::int64_t>)(left, kTableCloseLingerMs)));
+            // Its lines (the end of the connection) reach the host with no table lock held.
+            channel->WriteReports();
 #endif
         }
 
@@ -4819,6 +4935,7 @@ namespace
                 pipeline = tables_.get();
                 std::string reason;
                 const auto channel = TableChannelFor(reason);
+                AttachTableChannel(channel);
                 pipeline->Start(channel, reason);
             }
             catch (...)
@@ -4842,6 +4959,8 @@ namespace
                 tables_may_run_ = false;
                 pipeline = tables_.get();
             }
+            // The same budget as the pipeline's: the table connection closes within what is left of it.
+            table_stop_deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds((std::max)(std::int64_t{ 0 }, budget_ms));
             if (pipeline != nullptr)
                 pipeline->BeginStop(budget_ms);
             return pipeline;
@@ -6686,6 +6805,16 @@ namespace
         std::function<void()> before_table_create_lock_for_tests_;
         tables::TablePipelineOptions table_options_;
         std::shared_ptr<tables::ITableChannel> test_table_channel_;
+        // The stop budget of the table run: its drain and the close of the table connection. Written
+        // and read by the stop's thread only (under op_mutex_).
+        std::chrono::steady_clock::time_point table_stop_deadline_{};
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+        static constexpr std::int64_t kTableCloseLingerMs = 1000;
+        // The table connection of the session (#1848 part 4): made with the first table sensor of a
+        // collector on the session, under tables_mutex_.
+        std::shared_ptr<tables::SessionTableChannel> session_table_channel_;
+        std::function<void(tables::SessionTableChannelOptions&)> session_table_options_for_tests_;
+#endif
         // Set when the stop has folded the run's last Queue overflow bar; cleared by Start.
         std::atomic<bool> overflow_bar_closed_{ false };
 
@@ -9860,4 +9989,22 @@ namespace hsm::collector::tables::test
     {
         collector->impl->TestSetBeforeTableCreateLock(std::move(hook));
     }
+
+    void ServiceChannelNow(hsm_collector_t* collector)
+    {
+        if (auto* pipeline = collector->impl->TablePipelineForTests())
+            pipeline->ServiceChannelNow();
+    }
+
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+    std::shared_ptr<SessionTableChannel> SessionChannel(hsm_collector_t* collector)
+    {
+        return collector->impl->TestSessionTableChannel();
+    }
+
+    void SetSessionChannelOptions(hsm_collector_t* collector, std::function<void(SessionTableChannelOptions&)> adjust)
+    {
+        collector->impl->TestSetSessionTableChannelOptions(std::move(adjust));
+    }
+#endif
 } // namespace hsm::collector::tables::test

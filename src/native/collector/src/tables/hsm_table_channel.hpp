@@ -5,9 +5,8 @@
 /// server (#1848). Internal, never part of the public headers; the managed counterpart is
 /// HSMDataCollector.Tables.ITableBlockChannel.
 ///
-/// In 0.15.0 the only implementations are the tests' recording channel; a real host has no channel and
-/// its table sensors are Unavailable. The channel over the collector session's table connection is the
-/// next step of #1848.
+/// Implementations: SessionTableChannel (hsm_session_table_channel.hpp, since 0.15.1: the collector
+/// session's table connection) and the tests' recording channel.
 
 #include "hsm_table_format.hpp"
 
@@ -123,5 +122,19 @@ namespace hsm::collector::tables
 
         /// Called at every Start before the first call of the run.
         virtual void Reset() = 0;
+
+        /// How long the delivery thread may wait before it calls Service: -1 when the channel needs no
+        /// wake of its own (the default), 0 for at once. Called on the delivery thread between its work,
+        /// with no lock of the pipeline held.
+        virtual std::int64_t ServiceDelayMs() { return -1; }
+
+        /// The delivery thread's call when ServiceDelayMs has passed with nothing else to do: keeps a
+        /// connection (opens it, pings it, reads what the server sent). True when the channel can take
+        /// blocks now and could not before: the backlog is then delivered at once.
+        virtual bool Service() { return false; }
+
+        /// Writes what the channel queued to report: Put and Register run under locks of the pipeline,
+        /// where nothing may be logged. Called with no lock held, from any thread.
+        virtual void WriteReports() noexcept {}
     };
 } // namespace hsm::collector::tables

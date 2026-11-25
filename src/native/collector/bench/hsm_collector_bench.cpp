@@ -11,9 +11,9 @@
 // network), so the number reflects enqueue cost, not socket I/O.
 //
 // With HSM_COLLECTOR_TABLES it also measures the table sensors' add path (#1848): add_row and
-// add_rows of 100 rows, rows per second on one thread and on four (one sensor each). A table sensor of
-// a real host has no channel in 0.15.0, so the bench installs a sink channel through the test seam and
-// a manual tick: the numbers are the cost of taking rows into the buffer, without packing.
+// add_rows of 100 rows, rows per second on one thread and on four (one sensor each). The bench needs no
+// server, so it installs a sink channel through the test seam and a manual tick: the numbers are the
+// cost of taking rows into the buffer, without packing.
 //
 // Output: a one-line JSON object to stdout, and to argv[1] if given.
 
