@@ -93,11 +93,32 @@ namespace HSMServer.Core.TableSensors
             return first;
         }
 
+        // The products a pass leaves alone because their placements are not known to be up to their sensors' periods: the
+        // ones named, or every product when the batch store could not even list them.
+        private sealed class Unreconciled
+        {
+            public readonly HashSet<Guid> Products = [];
+            public bool All;
+
+            public int Count => All ? Math.Max(1, Products.Count) : Products.Count;
+
+            public bool Contains(Guid product) => All || Products.Contains(product);
+        }
+
         // Every placement of a sensor that has batches is brought up to its setting at the start of a pass, so a change on a
         // folder or a product (which moves many sensors at once and raises no event per sensor) is recorded within a pass,
         // whether or not the sensor has new rows. A product of the batch store that is not in the tree is left alone.
-        private void Reconcile(DateTime utcNow, ref string fault)
+        //
+        // Fail closed: a product for which this did not complete (the synced write of a placement failed, its placements
+        // could not be read) is answered as not reconciled, and the pass does nothing that decides by its placements: no
+        // merge (its discard of expired rows), no deletion of expired blocks of an hour it has blocks in, no drop of its
+        // week databases. Otherwise a period lengthened since the last pass (P1 to for ever, say) whose write failed once
+        // would leave the old placement in force for a retention that drops the only database with those rows. Counted
+        // (ProductsNotReconciled, Faults) and logged; the next pass tries again.
+        private Unreconciled Reconcile(DateTime utcNow, ref string fault)
         {
+            var unreconciled = new Unreconciled();
+
             IReadOnlyList<Guid> products;
             try
             {
@@ -106,9 +127,12 @@ namespace HSMServer.Core.TableSensors
             catch (Exception ex)
             {
                 fault = ex.Message;
+                unreconciled.All = true;
                 Stats.Add(ref Stats.Faults);
-                _logger.Error(ex, $"Table placements: the products of the batch store could not be listed: {ex.Message}");
-                return;
+                Stats.Add(ref Stats.ProductsNotReconciled);
+                _logger.Error(ex, "Table placements: the products of the batch store could not be listed, so no placement was brought up to its sensor's period; " +
+                                  $"nothing is merged, dropped or judged for expiry in this pass, and the next pass tries again: {ex.Message}");
+                return unreconciled;
             }
 
             foreach (var product in products)
@@ -124,10 +148,15 @@ namespace HSMServer.Core.TableSensors
                 catch (Exception ex)
                 {
                     fault = ex.Message;
+                    unreconciled.Products.Add(product);
                     Stats.Add(ref Stats.Faults);
-                    _logger.Error(ex, $"Table placements of product {product} were not brought up to the sensors' periods; the next pass tries again: {ex.Message}");
+                    Stats.Add(ref Stats.ProductsNotReconciled);
+                    _logger.Error(ex, $"Table placements of product {product} were not brought up to the sensors' periods; nothing of it is merged, dropped or " +
+                                      $"judged for expiry in this pass, and the next pass tries again: {ex.Message}");
                 }
             }
+
+            return unreconciled;
         }
 
         // The table sensors of a product's tree.

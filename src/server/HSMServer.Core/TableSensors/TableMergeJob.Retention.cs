@@ -40,7 +40,10 @@ namespace HSMServer.Core.TableSensors
 
 
         // Retention, once per hour of the clock. Never throws: a fault is logged, counted, reported, and tried again next hour.
-        private (int Weeks, int Hours) RunRetention(DateTime utcNow, CancellationToken token, ref string fault)
+        // A product whose placements were not reconciled in this pass gets none of it (fail closed, see Reconcile): no drop of
+        // its week databases, no deletion of expired blocks of an hour it has blocks in, no forgetting of its hours. It waits
+        // for the retention of the next hour.
+        private (int Weeks, int Hours) RunRetention(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault)
         {
             long hour = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
             if (hour == _retentionHour || token.IsCancellationRequested)
@@ -51,11 +54,20 @@ namespace HSMServer.Core.TableSensors
             // Expired blocks, then week databases, then the records of hours left with neither: an hour's record stays in
             // Hours while its blocks do (a dropped week does not remove it, #1850 part 4b), so the merge never takes an hour
             // whose blocks are still held as not merged; it is forgotten once no database of its week and none of its blocks is left.
-            int hours = DeleteExpiredBlocks(utcNow, token, ref fault);
-            int weeks = token.IsCancellationRequested ? 0 : DropExpiredWeeks(utcNow, token, ref fault);
+            if (unreconciled.All)
+            {
+                _logger.Warn("Table retention: skipped in this hour, the placements of no product were brought up to their sensors' periods");
+                return (0, 0);
+            }
+
+            foreach (var product in unreconciled.Products)
+                _logger.Warn($"Table retention: product {product} is skipped in this hour, its placements were not brought up to its sensors' periods");
+
+            int hours = DeleteExpiredBlocks(utcNow, token, unreconciled, ref fault);
+            int weeks = token.IsCancellationRequested ? 0 : DropExpiredWeeks(utcNow, token, unreconciled, ref fault);
 
             if (!token.IsCancellationRequested)
-                ForgetHoursWithNothingLeft(ref fault);
+                ForgetHoursWithNothingLeft(unreconciled, ref fault);
 
             return (weeks, hours);
         }
@@ -63,15 +75,15 @@ namespace HSMServer.Core.TableSensors
 
         // === Week databases ===
 
-        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, ref string fault)
+        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault)
         {
             int dropped = 0, held = 0;
-            int result = DropExpiredWeeks(utcNow, token, ref fault, ref dropped, ref held);
+            int result = DropExpiredWeeks(utcNow, token, unreconciled, ref fault, ref dropped, ref held);
             Stats.Set(ref Stats.MoveWeeksPending, held);
             return result;
         }
 
-        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, ref string fault, ref int dropped, ref int held)
+        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault, ref int dropped, ref int held)
         {
             IReadOnlyList<Guid> products;
 
@@ -87,6 +99,9 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var product in products)
             {
+                if (unreconciled.Contains(product))
+                    continue;
+
                 IReadOnlyList<TableBatchWeek> weeks;
                 try
                 {
@@ -170,7 +185,7 @@ namespace HSMServer.Core.TableSensors
         }
 
         // The records of committed hours no database of whose week is left and of which the block store holds no block.
-        private void ForgetHoursWithNothingLeft(ref string fault)
+        private void ForgetHoursWithNothingLeft(Unreconciled unreconciled, ref string fault)
         {
             IReadOnlyList<Guid> products;
             try
@@ -185,6 +200,9 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var product in products)
             {
+                if (unreconciled.Contains(product))
+                    continue;
+
                 try
                 {
                     var hours = Batches.GetHoursWithoutDatabases(product);
@@ -207,7 +225,7 @@ namespace HSMServer.Core.TableSensors
 
         // === Blocks never merged ===
 
-        private int DeleteExpiredBlocks(DateTime utcNow, CancellationToken token, ref string fault)
+        private int DeleteExpiredBlocks(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault)
         {
             SortedDictionary<long, Dictionary<Guid, List<TableBlockIndexEntry>>> byHour;
 
@@ -233,6 +251,10 @@ namespace HSMServer.Core.TableSensors
                 // hours ascend: every later one is younger.
                 if (!TableBatchRetention.IsExpired(week, 1, utcNow) || token.IsCancellationRequested)
                     break;
+
+                // An hour is deleted whole: with blocks of a product that was not reconciled in it, nothing of it is judged.
+                if (products.Keys.Any(unreconciled.Contains))
+                    continue;
 
                 try
                 {

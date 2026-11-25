@@ -134,6 +134,12 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// sensor whose period changed since and whose new period has not passed (owed to the move), at the last retention run.
         /// </summary>
         public long MoveWeeksPending;
+        /// <summary>
+        /// Products left out of a merge pass because their placements could not be brought up to their sensors' periods at
+        /// its start (#1850 part 4b): no merge, no retention and no expiry decision for them in that pass. Each also counts
+        /// in <see cref="Faults"/>.
+        /// </summary>
+        public long ProductsNotReconciled;
 
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
 

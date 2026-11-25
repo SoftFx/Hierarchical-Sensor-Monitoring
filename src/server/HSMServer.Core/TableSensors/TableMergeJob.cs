@@ -42,6 +42,12 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>Arrival hours retention deleted with blocks never merged whose period had passed (#1850 part 4).</summary>
         public int ExpiredHoursDeleted { get; init; }
+
+        /// <summary>
+        /// Products left out of the pass because their placements could not be brought up to their sensors' periods at its
+        /// start (#1850 part 4b): nothing of them was merged, dropped or judged for expiry. The next pass tries again.
+        /// </summary>
+        public int ProductsNotReconciled { get; init; }
     }
 
 
@@ -164,20 +170,25 @@ namespace HSMServer.Core.TableSensors
                 deleted = DeleteDue(utcNow, token, ref fault);
 
                 // Periods changed since the last pass (on a sensor, a folder, a product) are recorded before anything is merged.
-                Reconcile(utcNow, ref fault);
+                // A product whose placements could not be brought up to date is left out of the rest of the pass, fail
+                // closed: its placement on record may be the one of a period that was lengthened since, and a merge or
+                // retention deciding by it would discard rows the period now protects.
+                var unreconciled = Reconcile(utcNow, ref fault);
 
                 // Products whose merge faulted in this pass: their later hours wait for the next pass, so a product's hours
-                // are committed in order; the other products go on.
-                var faulted = new HashSet<Guid>();
+                // are committed in order; the other products go on. A product not reconciled starts as one of them.
+                var faulted = new HashSet<Guid>(unreconciled.Products);
 
-                foreach (var hour in DueHours(utcNow))
+                foreach (var hour in unreconciled.All ? [] : DueHours(utcNow))
                 {
                     if (token.IsCancellationRequested)
-                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true };
+                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true,
+                            ProductsNotReconciled = unreconciled.Count };
 
                     var outcome = MergeHour(hour, utcNow, token, faulted, ref mismatches, ref fault);
                     if (outcome == HourOutcome.Stopped)
-                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true };
+                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true,
+                            ProductsNotReconciled = unreconciled.Count };
 
                     if (outcome == HourOutcome.Merged)
                         merged++;
@@ -186,10 +197,10 @@ namespace HSMServer.Core.TableSensors
                 Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
 
                 // After the merge, so that a catch-up merges what it can before retention judges what is left.
-                var (weeks, expired) = RunRetention(utcNow, token, ref fault);
+                var (weeks, expired) = RunRetention(utcNow, token, unreconciled, ref fault);
 
                 return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
-                    WeeksDropped = weeks, ExpiredHoursDeleted = expired };
+                    WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count };
             }
             catch (Exception ex)
             {
