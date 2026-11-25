@@ -88,10 +88,34 @@ namespace hsm::http
 
     void AckedBinaryLink::Cancel()
     {
+        // Stored before the lock: a BeginClose that takes the lock after this one sees the flag, and
+        // one that took it before has published closing_, which is cancelled here.
         cancelled_.store(true);
         std::lock_guard<std::mutex> guard(mutex_);
         if (connection_)
             connection_->Cancel();
+        if (closing_)
+            closing_->Cancel();
+    }
+
+    std::shared_ptr<WebSocketConnection> AckedBinaryLink::BeginClose()
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        std::shared_ptr<WebSocketConnection> connection;
+        connection.swap(connection_);
+        closing_ = connection;
+        if (connection && cancelled_.load())
+            connection->Cancel();
+        return connection;
+    }
+
+    void AckedBinaryLink::FinishClose()
+    {
+        std::shared_ptr<WebSocketConnection> done;
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            done.swap(closing_);
+        }
     }
 
     void AckedBinaryLink::ResetCancel()
@@ -132,37 +156,44 @@ namespace hsm::http
 
     void AckedBinaryLink::Violation(int code, const std::string& why)
     {
-        std::shared_ptr<WebSocketConnection> connection;
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            connection.swap(connection_);
-        }
         // The close is said, briefly: the server learns why, and a broken server cannot hold the
-        // owner thread with it.
+        // owner thread with it. A Cancel during the linger reaches the closing connection.
+        const std::shared_ptr<WebSocketConnection> connection = BeginClose();
+        bool cancelled = false;
         if (connection)
+        {
+            if (options_.on_close_linger_for_tests)
+                options_.on_close_linger_for_tests();
             connection->Close(kCloseLingerMs, code, why);
+            cancelled = connection->LastCloseCancelled();
+        }
+        FinishClose();
         end_ = AckedLinkEnd{};
         end_.why = why;
         end_.protocol_error = true;
         end_.close_code = code;
+        end_.close_cancelled = cancelled;
     }
 
     void AckedBinaryLink::Close(int64_t linger_ms, int code, const std::string& reason)
     {
-        std::shared_ptr<WebSocketConnection> connection;
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            connection.swap(connection_);
-        }
+        const std::shared_ptr<WebSocketConnection> connection = BeginClose();
         if (!connection)
+        {
+            FinishClose();
             return;
+        }
         const bool was_open = connection->IsOpen();
+        if (was_open && linger_ms > 0 && options_.on_close_linger_for_tests)
+            options_.on_close_linger_for_tests();
         connection->Close(linger_ms, code, reason);
+        FinishClose();
         if (was_open)
         {
             end_ = AckedLinkEnd{};
             end_.why = reason;
             end_.close_code = code;
+            end_.close_cancelled = connection->LastCloseCancelled();
         }
     }
 
@@ -253,11 +284,14 @@ namespace hsm::http
                 ack.status = static_cast<long>((std::max<int64_t>)((std::min<int64_t>)(status->get<int64_t>(), 100000), -1));
             if (const auto words = frame.find("error"); words != frame.end() && words->is_string())
                 ack.error = Printable(words->get<std::string>());
-            if (const auto retry = frame.find("retryAfter"); retry != frame.end() && retry->is_number())
+            // As the managed collector reads it (TryGetInt32): an integer that fits an int32, else
+            // absent. Whether it is used, and its cap, are the caller's.
+            if (const auto retry = frame.find("retryAfter"); retry != frame.end() && retry->is_number_integer())
             {
-                const double seconds = retry->get<double>();
-                if (seconds >= 0 && seconds < 1e9)
-                    ack.retry_after_seconds = static_cast<int64_t>(seconds);
+                const bool fits = retry->is_number_unsigned() ? retry->get<uint64_t>() <= static_cast<uint64_t>(INT32_MAX)
+                                                              : retry->get<int64_t>() >= INT32_MIN && retry->get<int64_t>() <= INT32_MAX;
+                if (fits)
+                    ack.retry_after_seconds = retry->get<int64_t>();
             }
             if (const auto body = frame.find("body"); body != frame.end() && !body->is_null())
                 ack.body = body->dump();
@@ -293,6 +327,7 @@ namespace hsm::http
             if (cancelled_.load())
             {
                 result.why = "cancelled";
+                result.kind = "cancelled";
                 return result;
             }
 
@@ -318,6 +353,10 @@ namespace hsm::http
                 result.why = (cancelled_.load() ? std::string("cancelled")
                                                 : "the upgrade failed" + (opened.status_code != 0 ? " with HTTP " + std::to_string(opened.status_code) : std::string()) +
                                                       (opened.error.empty() ? std::string() : ": " + Printable(opened.error)));
+                result.kind = cancelled_.load()           ? std::string("cancelled")
+                              : opened.status_code == 101 ? std::string("upgrade:subprotocol")
+                              : opened.status_code != 0   ? "upgrade:http:" + std::to_string(opened.status_code)
+                                                          : "upgrade:curl:" + std::to_string(opened.curl_code);
                 end_.why = result.why;
                 return result;
             }
@@ -345,6 +384,11 @@ namespace hsm::http
                     Ended(cancelled_.load() ? std::string("cancelled") : "no hello: " + Printable(error), 0);
                 result.why = end_.why;
                 result.protocol_error = end_.protocol_error;
+                result.kind = cancelled_.load()                       ? std::string("cancelled")
+                              : received == WebSocketReceive::Closed  ? "hello:closed:" + std::to_string(end_.server_close)
+                              : received == WebSocketReceive::Timeout ? std::string("hello:timeout")
+                              : end_.protocol_error                   ? "hello:protocol:" + std::to_string(end_.close_code)
+                                                                      : std::string("hello:failed");
                 return result;
             }
 
@@ -356,6 +400,7 @@ namespace hsm::http
                 Violation(1002, "the first frame of the connection is not a hello");
                 result.why = end_.why;
                 result.protocol_error = true;
+                result.kind = "hello:protocol:not-a-hello";
                 return result;
             }
             const auto& body = hello["body"];
@@ -366,6 +411,7 @@ namespace hsm::http
                 Violation(1002, "the hello states a heartbeat this collector cannot work with (heartbeatSeconds " + std::to_string(heartbeat_seconds) + ")");
                 result.why = end_.why;
                 result.protocol_error = true;
+                result.kind = "hello:protocol:heartbeat";
                 return result;
             }
             result.hello_body = body.dump();
@@ -375,6 +421,7 @@ namespace hsm::http
                 Violation(1002, refused);
                 result.why = end_.why;
                 result.protocol_error = true;
+                result.kind = "hello:protocol:limits";
                 return result;
             }
             heartbeat_ms_ = heartbeat_seconds * 1000;
@@ -393,6 +440,7 @@ namespace hsm::http
             {
                 Ended(cancelled_.load() ? std::string("cancelled") : "sending the probe failed: " + Printable(error), 0);
                 result.why = end_.why;
+                result.kind = cancelled_.load() ? "cancelled" : "probe:send";
                 return result;
             }
             last_sent_ = Clock::now();
@@ -405,6 +453,7 @@ namespace hsm::http
                     Close(0, 1000, "no probe answer");
                     end_.why = "no hello and probe answer within " + std::to_string(options_.open_timeout_ms) + " ms";
                     result.why = end_.why;
+                    result.kind = "probe:timeout";
                     return result;
                 }
                 AckedLinkAck ack;
@@ -415,6 +464,9 @@ namespace hsm::http
                 {
                     result.why = end_.why;
                     result.protocol_error = end_.protocol_error;
+                    result.kind = frame == Frame::Cancelled ? std::string("cancelled")
+                                  : end_.protocol_error     ? "probe:protocol:" + std::to_string(end_.close_code)
+                                                            : "probe:ended:" + std::to_string(end_.server_close);
                     return result;
                 }
                 if (ack.id != id)
@@ -422,6 +474,7 @@ namespace hsm::http
                     Violation(1002, "the server's first answer is not the ack of the probe");
                     result.why = end_.why;
                     result.protocol_error = true;
+                    result.kind = "probe:protocol:not-the-probe";
                     return result;
                 }
                 if (ack.status != 200)
@@ -429,6 +482,7 @@ namespace hsm::http
                     Violation(1002, "the server answered the probe with status " + std::to_string(ack.status));
                     result.why = end_.why;
                     result.protocol_error = true;
+                    result.kind = "probe:status:" + std::to_string(ack.status);
                     return result;
                 }
                 break;
@@ -444,6 +498,7 @@ namespace hsm::http
             try
             {
                 result.why = "the open failed";
+                result.kind = "failed";
             }
             catch (...)
             {

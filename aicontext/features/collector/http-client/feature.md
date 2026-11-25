@@ -131,6 +131,9 @@ The connection under the collector session (ADR-0017, `docs/initiatives/collecto
   over the receive cap (the rest of the refused message is read and dropped until the peer's close, at most
   `kRefusalLingerMs`, 1 s, by which the `Receive` can outlast its timeout), and a cancelled `Receive` write a close frame
   `1000` (one non-blocking write) before the release; `LastRefusalCode()` says which refusal it was.
+  `LastCloseCancelled()` says whether the last `Close` ended because the connection was cancelled (before it began or
+  during its linger), and `WebSocketOpenResult::curl_code` gives libcurl's result code of a failed open, the kind of
+  failure without libcurl's words (which carry elapsed times).
 - **Receive cap per connection (#1848).** `max_message_bytes` bounds what `Receive` accepts (default `kMaxMessageBytes`, 8 MiB: the session keeps it); a connection that expects only small answers asks for less (the table connection: 1 MiB, the managed bound). The cap is enforced from the frame header. What a connection receives stays text only: a binary message from the server is an `Error` whatever the cap. The cap bounds receiving only; sending has no cap in the class (the caller keeps to the server's `maxFrameBytes`).
 - Every terminal outcome (failed `Open`, failed send, `Receive` returning `Closed` or `Error`) releases the connection; `IsOpen()` is the truth and nothing is written to a finished WebSocket. No member throws. Errors carry libcurl's own description when it gives one.
 - Waiting is a poll in 100 ms slices (`poll` on POSIX, so descriptors above `FD_SETSIZE` are fine). The session transport calls `Receive` with a short timeout between looks at its outgoing queue (50 ms when idle, 5 ms while requests wait for acks); libcurl gives a `CONNECT_ONLY` handle no way to be woken for outgoing data.

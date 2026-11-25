@@ -29,6 +29,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -105,6 +106,10 @@ namespace hsm::collector::tables
         /// A table connection is open now.
         bool IsServing() const noexcept { return serving_.load(); }
         std::string DownReason() const;
+        /// The report of a failed open, as TryOpen writes it (the dedup by kind is tested through it).
+        void ReportOpenFailureForTests(const hsm::http::AckedLinkOpen& opened) { ReportOpenFailure(opened, "test-session"); }
+        /// The answer the channel gives to an ack (the ack table is tested through it).
+        TableBlockAck AnswerForTests(const hsm::http::AckedLinkAck& ack) { return Answer(ack); }
 
     private:
         struct EndInfo
@@ -126,9 +131,12 @@ namespace hsm::collector::tables
         TableBlockAck ReadOutcome(const hsm::http::AckedLinkAck& ack);
         std::int64_t Backoff();
         void SetDown(std::string reason);
-        // Queued for WriteReports; an error is said once until its words change.
-        void Report(std::string message);
+        // Queued for WriteReports. A report is said once per kind until a connection opens: `kind`
+        // names the failure without its words (which may carry elapsed times), the words of the first
+        // one go into the line.
+        void Report(const std::string& kind, std::string message, bool error = true);
         void Info(std::string message);
+        void ReportOpenFailure(const hsm::http::AckedLinkOpen& opened, const std::string& session_id);
         std::string Url() const;
 
         const SessionTableChannelOptions options_;
@@ -173,6 +181,8 @@ namespace hsm::collector::tables
 
         std::mutex reports_mutex_;
         std::deque<std::pair<bool, std::string>> reports_;
-        std::string last_error_;
+        // The kinds reported since the last connection opened.
+        std::set<std::string> reported_kinds_;
+        static constexpr std::size_t kMaxReportedKinds = 64;
     };
 } // namespace hsm::collector::tables

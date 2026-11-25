@@ -425,7 +425,12 @@ if(HSM_COLLECTOR_TABLES)
                 native_table_dispose_from_every_state
                 native_table_no_connection_without_a_table_sensor
                 native_table_link_carries_4_and_16_mib_frames
-                native_table_stress_writers_reconnects_and_stop)
+                native_table_stress_writers_reconnects_and_stop
+                native_table_cancel_reaches_a_closing_connection
+                native_table_reports_are_said_once_per_kind
+                native_table_retry_after_as_managed
+                native_table_service_reports_the_connection_of_a_new_session
+                native_table_three_lost_connections_keep_the_block_at_the_head)
             add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
         endforeach()
         set_tests_properties(native_table_stress_writers_reconnects_and_stop native_table_dispose_from_every_state

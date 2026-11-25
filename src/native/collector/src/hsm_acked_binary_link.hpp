@@ -50,6 +50,10 @@ namespace hsm::http
         // For tests: polled while a request waits for its ack; true ends the wait as "no ack in time"
         // in place of the request timeout. Called on the owner thread with no lock held.
         std::function<bool(int64_t request_id)> ack_abandoned_for_tests;
+        // For tests: called on the owner thread when a close with a linger has taken its connection
+        // out of use and is about to wait for the peer's answer (Cancel reaches the closing
+        // connection from then on).
+        std::function<void()> on_close_linger_for_tests;
     };
 
     // The answer to one request.
@@ -59,7 +63,8 @@ namespace hsm::http
         long status = 0;
         // The ack's `error` text (empty without one).
         std::string error;
-        // The ack's `retryAfter` in seconds; -1 when it carried none (or not a number).
+        // The ack's `retryAfter` in seconds; -1 when it carried none, or not an integer that fits an
+        // int32 (the managed collector's TryGetInt32: 1.5 is absent).
         int64_t retry_after_seconds = -1;
         // The ack's `body` as JSON text; empty when it carried none.
         std::string body;
@@ -76,6 +81,8 @@ namespace hsm::http
         bool protocol_error = false;
         // The code the collector closed with (its own close or its answer to the server's).
         int close_code = 0;
+        // The collector's close with a linger ended because Cancel reached the closing connection.
+        bool close_cancelled = false;
     };
 
     struct AckedLinkOpen
@@ -90,6 +97,10 @@ namespace hsm::http
         // The hello, the probe's answer or another frame broke the protocol (the connection was
         // closed with a code of its own).
         bool protocol_error = false;
+        // What kind of failure it was, without its words: the step (upgrade, hello, probe) and the
+        // HTTP status, libcurl's result code or the close code. `why` may carry elapsed times
+        // (libcurl's text); this does not, so a failure that repeats can be said once.
+        std::string kind;
     };
 
     enum class AckedLinkPutResult
@@ -163,6 +174,10 @@ namespace hsm::http
         Frame ReceiveOne(int64_t timeout_ms, AckedLinkAck& ack);
         // Closes with `code` after a protocol error of the server.
         void Violation(int code, const std::string& why);
+        // Takes the open connection out of use for a close: it stays reachable by Cancel (closing_)
+        // until FinishClose, and is cancelled at once when Cancel came first.
+        std::shared_ptr<WebSocketConnection> BeginClose();
+        void FinishClose();
         // The connection ended without the collector's word (a close, an error): released.
         void Ended(const std::string& why, int server_close);
         bool SendPing(std::string& error);
@@ -173,6 +188,8 @@ namespace hsm::http
         // itself without it (Cancel only flips an atomic inside it).
         mutable std::mutex mutex_;
         std::shared_ptr<WebSocketConnection> connection_;
+        // The connection being closed with a linger: out of use, still reachable by Cancel.
+        std::shared_ptr<WebSocketConnection> closing_;
         AckedLinkEnd end_;
         int64_t heartbeat_ms_ = 30000;
         int64_t next_id_ = 1;

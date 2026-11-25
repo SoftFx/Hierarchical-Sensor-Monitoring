@@ -3320,6 +3320,239 @@ namespace
         CheckEqual(0, rig.log.Count("table connection") + rig.log.Count("Table") + rig.log.Count("table sensor"), "a line about tables");
     }
 
+    // A session of its own and a link to the same server, for the tests that drive the link or the
+    // channel directly (as the delivery thread would).
+    struct LinkRig
+    {
+        Server server{ SessionRig::ServerOptions() };
+        hsm::http::SessionOptions session_options;
+        std::unique_ptr<hsm::http::SessionTransport> session;
+
+        LinkRig()
+        {
+            server.EnableTableScript([](const std::string&) { return std::vector<std::string>(); });
+            session_options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+            session_options.headers = { { "Key", "k" } };
+            session = std::make_unique<hsm::http::SessionTransport>(session_options);
+            session->Start();
+            WaitOrFail([&] { return !session->CurrentSession().session_id.empty(); }, "the session");
+        }
+
+        ~LinkRig() { session->Stop(0); }
+
+        hsm::http::AckedLinkOptions LinkOptions() const
+        {
+            hsm::http::AckedLinkOptions options;
+            options.url = session_options.url;
+            options.headers = session_options.headers;
+            options.subprotocol = "hsm.tables.v1";
+            options.header_bytes = 40;
+            return options;
+        }
+    };
+
+    std::vector<std::uint8_t> TestFrame()
+    {
+        std::vector<std::uint8_t> frame(40 + 64, 0);
+        frame[16] = 7; // a producer that is not all zero
+        return frame;
+    }
+
+    // A Cancel while a connection is closing reaches it: the close's wait for the server's answer ends at
+    // the cancel. The server never answers a close, so without the cancel the close could only end by
+    // running out its linger; the assertion is on what ended it (the closing connection saw the cancel),
+    // never on a duration. Both closes with a linger of the link: the no-ack close of a put and the close
+    // of a protocol error.
+    void NativeTableCancelReachesAClosingConnection()
+    {
+        for (const bool protocol_error : { false, true })
+        {
+            LinkRig rig;
+            rig.server.SetTableAnswerCloses(false);
+            rig.server.AnswerTableNext(protocol_error ? Answer::WithText("this is not json") : Answer::NoAnswer());
+
+            // The hook holds the close at the moment it has taken its connection out of use, until the
+            // test has called Cancel: the cancel lands on the closing connection, whatever the timing.
+            std::atomic<bool> lingering{ false };
+            std::atomic<bool> cancel_sent{ false };
+            auto options = rig.LinkOptions();
+            Server* server = &rig.server;
+            options.ack_abandoned_for_tests = [server](std::int64_t id) { return server->TableFrameUnanswered(id); };
+            options.on_close_linger_for_tests = [&lingering, &cancel_sent] {
+                lingering.store(true);
+                const auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+                while (!cancel_sent.load() && std::chrono::steady_clock::now() < bound)
+                    std::this_thread::yield();
+            };
+            hsm::http::AckedBinaryLink link(options);
+            const auto opened = link.Open(rig.session->CurrentSession().session_id, {});
+            Check(opened.ok, "open: " + opened.why);
+
+            hsm::http::AckedLinkPutResult result = hsm::http::AckedLinkPutResult::NotOpen;
+            std::thread owner([&] {
+                auto frame = TestFrame();
+                hsm::http::AckedLinkAck ack;
+                result = link.Put(1, frame, 10000, 600000, ack);
+            });
+            WaitOrFail([&] { return lingering.load(); }, "the close's linger");
+            link.Cancel();
+            cancel_sent.store(true);
+            owner.join();
+
+            const std::string what = protocol_error ? "a protocol error's close: " : "the no-ack close: ";
+            Check(result == hsm::http::AckedLinkPutResult::Lost, what + "the put did not end as lost");
+            Check(link.LastEnd().close_cancelled, what + "the cancel did not reach the closing connection");
+            CheckEqual(protocol_error ? 1007 : 1000, link.LastEnd().close_code, what + "close code");
+        }
+    }
+
+    // A refusal is said once per kind (the step and the status or libcurl's code), whatever its words: two
+    // timeouts of the upgrade with different elapsed times are one line, another kind is a new one; the
+    // line for an ack body that is not JSON follows the same rule.
+    void NativeTableReportsAreSaidOncePerKind()
+    {
+        std::mutex mutex;
+        std::vector<std::string> lines;
+        tables::SessionTableChannelOptions options;
+        options.log = [&](bool, const std::string& line) {
+            std::lock_guard<std::mutex> guard(mutex);
+            lines.push_back(line);
+        };
+        tables::SessionTableChannel channel(options);
+
+        hsm::http::AckedLinkOpen first;
+        first.kind = "upgrade:curl:28";
+        first.why = "the upgrade failed: Connection timed out after 15001 milliseconds";
+        hsm::http::AckedLinkOpen second = first;
+        second.why = "the upgrade failed: Connection timed out after 15002 milliseconds";
+        hsm::http::AckedLinkOpen other;
+        other.kind = "upgrade:curl:7";
+        other.why = "the upgrade failed: Failed to connect to h port 443 after 2034 ms";
+        channel.ReportOpenFailureForTests(first);
+        channel.ReportOpenFailureForTests(second);
+        channel.ReportOpenFailureForTests(second);
+        channel.WriteReports();
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            CheckEqual(std::size_t{ 1 }, lines.size(), "lines for one kind");
+            Check(lines[0].find("15001 milliseconds") != std::string::npos, "the line carries the first words: " + lines[0]);
+        }
+        channel.ReportOpenFailureForTests(other);
+        channel.WriteReports();
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            CheckEqual(std::size_t{ 2 }, lines.size(), "lines after another kind");
+        }
+
+        hsm::http::AckedLinkAck ack;
+        ack.id = 1;
+        ack.status = 200;
+        ack.body = "{ not json";
+        CheckEqual(static_cast<int>(tables::TableBlockOutcome::Stored), static_cast<int>(channel.AnswerForTests(ack).outcome), "taken as stored");
+        channel.AnswerForTests(ack);
+        channel.AnswerForTests(ack);
+        channel.WriteReports();
+        std::lock_guard<std::mutex> guard(mutex);
+        CheckEqual(std::size_t{ 3 }, lines.size(), "one line for three acks whose body is not JSON");
+    }
+
+    // retryAfter as the managed collector reads it: an integer that fits an int32, else absent (1.5 is
+    // absent); the channel caps what it takes at 5 minutes (2,000,000,000 s gives 5 minutes).
+    void NativeTableRetryAfterAsManaged()
+    {
+        LinkRig rig;
+        auto options = rig.LinkOptions();
+        hsm::http::AckedBinaryLink link(options);
+        Check(link.Open(rig.session->CurrentSession().session_id, {}).ok, "open");
+
+        struct Case
+        {
+            const char* retry;
+            std::int64_t seconds;
+            std::int64_t answer_ms;
+        };
+        const std::vector<Case> cases = {
+            { "1.5", -1, -1 },
+            { "2000000000", 2000000000, 5 * 60 * 1000 },
+            { "3000000000", -1, -1 },
+            { "-5", -5, -1 },
+            { "0", 0, -1 },
+            { "7", 7, 7000 },
+            { "\"7\"", -1, -1 },
+        };
+        tables::SessionTableChannel channel(tables::SessionTableChannelOptions{});
+        for (const auto& item : cases)
+        {
+            rig.server.AnswerTableNext(Answer::WithText(std::string("{\"ack\":{id},\"status\":503,\"error\":\"x\",\"retryAfter\":") + item.retry + "}"));
+            auto frame = TestFrame();
+            hsm::http::AckedLinkAck ack;
+            Check(link.Put(1, frame, 10000, 60000, ack) == hsm::http::AckedLinkPutResult::Acked, std::string("no ack for retryAfter ") + item.retry);
+            CheckEqual(item.seconds, ack.retry_after_seconds, std::string("retryAfter ") + item.retry + " as read");
+            const auto answer = channel.AnswerForTests(ack);
+            CheckEqual(static_cast<int>(tables::TableBlockOutcome::NotDelivered), static_cast<int>(answer.outcome), "a 503 is not delivered");
+            CheckEqual(item.answer_ms, answer.retry_after_ms, std::string("retryAfter ") + item.retry + " as answered");
+        }
+        link.Close(0, 1000, "done");
+    }
+
+    // One Service call that closes the connection of an ended session and opens the one of the new
+    // session says that a connection came up, so the blocks that waited go at once.
+    void NativeTableServiceReportsTheConnectionOfANewSession()
+    {
+        LinkRig rig;
+        tables::SessionTableChannelOptions options;
+        options.registration_json = [](const tables::TableRegistration& registration) { return "{\"Path\":\"" + registration.path + "\"}"; };
+        options.backoff_ms = [](int) { return std::int64_t{ 20 }; };
+        tables::SessionTableChannel channel(options);
+        channel.Attach(rig.session.get());
+        tables::TableRegistration registration;
+        registration.path = "t";
+        registration.columns = { { "time", tables::TableColumnType::Time }, { "v", tables::TableColumnType::Double } };
+        const auto result = channel.Register({ registration });
+        CheckEqual(std::size_t{ 1 }, result.accepted.size(), "accepted");
+        Check(channel.IsServing(), "the connection after the registration: " + channel.DownReason());
+        const auto generation = rig.session->CurrentSession().generation;
+
+        rig.server.Drop();
+        WaitOrFail([&] { return rig.session->CurrentSession().generation > generation; }, "the next session");
+        Check(channel.Service(), "Service did not say that the connection of the new session came up");
+        CheckEqual(std::int64_t{ 2 }, channel.ConnectionsOpened(), "connections");
+        CheckEqual(rig.server.HelloSessionIds().back(), rig.server.TableUpgradeSessionIds().back(), "the new connection names the new session");
+        channel.Close(0);
+        channel.Attach(nullptr);
+    }
+
+    // A put follows its block across three lost connections and then answers not delivered: the block
+    // stays at the head with its producer and sequence, and the next tick sends the same frame again.
+    void NativeTableThreeLostConnectionsKeepTheBlockAtTheHead()
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        for (int i = 0; i < 3; ++i)
+            rig.server.AnswerTableNext(Answer::NoAnswer());
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        CheckEqual(std::string("0,0,0"), Sequences(rig.server), "sequences of the put");
+        CheckEqual(std::string("1,2,3"), FrameConnections(rig.server), "connections of the put");
+        CheckEqual(std::size_t{ 1 }, tables::test::Pipeline(rig.collector.value)->BacklogBlocks(), "the block at the head");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+
+        rig.WaitUp(4);
+        rig.Tick();
+        CheckEqual(std::string("0,0,0,0"), Sequences(rig.server), "sequences");
+        CheckEqual(std::string("1,2,3,4"), FrameConnections(rig.server), "connections");
+        std::set<std::string> producers;
+        for (const auto& frame : rig.server.TableFrames())
+            producers.insert(frame.producer);
+        CheckEqual(std::size_t{ 1 }, producers.size(), "one producer");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "stored");
+        CheckEqual(std::size_t{ 0 }, tables::test::Pipeline(rig.collector.value)->BacklogBlocks(), "backlog");
+        rig.Stop();
+    }
+
     // The link itself: a 4 MiB and a 16 MiB binary frame go whole, each answered by its ack.
     void NativeTableLinkCarriesLargeFrames()
     {
@@ -3542,6 +3775,11 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_dispose_from_every_state", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableDisposeFromEveryState(); } },
         { "native_table_no_connection_without_a_table_sensor", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableNoConnectionWithoutATableSensor(); } },
         { "native_table_link_carries_4_and_16_mib_frames", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableLinkCarriesLargeFrames(); } },
+        { "native_table_cancel_reaches_a_closing_connection", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableCancelReachesAClosingConnection(); } },
+        { "native_table_reports_are_said_once_per_kind", [](const std::string&) { NativeTableReportsAreSaidOncePerKind(); } },
+        { "native_table_retry_after_as_managed", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableRetryAfterAsManaged(); } },
+        { "native_table_service_reports_the_connection_of_a_new_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableServiceReportsTheConnectionOfANewSession(); } },
+        { "native_table_three_lost_connections_keep_the_block_at_the_head", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableThreeLostConnectionsKeepTheBlockAtTheHead(); } },
         { "native_table_stress_writers_reconnects_and_stop", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStressWritersTicksReconnectsAndStop(); } },
 #endif
     };
