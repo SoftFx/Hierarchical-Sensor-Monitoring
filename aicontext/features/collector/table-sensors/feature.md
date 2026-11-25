@@ -75,6 +75,14 @@ undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3.
   of this feature, at Start, during the run and at Stop. A table sensor created while the collector runs starts the
   pipeline's run at once. A compressor that cannot be made makes the sensor `Unavailable` with the reason; it never fails
   `Start`.
+- **A collector with a table sensor has a run from `Start` to `Stop`, also when none of its sensors can send** (an
+  HTTP collector, a custom sender, no compressor): that run has the tick and the ledger and no delivery loop, and it
+  never makes the compressor. The rows an `Unavailable` sensor refuses are lost rows, reported like every other loss.
+- **Whether a run may start is decided under the collector's lifecycle lock** (`DataCollector._tableRunMayStart`): from
+  the moment a `Start` has started the processor until a `Stop`, a `Dispose` or the rollback of that start begins.
+  The status alone does not say it: the collector is still `Starting` while the rollback of a failed start stops its
+  processor. A table sensor created during a rollback is created and starts no run; the rollback closes whatever run
+  exists when it ends, so the collector never reaches `Stopped` with a tick or a delivery loop alive.
 - **One object per run.** Everything a run owns is in its `TableRun`, made at `Start` and closed at the end of its stop:
   the cancellation, the packing and delivery gates, the backlog and the block in flight, the producer id and sequence,
   the bytes reserved by writers, the registration marks and the loss ledger. A sensor holds a reference to its current
@@ -217,7 +225,10 @@ Every lost row is counted in its sensor's `RowsDropped` and in the **loss ledger
 gate). At every tick and at the end of the table drain the ledger reports what it gathered: one deduplicated line per
 reason through `Collector errors`, and the rows to the `Queue overflow` diagnostic sensor under the queue
 **"Table rows"** while that sensor takes values (from its start until it has published its last bar of the run; the
-sensor refuses them after that, atomically with its last bar). Rows the sensor did not take stay in the ledger.
+sensor refuses them after that, atomically with its last bar). Rows the sensor did not take stay in the ledger. The
+sensor's stop first lets a periodic send in flight end (the bounded wait of every sensor stop) and then publishes its
+last bar: a loss the sensor took after that send's snapshot is in the last bar (`BarMonitoringSensorBase.StopCoreAsync`,
+the same for every bar sensor).
 
 At the very end of the collector's stop (after the sensors stopped, the value drain and the table drain), **one line**
 says what the ledger still holds: `Collector stop: N table row(s) were lost during this run and are not in the Queue
@@ -263,7 +274,12 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   `TableRunLifecycleTests`: the run as one object (a tick, a registration answer, a reservation of an earlier run never
   reach the next; an answer is applied after a cancellation), no pipeline without table sensors, a compressor that cannot
   be made, a failed buffer growth, the ledger and its one stop line, a logger that disposes the collector from a report,
-  and a stress test of Start/Stop/Start/Stop with writers on every boundary.
+  the rows of an `Unavailable` sensor in the overflow sensor or the stop line, a table sensor created during a start
+  rollback, and a stress test of Start/Stop/Start/Stop/Start/Stop: the writers start after the first Start and write
+  through every boundary (each stop is held by hooks until every writer has written more), every run accepts a minimum
+  from every writer, and every delivered row is checked against the run that accepted it (recorded at `AddRow`).
+  `QueueOverflowFinalBarTests`: a loss the overflow sensor took after the snapshot of a periodic send in flight is in
+  the bar its stop publishes.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver; the native driver
   marks the table verbs `CONFORMANCE-UNSUPPORTED (#1848)` and does not run the fixture until step 6.
 
@@ -278,6 +294,26 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - Rows of refused tables beyond the first 100 of one acknowledgement are not in `RowsDropped`: the server lists at
   most 100 refusals and gives only the number of the rest (`refusedCount`), so the collector knows neither their tables
   nor their rows. The collector logs both numbers.
+- **A logger that disposes the collector from the stop line deadlocks.** The one line `Collector stop: N table row(s)
+  ...` is written by the stop itself (`TablePipeline.ReportStopLine`); a host `ICollectorLogger` that calls
+  `Dispose()` synchronously inside the callback of that line waits for the stop task that is waiting for the logger
+  (`DataCollector.Dispose` joins the stop in flight). Every other report of the tables is written outside the gates and
+  may dispose.
+- **A count can miss the reports when a thread is paused across a whole stop.** A writer refused by a full buffer
+  counts the rows in `RowsDropped` first and in the ledger second (`TableSensor.Drop`); paused between the two until
+  the stop line has closed the ledger, its rows stay on the sensor and are in no report. The same for a tick that took
+  the unreported count from the ledger (`TableLossLedger.TakeUnreported`) and outlasts the stop's wait for it (1 s):
+  the overflow sensor no longer takes the count and the closed ledger does not take it back.
+- **A block stored too late is counted as lost.** When the `stored` answer of a block arrives after the delivery wait
+  and the drain budget of the stop have expired, the stop has counted its rows as not delivered although the server
+  has them. The count errs on the side of loss.
+- **A registration refusal that lands between two runs stays.** A refusal answered for run R1 and applied after R1
+  closed, before the next `Start` attached the sensor to R2, still finds the sensor in R1 and makes it `Refused`
+  (`TableSensor.TryMove`); `Start` puts only `Registered` sensors back to `Pending`, so R2 does not register it. The
+  outcome is that of the same refusal a moment earlier: a refusal is final.
+- **A last bar that cannot be published.** A periodic send of `Queue overflow` that outlives the bounded wait of the
+  sensor's stop (1 s; the send only enqueues a value) still owns the send guard when the last bar is due: that bar is
+  not published, and the losses the sensor took after that send's snapshot are in no report.
 
 ## Open Points
 
