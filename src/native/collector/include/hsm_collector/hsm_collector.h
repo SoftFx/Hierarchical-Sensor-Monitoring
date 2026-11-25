@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 14
-#define HSM_COLLECTOR_VERSION_PATCH 1
+#define HSM_COLLECTOR_VERSION_MINOR 15
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -1214,8 +1214,7 @@ typedef struct hsm_table_column_t
 
 /* One cell: the column's type says which member is read. A double travels bit for bit (NaN, the
    infinities, -0.0). A cell without a value is marked in the `nulls` bit map of the add call. */
-typedef union hsm_table_cell_t
-{
+typedef union hsm_table_cell_t {
     int64_t i64;
     double f64;
 } hsm_table_cell_t;
@@ -1280,10 +1279,10 @@ hsm_result_t hsm_table_sensor_add_rows(hsm_table_sensor_t* sensor, const int64_t
 
 typedef enum hsm_table_sensor_state_t HSM_ENUM_INT32
 {
-    HSM_TABLE_SENSOR_PENDING = 0,     /* not registered yet in this run; rows are kept within the buffer bound */
-    HSM_TABLE_SENSOR_REGISTERED = 1,  /* its rows go into the next block */
-    HSM_TABLE_SENSOR_REFUSED = 2,     /* the server said no; final for the life of the collector */
-    HSM_TABLE_SENSOR_UNAVAILABLE = 3  /* this collector cannot send tables now (see the reason) */
+    HSM_TABLE_SENSOR_PENDING = 0,    /* not registered yet in this run; rows are kept within the buffer bound */
+    HSM_TABLE_SENSOR_REGISTERED = 1, /* its rows go into the next block */
+    HSM_TABLE_SENSOR_REFUSED = 2,    /* the server said no; final for the life of the collector */
+    HSM_TABLE_SENSOR_UNAVAILABLE = 3 /* this collector cannot send tables now (see the reason) */
 } hsm_table_sensor_state_t;
 
 typedef struct hsm_table_sensor_stats_t
