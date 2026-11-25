@@ -7,9 +7,9 @@
 #include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
 #include "platform/hsm_linux_metric_sources.hpp"   // Linux /proc + statvfs metric-source factory (#1414; __linux__ only)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
-#include "hsm_scheduled_task.hpp"                   // InvokeIsolated + the periodic ScheduledTask
-#include "tables/hsm_table_pipeline.hpp"            // table sensors (#1848): in every build, packing with HSM_COLLECTOR_TABLES
-#include "tables/hsm_table_test_seams.hpp"          // their test-only seams (not in the public header)
+#include "hsm_scheduled_task.hpp"                  // InvokeIsolated + the periodic ScheduledTask
+#include "tables/hsm_table_pipeline.hpp"           // table sensors (#1848): in every build, packing with HSM_COLLECTOR_TABLES
+#include "tables/hsm_table_test_seams.hpp"         // their test-only seams (not in the public header)
 
 #include <algorithm>
 #include <atomic>
@@ -3134,6 +3134,13 @@ namespace
             std::string error;
             if (!tables::CheckTablePath(normalized, path, tables::TableBlockLimits{}.max_table_id_length, error))
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
+
+            // A mistake of the call makes no pipeline.
+            {
+                tables::TableSchema schema;
+                if (!tables::TablePipeline::BuildSchema(columns, schema, error))
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, error);
+            }
 
             tables::TablePipeline* pipeline = nullptr;
             {
@@ -9683,8 +9690,8 @@ hsm_result_t hsm_collector_create_table_sensor(hsm_collector_t* collector, const
             const auto type = static_cast<int32_t>(columns[i].type);
             if (type != HSM_TABLE_COLUMN_INT64 && type != HSM_TABLE_COLUMN_DOUBLE)
                 return impl.TableFail(HSM_RESULT_INVALID_ARGUMENT,
-                                     std::string("Column '") + columns[i].name + "' has the type " + std::to_string(type) +
-                                         "; a value column is HSM_TABLE_COLUMN_DOUBLE or HSM_TABLE_COLUMN_INT64.");
+                                      std::string("Column '") + columns[i].name + "' has the type " + std::to_string(type) +
+                                          "; a value column is HSM_TABLE_COLUMN_DOUBLE or HSM_TABLE_COLUMN_INT64.");
             list.push_back({ columns[i].name, static_cast<hsm::collector::tables::TableColumnType>(type) });
         }
 

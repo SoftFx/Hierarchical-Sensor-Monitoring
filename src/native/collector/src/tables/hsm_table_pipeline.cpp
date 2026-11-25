@@ -587,9 +587,7 @@ namespace hsm::collector::tables
         return sensors;
     }
 
-    bool TablePipeline::CreateSensor(const std::string& path, const std::vector<TableRegistrationColumn>& columns,
-                                     const std::string& description, std::int64_t keep_history_ms,
-                                     const std::string& unavailable_reason, std::shared_ptr<TableSensor>& out, std::string& error)
+    bool TablePipeline::BuildSchema(const std::vector<TableRegistrationColumn>& columns, TableSchema& schema, std::string& error)
     {
         const TableBlockLimits limits;
 
@@ -617,13 +615,22 @@ namespace hsm::collector::tables
             schema_columns.push_back({ column.name, column.type });
         }
 
-        TableSchema schema;
         std::string schema_error;
         if (!TableSchema::Create(schema_columns, limits.max_columns_per_table, schema, schema_error))
         {
             error = "The columns of the table sensor are invalid: " + schema_error + ".";
             return false;
         }
+        return true;
+    }
+
+    bool TablePipeline::CreateSensor(const std::string& path, const std::vector<TableRegistrationColumn>& columns,
+                                     const std::string& description, std::int64_t keep_history_ms,
+                                     const std::string& unavailable_reason, std::shared_ptr<TableSensor>& out, std::string& error)
+    {
+        TableSchema schema;
+        if (!BuildSchema(columns, schema, error))
+            return false;
 
         // A running pipeline decides by its run; a stopped one by what the collector has now (and
         // decides again at the next Start). Read before sensors_mutex_: Start takes the two the other way.

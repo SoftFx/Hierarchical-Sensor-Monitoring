@@ -279,6 +279,10 @@ namespace hsm::collector::tables
         TablePipeline(const TablePipeline&) = delete;
         TablePipeline& operator=(const TablePipeline&) = delete;
 
+        /// Checks the value columns of a table sensor and builds its schema (the time first). False with
+        /// `error` for a mistake of the call.
+        static bool BuildSchema(const std::vector<TableRegistrationColumn>& columns, TableSchema& schema, std::string& error);
+
         /// Creates a sensor, or returns the one created before under the same path with the same
         /// columns. False with `error` for a mistake of the call. `unavailable_reason` empty: the
         /// collector has a channel now; else the sensor is Unavailable (a running pipeline decides by
