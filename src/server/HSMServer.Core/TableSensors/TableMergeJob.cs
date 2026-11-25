@@ -135,6 +135,9 @@ namespace HSMServer.Core.TableSensors
         /// </summary>
         internal int LastPasses { get; private set; }
 
+        /// <summary>The feed counters the blocks it could not read are counted in at a commit (#1847); none when null.</summary>
+        internal TableFeedCounters Feed { get; init; }
+
         private ITableBlockStore Blocks => _database.TableBlocks;
 
         private ITableBatchStore Batches => _database.TableBatches;
@@ -525,6 +528,7 @@ namespace HSMServer.Core.TableSensors
             Stats.Add(ref Stats.RowsDropped, dropped);
             Stats.Add(ref Stats.RowsExpired, expired);
             Stats.Add(ref Stats.UnreadableBlocksKept, unreadable.Count);
+            Feed?.AddUnreadable(product, unreadable.Count);
 
             if (unreadable.Count > 0)
                 _logger.Error($"Table hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} of product {product}: {unreadable.Count} blocks could not be read " +

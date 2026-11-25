@@ -56,6 +56,15 @@ namespace HSMServer.Core.TableSensors
         public long RowCount { get; init; }
 
         /// <summary>
+        /// The time of the earliest and of the latest row the answer counts (in <see cref="RowCount"/>), UTC ticks; null
+        /// when it counts none. Independent of the order the rows were read in. After a stop at the scan limit they are of
+        /// the rows before <see cref="CompleteToTicks"/>, the rows counted, not of the whole range.
+        /// </summary>
+        public long? FirstRowTicks { get; init; }
+
+        public long? LastRowTicks { get; init; }
+
+        /// <summary>
         /// Null when every row of the range was read. Otherwise the read stopped at its scan limit: every bucket before this
         /// time holds all of its rows, the buckets from it on are empty. Always the start of a bucket.
         /// </summary>
@@ -126,8 +135,9 @@ namespace HSMServer.Core.TableSensors
 
 
     /// <summary>
-    /// A chart whose read met an hour merged since its plan on every one of its plans: the store changed under it. Not a
-    /// fault of the store and not a wrong request; the same request later is answered.
+    /// A read or a chart every one of whose plans met a change of the batch store (its generation: an hour committed, a
+    /// week dropped, a placement written): the store changed under it. Not a fault of the store and not a wrong request;
+    /// the same request later is answered.
     /// </summary>
     public sealed class TableReadChangedException(string message) : Exception(message);
 }

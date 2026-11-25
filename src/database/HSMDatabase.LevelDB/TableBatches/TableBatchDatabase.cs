@@ -211,7 +211,13 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                         try
                         {
-                            product.Weeks.Add(new TableBatchWeek(week, part.PeriodWeeks));
+                            // A week database that is new to the product is something a read's plan sees (GetWeeks, and the
+                            // hours GetHours lists), whether or not this hour reaches its commit.
+                            if (product.Weeks.Add(new TableBatchWeek(week, part.PeriodWeeks)))
+                            {
+                                product.Snapshot = null;
+                                product.Generation++;
+                            }
 
                             // A mark of the hour here was written by a run that did not reach the commit (a committed hour
                             // returned above). The part is always written again, whatever that run wrote: its metadata cannot
@@ -272,6 +278,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 product.Hours[hour] = new TableBatchHour(hour, classes, commit.FirstBlockSequence, commit.LastBlockSequence, commit.BlocksMerged, commit.UnreadableBlocks.ToArray(), commitTicks);
                 product.Snapshot = null;
+                product.Generation++;
 
                 RaiseWatermarks(product, commit.Watermarks);
 
@@ -346,6 +353,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     product.Weeks.Add(week);
                     product.Snapshot = null;
+                    product.Generation++;
 
                     using var batch = new WriteBatch();
                     for (int i = 0; i < batches.Count; i++)
@@ -475,6 +483,8 @@ namespace HSMDatabase.LevelDB.TableBatches
                     product.Hours.Remove(hour);
 
                 product.Snapshot = null;
+                // A forgotten hour is not committed any more: a plan asks that of every hour with blocks (GetHour).
+                product.Generation++;
             }
         }
 
@@ -486,6 +496,16 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             lock (product.Lock)
                 return product.Hours.ContainsKey(hourTicks);
+        }
+
+        public long GetGeneration(Guid productId)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return 0;
+
+            lock (product.Lock)
+                return product.Generation;
         }
 
         public TableBatchHour GetHour(Guid productId, long hourTicks)
@@ -704,6 +724,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                     // Dropped by the record, whether the folder went or not: a folder left is deleted at the next open.
                     product.Weeks.Remove(week);
                     product.Snapshot = null;
+                    product.Generation++;
 
                     // The hours of the week stay committed (#1850 part 4b): a record leaves Hours only through ForgetHours, once
                     // no database of its week is left and the block store holds none of its blocks. Removed here, an hour
@@ -987,6 +1008,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                     product.Placements.Remove(sensorId);
                 else
                     product.Placements[sensorId] = placement;
+
+                // A placement gives ClassOf, which a read's plan takes for every merged hour.
+                product.Generation++;
             }
         }
 
@@ -1124,6 +1148,8 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             foreach (var (sensor, placement) in rebuilt)
                 product.Placements[sensor] = placement;
+
+            product.Generation++;
 
             Statistics.Add(ref Statistics.PlacementsRebuilt);
             _logger.Warn($"The placements of the table batches of product {product.Id} were rebuilt from the indexes of {product.Weeks.Count} week databases: {rebuilt.Count} sensors");
@@ -1296,6 +1322,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             product.HoursDb.Write(batch, _syncWrite);
 
             LoadCommits(product);
+            product.Generation++;
             Statistics.Add(ref Statistics.HoursRebuilt, rebuilt);
             _logger.Warn($"The merged hours of product {product.Id} were rebuilt from the marks of {product.Weeks.Count} week databases: {rebuilt} hours");
         }
@@ -1718,6 +1745,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             public long PinnedWeek = long.MinValue;
             public IReadOnlyDictionary<Guid, long> Watermarks = new Dictionary<Guid, long>();
             public IReadOnlyList<TableBatchHour> Snapshot;
+            // Changed under Lock by every write that changes what a read's plan sees (GetGeneration).
+            public long Generation;
         }
 
 

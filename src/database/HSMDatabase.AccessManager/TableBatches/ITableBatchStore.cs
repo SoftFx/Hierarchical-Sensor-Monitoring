@@ -215,6 +215,18 @@ namespace HSMDatabase.AccessManager.TableBatches
         bool IsHourMerged(Guid productId, long hourTicks);
 
         /// <summary>
+        /// The product's generation: a number that changes, under the product's lock, with every change of what a read's
+        /// plan can see in the store: every commit of an hour (one without any batch class included), a week database
+        /// created by the write of an hour (also one that does not reach its commit), every <see cref="DropWeek"/>, every
+        /// <see cref="SetPlacement"/> (a placement gives the class of each hour), every <see cref="ForgetHours"/> that
+        /// removes an hour, a rebuild of the hours database or of the placements, a write of moved batches. Read under the
+        /// same lock. Two equal readings mean nothing a plan sees changed between them (#1847, #1850 part 4b): it is the
+        /// only test of a plan's staleness, so a new write that changes what a plan sees must change it as well. A product
+        /// without a folder answers 0.
+        /// </summary>
+        long GetGeneration(Guid productId);
+
+        /// <summary>
         /// The record of a committed hour of a product, or null when the hour is not committed. Unlike <see cref="GetHours"/>
         /// it also gives an hour without any batch (every table of its blocks refused or dropped) and an hour whose classes'
         /// week databases were dropped.

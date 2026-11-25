@@ -246,6 +246,9 @@ namespace HSMServer.Core.Tests.TableSensors
             // The kept block is still a failed block of the answer (#1850 part 4b), as it was before the merge.
             Assert.Equal(1, _server.Service.Read(a.Id, From, To).Value.BlocksFailed);
 
+            // The feed counters of the product have it at the commit (#1847); the service started after the puts.
+            Assert.Equal(1, _server.Service.Feed.Drain(tables: false).Products[_product].UnreadableBlocks);
+
             // Past the delay the other blocks go; the damaged one stays.
             Pass(Hour0.AddHours(30));
             Assert.Equal([damaged], _server.Blocks.GetBlocks(_product).Select(e => e.Sequence));

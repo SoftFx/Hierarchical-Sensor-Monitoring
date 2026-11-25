@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
+using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.LevelDB.TableBatches;
 using HSMDatabase.LevelDB.TableBlocks;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -30,7 +31,8 @@ namespace HSMServer.Core.Tests.TableSensors
     /// <summary>
     /// The chart read of a table sensor through the block service (#1847): hours not merged and merged alike, an hour
     /// committed between the plan and its read, the exact rows of a short range, the scan limit across hours, cancellation
-    /// and the refusals of a request. No timing: the stores' clocks are seams.
+    /// and the refusals of a request; and the plan of both readers taken at one generation of the batch store. No timing:
+    /// the stores' clocks are seams.
     /// </summary>
     [Collection("Database collection")]
     public class TableChartReadTests : MonitoringCoreTestsBase<TableChartReadFixture>
@@ -521,7 +523,294 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
 
+        // === The plan: one generation of the store (the third review) ===
+
+        [Fact]
+        public async Task A_read_whose_three_plans_each_meet_a_commit_ends_in_the_store_changed_fault()
+        {
+            var a = await RegisterAsync("a");
+
+            for (int h = 0; h < 3; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(10);
+                Put(Block(("a", [Row(Hour0.AddHours(h).AddMinutes(1).Ticks, h, h)])));
+            }
+
+            // The review's sequence: each plan meets the commit of an hour between its listing of the blocks and its question
+            // whether their hours are committed. The hour committed there is skipped as merged, and the list of merged hours
+            // taken before has no batches of it: the plan holds that hour in neither source, and must never be read.
+            var plans = 0;
+            _service.PlanStep = step =>
+            {
+                if (step != "blocks")
+                    return;
+
+                plans++;
+                Assert.Null(Pass(Hour0.AddHours(plans).AddMinutes(3)).Fault);
+            };
+
+            Assert.Throws<TableReadChangedException>(() => _service.Read(a.Id, From, To));
+            Assert.Equal(TableBlockService.MaxChartPlans, plans);
+        }
+
+        [Fact]
+        public async Task A_read_whose_first_plan_meets_a_commit_reads_the_hour_once_from_its_second_plan()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1), Row(Hour0.AddMinutes(2).Ticks, 2, 2)])));
+
+            var stale = new List<bool>();
+            _service.PlanTaken = stale.Add;
+            _service.PlanStep = Once("blocks", () => Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault));
+
+            var rows = _service.Read(a.Id, From, To).Value;
+
+            Assert.Equal(new[] { true, false }, stale);
+            Assert.Equal(Expected((Hour0.AddMinutes(1).Ticks, 1.0, 1L), (Hour0.AddMinutes(2).Ticks, 2.0, 2L)), Snapshot(rows));
+            Assert.True(rows.BatchesRead > 0);
+        }
+
+        [Fact]
+        public async Task A_commit_without_any_class_during_the_plan_of_a_read_never_answers_without_the_row_that_arrived_meanwhile()
+        {
+            var a = await RegisterAsync("a");
+            var arrived = SeedClasslessCommit();
+
+            var rows = _service.Read(a.Id, From, To).Value;
+
+            Assert.Equal(Expected((arrived.Time, arrived.Bid, arrived.Size)), Snapshot(rows));
+        }
+
+        [Fact]
+        public async Task A_commit_without_any_class_during_the_plan_of_a_chart_never_answers_without_the_row_that_arrived_meanwhile()
+        {
+            var a = await RegisterAsync("a");
+            var arrived = SeedClasslessCommit();
+
+            var chart = Reduce(a, 100);
+
+            Assert.Equal(1, chart.RowCount);
+            Assert.False(chart.IsIncomplete);
+            AssertMatchesReference(chart, [Row(arrived.Time, arrived.Bid, arrived.Size)], From.Ticks, To.Ticks, Columns);
+        }
+
+        [Fact]
+        public async Task A_commit_and_the_drop_of_its_week_during_a_plan_make_it_stale_although_the_merged_hours_look_the_same()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+
+            var stale = new List<bool>();
+            _service.PlanTaken = stale.Add;
+            _service.PlanStep = Once("blocks", () =>
+            {
+                // Hour 0 is committed into its week database, which is then dropped: the list of merged hours is empty before
+                // and after, and so is the list of week databases. With the placements (#1850 part 4b) the hour keeps its
+                // record after the drop (it is forgotten only once its blocks are gone), so it stays committed.
+                Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+                Assert.Single(_batches.GetHours(_product));
+                _batches.DropWeek(_product, _batches.GetWeeks(_product).Single());
+                Assert.Empty(_batches.GetHours(_product));
+                Assert.Empty(_batches.GetWeeks(_product));
+                Assert.True(_batches.IsHourMerged(_product, Hour0.Ticks));
+            });
+
+            var rows = _service.Read(a.Id, From, To).Value;
+
+            // Stale by the generation alone (no list changed), and planned again. The second plan finds the hour committed
+            // and its week gone: the rows went with the database, and the blocks of a committed hour are not read.
+            Assert.Equal(new[] { true, false }, stale);
+            Assert.Equal(0, rows.RowCount);
+            Assert.Equal((0, 0), (rows.BlocksFailed, rows.BatchesFailed));
+        }
+
+        [Fact]
+        public async Task A_placement_written_or_hours_forgotten_during_a_plan_make_it_stale()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            var placement = _batches.GetPlacement(_product, a.Id);
+            Assert.NotNull(placement);
+
+            // A placement written between two steps of a plan: the class of an hour (ClassOf) may not be the one the plan took.
+            var stale = new List<bool>();
+            _service.PlanTaken = stale.Add;
+            _service.PlanStep = Once("blocks", () => _batches.SetPlacement(_product, a.Id, placement.Retarget(placement.Target + 1, Hour0.AddHours(5).Ticks)));
+
+            var rows = _service.Read(a.Id, From, To).Value;
+            Assert.Equal(new[] { true, false }, stale);
+            Assert.Equal(Expected((Hour0.AddMinutes(1).Ticks, 1.0, 1L)), Snapshot(rows));
+
+            // Hours forgotten between two steps: an hour the plan found committed may not be committed any more. The week
+            // is dropped first (an hour is forgotten only once no database of its week is left).
+            _batches.DropWeek(_product, _batches.GetWeeks(_product).Single());
+            stale.Clear();
+            _service.PlanStep = Once("blocks", () =>
+            {
+                _batches.ForgetHours(_product, [Hour0.Ticks]);
+                Assert.False(_batches.IsHourMerged(_product, Hour0.Ticks));
+            });
+
+            _service.Read(a.Id, From, To);
+            Assert.Equal(new[] { true, false }, stale);
+        }
+
+        [Fact]
+        public async Task A_placement_written_after_the_chart_planned_is_planned_again()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            var placement = _batches.GetPlacement(_product, a.Id);
+
+            var replans = new List<long>();
+            _service.BeforeChartReplan = replans.Add;
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan == 1)
+                    _batches.SetPlacement(_product, a.Id, placement.Retarget(placement.Target + 1, Hour0.AddHours(5).Ticks));
+            };
+
+            var chart = Reduce(a, 100);
+
+            Assert.Equal([Hour0.Ticks], replans);
+            Assert.Equal((1L, false), (chart.RowCount, chart.IsIncomplete));
+        }
+
+        [Fact]
+        public async Task A_read_cancelled_during_its_last_stale_plan_is_cancelled_not_a_changed_store()
+        {
+            var a = await RegisterAsync("a");
+
+            for (int h = 0; h < 3; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(10);
+                Put(Block(("a", [Row(Hour0.AddHours(h).AddMinutes(1).Ticks, h, h)])));
+            }
+
+            using var cancel = new CancellationTokenSource();
+            var plans = 0;
+            _service.PlanStep = step =>
+            {
+                if (step != "blocks")
+                    return;
+
+                plans++;
+                Assert.Null(Pass(Hour0.AddHours(plans).AddMinutes(3)).Fault);
+
+                if (plans == TableBlockService.MaxChartPlans)
+                    cancel.Cancel();
+            };
+
+            Assert.Throws<OperationCanceledException>(() => _service.Read(a.Id, From, To, null, cancel.Token));
+        }
+
+        [Fact]
+        public async Task A_chart_cancelled_while_its_third_plan_waited_for_the_gate_is_cancelled_not_a_changed_store()
+        {
+            var a = await RegisterAsync("a");
+
+            // Arrival hours 0, 1 and 2; the row of hour 2 is the earliest, so it is the first source of every plan.
+            for (int h = 0; h < 3; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(10);
+                Put(Block(("a", [Row(Hour0.AddMinutes(3 - h).Ticks, h, h)])));
+            }
+
+            using var cancel = new CancellationTokenSource();
+            using var release = new ManualResetEventSlim();
+            using var held = new ManualResetEventSlim();
+            var gate = _service.HourGate;
+            Task deletion = null, waiter = null;
+
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan < TableBlockService.MaxChartPlans)
+                {
+                    // Plans 1 and 2 each meet the commit of an hour of their blocks.
+                    Assert.Null(Pass(Hour0.AddHours(plan).AddMinutes(3)).Fault);
+                    return;
+                }
+
+                // Plan 3: a deletion holds the gate (on a thread of its own); once the chart waits for it, hour 2, its first
+                // source, is committed, the chart is cancelled, and the deletion ends.
+                deletion = Task.Run(() =>
+                {
+                    using (gate.Delete())
+                    {
+                        held.Set();
+                        release.Wait();
+                    }
+                });
+                held.Wait();
+
+                waiter = Task.Run(() =>
+                {
+                    SpinWait.SpinUntil(() => gate.WaitingReads > 0);
+                    Assert.Null(Pass(Hour0.AddHours(3).AddMinutes(3)).Fault);
+                    cancel.Cancel();
+                    release.Set();
+                });
+            };
+
+            Assert.Throws<OperationCanceledException>(() => _service.Reduce(a.Id, From, To, Columns, 100, cancel.Token));
+            await waiter;
+            await deletion;
+            Assert.True(_batches.IsHourMerged(_product, Hour0.AddHours(2).Ticks));
+        }
+
+
         // === Helpers ===
+
+        private static Action<string> Once(string step, Action action)
+        {
+            var done = false;
+            return name =>
+            {
+                if (name != step || done)
+                    return;
+
+                done = true;
+                action();
+            };
+        }
+
+        // The second sequence of the third review: the plan lists the blocks of hour 0 with a readable row; then a matching row
+        // arrives in hour 1, and hour 0 is committed without any batch class (a catch-up merge that found its every row
+        // expired: written here as such a commit), before the plan asks whether hour 0 is committed. No list of merged hours
+        // shows such a commit. Returns the row of hour 1.
+        private (long Time, double Bid, long Size) SeedClasslessCommit()
+        {
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            var arrived = (Time: Hour0.AddMinutes(2).Ticks, Bid: 2.0, Size: 2L);
+
+            _service.PlanStep = Once("blocks", () =>
+            {
+                _now = Hour0.AddHours(1).AddMinutes(10);
+                Put(Block(("a", [Row(arrived.Time, arrived.Bid, arrived.Size)])));
+
+                var blocks = _blocks.GetBlocks(_product).Where(e => e.ArrivalHourTicks == Hour0.Ticks).ToList();
+                _batches.WriteHour(_product, new TableBatchHourCommit
+                {
+                    HourTicks = Hour0.Ticks,
+                    FirstBlockSequence = blocks.Min(e => e.Sequence),
+                    LastBlockSequence = blocks.Max(e => e.Sequence),
+                    BlocksMerged = blocks.Count,
+                    Watermarks = _batches.GetWatermarks(_product),
+                }, []);
+
+                Assert.True(_batches.IsHourMerged(_product, Hour0.Ticks));
+                Assert.Empty(_batches.GetHours(_product));
+            });
+
+            return arrived;
+        }
 
         private void Build(TableBlockOptions options)
         {
@@ -592,6 +881,8 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         private static TestRow Row(long time, double? bid, long? size) => new(time, bid, size, 0);
+
+        private static List<(long, double?, long?)> Expected(params (long Time, double? Bid, long? Size)[] rows) => [.. rows];
 
         private static List<(long, double?, long?)> Snapshot(TableRows rows) =>
             Enumerable.Range(0, rows.RowCount).Select(r => (rows.Time[r],
