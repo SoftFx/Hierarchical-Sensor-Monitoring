@@ -176,6 +176,9 @@ namespace HSMServer.TablePages
                 times = times.ToArray(),
                 bucketRows = isRows ? null : chart.BucketRows,
                 rowCount = chart.RowCount,
+                // The first and the last row counted (the page's facts line); null without rows.
+                firstTime = chart.FirstRowTicks is { } firstRow ? Time(firstRow) : (DateTime?)null,
+                lastTime = chart.LastRowTicks is { } lastRow ? Time(lastRow) : (DateTime?)null,
                 completeTo = chart.CompleteToTicks is { } complete ? Time(complete) : (DateTime?)null,
                 blocksFailed = chart.BlocksFailed,
                 batchesFailed = chart.BatchesFailed,

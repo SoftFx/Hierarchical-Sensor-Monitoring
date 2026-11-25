@@ -206,6 +206,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal("2026-11-24T09:00:00Z", json.GetProperty("from").GetString());
             Assert.Equal("2026-11-24T09:00:36Z", json.GetProperty("times")[1].GetString());
             Assert.Equal(300, json.GetProperty("rowCount").GetInt64());
+            Assert.Equal(("2026-11-24T09:00:00Z", "2026-11-24T09:29:54Z"), (json.GetProperty("firstTime").GetString(), json.GetProperty("lastTime").GetString()));
             Assert.Equal(JsonValueKind.Null, json.GetProperty("completeTo").ValueKind);
             Assert.Equal((0, 0), (json.GetProperty("blocksFailed").GetInt32(), json.GetProperty("batchesFailed").GetInt32()));
 
@@ -243,6 +244,7 @@ namespace HSMServer.Core.Tests.Controllers
             var json = await ChartJsonAsync(a, Viewer(_product), new TableChartRequest { From = From, To = To, Buckets = 100 });
 
             Assert.Equal("rows", json.GetProperty("mode").GetString());
+            Assert.Equal(("2026-11-24T09:01:00Z", "2026-11-24T09:02:00Z"), (json.GetProperty("firstTime").GetString(), json.GetProperty("lastTime").GetString()));
             Assert.Equal(new[] { "2026-11-24T09:01:00Z", "2026-11-24T09:02:00Z" }, json.GetProperty("times").EnumerateArray().Select(t => t.GetString()));
 
             // Columns not named: every double column.
@@ -266,6 +268,7 @@ namespace HSMServer.Core.Tests.Controllers
             var json = await ChartJsonAsync(a, Viewer(_product), new TableChartRequest { From = From, To = To, Columns = [], Buckets = asked });
 
             Assert.Equal(expected, json.GetProperty("bucketCount").GetInt32());
+            Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (json.GetProperty("firstTime").ValueKind, json.GetProperty("lastTime").ValueKind));
         }
 
         [Fact]
