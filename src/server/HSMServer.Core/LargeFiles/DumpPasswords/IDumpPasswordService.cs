@@ -27,7 +27,13 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         /// <summary>A typed password with a character outside printable ASCII.</summary>
         NotPrintableAscii,
 
+        /// <summary>A password longer than <see cref="DumpPasswordRules.MaxLength"/>.</summary>
+        TooLong,
+
         ProductUnknown,
+
+        /// <summary>The product is not a root product: the password belongs to the root, whose archives it protects.</summary>
+        NotRootProduct,
     }
 
 
@@ -71,6 +77,9 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         IReadOnlyList<DumpPasswordVersion> GetVersions(Guid productId);
 
         bool HasPassword(Guid productId);
+
+        /// <summary>The products that have a dump password: the builder retires their replaced versions after a restart.</summary>
+        IReadOnlyCollection<Guid> GetProductIds();
 
         /// <summary>
         /// Stores a new version (the previous maximum + 1) durably, then writes "dump password changed" to the journal without

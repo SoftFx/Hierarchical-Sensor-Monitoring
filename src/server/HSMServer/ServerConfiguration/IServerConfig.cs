@@ -24,6 +24,8 @@
 
         TableSensorsConfig TableSensors { get; }
 
+        LargeFileArchivesConfig LargeFileArchives { get; }
+
         OidcConfig Oidc { get; }
 
 
