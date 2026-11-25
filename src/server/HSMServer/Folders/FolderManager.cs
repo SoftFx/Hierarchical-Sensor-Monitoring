@@ -35,6 +35,8 @@ namespace HSMServer.Folders
         // journal is a thin facade).
         private readonly HSMServer.Core.ChangeSets.IChangeSetJournal _changeSetJournal;
 
+        private const string TtlSetting = "TTL";
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -306,57 +308,84 @@ namespace HSMServer.Folders
             foreach (var product in _cache.GetProducts())
                 if (TryGetValueById(product.FolderId, out var folder))
                 {
-                    var stale = new List<FolderPeriodRepair>(3);
-
-                    TimeIntervalModel Stale(TimeIntervalSettingProperty property, TimeIntervalViewModel folderSetting, string setting)
+                    // One product that cannot be re-derived must stop neither the
+                    // start of the server nor the pass for the products after it.
+                    try
                     {
-                        var copy = property.CurValue;
-                        var folderModel = folderSetting.ToModel();
-
-                        if (!copy.IsFromFolder || !folderModel.IsCalendarPreset)
-                            return null;
-
-                        var expected = folderModel.ToFromFolderModel();
-
-                        if (copy.Ticks == expected.Ticks)
-                            return null;
-
-                        stale.Add(new FolderPeriodRepair(product.Id, product.DisplayName, folder.Name, setting, copy, expected));
-
-                        return expected;
+                        repairs.AddRange(await ReapplyFolderCalendarPresets(product, folder));
                     }
-
-                    var update = new ProductUpdate
+                    catch (Exception ex)
                     {
-                        Id = product.Id,
-                        TTL = Stale(product.Settings.TTL, folder.TTL, "TTL"),
-                        KeepHistory = Stale(product.Settings.KeepHistory, folder.KeepHistory, "Keep sensor history"),
-                        SelfDestroy = Stale(product.Settings.SelfDestroy, folder.SelfDestroy, "Remove sensor after inactivity"),
-
-                        // Forced: the setting was last changed by a user, and the user's
-                        // choice ("from folder") is what this update keeps.
-                        Initiator = InitiatorInfo.AsSystemMigrator(),
-                    };
-
-                    if (stale.Count == 0)
-                        continue;
-
-                    var result = await _cache.UpdateProductAsync(update);
-
-                    if (!result.IsOk)
-                    {
-                        _logger.Error($"Folder period not re-derived (#1864) for product '{product.DisplayName}' [{product.Id}], folder '{folder.Name}': {result.Error}");
-                        continue;
+                        _logger.Error(ex, $"Folder period not re-derived (#1864) for product '{product.DisplayName}' [{product.Id}], folder '{folder.Name}'");
                     }
-
-                    foreach (var repair in stale)
-                        _logger.Warn($"Folder period re-derived (#1864): product '{repair.ProductName}' [{repair.ProductId}], folder '{repair.FolderName}', '{repair.Setting}': {repair.Old} -> {repair.New}");
-
-                    repairs.AddRange(stale);
                 }
 
             if (repairs.Count > 0)
-                _logger.Warn($"{repairs.Count} period(s) inherited from a folder's calendar preset were never applied before (#1864) and are applied from now on, in {repairs.Select(r => r.ProductId).Distinct().Count()} product(s). The next cleanup run (on the full hour) clears the history older than the folder's period and removes the sensors idle for longer than it; each cleared sensor is logged by that run ('Clearing history'), each removed one by 'Sensor removed'. An inherited TTL of a month starts to expire the sensors silent for longer.");
+            {
+                var ttl = repairs.Any(r => r.Setting == TtlSetting) ? " An inherited TTL of a month starts to expire the sensors silent for longer." : string.Empty;
+
+                _logger.Warn($"{repairs.Count} period(s) inherited from a folder's calendar preset were never applied before (#1864) and are applied from now on, in {repairs.Select(r => r.ProductId).Distinct().Count()} product(s). The next cleanup run (on the full hour) clears the history older than the folder's period and removes the sensors idle for longer than it; each cleared sensor is logged by that run ('Clearing history'), each removed one by 'Sensor removed'.{ttl}");
+            }
+
+            return repairs;
+        }
+
+        private async Task<List<FolderPeriodRepair>> ReapplyFolderCalendarPresets(ProductModel product, FolderModel folder)
+        {
+            var stale = new List<(FolderPeriodRepair Repair, TimeIntervalSettingProperty Property)>(3);
+
+            TimeIntervalModel Stale(TimeIntervalSettingProperty property, TimeIntervalViewModel folderSetting, string setting)
+            {
+                var copy = property.CurValue;
+                var folderModel = folderSetting.ToModel();
+
+                if (!copy.IsFromFolder || !folderModel.IsCalendarPreset)
+                    return null;
+
+                var expected = folderModel.ToFromFolderModel();
+
+                if (copy.Ticks == expected.Ticks)
+                    return null;
+
+                stale.Add((new FolderPeriodRepair(product.Id, product.DisplayName, folder.Name, setting, copy, expected), property));
+
+                return expected;
+            }
+
+            var update = new ProductUpdate
+            {
+                Id = product.Id,
+                TTL = Stale(product.Settings.TTL, folder.TTL, TtlSetting),
+                KeepHistory = Stale(product.Settings.KeepHistory, folder.KeepHistory, "Keep sensor history"),
+                SelfDestroy = Stale(product.Settings.SelfDestroy, folder.SelfDestroy, "Remove sensor after inactivity"),
+
+                // Forced: the setting was last changed by a user, and the user's
+                // choice ("from folder") is what this update keeps.
+                Initiator = InitiatorInfo.AsSystemMigrator(),
+            };
+
+            var repairs = new List<FolderPeriodRepair>(stale.Count);
+
+            if (stale.Count == 0)
+                return repairs;
+
+            var result = await _cache.UpdateProductAsync(update);
+
+            if (!result.IsOk)
+            {
+                _logger.Error($"Folder period not re-derived (#1864) for product '{product.DisplayName}' [{product.Id}], folder '{folder.Name}': {result.Error}");
+                return repairs;
+            }
+
+            // Reported by what the product holds now, not by the update's answer.
+            foreach (var (repair, property) in stale)
+                if (property.CurValue.IsFromFolder && property.CurValue.Ticks == repair.New.Ticks)
+                {
+                    _logger.Warn($"Folder period re-derived (#1864): product '{repair.ProductName}' [{repair.ProductId}], folder '{repair.FolderName}', '{repair.Setting}': {repair.Old} -> {repair.New}");
+                    repairs.Add(repair);
+                }
+                else
+                    _logger.Error($"Folder period not re-derived (#1864) for product '{repair.ProductName}' [{repair.ProductId}], folder '{repair.FolderName}', '{repair.Setting}': still {property.CurValue}");
 
             return repairs;
         }

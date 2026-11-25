@@ -495,6 +495,28 @@ namespace HSMServer.Core.Tests.Folders
         }
 
         [Fact]
+        public async Task Start_AProductThatCannotBeUpdated_DoesNotStopTheStart()
+        {
+            // The pass runs inside FolderManager.Initialize: a throw from it
+            // would keep the server from starting.
+            var cache = new Mock<ITreeValuesCache>();
+            cache.Setup(c => c.GetProducts()).Returns(_valuesCache.GetProducts());
+            cache.Setup(c => c.UpdateProductAsync(It.IsAny<ProductUpdate>(), It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("the store is not there"));
+
+            var chats = new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object);
+            var folderManager = new FolderManager(_databaseCoreManager.DatabaseCore, cache.Object, _userManager, _journalService, chats);
+
+            await folderManager.Initialize();
+
+            cache.Verify(c => c.UpdateProductAsync(It.Is<ProductUpdate>(u => u.Id == _fixture.StaleProductId), It.IsAny<CancellationToken>()), Times.Once);
+            cache.Verify(c => c.UpdateProductAsync(It.IsAny<ProductUpdate>(), It.IsAny<CancellationToken>()), Times.Once);
+
+            // Nothing is reported as re-derived, and nothing was.
+            Assert.Empty(await folderManager.ReapplyFolderCalendarPresets());
+            Assert.Equal(FolderPresetRetentionFixture.LostPreset, _databaseCoreManager.GetProduct(_fixture.StaleProductId).Settings[KeepHistory]);
+        }
+
+        [Fact]
         public async Task Start_TheRederivedPeriodIsApplied()
         {
             await StartAsync();

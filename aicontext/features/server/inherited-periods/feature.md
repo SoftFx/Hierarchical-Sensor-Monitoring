@@ -45,6 +45,7 @@ Products that inherited a calendar preset on a server from before #1864 hold `Fr
 - It is the same update as workflow 1, so the same journal record is written per setting ("Settings update", old and new value, initiator `ServerMigration`) and the same entity shape is stored.
 - It is forced past the change table: the setting was last changed by a user, and the user's choice ("from folder") is what the update keeps.
 - It touches nothing else: a product's own period, a copy of a folder period that is not a calendar preset (a folder's "Never" with 0 ticks included), a copy that is already right. A second start finds nothing to do.
+- It is isolated per product: a product whose update throws or fails is logged at `Error` and neither stops the start nor the pass for the products after it. A setting is reported as re-derived by what the product holds after the update, not by the update's answer.
 - Each re-derived setting is logged at `Warn` ("Folder period re-derived (#1864): product ..., folder ..., '<setting>': FromFolder(00:00:00) -> FromFolder(31.00:00:00)"), followed by one `Warn` with the totals and what the next cleanup run will do.
 
 The alternative, resolving the folder's present period whenever a policy is evaluated, was not taken: the core would have to call the web layer from the value hot path (the retention floor of out-of-order values reads `KeepHistory` for every late value), and the copy would stay wrong for any reader of the entity.
