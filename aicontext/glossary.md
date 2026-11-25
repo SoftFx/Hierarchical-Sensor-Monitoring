@@ -1,6 +1,6 @@
 # HSM Glossary
 
-> Owner: shared | Last reviewed: 2026-11-19 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-25 | Canonical: yes
 
 Canonical terms for Hierarchical-Sensor-Monitoring. Prefer these names in code,
 docs, PR descriptions, review comments, and user-facing documentation.
@@ -90,6 +90,9 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Large file store | The folder of the server that holds large file values as files: a part while a file is uploaded and checked (uploading, then verified), then one zip under the product's dump password (packed). A file of a product without a password stays verified. | Not a LevelDB database, by decision (ADR-0022); not part of the databases' backups. Only the finished archives are shown to Caddy. |
 | Download log | The record of every allowed download of a large file value: who (the user, or the token and its owner), when, which file. A download that cannot be recorded is refused. | Not the Journal, which holds changes of configuration and never refuses an action. |
 | Dump password | The password of a product under which its large file values are given out: every download is an AES zip with it. Set and seen by a Manager of the product and by an admin, on a page of the web UI only. | Not a credential of HSM: it does not sign anyone in, and HSM still checks who may download. Never returned by an API, never written to the Journal as a value. |
+| Password version | The number of one value of a product's dump password: each change makes the next version. Every archive records the version it opens with, and a download names it in `X-Hsm-Password-Version`. | A replaced version stays readable to Managers and admins until 30 days (a setting) after its last archive was re-encrypted, then it is removed. See `features/server/dump-password/feature.md`. |
+| Archive build | The server's packing of a large file value into its zip: the first pack of a verified file, or the re-encryption of an archive under a newer password version. One at a time for the whole server; every archive is read back and checked against the SHA-256 of the original bytes before it counts. | A re-encrypted archive is a new file with a new id. Not the collector's compression of pieces. See `features/server/large-file-download/feature.md`. |
+| Archive hand-over | HSM's answer to a checked download that came through the bundled Caddy: an instruction (`X-Hsm-Archive`) naming the archive, which Caddy serves from its read-only view of the archives instead of HSM sending the bytes. | Honoured only from a trusted proxy; without one HSM serves the file itself. Not a redirect and not a signed link. |
 | Watched folder | A folder, a name mask and a sensor path an application gives its collector: a file there is sent as a large file value once its size and modification time have not changed for the configured time (on Windows it must also open with no writer). | The collector deletes the file it sent after the server confirmed it, unless told to keep it. |
 | Week handle | `SensorValuesWeek`: what the shard dictionary holds for a history week; it can swap the instance serving the week (rows or sealed) while the server runs. | Swapped only by the sealing job. |
 | Journal | The single journal of every monitoring-tree configuration change (#1588): global page + per-node tabs + `/api/v1/journal` + MCP tools, with entity kinds, products and undo-group links. | The undo mechanics are internal; say "journal record", not "change set", on user-facing surfaces. |
