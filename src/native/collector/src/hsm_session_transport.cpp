@@ -283,6 +283,22 @@ namespace hsm::http
 
     SessionResult SessionTransport::Request(const char* op, const std::string& body, int64_t timeout_ms)
     {
+        static const std::atomic<bool> never{ false };
+        return Request(op, body, timeout_ms, never);
+    }
+
+    void SessionTransport::Wake()
+    {
+        // Under the lock: a request that read its flag as false just before it waits cannot miss
+        // the notification.
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+        }
+        cv_.notify_all();
+    }
+
+    SessionResult SessionTransport::Request(const char* op, const std::string& body, int64_t timeout_ms, const std::atomic<bool>& abandon)
+    {
         SessionResult failed;
         std::shared_ptr<Pending> pending;
 
@@ -294,7 +310,7 @@ namespace hsm::http
         frame += '}';
 
         std::unique_lock<std::mutex> lock(mutex_);
-        if (cancelled_)
+        if (cancelled_ || abandon.load())
         {
             failed.error = kCancelled;
             return failed;
@@ -315,7 +331,7 @@ namespace hsm::http
         outgoing_.emplace_back(id, std::move(frame));
 
         const auto deadline = Clock::now() + std::chrono::milliseconds((std::max<int64_t>)(timeout_ms, 0));
-        cv_.wait_until(lock, deadline, [&] { return pending->done || cancelled_; });
+        cv_.wait_until(lock, deadline, [&] { return pending->done || cancelled_ || abandon.load(); });
         if (pending->done)
             return pending->result;
 
@@ -324,7 +340,7 @@ namespace hsm::http
         pending_.erase(id);
         outgoing_.erase(std::remove_if(outgoing_.begin(), outgoing_.end(), [id](const auto& entry) { return entry.first == id; }),
                         outgoing_.end());
-        if (cancelled_)
+        if (cancelled_ || abandon.load())
         {
             failed.error = kCancelled;
         }
@@ -424,6 +440,10 @@ namespace hsm::http
         result.status = static_cast<long>(IntegerField(frame, "status"));
         // The server's words end up in the collector's log lines about the failed send.
         result.error = Printable(StringField(frame, "error"));
+        // A body worth reading (a `commands` ack's per-path errors); the usual empty object of a
+        // `list` ack is not copied.
+        if (const auto found = frame.find("body"); found != frame.end() && !found->is_null() && !(found->is_object() && found->empty()))
+            result.body = found->dump();
 
         {
             std::lock_guard<std::mutex> guard(mutex_);

@@ -589,6 +589,21 @@ namespace hsm::collector::tables
 
     void TablePipeline::FlushReports() noexcept
     {
+        // The channel's own reports first: they say why the pipeline's about the same moment happened.
+        try
+        {
+            std::shared_ptr<ITableChannel> channel;
+            {
+                std::lock_guard<std::mutex> guard(lifecycle_mutex_);
+                channel = channel_;
+            }
+            if (channel)
+                channel->WriteReports();
+        }
+        catch (...)
+        {
+        }
+
         try
         {
             std::vector<std::string> reports;
@@ -817,9 +832,11 @@ namespace hsm::collector::tables
                     }
                 }
 
+                // The run is counted before it takes rows: a writer that reads the count around its
+                // add can never see a row taken by a run it has not counted yet.
+                run_count_.fetch_add(1);
                 shared_->ledger_open.store(true, std::memory_order_release);
                 shared_->accepting.store(true, std::memory_order_release);
-                run_count_.fetch_add(1);
                 running_ = true;
 
                 if (!options_.manual_tick)
@@ -1647,14 +1664,70 @@ namespace hsm::collector::tables
 
     // The delivery thread's function: nothing leaves it, and its catch handlers allocate nothing (a
     // second failure there would end the host's process).
+    void TablePipeline::ServiceChannelNow()
+    {
+        const std::shared_ptr<ITableChannel> channel = channel_;
+        if (!channel)
+            return;
+        bool up = false;
+        try
+        {
+            up = channel->Service();
+        }
+        catch (...)
+        {
+        }
+        if (up)
+            Deliver(/*at_stop=*/false, std::chrono::steady_clock::time_point::max());
+        FlushReports();
+    }
+
     void TablePipeline::DeliveryLoop() noexcept
     {
         try
         {
+            // Set before this thread was made and not changed until it is joined.
+            const std::shared_ptr<ITableChannel> channel = channel_;
+            const auto ready = [this] { return stop_delivery_.load() || drain_requested_ || register_due_ || deliver_due_; };
             std::unique_lock<std::mutex> lock(delivery_mutex_);
             while (true)
             {
-                delivery_cv_.wait(lock, [this] { return stop_delivery_.load() || drain_requested_ || register_due_ || deliver_due_; });
+                // The channel may need this thread between the ticks (a connection to open again after
+                // a pause, a heartbeat): it says when, asked with no lock held.
+                std::int64_t service_ms = -1;
+                if (!ready())
+                {
+                    lock.unlock();
+                    try
+                    {
+                        service_ms = channel ? channel->ServiceDelayMs() : -1;
+                    }
+                    catch (...)
+                    {
+                        service_ms = -1;
+                    }
+                    lock.lock();
+                }
+                if (service_ms < 0)
+                {
+                    delivery_cv_.wait(lock, ready);
+                }
+                else if (!delivery_cv_.wait_for(lock, std::chrono::milliseconds(service_ms), ready))
+                {
+                    lock.unlock();
+                    try
+                    {
+                        if (channel->Service())
+                            Deliver(/*at_stop=*/false, std::chrono::steady_clock::time_point::max());
+                    }
+                    catch (...)
+                    {
+                        Fault(TableFault::DeliveryFailed);
+                    }
+                    FlushReports();
+                    lock.lock();
+                    continue;
+                }
                 if (stop_delivery_.load())
                     return;
 

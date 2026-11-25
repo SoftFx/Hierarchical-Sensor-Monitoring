@@ -146,6 +146,14 @@ struct TableConformanceState;
 std::shared_ptr<TableConformanceState> NewTableConformanceState();
 void PrepareTableConformanceCollector(TableConformanceState& state, hsm_collector_t* collector, bool with_channel);
 bool ExecuteTableConformanceStep(TableConformanceState& state, hsm_collector_t* collector, const std::vector<std::string>& step);
+#if defined(HSM_COLLECTOR_HTTP)
+namespace hsm::test
+{
+    class WebSocketTestServer;
+}
+// The scripted session server takes the table connection of a session collector (#1848 part 4).
+void PrepareTableConformanceSession(TableConformanceState& state, hsm_collector_t* collector, hsm::test::WebSocketTestServer& server);
+#endif
 const std::map<std::string, std::function<void(const std::string&)>>& TablePipelineTests();
 
 namespace
@@ -800,6 +808,8 @@ namespace
         {
             hsm::test::WebSocketTestServer::Options options;
             options.session = true;
+            // The table connection of the session (#1848 part 4) is a side connection of the same route.
+            options.side_subprotocol = "hsm.tables.v1";
             state.session_server = std::make_unique<hsm::test::WebSocketTestServer>(options);
         }
         return *state.session_server;
@@ -3431,6 +3441,9 @@ namespace
                             },
                             state.directives.get()) == HSM_RESULT_OK,
                         "the directive handler of a session case must install");
+                // The table verbs on a session collector: the scripted server stands in for the recording
+                // channel and takes the table connection (table_connection_contract.hsmtest).
+                PrepareTableConformanceSession(*state.tables, state.collector.value, server);
                 return;
             }
 
@@ -3704,41 +3717,10 @@ namespace
 #endif
         }
 
-        // Table sensors (#1846, #1848): tests/conformance/collector/table_sensor_contract.hsmtest.
+        // Table sensors (#1846, #1848): tests/conformance/collector/table_sensor_contract.hsmtest, and on a
+        // session collector table_connection_contract.hsmtest (the verbs live in hsm_table_pipeline_tests.cpp).
         if (ExecuteTableConformanceStep(*state.tables, state.collector.value, step))
             return;
-
-        // The table connection of the session (tests/conformance/collector/table_connection_contract.hsmtest)
-        // comes with the next part of step 6 (#1848). Until then the fixture is not registered in CMakeLists.txt,
-        // and its verbs fail by name instead of as unknown ones, so the port backlog stays visible:
-        // CONFORMANCE-UNSUPPORTED: table_register (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_refuse_upgrades (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_server_accept_upgrades (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_connections (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_refused_table_upgrades_at_least (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_upgrade_names_session (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_probe_before_blocks (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_frame_connections (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_close_code (#1848)
-        // CONFORMANCE-UNSUPPORTED: expect_table_closed_before_session (#1848)
-        // CONFORMANCE-UNSUPPORTED: table_wait_connection_up (#1848)
-        static const char* const kTableConnectionVerbs[] = {
-            "table_register",
-            "table_server_refuse_upgrades",
-            "table_server_accept_upgrades",
-            "expect_table_connections",
-            "expect_refused_table_upgrades_at_least",
-            "expect_table_upgrade_names_session",
-            "expect_table_probe_before_blocks",
-            "expect_table_frame_connections",
-            "expect_table_close_code",
-            "expect_table_closed_before_session",
-            "table_wait_connection_up",
-        };
-
-        for (const char* verb : kTableConnectionVerbs)
-            if (action == verb)
-                throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1848)");
 
         throw std::runtime_error("Unknown conformance action: " + action);
     }
@@ -11572,6 +11554,12 @@ namespace
               [](const std::string& path) {
                   if (WsAvailable("meta_session_must_fail"))
                       RunConformanceContractExpectFailure(path);
+              } },
+            // The table connection of the session (#1848 part 4): the session scenarios' rule.
+            { "conformance_table_connection_contract",
+              [](const std::string& path) {
+                  if (WsAvailable("conformance_table_connection_contract"))
+                      RunConformanceContract(path);
               } },
 #endif
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },

@@ -434,9 +434,9 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - End to end, net8.0, the Docker-backed lane: `TableSensorEndToEndTests` registers a table sensor on the real server,
   delivers rows at a tick and in the stop drain, and reads them back through `POST api/sensors/tableHistory`.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver and, since 0.15.0,
-  the native driver (tables build; see "Native collector"); `table_connection_contract.hsmtest` through the .NET
-  driver on the scripted session server; the native driver marks the verbs of the table connection
-  `CONFORMANCE-UNSUPPORTED (#1848)` and does not run that fixture until the table connection of step 6.
+  the native driver (tables build; see "Native collector"); `table_connection_contract.hsmtest` through both drivers
+  on their scripted session servers (the native driver since 0.15.1, in builds with the session transport and table
+  sensors).
 
 ## Known Issues / Limitations
 
@@ -497,14 +497,69 @@ Unix nanoseconds, kept to 100 ns (rounded down). Settings: `hsm_table_options_t`
 1 s; `max_buffer_bytes` and `max_backlog_bytes` 64 MiB), set before the first table sensor.
 
 **Build option.** The ABI exists in every build. Packing needs `HSM_COLLECTOR_TABLES` (zstd, zlib; vcpkg feature
-`tables`); without it every table sensor is `Unavailable` ("built with HSM_COLLECTOR_TABLES=OFF"). The agent and
-the probe build with tables OFF.
+`tables`); without it every table sensor is `Unavailable` ("built with HSM_COLLECTOR_TABLES=OFF"). Delivery needs the
+session transport too, so `HSM_COLLECTOR_HTTP` as well. The agent and the probe build with tables OFF.
 
-**What works at 0.15.0, and what does not.** The pipeline is complete up to an internal channel seam
-(`src/tables/hsm_table_channel.hpp`, the managed `ITableBlockChannel`). In 0.15.0 only the tests implement it: **on
-a real host every table sensor is `Unavailable` and counts its rows as dropped** (reason: the collector does not use
-the session transport, or "the table connection of the collector session is not implemented"). The channel over the
-table connection is the next PR of #1848, then the legacy wrapper.
+**Through the legacy C++ wrapper (#1848 part 5, wrapper 2.0.0).** `HSMCppWrapper.dll` (`src/wrapper`) is built with
+`HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES` and a pinned libcurl with WebSocket (`src/wrapper/vcpkg.json`, the
+same baseline as the native collector's manifest), and its `DataCollectorProxy` chooses the session when it is
+constructed (ADR-0019, point 5 as amended on 2026-11-25), so a table sensor made through
+`proxy.Native().CreateTableSensor(...)` before or after `Start` registers and delivers like any other native one, on a
+server that has the table connection (the first release with it is later than 3.44.0; on an earlier server with
+sessions the values flow and table sensors deliver nothing); the wrapper's own ABI has no table type. Before `Start`
+the only observable of the default transport is such a table sensor's state (Pending, not Unavailable). After `proxy.UseHttpTransport()` (the one method 2.0.0 adds, for a server
+without sessions) every table sensor is `Unavailable` with the reason "table sensors need the collector session
+transport (hsm_collector_use_session_transport)" and its rows are dropped and counted. Pinned through the exported
+API by `src/wrapper/WrapperConsole/WrapperTransportTests.cpp` (`wrapper_table_sensor_delivers_on_the_default_transport`,
+`wrapper_table_sensor_is_unavailable_on_http`) against `tests/ws_test_server.hpp`. The bundle ships `zstd.dll` beside
+`libcurl.dll` and `z.dll`.
+
+**What works since 0.15.1 (#1848 part 4).** A collector on the session (`hsm_collector_use_session_transport`) built
+with both options delivers its table sensors: the registrations as a `commands` request of their own on the session
+(the wire of the managed golden `Registration_of_a_table_sensor_carries_its_columns_after_previous_paths`), the
+blocks on the session's table connection (`SessionTableChannel`, `src/tables/hsm_session_table_channel.{hpp,cpp}`,
+over `AckedBinaryLink`, `src/hsm_acked_binary_link.{hpp,cpp}`). The table connection is the managed one: opened
+only while the session is up and once a registration of the run was accepted, named after the session by
+`X-Hsm-Session`, the hello's `maxFrameBytes` and `blockLimits` the limits the pipeline packs for (`MaxBlockBytes`,
+`Limits`; the defaults before the first hello), the probe and its `200` before the connection counts as up, one block
+in flight, the ack table above (2xx `stored` / `duplicate` / `allRefused`, an unknown outcome or a body that is not
+JSON taken as stored and said; `400` and every other 4xx `Invalid`; `408`, `429` and every 5xx not delivered with
+`retryAfter`, read as the managed collector reads it (an integer that fits an int32 and is above 0, else none: `1.5` is
+none) and capped at 5 minutes; any other status closes with `1002`), no ack within the request timeout closes the
+connection with `1000` and the same frame (same producer and sequence) goes on the next connection, up to three
+connections per put, each waited for up to 15 s; the refused upgrades (`404` and `400` said once, asked again every 5
+minutes and with the next session; `409` waits for the next session; `406`, `503` and the others with the session's
+backoff); the closes (`1013` and every other close or a lost connection: reconnect with the backoff and send the same
+frame; `1000` from the server: a new session or a backoff, whichever is first; a new session replaces the connection
+at once); what the server must not send (a binary frame `1003`, a text that is not a JSON object `1007`, a frame that
+is neither an ack nor a push or a foreign ack `1002`, a text over 1 MiB `1009`: closed, reported once, reconnected,
+the block sent again); the heartbeat (a `ping` when nothing was sent for the hello's heartbeat). "Said once" is per
+kind of failure until a connection opens: the step and the HTTP status, libcurl's result code or the close code, not
+the words, since libcurl's words carry elapsed times ("after 15001 milliseconds"); the line keeps the words of the first
+one (`native_table_reports_are_said_once_per_kind`). A collector on HTTP,
+or built without either option, or whose libcurl cannot carry a WebSocket, keeps its table sensors `Unavailable` with
+that reason. A collector without table sensors makes nothing of it: no channel, no connection, no thread, no line
+(`native_table_no_connection_without_a_table_sensor`).
+
+**Threads of the table connection.** It has none of its own. The pipeline's delivery thread owns it (in tests with a
+manual tick, the caller of the tick): it opens the connection when a registration is accepted, sends the blocks and
+reads their acks, and between ticks wakes when the channel asks for it (`ITableChannel::ServiceDelayMs` and
+`Service`, the seam's two additions of 0.15.1): to open the connection again after a pause, to send the heartbeat, and
+once a second while the connection is open (to read what the server sent meanwhile and to notice a new session).
+`Cancel` (the stop's budget, a dispose) reaches the connection from any thread, at every step: the upgrade, the hello
+and the probe (the connection is published before the upgrade and the cancel is checked again after publishing), a
+put's write and ack wait, and every close that waits for the server's answer (a lost ack, a protocol error, a session
+that ended, an unknown status, the stop's own close): a closing connection stays reachable until its close returns
+(`native_table_cancel_reaches_a_closing_connection`). The channel writes its lines only
+through `ITableChannel::WriteReports`, which the pipeline calls with no lock held (its `Register` and `Put` run under
+the pipeline's locks, where nothing is logged).
+
+**Stop.** The table drain delivers within the stop budget as before; then, after the delivery thread is joined and
+before the session is closed, the table connection is closed with `1000`, waiting for the server's answer for what is
+left of the budget and at most a second (with the budget spent, the close frame is written once and nothing is
+waited for). A block in flight when the budget ends is cancelled: its connection gets a close frame `1000` (one
+non-blocking write) and its rows are counted once as not delivered at stop
+(`native_table_stop_with_a_block_in_flight`). Dispose and destroy do the same without the drain.
 
 **Threads and lifetime.** The first table sensor makes the pipeline; a collector without one has no pipeline, no zstd
 context, no thread, no tick and no log line of this feature. From Start to Stop the pipeline has a tick thread (a
@@ -548,6 +603,28 @@ for every lifecycle report).
 
 **Differences from the managed collector.**
 
+- The table connection has no loop of its own: the delivery thread keeps it (see "Threads of the table connection").
+  It opens the connection as soon as a registration is accepted, inside that registration; a put that finds none opens
+  one itself (one attempt at a time either way, the same backoff). While a block's put waits for its ack, nothing
+  else of the table connection runs: the registrations of the run wait for the put, as they wait for the managed
+  delivery loop.
+- No silence limit. The managed connection is given up after two and a half heartbeats without a frame from the
+  server; the native one is read only when the delivery thread is there, so a dead connection is found by a failed
+  write, a ping that cannot be written, or the ack timeout of the next block (then the same frame goes on the next
+  connection, as for every lost ack). The heartbeat is sent from the wake the channel asks for, at the heartbeat's due
+  time.
+- A block is one binary message from one buffer: the pipeline reserves the 40 header bytes in front of the block, the
+  channel writes the producer and the sequence there and the link the version, kind, length and request id. The
+  managed collector writes the header and the block as two fragments of one message.
+- A refused message of the server (binary, over 1 MiB) ends in an orderly close: the rest of it is read and dropped
+  until the server's close, at most a second, then the connection is released. Managed closes with the code and
+  aborts.
+- The stop closes the table connection with a linger of what is left of the stop budget, at most a second, after the
+  drain; managed writes the close frame within 250 ms, waits up to a second for the answer and up to a second for its
+  loop, so it can pass its budget by about 1.25 s. The native close stays in the budget, except for the open item
+  below.
+- An empty description is registered as `null` (the C ABI has no unset description apart from an empty one); managed
+  sends `""` for an empty string and `null` for none.
 - `Unavailable` is decided at creation and again **at every Start** (the managed collector decides it once, when it is
   constructed): native transports are chosen by a call before Start. A sensor `Unavailable` in one run is `Pending` in
   the next if a channel exists by then. `Refused` stays final in both.
@@ -578,6 +655,26 @@ for every lifecycle report).
 - A writer paused between the moment it reads that the ledger is open and its count, across a whole stop, has its rows
   in the next run's first report instead of none (the managed known limit loses them from the reports).
 
+**Known limits of the table connection (0.15.1).**
+
+- **A stop can wait for a block write that does not end.** On Windows with TLS (Schannel) a libcurl WebSocket send can
+  block past its timeout when the server stops reading in the middle of a large frame (measured: a 16 MiB send with a
+  2 s timeout returned after 20 s). The stop's cancel cannot interrupt it there, and the stop joins the delivery thread
+  before it closes the table connection and the session, so a stop (and a dispose) can last as long as that write: the
+  frame's size over what the server still reads, bounded by the write's own bound of ten heartbeats (at least 10 s)
+  only where libcurl honours it. How to bound it is open (branch `feature/1848-native-send-bound`). Where libcurl hands
+  the write back between its pieces, a cancel is seen within one wait slice (100 ms).
+- **Rows stored and counted as lost after a smaller hello.** The frame and limit check runs again on every connection
+  of a put: when the frame went out on one connection and was stored but its ack was lost, and the next connection's
+  hello states a smaller `maxFrameBytes` or `blockLimits`, the put answers `TooLarge` and the block's rows are dropped
+  and counted as too large although the server holds them. The managed collector's limit of the same origin
+  ("Rows can be stored twice after a smaller hello", above) packs such rows again and may store them twice; the native
+  collector counts stored rows as lost instead. Neither loses a row without a count.
+- No run against a real HSM server is part of 0.15.1: the table connection is proven against the scripted table side
+  of `tests/ws_test_server.hpp` (a second, independent implementation of the server's side) and the shared fixture.
+- The heartbeat waits for the delivery thread: while a registration or a put is under way (each bounded by the
+  request timeout) no ping is sent; a block's ack wait sends one when a heartbeat passes without a write.
+
 **Tests.** `src/native/collector/tests/hsm_table_pipeline_tests.cpp`: the parts (buffer growth, failed growth, null map
 on first use, swap; the bound's compare-and-swap under eight threads; the backlog with a block in flight; splitting;
 paths; the ledger), the ABI and the wrapper, a host without table sensors, a handle that outlives its collector, the
@@ -587,6 +684,34 @@ stress test (four writers, three sensors, eight runs of three ticks, a stop and 
 flight; per sensor offered = accepted + refused, dropped = refused + lost after acceptance, every delivered row
 accepted once and under a run that was accepting during its call). The shared fixture
 `tests/conformance/collector/table_sensor_contract.hsmtest` and its must-fail fixture run in the native tables build.
+
+The table connection (0.15.1; builds with HTTP and tables, against the scripted table side of
+`tests/ws_test_server.hpp`; no case is decided by a duration: the end of an ack wait is the script's, through
+`SessionTableChannelOptions::ack_abandoned_for_tests`): `native_table_block_after_hello_and_probe` (the upgrade's
+headers and `X-Hsm-Session`, the probe first, one frame, the registration byte-identical to the managed golden, with a
+description and a retention too), `_every_ack_status_maps_to_its_answer` (eleven acks: stored with `UnknownSensor`,
+duplicate with refusals and with `refusedKnown: false`, `allRefused`, an unknown outcome, 400, 404, 408, 429, 500,
+503), `_lost_ack_then_duplicate`, `_close_1013_sends_the_same_frame`, `_close_1000_sends_the_same_frame`,
+`_upgrade_404_asked_again_later`, `_upgrade_400_asked_again_later`, `_upgrade_404_asked_with_the_next_session`,
+`_upgrade_400_asked_with_the_next_session`, `_upgrade_406_uses_the_backoff`, `_upgrade_503_uses_the_backoff`,
+`_upgrade_409_waits_for_the_next_session`, `_block_in_flight_across_a_new_session`, `_splits_by_the_hello_limits`
+(frame limit and `maxRows`), `_block_packed_before_a_smaller_hello` (final, rows counted once, the sequence not given
+to other rows), `_stop_with_a_block_in_flight`, `_server_protocol_errors` (binary 1003, over 1 MiB 1009, not JSON 1007,
+a foreign ack and a frame neither ack nor push 1002, a status 302 1002; each said once, the block stored on the next
+connection), `_heartbeat`, `_start_stop_start` (a connection and a producer per run), `_dispose_from_every_state`
+(created, no session, registered, up, a block in flight, refused upgrades, stopped; dispose and destroy),
+`_no_connection_without_a_table_sensor`, `_link_carries_4_and_16_mib_frames` (the link itself), and
+`_stress_writers_reconnects_and_stop` (four writers against twelve ticks, a 1013 and a dropped session every four,
+then Stop: every accepted row stored once or counted as lost, a sequence on the wire always with the same bytes),
+`_cancel_reaches_a_closing_connection` (a server that never answers a close; the cancel lands while the close of a
+lost ack, and of a protocol error, holds its connection out of use, and that connection's close ends by the cancel),
+`_reports_are_said_once_per_kind` (two upgrade timeouts with different elapsed times are one line; another kind is a
+new one; three ack bodies that are not JSON are one line), `_retry_after_as_managed` (`1.5`, a value over int32 and a
+string are none, `-5` and `0` are not used, `2000000000` is capped at 5 minutes, `7` is 7 s),
+`_service_reports_the_connection_of_a_new_session` (one call that replaces the connection of an ended session says
+that a connection came up) and `_three_lost_connections_keep_the_block_at_the_head` (three connections without an ack,
+then not delivered: the block stays at the head, and the next tick sends the same producer and sequence on a fourth).
+`table_connection_contract.hsmtest` runs through the native driver in the same builds.
 
 ## Open Points
 
