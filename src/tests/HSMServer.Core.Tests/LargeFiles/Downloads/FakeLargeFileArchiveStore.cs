@@ -36,7 +36,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             return file;
         }
 
-        public LargeArchiveFile AddPacked(Guid productId, Guid sensorId, byte[] archive, int passwordVersion = 1, string name = "core", string extension = "dmp")
+        public LargeArchiveFile AddPacked(Guid productId, Guid sensorId, byte[] archive, int passwordVersion = 1, string name = "core", string extension = "dmp",
+                                          bool secure = true)
         {
             var file = new LargeArchiveFile
             {
@@ -48,12 +49,14 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
                 Size = archive.Length * 3L,
                 SourceModifiedUtc = new DateTime(2026, 11, 20, 10, 0, 0, DateTimeKind.Utc),
                 State = LargeArchiveFileState.Packed,
+                IsSecure = secure,
             };
 
-            return Add(WriteArchive(file, Guid.NewGuid(), archive, passwordVersion));
+            // A file that is not secure is committed with version 0: the store keeps none.
+            return Add(WriteArchive(file, Guid.NewGuid(), archive, secure ? passwordVersion : null));
         }
 
-        public LargeArchiveFile AddInState(Guid productId, Guid sensorId, LargeArchiveFileState state) => Add(new LargeArchiveFile
+        public LargeArchiveFile AddInState(Guid productId, Guid sensorId, LargeArchiveFileState state, bool secure = true) => Add(new LargeArchiveFile
         {
             FileId = Guid.NewGuid(),
             ProductId = productId,
@@ -63,6 +66,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             Size = 1024,
             SourceModifiedUtc = new DateTime(2026, 11, 20, 10, 0, 0, DateTimeKind.Utc),
             State = state,
+            IsSecure = secure,
         });
 
         // A re-encryption: a new archive with a new id replaces the old one, which is deleted (the store's commit).
@@ -126,7 +130,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
 
-        private LargeArchiveFile WriteArchive(LargeArchiveFile file, Guid archiveId, byte[] archive, int passwordVersion)
+        private LargeArchiveFile WriteArchive(LargeArchiveFile file, Guid archiveId, byte[] archive, int? passwordVersion)
         {
             var packed = file with
             {

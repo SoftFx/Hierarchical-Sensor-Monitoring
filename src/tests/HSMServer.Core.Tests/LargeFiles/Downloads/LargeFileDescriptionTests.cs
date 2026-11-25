@@ -53,6 +53,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             Assert.Equal("core", root.GetProperty("name").GetString());
             Assert.Equal("dmp", root.GetProperty("extension").GetString());
             Assert.Equal("packed", root.GetProperty("state").GetString());
+            Assert.True(root.GetProperty("secure").GetBoolean());
             Assert.Equal("queued", root.GetProperty("buildState").GetString());
 
             var archive = root.GetProperty("archive");
@@ -89,6 +90,73 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             Assert.Equal("waitingForPassword", body.RootElement.GetProperty("buildState").GetString());
             Assert.Equal(LargeFileDownloadService.WaitingForPasswordReason, body.RootElement.GetProperty("notReadyReason").GetString());
             Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("archive").ValueKind);
+        }
+
+        [Fact]
+        public async Task ANotSecureFile_IsDescribedAsNotSecure_WithNoPasswordVersion()
+        {
+            _world.Passwords.Setup(p => p.HasPassword(_world.ProductA.Id)).Returns(false);
+            var open = _world.Store.AddPacked(_world.ProductA.Id, _world.SensorA.Id, _archive, secure: false);
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ViewerA, readOnly: true));
+
+            using var response = await client.GetAsync(Url(_world.SensorA.Id, open.FileId));
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = body.RootElement;
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("packed", root.GetProperty("state").GetString());
+            Assert.False(root.GetProperty("secure").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, root.GetProperty("notReadyReason").ValueKind);
+
+            var archive = root.GetProperty("archive");
+            Assert.Equal(open.ArchiveId.Value, archive.GetProperty("id").GetGuid());
+            Assert.Equal(JsonValueKind.Null, archive.GetProperty("passwordVersion").ValueKind);
+            Assert.Equal(JsonValueKind.Null, archive.GetProperty("passwordSetUtc").ValueKind);
+
+            using var download = await client.GetAsync(new Uri(archive.GetProperty("downloadUrl").GetString()).PathAndQuery);
+            Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        }
+
+        [Fact]
+        public void ANotSecureVerifiedFile_OfAProductWithoutAPassword_IsBeingPacked_NotWaitingForAPassword()
+        {
+            _world.Passwords.Setup(p => p.HasPassword(_world.ProductA.Id)).Returns(false);
+            var verified = _world.Store.AddInState(_world.ProductA.Id, _world.SensorA.Id, LargeArchiveFileState.Verified, secure: false);
+
+            var dto = _world.CreateService().DescribeFile(verified.FileId, "https://hsm.example");
+
+            Assert.False(dto.Secure);
+            Assert.Equal("verified", dto.State);
+            Assert.Equal(LargeFileDownloadService.BeingPackedReason, dto.NotReadyReason);
+            Assert.Null(dto.Archive);
+        }
+
+        [Fact]
+        public void DescribeFile_DescribesWithoutACaller_AndIsNullWhereTheDescriptionWouldBe404()
+        {
+            var service = _world.CreateService();
+
+            var dto = service.DescribeFile(_file.FileId, "https://hsm.example/");
+            Assert.Equal(_file.FileId, dto.FileId);
+            Assert.True(dto.Secure);
+            Assert.Equal("packed", dto.State);
+            Assert.Equal(3, dto.Archive.PasswordVersion);
+            Assert.Equal($"https://hsm.example{LargeFileDownloadService.ApiDownloadPath(_file.FileId, _file.ArchiveId.Value)}", dto.Archive.DownloadUrl);
+
+            // A file of the other product: no caller, so no sight check.
+            var other = _world.Store.AddPacked(_world.ProductB.Id, _world.SensorB.Id, _archive);
+            Assert.NotNull(service.DescribeFile(other.FileId, null));
+
+            var uploading = _world.Store.AddInState(_world.ProductA.Id, _world.SensorA.Id, LargeArchiveFileState.Uploading);
+            var orphan = _world.Store.AddPacked(_world.ProductA.Id, Guid.NewGuid(), _archive);
+            var moved = _world.Store.AddPacked(_world.ProductB.Id, _world.SensorA.Id, _archive);
+
+            Assert.Null(service.DescribeFile(Guid.NewGuid(), null));
+            Assert.Null(service.DescribeFile(uploading.FileId, null));
+            Assert.Null(service.DescribeFile(orphan.FileId, null));
+            Assert.Null(service.DescribeFile(moved.FileId, null));
         }
 
         [Fact]
@@ -130,6 +198,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             var dto = tool.GetLargeFile(_world.SensorA.Id, _file.FileId);
 
             Assert.Equal("packed", dto.State);
+            Assert.True(dto.Secure);
             Assert.Equal($"https://hsm.example:443{LargeFileDownloadService.ApiDownloadPath(_file.FileId, _file.ArchiveId.Value)}", dto.Archive.DownloadUrl);
             Assert.DoesNotContain(LargeFileWorld.Password, JsonSerializer.Serialize(dto));
 
@@ -150,6 +219,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             Assert.Contains("never go through MCP", description);
             Assert.Contains("same 'Authorization: Bearer' token", description);
             Assert.Contains("ask the operator", description);
+            Assert.Contains("secure=false", description);
         }
 
 

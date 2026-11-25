@@ -150,7 +150,9 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
         {
             response.Headers[HeaderNames.ContentDisposition] = LargeFileNames.ContentDisposition(download.FileName);
             response.Headers[ReprDigestHeader] = $"sha-256=:{Convert.ToBase64String(download.Sha256)}:";
-            response.Headers[PasswordVersionHeader] = download.PasswordVersion.ToString(CultureInfo.InvariantCulture);
+            // Absent, not empty, for an archive that is not secure: it opens without a password.
+            if (download.PasswordVersion is int version)
+                response.Headers[PasswordVersionHeader] = version.ToString(CultureInfo.InvariantCulture);
             response.Headers[HeaderNames.CacheControl] = CacheControlValue;
         }
 

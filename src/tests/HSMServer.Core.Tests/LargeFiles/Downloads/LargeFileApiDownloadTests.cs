@@ -142,6 +142,102 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task ANotSecureArchive_Downloads_WithoutThePasswordVersionHeader_WhetherOrNotTheProductHasAPassword(bool productHasPassword)
+        {
+            _world.Passwords.Setup(p => p.HasPassword(_world.ProductA.Id)).Returns(productHasPassword);
+            var open = _world.Store.AddPacked(_world.ProductA.Id, _world.SensorA.Id, _archive, name: "trace", extension: "log", secure: false);
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ViewerA));
+            using var response = await client.GetAsync(Url(open));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(_archive, await response.Content.ReadAsByteArrayAsync());
+            Assert.Equal($"sha-256=:{Convert.ToBase64String(SHA256.HashData(_archive))}:", Header(response, LargeFileDownloadResult.ReprDigestHeader));
+            Assert.False(response.Headers.Contains(LargeFileDownloadResult.PasswordVersionHeader));
+            Assert.False(response.Content.Headers.Contains(LargeFileDownloadResult.PasswordVersionHeader));
+            Assert.Equal("trace.log.zip", response.Content.Headers.ContentDisposition?.FileNameStar);
+
+            // Recorded like a secure download, with no password version.
+            _world.Log.Verify(l => l.Record(It.IsAny<DownloadCaller>(),
+                It.Is<DownloadTarget>(t => t.FileId == open.FileId && t.ArchiveId == open.ArchiveId && t.PasswordVersion == 0),
+                It.IsAny<DateTime>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task ANotSecureFileNotPackedYet_Answers409BeingPacked_NeverWaitingForAPassword()
+        {
+            _world.Passwords.Setup(p => p.HasPassword(_world.ProductA.Id)).Returns(false);
+            var verified = _world.Store.AddInState(_world.ProductA.Id, _world.SensorA.Id, LargeArchiveFileState.Verified, secure: false);
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ViewerA));
+
+            var answer = await Snapshot(client.GetAsync(LargeFileDownloadService.ApiDownloadPath(verified.FileId, Guid.NewGuid())));
+
+            Assert.Equal(409, answer.Status);
+            using var body = JsonDocument.Parse(answer.Body);
+            Assert.Equal(LargeFileDownloadService.BeingPackedReason, body.RootElement.GetProperty("message").GetString());
+        }
+
+        [Fact]
+        public async Task NotSecureAndSecureFiles_HideBehindTheSame404()
+        {
+            var open = _world.Store.AddPacked(_world.ProductA.Id, _world.SensorA.Id, _archive, secure: false);
+            var stranger = _world.AddToken(_world.ManagerB);
+            var manager = _world.AddToken(_world.ManagerA);
+
+            using var host = _world.BuildHost();
+            using var strangerClient = LargeFileWorld.ApiClient(host, stranger);
+            using var managerClient = LargeFileWorld.ApiClient(host, manager);
+
+            var answers = new[]
+            {
+                await Snapshot(strangerClient.GetAsync(Url(_file))),
+                await Snapshot(strangerClient.GetAsync(Url(open))),
+                await Snapshot(managerClient.GetAsync(LargeFileDownloadService.ApiDownloadPath(open.FileId, Guid.NewGuid()))),
+            };
+
+            Assert.Equal(404, answers[0].Status);
+            Assert.All(answers, answer => Assert.Equal(answers[0], answer));
+        }
+
+        [Fact]
+        public async Task TheHandOverOfANotSecureArchive_CarriesNoPasswordVersion()
+        {
+            _world.TrustProxies();
+            var open = _world.Store.AddPacked(_world.ProductA.Id, _world.SensorA.Id, _archive, secure: false);
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ManagerA));
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, Url(open));
+            request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
+            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            using var response = await client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Equal($"{_world.ProductA.Id:N}/{open.ArchiveId:N}.zip", Header(response, LargeFileDownloadResult.ArchiveHeader));
+            Assert.NotNull(Header(response, LargeFileDownloadResult.ReprDigestHeader));
+            Assert.Null(Header(response, LargeFileDownloadResult.PasswordVersionHeader));
+        }
+
+        [Fact]
+        public void ASecureRecordWithoutAPasswordVersion_IsNotServed()
+        {
+            // A packed secure record always names its version; one that names none (or 0) is a store defect.
+            foreach (var version in new int?[] { null, 0 })
+            {
+                var broken = _world.Store.Add(_file with { FileId = Guid.NewGuid(), PasswordVersion = version });
+                var decision = _world.CreateService().Decide(broken.FileId, broken.ArchiveId.Value, LargeFileCaller.Web(_world.ManagerA, null), record: false);
+
+                Assert.Equal(LargeFileDownloadOutcome.NotFound, decision.Outcome);
+            }
+        }
+
         [Fact]
         public async Task EveryGetIsRecorded_AHeadIsNot()
         {

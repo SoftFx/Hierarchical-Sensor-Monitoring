@@ -3571,6 +3571,12 @@
         <member name="T:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDownload">
             <summary>What a download answer needs once it was allowed (and recorded). Never the password.</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDownload.IsSecure">
+            <summary>The kind of the file: false for an archive without encryption.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDownload.PasswordVersion">
+            <summary>The dump password version a secure archive opens with; null for a file that is not secure.</summary>
+        </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDownload.FileName">
             <summary>The name the browser saves the archive as: the sanitized original name plus ".zip".</summary>
         </member>
@@ -3611,6 +3617,13 @@
             files of another sensor, files in upload and files the token's owner may not see answer the same NotFound.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadService.DescribeFile(System.Guid,System.String)">
+            <summary>
+            The description of a large file without any caller check, for a surface that has already decided who may see
+            it (the sensor page). Null where the described file is not a value: the store does not know it, it is still
+            being uploaded, or its sensor is gone or now belongs to another product than the one it was uploaded to.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDto">
             <summary>
             A large file value as the management API and the MCP tool describe it: what it is, whether it can be downloaded
@@ -3622,6 +3635,13 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDto.Size">
             <summary>The original (decompressed) size in bytes.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDto.Secure">
+            <summary>
+            The kind of the file, decided by the application at the send and never changed. True: the archive is a zip
+            encrypted with AES-256 under the product's dump password. False: the same zip without encryption, opened without
+            a password; it never waits for a password and has no password version.
+            </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDto.State">
             <summary>"verified" (kept, no archive yet) or "packed" (an archive can be downloaded).</summary>
@@ -3639,7 +3659,10 @@
             <summary>The current archive; null until the file is packed.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDto">
-            <summary>The current archive of a packed large file: a zip with one entry, AES-256 under the product's dump password.</summary>
+            <summary>
+            The current archive of a packed large file: a zip with one entry, AES-256 under the product's dump password for a
+            secure file, without encryption for a file that is not secure.
+            </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDto.Id">
             <summary>The archive id: a new password makes a new archive with a new id, and the old link answers 404.</summary>
@@ -3651,10 +3674,10 @@
             <summary>SHA-256 of the archive bytes, lowercase hex (the download carries it as Repr-Digest, base64).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDto.PasswordVersion">
-            <summary>The version of the product's dump password the archive opens with.</summary>
+            <summary>The version of the product's dump password the archive opens with; null for a file that is not secure.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDto.PasswordSetUtc">
-            <summary>When that password version was set; null when it is no longer kept.</summary>
+            <summary>When that password version was set; null when it is no longer kept, and for a file that is not secure.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDto.DownloadUrl">
             <summary>GET with the same bearer token downloads the archive (byte ranges supported).</summary>
