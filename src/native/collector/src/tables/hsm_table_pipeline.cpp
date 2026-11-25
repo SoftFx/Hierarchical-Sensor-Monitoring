@@ -832,9 +832,11 @@ namespace hsm::collector::tables
                     }
                 }
 
+                // The run is counted before it takes rows: a writer that reads the count around its
+                // add can never see a row taken by a run it has not counted yet.
+                run_count_.fetch_add(1);
                 shared_->ledger_open.store(true, std::memory_order_release);
                 shared_->accepting.store(true, std::memory_order_release);
-                run_count_.fetch_add(1);
                 running_ = true;
 
                 if (!options_.manual_tick)
