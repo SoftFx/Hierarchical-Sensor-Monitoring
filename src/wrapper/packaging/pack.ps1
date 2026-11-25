@@ -3,7 +3,7 @@
   Assemble the HSMCppWrapper drop-in bundle (both x64 configs) for the tt-aggregator2 handoff.
 
 .DESCRIPTION
-  Packs the pure-native HSMCppWrapper.dll (no CLR) plus its libcurl/zlib runtime, import libs, PDBs,
+  Packs the pure-native HSMCppWrapper.dll (no CLR) plus its libcurl/zlib/zstd runtime, import libs, PDBs,
   and the public headers into a single versioned zip whose layout mirrors the aggregator's vendored
   tree (include/, dll/, lib/) so the team can unzip it straight over their checkout and relink.
 
@@ -20,7 +20,7 @@
 [CmdletBinding()]
 param(
     # CMake build directory that contains the Release/ and Debug/ output subfolders. The runtime
-    # dependency DLLs (libcurl/zlib) are taken from vcpkg's app-local deployment next to that output.
+    # dependency DLLs (libcurl/zlib/zstd) are taken from vcpkg's app-local deployment next to that output.
     [Parameter(Mandatory)] [string] $BuildDir,
     # Bundle version, e.g. "1.0.0" (a leading "wrapper-v"/"v" is stripped).
     [Parameter(Mandatory)] [string] $Version,
@@ -78,7 +78,7 @@ foreach ($cfg in $configs) {
     Copy-Item $lib $libDst
 
     # Runtime dependency DLLs: copy whatever vcpkg's app-local deployment placed next to the build
-    # output — the exact runtime closure of HSMCppWrapper.dll (libcurl + zlib today; auto-adapting if
+    # output — the exact runtime closure of HSMCppWrapper.dll (libcurl + zlib + zstd today; auto-adapting if
     # curl ever gains a dependency). This never guesses vcpkg's DLL names (its zlib is z.dll / zd.dll,
     # NOT zlib1.dll — an earlier name-based allow-list silently dropped it) so it can't miss a needed
     # DLL; the post-pack closure smoke in CI re-verifies the shipped set actually loads.
@@ -88,7 +88,7 @@ foreach ($cfg in $configs) {
         # HSMCppWrapper.dll load-time imports libcurl, so an empty dep set means vcpkg's app-local
         # deploy did not run and the bundle would ship non-loadable. Fail loud: the CI post-pack
         # closure smoke only guards the workflow, but a local `pack.ps1` run has no such net.
-        throw "No runtime dependency DLLs next to '$binSrc' for $cfg - vcpkg's app-local deploy did not run; the bundle would be missing libcurl/zlib."
+        throw "No runtime dependency DLLs next to '$binSrc' for $cfg - vcpkg's app-local deploy did not run; the bundle would be missing libcurl/zlib/zstd."
     }
     foreach ($depFile in $deps) { Copy-Item $depFile.FullName $dllDst }
 
@@ -129,7 +129,8 @@ C++/CLI wrapper: relink only, zero source changes in the consumer.
 | Source commit | __COMMIT__ |
 | Built | __DATE__ |
 | Platform | x64, MSVC, Release + Debug |
-| Transport | libcurl (schannel TLS) - shipped next to the DLL |
+| Transport | the collector session (WebSocket, libcurl 8.14+ with schannel TLS) by default; HTTP after `UseHttpTransport()` - libcurl shipped next to the DLL |
+| Server | HSMServer 3.43.0 or later (collector sessions); for an older server call `DataCollectorProxy::UseHttpTransport()` before `Start` |
 
 ## Layout
 
@@ -138,7 +139,7 @@ include/
   HSMCppWrapper/      public wrapper ABI headers (DataCollector.h, HSMSensor.h, ...)   -- Option A
   hsm_collector/      native collector headers (Native() and the pure-native adapter) -- Option B
 dll/HSMCppWrapper/x64/{Release,Debug}/
-  HSMCppWrapper.dll   HSMCppWrapper.pdb   + the vcpkg runtime: libcurl.dll + z.dll (Debug: libcurl-d.dll + zd.dll)
+  HSMCppWrapper.dll   HSMCppWrapper.pdb   + the vcpkg runtime: libcurl.dll + z.dll + zstd.dll (Debug: libcurl-d.dll + zd.dll + zstd.dll)
 lib/HSMCppWrapper/x64/{Release,Debug}/
   HSMCppWrapper.lib        import library (Option A: relink)
 lib/hsm_collector/x64/{Release,Debug}/
@@ -156,12 +157,21 @@ Two ways to consume this bundle:
 1. Copy `include/`, `dll/`, `lib/` over your vendored tree (`aggregator/{include,dll,lib}/...`).
    The headers are **byte-identical** to what you already vendor - overwriting them is a no-op.
 2. Copy the new runtime DLLs next to the wrapper (your PostBuild xcopy of `dll/.../*.dll` -> OutDir
-   already picks them up): `libcurl.dll` + `z.dll` (Release), `libcurl-d.dll` + `zd.dll` (Debug).
+   already picks them up): `libcurl.dll` + `z.dll` + `zstd.dll` (Release), `libcurl-d.dll` + `zd.dll` +
+   `zstd.dll` (Debug). `zstd.dll` is new in 2.0.0 (table sensors).
 3. **Delete the managed leftovers** from your build output / vendored dll dir - they are no longer
    loaded: `HSMDataCollector.dll`, `HSMSensorDataObjects.dll` (+ their `.pdb`).
-4. Rebuild. No CLR is loaded anymore. The exported ABI matches (relink proven by `dumpbin
-   /LINKERMEMBER`: 545 exports in both configs - 543 wrapper + 2 `Native()` C-ABI re-exports), so the
-   link resolves with no source edits.
+4. Rebuild. No CLR is loaded anymore. The exported ABI only grows (`dumpbin /EXPORTS`: every earlier
+   export is still there unchanged; 2.0.0 adds `DataCollectorProxy::UseHttpTransport` and the table
+   functions of the re-exported C ABI), so the link resolves with no source edits.
+
+**Transport (2.0.0).** The wrapper talks to the server over the collector session, one WebSocket on
+`/api/sensors/session`, which needs **HSMServer 3.43.0 or later**. Update the server first; a host that
+must keep talking to an older server calls `proxy.UseHttpTransport()` before `Start`. There is no
+automatic fallback: against a server without sessions a host on the default sends nothing.
+
+**Table sensors** come through `proxy.Native()`: `#include <hsm_collector/tables.hpp>` and call
+`proxy.Native().CreateTableSensor(path, options)`. They need the session; on HTTP they are Unavailable.
 
 ## Option B - your own native adapter (no wrapper)
 
@@ -170,9 +180,11 @@ Build directly against the native collector and drop `HSMCppWrapper.dll` entirel
 1. Vendor `lib/hsm_collector/x64/{Release,Debug}/hsm_collector_core.lib` (e.g. under
    `aggregator/lib/hsm_collector/x64/...`) plus the `include/hsm_collector/` headers.
 2. Link, per config: `hsm_collector_core.lib` + Windows SDK `iphlpapi.lib` + `pdh.lib` + `libcurl.lib`
-   (the import lib for the shipped `libcurl.dll` - from vcpkg `curl:x64-windows`, or ask us to bundle it).
+   + `zstd.lib` + `z.lib` (the import libs for the shipped DLLs - from vcpkg `curl[ssl,websockets]`,
+   `zstd`, `zlib` for `x64-windows`, or ask us to bundle them).
 3. `#include <hsm_collector/hsm_collector.hpp>` and use the `hsm::collector::Collector` RAII API (or the
-   C ABI in `hsm_collector.h`). Ship the same `libcurl.dll` + `z.dll` runtime next to your binary.
+   C ABI in `hsm_collector.h`). Ship the same `libcurl.dll` + `z.dll` + `zstd.dll` runtime next to your
+   binary, and choose the transport yourself (`UseSessionTransport()` or `UseHttpTransport()`).
 
 `hsm_collector_core.lib` carries both the C++ implementation and the C ABI, so no wrapper DLL is needed
 on this path. (If you keep the wrapper instead, its DLL already re-exports the C ABI, so Option A's

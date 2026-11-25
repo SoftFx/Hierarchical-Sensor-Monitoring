@@ -30,29 +30,48 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
     runs-on: windows-latest
+    env:
+      VCPKG_DISABLE_METRICS: '1'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install libcurl (vcpkg)
-        run: vcpkg install curl:x64-windows nlohmann-json:x64-windows
-        shell: cmd
+      # Dependencies come from vcpkg manifest mode (src/wrapper/vcpkg.json): curl with WebSocket (the
+      # collector session needs libcurl 8.14.0 or newer with it), zstd and zlib (table sensors).
+      # Pinned to the manifest's builtin-baseline, as the native-collector lanes are, so the runner's
+      # own vcpkg never decides which curl the wrapper ships.
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Configure
         # No -G: use the runner's default (multi-config VS) generator — pinning a VS version breaks
         # when the image upgrades Visual Studio (same approach as the native-collector lanes).
+        # The vcpkg manifest install runs here. VCPKG_BINARY_SOURCES=clear for the same reason as in
+        # native-collector-conformance.yml: run-vcpkg's default GHA cache backend needs tokens that
+        # are not reliably exported, which fails the install.
+        env:
+          VCPKG_BINARY_SOURCES: clear
         run: >
           cmake -S src/wrapper -B build/wrapper
-          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
           -DVCPKG_TARGET_TRIPLET=x64-windows
-        shell: cmd
 
       - name: Build
         run: cmake --build build/wrapper --config Release
         shell: cmd
 
       - name: Smoke (drive the public ABI in-process, no server needed)
+        # vcpkg's app-local deployment put libcurl, zlib and zstd next to the DLL.
         run: |
-          set "PATH=%CD%\build\wrapper\Release;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%"
+          set "PATH=%CD%\build\wrapper\Release;%PATH%"
           build\wrapper\Release\WrapperConsole.exe
+        shell: cmd
+
+      # The exported API against scripted servers (#1848 part 5): the default transport is the
+      # collector session, UseHttpTransport() sends over HTTP with no upgrade, a table sensor made
+      # through Native() delivers on the session and is Unavailable on HTTP.
+      - name: Transport tests
+        run: ctest --test-dir build/wrapper -C Release --output-on-failure
         shell: cmd
