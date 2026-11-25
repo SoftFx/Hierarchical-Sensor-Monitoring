@@ -287,6 +287,133 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // A block names its table by the registered path in UTF-8, and a block whose identifier is
+        // longer than TableSensors.MaxTableIdLength (1,024 bytes by default) is refused: a table
+        // registered under a longer path could never be sent a row, so the registration is refused
+        // once. The limit is in bytes: these paths are of two-byte characters, so a check of the
+        // character count would take the one over the limit.
+        [Fact]
+        public async Task Commands_ATablePathOverTheIdentifierLimit_IsRefused_AndOneAtTheLimitIsTaken()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var atLimit = PathOfBytes($"wire/id/{Guid.NewGuid():N}/", 1024);
+            var over = PathOfBytes($"wire/id/{Guid.NewGuid():N}/", 1025);
+
+            Assert.True(over.Length < 1024, "the path over the limit in bytes is under it in characters");
+
+            var answer = await PostAsync(host, "commands", $"[{Table(atLimit, Quotes)},{Table(over, Quotes)}]");
+
+            Assert.Equal(HttpStatusCode.OK, answer.Status);
+
+            var errors = JsonNode.Parse(answer.Body).AsObject();
+
+            Assert.Single(errors);
+            Assert.StartsWith(Refused, (string)errors[over]);
+            Assert.Contains("at most 1024 bytes", (string)errors[over]);
+            Assert.Contains("this one has 1025", (string)errors[over]);
+            Assert.Null(Sensor(over));
+            Assert.IsType<TableSensorModel>(Sensor(atLimit));
+        }
+
+        // The limit is the configured TableSensors.MaxTableIdLength, not the default.
+        [Fact]
+        public async Task Commands_TheConfiguredTableIdLimit_IsTheOneApplied()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig(), tableSensors: new TableSensorsConfig { MaxTableIdLength = 60 });
+
+            var atLimit = PathOfBytes($"wire/idc/{Guid.NewGuid():N}/", 60);
+            var over = PathOfBytes($"wire/idc/{Guid.NewGuid():N}/", 61);
+
+            var answer = await PostAsync(host, "commands", $"[{Table(atLimit, Quotes)},{Table(over, Quotes)}]");
+
+            Assert.Equal(HttpStatusCode.OK, answer.Status);
+
+            var errors = JsonNode.Parse(answer.Body).AsObject();
+
+            Assert.Single(errors);
+            Assert.StartsWith(Refused, (string)errors[over]);
+            Assert.Contains("at most 60 bytes, this one has 61", (string)errors[over]);
+            Assert.Null(Sensor(over));
+            Assert.IsType<TableSensorModel>(Sensor(atLimit));
+        }
+
+        // A registration that will be refused moves nothing (#1724), in a batch as on the single
+        // route: the batch's move pre-pass must know every table refusal. Here table columns on an
+        // int sensor's registration, with the int sensor's old path in PreviousPaths.
+        [Fact]
+        public async Task Commands_ARefusedTableRegistrationWithPreviousPaths_MovesNothing()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var old = $"wire/move/{Guid.NewGuid():N}/old";
+            var renamed = $"wire/move/{Guid.NewGuid():N}/new";
+
+            var created = await PostAsync(host, "commands", $"[{Registration(old, "\"SensorType\":1")}]");
+            Assert.Empty(JsonNode.Parse(created.Body).AsObject());
+            var sensor = Sensor(old);
+            Assert.NotNull(sensor);
+
+            var answer = await PostAsync(host, "commands",
+                $"[{Registration(renamed, $"\"SensorType\":1,\"PreviousPaths\":[\"{old}\"],\"TableColumns\":[{{\"Name\":\"time\",\"Type\":1}}]")}]");
+
+            Assert.Equal(HttpStatusCode.OK, answer.Status);
+
+            var errors = JsonNode.Parse(answer.Body).AsObject();
+
+            Assert.StartsWith(Refused, (string)errors[renamed]);
+            Assert.Contains("only a registration of a table sensor (SensorType 11) carries table columns", (string)errors[renamed]);
+            Assert.Same(sensor, Sensor(old));
+            Assert.Null(Sensor(renamed));
+        }
+
+        // The same through the session's commands op, which runs the same pre-pass.
+        [Fact]
+        public async Task Session_ARefusedTableRegistrationWithPreviousPaths_MovesNothing()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var old = $"wire/smove/{Guid.NewGuid():N}/old";
+            var renamed = $"wire/smove/{Guid.NewGuid():N}/new";
+
+            var created = await PostAsync(host, "commands", $"[{Registration(old, "\"SensorType\":1")}]");
+            Assert.Empty(JsonNode.Parse(created.Body).AsObject());
+            var sensor = Sensor(old);
+            Assert.NotNull(sensor);
+
+            using var socket = new ClientWebSocket();
+
+            socket.Options.SetRequestHeader("ClientName", ClientName);
+            socket.Options.SetRequestHeader("Key", _key);
+            socket.Options.AddSubProtocol("hsm.sensors.v1");
+
+            await socket.ConnectAsync(host.SessionUri, Deadline());
+            Assert.Equal("hello", (string)(await ReceiveAsync(socket))["op"]);
+
+            var body = $"[{Registration(renamed, $"\"SensorType\":1,\"PreviousPaths\":[\"{old}\"],\"TableColumns\":[{{\"Name\":\"time\",\"Type\":1}}]")}]";
+
+            await socket.SendAsync(Encoding.UTF8.GetBytes($"{{\"id\":1,\"op\":\"commands\",\"body\":{body}}}"), WebSocketMessageType.Text, true, Deadline());
+
+            var ack = await ReceiveAsync(socket);
+
+            Assert.Equal(200, (int)ack["status"]);
+            Assert.StartsWith(Refused, (string)ack["body"][renamed]);
+            Assert.Same(sensor, Sensor(old));
+            Assert.Null(Sensor(renamed));
+        }
+
+        // A path of exactly `bytes` UTF-8 bytes: the prefix, then two-byte characters, then an 'x'
+        // when the count left is odd.
+        private static string PathOfBytes(string prefix, int bytes)
+        {
+            var left = bytes - Encoding.UTF8.GetByteCount(prefix);
+            var path = prefix + new string('ж', left / 2) + (left % 2 == 1 ? "x" : string.Empty);
+
+            Assert.Equal(bytes, Encoding.UTF8.GetByteCount(path));
+            return path;
+        }
+
+
         private BaseSensorModel Sensor(string path) => _valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor) ? sensor : null;
 
         private static string Registration(string path, string members) => $"{{\"Type\":0,\"Path\":\"{path}\",{members}}}";

@@ -306,7 +306,8 @@ namespace HSMServer.Core.Tests.SensorApi
         // setting and the folder whose agent/version.txt names the staged agent.
         // `tables` and `tableSensors` are for the table connection (#1845): the block service its
         // blocks are put into, and the section with MaxConcurrentPuts and the block limits. The
-        // ingestion checks a table schema against those limits, as in production (one source).
+        // ingestion checks a table registration against those limits, as in production (one
+        // source); the defaults when none is given.
         public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null,
             ITableBlockService tables = null, TableSensorsConfig tableSensors = null)
         {
