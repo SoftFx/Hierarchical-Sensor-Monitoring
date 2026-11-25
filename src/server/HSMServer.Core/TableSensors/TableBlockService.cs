@@ -121,13 +121,13 @@ namespace HSMServer.Core.TableSensors
             {
                 AfterReserve?.Invoke(ticket.Sequence);
 
-                var refusals = Match(productId, directory, ticket.Sequence);
+                var refusals = Match(productId, directory, ticket.Sequence, out var detailed);
                 var envelope = new TableBlockEnvelope
                 {
                     ProductId = productId,
                     ProducerId = producerId,
                     ProducerSequence = producerSequence,
-                    Refusals = refusals.Select(r => new TableRefusal(r.Index, r.Reason)).ToArray(),
+                    Refusals = refusals.ToArray(),
                 };
 
                 var allRefused = refusals.Count == directory.Entries.Count;
@@ -141,29 +141,33 @@ namespace HSMServer.Core.TableSensors
                             Outcome = TableBlockPutOutcome.Duplicate,
                             Sequence = appended.Entry.Sequence,
                             TableCount = appended.Entry.TableCount,
-                            Refusals = (appended.Envelope?.Refusals ?? []).Select(r => new TableRefusalInfo(r.Index, TableIdText(directory, r.Index), r.Reason)).ToList(),
+                            Refusals = (appended.Envelope?.Refusals ?? []).Take(TableBlockPutResult.MaxDetailedRefusals)
+                                .Select(r => new TableRefusalInfo(r.Index, TableIdText(directory, r.Index), r.Reason)).ToList(),
+                            RefusedCount = appended.Envelope?.Refusals.Count ?? 0,
                             RefusalsKnown = appended.Envelope is not null,
                             Message = appended.Envelope is null ? "The stored block's envelope could not be read; its refusals are not known." : null,
                         };
 
                     case TableBlockAppendOutcome.NotStored:
-                        CountRefusals(refusals);
+                        CountRefusals(refusals, detailed);
                         return new TableBlockPutResult
                         {
                             Outcome = TableBlockPutOutcome.AllRefused,
                             TableCount = directory.Entries.Count,
-                            Refusals = refusals,
+                            Refusals = detailed,
+                            RefusedCount = refusals.Count,
                             Message = "Every table of the block was refused; nothing was stored.",
                         };
 
                     default:
-                        CountRefusals(refusals);
+                        CountRefusals(refusals, detailed);
                         return new TableBlockPutResult
                         {
                             Outcome = TableBlockPutOutcome.Stored,
                             Sequence = appended.Entry.Sequence,
                             TableCount = directory.Entries.Count,
-                            Refusals = refusals,
+                            Refusals = detailed,
+                            RefusedCount = refusals.Count,
                         };
                 }
             }
@@ -193,22 +197,29 @@ namespace HSMServer.Core.TableSensors
         }
 
 
-        // The refused tables of a block, in directory order. Outside any lock of the store: the put holds a reserved
-        // ticket, which only makes later puts wait for their turn to write.
-        private List<TableRefusalInfo> Match(Guid productId, TableBlockDirectory directory, long sequence)
+        // The refused tables of a block, in directory order: every one (for the envelope), and the first
+        // MaxDetailedRefusals with their identifiers (for the result). Outside any lock of the store: the put holds a
+        // reserved ticket, which only makes later puts wait for their turn to write.
+        private List<TableRefusal> Match(Guid productId, TableBlockDirectory directory, long sequence, out List<TableRefusalInfo> detailed)
         {
-            var refusals = new List<TableRefusalInfo>();
+            var refusals = new List<TableRefusal>();
+            detailed = new List<TableRefusalInfo>();
 
             for (int i = 0; i < directory.Entries.Count; i++)
             {
                 var entry = directory.Entries[i];
                 var reason = Refuse(productId, entry, sequence, out var path);
 
-                if (reason is { } refused)
-                {
-                    refusals.Add(new TableRefusalInfo(i, path ?? Printable(entry.TableId), refused));
+                if (reason is not { } refused)
+                    continue;
+
+                refusals.Add(new TableRefusal(i, refused));
+
+                if (detailed.Count < TableBlockPutResult.MaxDetailedRefusals)
+                    detailed.Add(new TableRefusalInfo(i, path ?? Printable(entry.TableId), refused));
+
+                if (_logger.IsDebugEnabled)
                     _logger.Debug($"Table '{path ?? Printable(entry.TableId)}' of block sequence {sequence} refused: {refused}");
-                }
             }
 
             return refusals;
@@ -248,7 +259,7 @@ namespace HSMServer.Core.TableSensors
         }
 
         // Every refused table is counted; the log gets a Warn line with the reasons at most once a minute (Debug per table).
-        private void CountRefusals(List<TableRefusalInfo> refusals)
+        private void CountRefusals(List<TableRefusal> refusals, List<TableRefusalInfo> detailed)
         {
             if (refusals.Count == 0)
                 return;
@@ -265,7 +276,7 @@ namespace HSMServer.Core.TableSensors
                     return;
 
                 _lastRefusalLog = now;
-                _logger.Warn($"Table blocks: tables refused since the last report: {string.Join(", ", _refusalsSinceLog.Select(r => $"{r.Key} {r.Value}"))}; last: '{refusals[^1].TableId}' {refusals[^1].Reason}");
+                _logger.Warn($"Table blocks: tables refused since the last report: {string.Join(", ", _refusalsSinceLog.Select(r => $"{r.Key} {r.Value}"))}; first of the last block: '{detailed[0].TableId}' {detailed[0].Reason}");
                 _refusalsSinceLog.Clear();
             }
         }

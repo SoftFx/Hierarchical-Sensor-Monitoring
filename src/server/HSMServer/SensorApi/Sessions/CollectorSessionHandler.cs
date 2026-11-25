@@ -86,6 +86,16 @@ namespace HSMServer.SensorApi.Sessions
         // would never reach the access check that every completed frame gets.
         private const int FrameBudgetInSilenceLimits = 10;
 
+        // A frame of a table connection that holds a reservation of the frame budget (#1845) must
+        // arrive whole within this many silence limits from the moment it was reserved, however its
+        // bytes trickle in: past it the connection is cut and the reservation goes back. One limit
+        // (90 s by default) is enough for the largest frame (4 MiB by default, about 47 KB/s), and a
+        // reservation is what every other collector's large frame waits for; the ten limits an
+        // ordinary frame may take would let a slow sender hold the budget for a quarter of an hour.
+        private const int ReservedFrameDeadlineInSilenceLimits = 1;
+
+        private const string ReservedFrameTooSlowReason = "a large table frame took too long to arrive";
+
         // An ack buffer that grew past this (a batch with many per-path errors) is dropped
         // after the frame, so one large answer does not stay allocated for the session.
         private const int KeepOutputBytes = 64 * 1024;
@@ -445,9 +455,14 @@ namespace HSMServer.SensorApi.Sessions
             var maxFrameBytes = session.IsTable ? _config.MaxTableFrameBytes : _config.MaxFrameBytes;
 
             // A table connection's large frames take from the server-wide budget (#1845); whatever
-            // it holds goes back when the loop ends, on every path.
+            // it holds goes back when the loop ends, on every path. A reserved frame has a deadline of
+            // its own, which bytes arriving do not move.
+            await using var frameDeadline = session.IsTable
+                ? new SilenceWatch(_time, session, _config.SilenceLimit * ReservedFrameDeadlineInSilenceLimits, ReservedFrameTooSlowReason)
+                : null;
+
             using var memory = session.IsTable
-                ? new TableFrameMemory(_tableBudget, maxFrameBytes, token => WaitForTableBudgetAsync(session, silence, token))
+                ? new TableFrameMemory(_tableBudget, maxFrameBytes, session.KeyId, token => WaitForTableBudgetAsync(session, silence, token), frameDeadline.Arm)
                 : null;
 
             if (session.IsTable)
@@ -490,6 +505,7 @@ namespace HSMServer.SensorApi.Sessions
                 using var frame = received;
 
                 silence.Disarm();
+                frameDeadline?.Disarm();
 
                 // The watch may have fired just as the frame completed: the session is then
                 // over, and acting on the frame would store a batch whose ack can no longer
@@ -655,7 +671,9 @@ namespace HSMServer.SensorApi.Sessions
         // the connection (shutdown, a replacement, the end of its session).
         private async Task WaitForTableBudgetAsync(CollectorSession session, SilenceWatch silence, CancellationToken token)
         {
-            if (IsTimeToWarn(ref _budgetWarnedAtTicks))
+            // Said only when the bytes are spent: a second large frame of a key that holds one may wait
+            // for that one alone.
+            if (_tableBudget.InUse + _config.TableFrameReservation > _tableBudget.Capacity && IsTimeToWarn(ref _budgetWarnedAtTicks))
                 _logger.Warn($"The table frame budget is spent (CollectorSessions.{nameof(CollectorSessionsConfig.MaxTableBytesInFlight)} = {_config.MaxTableBytesInFlight}, " +
                              $"{_tableBudget.InUse} bytes held, {_tableBudget.Waiting} connection(s) waiting): table connection {session.ShortId} from {session.RemoteIP} " +
                              "stops reading its frame until frames being stored are done. Raise the budget if this is steady.");
@@ -669,7 +687,7 @@ namespace HSMServer.SensorApi.Sessions
             {
                 try
                 {
-                    await _tableBudget.TakeAsync(_config.TableFrameReservation, wait.Token);
+                    await _tableBudget.TakeAsync(_config.TableFrameReservation, session.KeyId, wait.Token);
                 }
                 catch (OperationCanceledException) when (Volatile.Read(ref timedOut) == 1)
                 {
@@ -757,15 +775,6 @@ namespace HSMServer.SensorApi.Sessions
 
             var productId = caller.Product.Id;
 
-            // Two collectors with one producer id make each other's blocks duplicates: the rows of
-            // whichever is second are lost. Not refused (a restarted collector reconnects with its
-            // own id while its old connection may still be listed), but said.
-            if (_registry.NoteProducer(session, productId, header.ProducerId, _time.GetUtcNow().UtcTicks, out var worthLogging) is { } other && worthLogging)
-                _logger.Warn($"Two live table connections of product \"{CollectorSession.Printable(caller.Product.DisplayName)}\" send blocks of one producer id {header.ProducerId}: " +
-                             $"{session.ShortId} from {session.RemoteIP} (client \"{CollectorSession.Printable(session.ClientName)}\") and {other.ShortId} from {other.RemoteIP} " +
-                             $"(client \"{CollectorSession.Printable(other.ClientName)}\"). Their blocks are taken for each other's repeats and rows are lost: " +
-                             "each collector installation needs its own producer id (a copied data folder carries it along).");
-
             // The store takes a whole array; the frame's buffer is the session's and is reused.
             var block = payload.ToArray();
 
@@ -802,21 +811,33 @@ namespace HSMServer.SensorApi.Sessions
                 _putGate.Release();
             }
 
+            // Two collectors with one producer id make each other's blocks duplicates: the rows of
+            // whichever is second are lost. Not refused (a restarted collector reconnects with its
+            // own id while its old connection may still be listed), but said. Noted only for a block
+            // the store took or knew: a frame that is not a block names no producer worth tracking.
+            if (result.Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate &&
+                _registry.NoteProducer(session, productId, header.ProducerId, _time.GetUtcNow().UtcTicks, out var worthLogging, out var conflicts) is { } other && worthLogging)
+                _logger.Warn($"Two live table connections of product \"{CollectorSession.Printable(caller.Product.DisplayName)}\" send blocks of one producer id {header.ProducerId}: " +
+                             $"{session.ShortId} from {session.RemoteIP} (client \"{CollectorSession.Printable(session.ClientName)}\") and {other.ShortId} from {other.RemoteIP} " +
+                             $"(client \"{CollectorSession.Printable(other.ClientName)}\"). Their blocks are taken for each other's repeats and rows are lost: " +
+                             "each collector installation needs its own producer id (a copied data folder carries it along). " +
+                             $"{conflicts} such block(s) on this server since the last line of this kind (one a minute).");
+
             switch (result.Outcome)
             {
                 case TableBlockPutOutcome.Stored:
-                    session.CountBlockStored(result.Refusals.Count);
-                    SessionProtocol.WriteBlockAck(output, id, "stored", result.TableCount, result.Refusals);
+                    session.CountBlockStored(result.RefusedCount);
+                    SessionProtocol.WriteBlockAck(output, id, "stored", result.TableCount, result.Refusals, result.RefusedCount);
                     break;
 
                 case TableBlockPutOutcome.Duplicate:
                     session.CountBlockDuplicate();
-                    SessionProtocol.WriteBlockAck(output, id, "duplicate", result.TableCount, result.RefusalsKnown ? result.Refusals : null);
+                    SessionProtocol.WriteBlockAck(output, id, "duplicate", result.TableCount, result.RefusalsKnown ? result.Refusals : null, result.RefusedCount);
                     break;
 
                 case TableBlockPutOutcome.AllRefused:
-                    session.CountBlockAllRefused(result.Refusals.Count);
-                    SessionProtocol.WriteBlockAck(output, id, "allRefused", result.TableCount, result.Refusals);
+                    session.CountBlockAllRefused(result.RefusedCount);
+                    SessionProtocol.WriteBlockAck(output, id, "allRefused", result.TableCount, result.Refusals, result.RefusedCount);
                     break;
 
                 default:
@@ -1168,9 +1189,9 @@ namespace HSMServer.SensorApi.Sessions
 
         // Ends a session that makes no progress for `limit` while the loop waits for the
         // collector: for its next frame, or for it to take what the server sends.
-        private sealed class SilenceWatch(TimeProvider time, CollectorSession session, TimeSpan limit) : IAsyncDisposable
+        private sealed class SilenceWatch(TimeProvider time, CollectorSession session, TimeSpan limit, string reason = SilenceReason) : IAsyncDisposable
         {
-            private readonly ITimer _timer = time.CreateTimer(_ => session.Abort(SilenceReason), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            private readonly ITimer _timer = time.CreateTimer(_ => session.Abort(reason), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
 
             public void Arm() => _timer.Change(limit, Timeout.InfiniteTimeSpan);

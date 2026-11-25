@@ -14,8 +14,9 @@ namespace HSMServer.Core.Tests.SensorApi
 {
     // The acknowledgement of a frame on a table connection, as a collector reads it (#1845).
     // `Refused` is null when the server says it does not know them ("refusedKnown": false).
+    // `RefusedCount` is the exact count of refused tables; `Refused` lists at most the first 100.
     internal sealed record TableAck(long Id, int Status, string Outcome, int? Tables, IReadOnlyList<(int Index, string Table, string Reason)> Refused,
-        string Error, int? RetryAfter, JsonNode Raw)
+        string Error, int? RetryAfter, JsonNode Raw, int? RefusedCount = null)
     {
         public static TableAck Parse(JsonNode ack)
         {
@@ -36,7 +37,7 @@ namespace HSMServer.Core.Tests.SensorApi
             }
 
             return new TableAck((long)ack["ack"], (int)ack["status"], (string)body?["outcome"], (int?)body?["tables"], refused,
-                (string)ack["error"], (int?)ack["retryAfter"], ack);
+                (string)ack["error"], (int?)ack["retryAfter"], ack, (int?)body?["refusedCount"]);
         }
     }
 

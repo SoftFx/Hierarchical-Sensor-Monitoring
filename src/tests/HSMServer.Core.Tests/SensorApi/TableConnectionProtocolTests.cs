@@ -17,9 +17,9 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             var output = new ArrayBufferWriter<byte>();
 
-            SessionProtocol.WriteBlockAck(output, 17, "stored", 3, [new TableRefusalInfo(2, "quotes/X\"Y", TableRefusalReason.UnknownSensor)]);
+            SessionProtocol.WriteBlockAck(output, 17, "stored", 3, [new TableRefusalInfo(2, "quotes/X\"Y", TableRefusalReason.UnknownSensor)], refusedCount: 1);
 
-            Assert.Equal("{\"ack\":17,\"status\":200,\"body\":{\"outcome\":\"stored\",\"tables\":3,\"refused\":[{\"index\":2,\"table\":\"quotes/X\\u0022Y\",\"reason\":\"UnknownSensor\"}]}}",
+            Assert.Equal("{\"ack\":17,\"status\":200,\"body\":{\"outcome\":\"stored\",\"tables\":3,\"refusedCount\":1,\"refused\":[{\"index\":2,\"table\":\"quotes/X\\u0022Y\",\"reason\":\"UnknownSensor\"}]}}",
                 Encoding.UTF8.GetString(output.WrittenSpan));
         }
 
@@ -30,7 +30,7 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             var output = new ArrayBufferWriter<byte>();
 
-            SessionProtocol.WriteBlockAck(output, 18, "duplicate", 1000, refused: null);
+            SessionProtocol.WriteBlockAck(output, 18, "duplicate", 1000, refused: null, refusedCount: 0);
 
             Assert.Equal("{\"ack\":18,\"status\":200,\"body\":{\"outcome\":\"duplicate\",\"tables\":1000,\"refusedKnown\":false}}", Encoding.UTF8.GetString(output.WrittenSpan));
 

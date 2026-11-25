@@ -55,7 +55,18 @@ namespace HSMServer.Core.TableSensors
 
         public int TableCount { get; init; }
 
+        /// <summary>
+        /// The first <see cref="MaxDetailedRefusals"/> refused tables, in directory order, with their identifiers. A block
+        /// may refuse tens of thousands of tables; their identifiers are not built past what a caller can use.
+        /// <see cref="RefusedCount"/> is the exact count, and the stored envelope records every refused table.
+        /// </summary>
         public IReadOnlyList<TableRefusalInfo> Refusals { get; init; } = [];
+
+        /// <summary>Every refused table of the block, counted exactly (Refusals holds at most the first ones).</summary>
+        public int RefusedCount { get; init; }
+
+        /// <summary>The most refused tables a put result lists with their identifiers.</summary>
+        public const int MaxDetailedRefusals = 100;
 
         /// <summary>
         /// False for a duplicate whose first put's refusals cannot be told (its envelope could not be read; after the merge
@@ -67,7 +78,7 @@ namespace HSMServer.Core.TableSensors
 
         public string Message { get; init; }
 
-        public int AcceptedTables => Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate ? TableCount - Refusals.Count : 0;
+        public int AcceptedTables => Outcome is TableBlockPutOutcome.Stored or TableBlockPutOutcome.Duplicate ? TableCount - RefusedCount : 0;
     }
 
 

@@ -44,11 +44,14 @@ namespace HSMServer.SensorApi.Sessions
         private readonly object _pairLock = new();
         private readonly Dictionary<Guid, CollectorSession> _tableBySession = new();
 
-        // The table connection that last sent a block of each (product, producer id), one entry per
-        // connection, and when two live connections sharing one were last reported.
+        // The table connection that last stored a block of each (product, producer id): at most one
+        // entry per live table connection (a connection's entry goes when it notes another producer
+        // or ends), so the map is bounded by the connections. Conflicts between two live connections
+        // are reported for the whole server at most once a minute, with the count since the last line.
         private readonly object _producerLock = new();
         private readonly Dictionary<(Guid Product, Guid Producer), CollectorSession> _producers = new();
-        private readonly Dictionary<(Guid Product, Guid Producer), long> _producerWarnedAt = new();
+        private long _conflictWarnedAtTicks;
+        private long _conflictsSinceWarn;
 
 
         // Sessions that completed the upgrade.
@@ -180,15 +183,19 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
-        // A table connection sends a block of `producer` in `product`. Returns another live table
-        // connection that sent a block of the same producer, if there is one: two collectors
-        // with one producer id make each other's blocks duplicates, and the second one's rows are
-        // lost. `worthLogging` is true at most once a minute for each (product, producer).
-        internal CollectorSession NoteProducer(CollectorSession table, Guid product, Guid producer, long utcNowTicks, out bool worthLogging)
+        // A table connection stored (or was answered a duplicate for) a block of `producer` in
+        // `product`. Returns another live table connection that did the same for that producer, if
+        // there is one: two collectors with one producer id make each other's blocks duplicates, and
+        // the second one's rows are lost. A connection of the same session (the one a reconnect
+        // replaces) and one that is closing do not count. `worthLogging` is true at most once a
+        // minute for the whole server; `conflicts` is then the number of conflicts since the last
+        // line, this one included.
+        internal CollectorSession NoteProducer(CollectorSession table, Guid product, Guid producer, long utcNowTicks, out bool worthLogging, out long conflicts)
         {
             var key = (product, producer);
 
             worthLogging = false;
+            conflicts = 0;
 
             lock (_producerLock)
             {
@@ -198,17 +205,17 @@ namespace HSMServer.SensorApi.Sessions
 
                 table.LastProducer = key;
 
-                if (_producers.TryGetValue(key, out var owner) && !ReferenceEquals(owner, table) && _tables.ContainsKey(owner.Id))
+                if (_producers.TryGetValue(key, out var owner) && !ReferenceEquals(owner, table) && _tables.ContainsKey(owner.Id) &&
+                    owner.PairedSessionId != table.PairedSessionId && !owner.Ending.IsCancellationRequested)
                 {
-                    if (!_producerWarnedAt.TryGetValue(key, out var warnedAt) || utcNowTicks - warnedAt >= TimeSpan.TicksPerMinute)
-                    {
-                        _producerWarnedAt[key] = utcNowTicks;
-                        worthLogging = true;
+                    _conflictsSinceWarn++;
 
-                        // The throttle forgets pairs it has not needed for a while, so it stays small.
-                        if (_producerWarnedAt.Count > 1024)
-                            foreach (var stale in _producerWarnedAt.Where(entry => utcNowTicks - entry.Value >= TimeSpan.TicksPerMinute).Select(entry => entry.Key).ToList())
-                                _producerWarnedAt.Remove(stale);
+                    if (utcNowTicks - _conflictWarnedAtTicks >= TimeSpan.TicksPerMinute)
+                    {
+                        _conflictWarnedAtTicks = utcNowTicks;
+                        worthLogging = true;
+                        conflicts = _conflictsSinceWarn;
+                        _conflictsSinceWarn = 0;
                     }
 
                     return owner;
