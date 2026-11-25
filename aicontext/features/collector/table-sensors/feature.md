@@ -385,7 +385,7 @@ counted on its sensor only, and so is a row added before the first `Start`.
 | backlog full | `MaxTableBacklogBytes` passed: the oldest blocks (never the one being sent) are dropped |
 | refused by the server | refused tables of a block, `allRefused`, `400` |
 | not delivered at stop | what a stop could not deliver |
-| row too large / packing failed | a single row larger than a frame or a block limit of the table connection (at the pack, or a `TooLarge` for a block of one row); a fault of the packer |
+| row too large / packing failed | a single row larger than a frame or a block limit of the table connection (at the pack, or a `TooLarge` for a block of one row); a fault of the packer (only the rows in no block queued before it, once) |
 | buffer could not grow | an allocation failed while a sensor's buffer grew (out of memory) |
 
 ## Storage / Persistence

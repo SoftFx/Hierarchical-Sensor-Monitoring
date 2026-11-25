@@ -830,6 +830,10 @@ namespace HSMDataCollector.Tables
             await run.PackGate.WaitAsync().ConfigureAwait(false);
 
             var taken = new List<KeyValuePair<TableSensor, TableRowBuffer>>();
+
+            // Per sensor, the rows of this pack already settled: in a block queued into the backlog, or dropped and
+            // counted (too large, not packed in time). A pack that fails counts only the rest.
+            var settled = new Dictionary<TableSensor, long>();
             long abandoned = 0;
 
             try
@@ -859,16 +863,25 @@ namespace HSMDataCollector.Tables
                     Cut(entry.Key, entry.Value, limits, pieces);
 
                 foreach (var group in Group(pieces, limits))
-                    abandoned += EncodeAndQueue(run, group, maxBlock, limits, token, cancelledReason, (bytes, packed) => Enqueue(run, bytes, packed));
+                    abandoned += EncodeAndQueue(run, group, maxBlock, limits, token, cancelledReason, (bytes, packed) =>
+                    {
+                        Enqueue(run, bytes, packed);
+                        Settle(settled, packed);
+                    }, settled);
             }
             catch (Exception ex)
             {
-                // Packing has no reason to fail; if it does, the rows it took are lost and said so.
+                // Packing has no reason to fail; if it does, the rows it took that are in no queued block and were not
+                // counted already are lost and said so, once. The rows of blocks queued before the fault go out.
                 NoteFault("Packing table rows", ex);
 
                 foreach (var entry in taken)
-                    if (entry.Value.Count > 0)
-                        entry.Key.Drop(entry.Value.Count, TableDropReason.PackingFailed, run);
+                {
+                    var left = entry.Value.Count - (settled.TryGetValue(entry.Key, out var done) ? done : 0);
+
+                    if (left > 0)
+                        entry.Key.Drop(left, TableDropReason.PackingFailed, run);
+                }
             }
             finally
             {
@@ -886,6 +899,15 @@ namespace HSMDataCollector.Tables
 
             FlushReports();
         }
+
+        private static void Settle(Dictionary<TableSensor, long> settled, List<Piece> pieces)
+        {
+            foreach (var piece in pieces)
+                Settle(settled, piece.Sensor, piece.Count);
+        }
+
+        private static void Settle(Dictionary<TableSensor, long> settled, TableSensor sensor, long rows) =>
+            settled[sensor] = (settled.TryGetValue(sensor, out var done) ? done : 0) + rows;
 
         // The rows of one sensor in pieces that each fit the block limits on their own.
         private static void Cut(TableSensor sensor, TableRowBuffer rows, TableBlockLimits limits, List<Piece> pieces)
@@ -939,8 +961,9 @@ namespace HSMDataCollector.Tables
         // tables first and then by rows. A single row that still breaks one is dropped and counted as too large: every
         // limit a block can break on its own is judged here, so no block that leaves this method is too large for the
         // limits it was packed for. Returns the rows left unpacked because the token fired (dropped and counted here).
+        // Every row it drops and counts is added to <dropped> (the sink settles what it takes on its own).
         private long EncodeAndQueue(TableRun run, List<Piece> group, int maxBlock, TableBlockLimits limits, CancellationToken token,
-                                    TableDropReason cancelledReason, Action<byte[], List<Piece>> sink)
+                                    TableDropReason cancelledReason, Action<byte[], List<Piece>> sink, Dictionary<TableSensor, long> dropped)
         {
             if (token.IsCancellationRequested)
             {
@@ -949,6 +972,7 @@ namespace HSMDataCollector.Tables
                 foreach (var cut in group)
                 {
                     cut.Sensor.Drop(cut.Count, cancelledReason, run);
+                    Settle(dropped, cut.Sensor, cut.Count);
                     rows += cut.Count;
                 }
 
@@ -969,8 +993,8 @@ namespace HSMDataCollector.Tables
             if (group.Count > 1)
             {
                 var half = group.Count / 2;
-                return EncodeAndQueue(run, group.GetRange(0, half), maxBlock, limits, token, cancelledReason, sink)
-                     + EncodeAndQueue(run, group.GetRange(half, group.Count - half), maxBlock, limits, token, cancelledReason, sink);
+                return EncodeAndQueue(run, group.GetRange(0, half), maxBlock, limits, token, cancelledReason, sink, dropped)
+                     + EncodeAndQueue(run, group.GetRange(half, group.Count - half), maxBlock, limits, token, cancelledReason, sink, dropped);
             }
 
             var piece = group[0];
@@ -978,11 +1002,12 @@ namespace HSMDataCollector.Tables
             if (piece.Count > 1)
             {
                 var first = piece.Count / 2;
-                return EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, limits, token, cancelledReason, sink)
-                     + EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, limits, token, cancelledReason, sink);
+                return EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, limits, token, cancelledReason, sink, dropped)
+                     + EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, limits, token, cancelledReason, sink, dropped);
             }
 
             piece.Sensor.Drop(1, TableDropReason.RowTooLarge, run);
+            Settle(dropped, piece.Sensor, 1);
             Note($"A row of the table sensor {piece.Sensor.Path} does not fit {exceeded} and is dropped.");
             return 0;
         }
@@ -1273,6 +1298,9 @@ namespace HSMDataCollector.Tables
 
             var buffers = new List<TableRowBuffer>();
 
+            // Rows of the head the repack dropped and counted on its own (too large for the limits now).
+            var dropped = new Dictionary<TableSensor, long>();
+
             try
             {
                 if (run.IsClosed)
@@ -1300,7 +1328,7 @@ namespace HSMDataCollector.Tables
 
                 foreach (var group in Group(pieces, limits))
                     EncodeAndQueue(run, group, maxBlock, limits, CancellationToken.None, TableDropReason.NotDeliveredAtStop,
-                                   (bytes, rows) => packed.Add(new KeyValuePair<byte[], List<Piece>>(bytes, rows)));
+                                   (bytes, rows) => packed.Add(new KeyValuePair<byte[], List<Piece>>(bytes, rows)), dropped);
 
                 lock (run.BacklogLock)
                 {
@@ -1348,8 +1376,10 @@ namespace HSMDataCollector.Tables
             }
             catch (Exception ex)
             {
+                // The new blocks are not in the backlog yet: the head's rows are lost, but for those the repack has
+                // already dropped and counted (too large), which are not counted twice.
                 NoteFault("Packing a table block again", ex);
-                DropHead(run, head, TableDropReason.PackingFailed);
+                DropHead(run, head, TableDropReason.PackingFailed, dropped);
             }
             finally
             {
@@ -1381,7 +1411,8 @@ namespace HSMDataCollector.Tables
         }
 
         // True when this call removed the block and counted its rows (false: a stop dropped and counted it already).
-        private bool DropHead(TableRun run, PendingBlock head, TableDropReason reason)
+        // Rows in <settled> (per sensor) were counted already and are not counted again.
+        private bool DropHead(TableRun run, PendingBlock head, TableDropReason reason, Dictionary<TableSensor, long> settled = null)
         {
             bool removed;
 
@@ -1397,7 +1428,18 @@ namespace HSMDataCollector.Tables
             }
 
             if (removed)
-                head.DropRows(reason);
+            {
+                if (settled == null)
+                    head.DropRows(reason);
+                else
+                    foreach (var table in head.Tables)
+                    {
+                        var left = table.Rows - (settled.TryGetValue(table.Sensor, out var done) ? done : 0);
+
+                        if (left > 0)
+                            table.Sensor.Drop(left, reason, run);
+                    }
+            }
 
             return removed;
         }

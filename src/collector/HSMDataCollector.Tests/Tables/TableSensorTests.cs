@@ -546,6 +546,50 @@ namespace HSMDataCollector.Tests.Tables
             }
         }
 
+        // A pack that fails part way: the blocks queued before the fault are delivered and their rows are not counted as
+        // lost; only the rows in no queued block are counted, once, as "packing failed"; every reservation returns.
+        [Fact]
+        public async Task A_failed_pack_counts_only_the_rows_in_no_queued_block()
+        {
+            // One table per block: four sensors, four groups, the encoder fails on the third.
+            var sender = new FakeTableSender { BlockLimits = new TableBlockLimits(maxTables: 1) };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var tables = Enumerable.Range(0, 4).Select(i => collector.CreateTableSensor($"t{i}", Quotes())).ToList();
+                var run = collector.TablePipeline.CurrentRun;
+
+                foreach (var table in tables)
+                    for (var i = 0; i < 3; i++)
+                        Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                var passes = 0;
+                collector.TablePipeline.OnPackPassForTests = () =>
+                {
+                    if (++passes == 3)
+                        throw new InvalidOperationException("scripted: the encoder fails on the third group");
+                };
+
+                await collector.TickTablesAsync();
+
+                var delivered = tables.Where(t => sender.RowsOf(t.Path).Count > 0).ToList();
+                var lost = tables.Except(delivered).ToList();
+
+                Assert.Equal(2, sender.Stored.Count);
+                Assert.Equal(2, delivered.Count);
+                Assert.All(delivered, t => Assert.Equal(3, sender.RowsOf(t.Path).Count));
+                Assert.All(delivered, t => Assert.Equal(0, t.RowsDropped));
+                Assert.All(lost, t => Assert.Equal(3, t.RowsDropped));
+                Assert.Equal(6, run.Ledger.TotalOf(TableDropReason.PackingFailed));
+                Assert.Equal(6, run.Ledger.Total);
+                Assert.Equal(0, collector.TablePipeline.BufferedBytes);
+
+                // Offered = accepted + dropped, and what the server got is the accepted rows that were not lost.
+                Assert.All(tables, t => Assert.Equal(3, t.RowsAccepted));
+                Assert.Equal(12 - 6, tables.Sum(t => sender.RowsOf(t.Path).Count));
+            }
+        }
+
         // A block whose frame went out on a connection that was lost before its ack (the server may have stored it), and
         // whose put then met a smaller hello on the next connection: its sequence is never given to other rows. Here
         // every row of it breaks the new limit and is dropped by the repack; the block behind it and a block of new rows
