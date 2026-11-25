@@ -34,6 +34,7 @@ namespace HSMDataCollector.Client.Session
         private static readonly TimeSpan CloseLinger = TimeSpan.FromSeconds(1);
 
         private readonly SessionConnection _connection;
+        private readonly TableConnection _tables;
         private readonly ICollectorLogger _logger;
         private readonly TimeSpan _requestTimeout;
         private readonly string _unavailable;
@@ -64,12 +65,18 @@ namespace HSMDataCollector.Client.Session
 
             _unavailable = FindWhySessionCannotExist(options, Url);
             _connection = new SessionConnection(Url, headers, options.AllowUntrustedServerCertificate, logger, ReportError, Directives, options.SessionTimings);
+
+            // The table connection of the session (#1846 part 2): its loop starts with the session's and opens a
+            // connection only once a table registration was accepted, so a collector without table sensors opens none.
+            _tables = new TableConnection(_connection, logger, ReportError, options.SessionTimings, options.RequestTimeout);
         }
 
         /// <summary>The session endpoint: ws:// or wss://host[:port]/api/sensors/session.</summary>
         internal Uri Url { get; }
 
         internal SessionConnection Connection => _connection;
+
+        internal TableConnection Tables => _tables;
 
         /// <summary>The directives the server pushes on the session (#1660 step 5) arrive here.</summary>
         internal ServerDirectives Directives { get; }
@@ -148,10 +155,22 @@ namespace HSMDataCollector.Client.Session
             }
 
             _connection.Start();
+            _tables.Start();
         }
 
         public async Task StopAsync(bool terminal)
         {
+            // The table connection closes before the session: the server closes it with its session anyway, and a block
+            // it is storing is answered first.
+            try
+            {
+                await _tables.StopAsync(terminal ? TimeSpan.Zero : CloseLinger).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Closing the table connection failed: {ex.Message}");
+            }
+
             try
             {
                 await _connection.StopAsync(terminal ? TimeSpan.Zero : CloseLinger).ConfigureAwait(false);
@@ -169,6 +188,7 @@ namespace HSMDataCollector.Client.Session
             if (Interlocked.Exchange(ref _disposed, 1) == 1)
                 return;
 
+            _tables.Dispose();
             _connection.Dispose();
         }
 

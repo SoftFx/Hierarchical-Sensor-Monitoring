@@ -82,6 +82,12 @@ namespace HSMDataCollector.Tables
 
         /// <summary>A 400: the block breaks the format or the limits. Final.</summary>
         Invalid,
+
+        /// <summary>
+        /// Not sent: the block is larger than a frame of the table connection takes now (a server whose hello states a
+        /// smaller limit than the one the block was packed for). The pipeline packs its rows again into smaller blocks.
+        /// </summary>
+        TooLarge,
     }
 
 
@@ -145,5 +151,8 @@ namespace HSMDataCollector.Tables
 
         internal static TableBlockAck NotDelivered(string why, TimeSpan? retryAfter = null) =>
             new TableBlockAck(TableBlockOutcome.NotDelivered, null, 0, why, retryAfter);
+
+        internal static TableBlockAck TooLarge(string why) =>
+            new TableBlockAck(TableBlockOutcome.TooLarge, null, 0, why, null);
     }
 }

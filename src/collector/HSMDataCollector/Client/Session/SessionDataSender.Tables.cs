@@ -16,25 +16,22 @@ namespace HSMDataCollector.Client.Session
     /// <summary>
     /// The table sensors on the collector session (ADR-0021 point 7): their registrations travel as a <c>commands</c>
     /// request of their own, never mixed with the registrations of other sensors, and the per-path errors of its ack say
-    /// which were refused. Blocks go on the table connection of the session (#1846 part 2): until it exists here, a block
-    /// is not delivered and stays in the collector's backlog.
+    /// which were refused. Blocks go on the table connection of the session (<see cref="TableConnection"/>, #1846 part 2),
+    /// which is opened once a registration was accepted; its hello's limits are the ones the pipeline packs for.
     /// </summary>
     internal sealed partial class SessionDataSender : ITableBlockChannel
     {
-        /// <summary>The frame limit the server announces by default (wire contract, "Table connection").</summary>
-        private const int DefaultTableFrameBytes = 4 * 1024 * 1024;
-
         string ITableBlockChannel.TablesUnavailableReason =>
             _unavailable == null ? null : $"table sensors need the collector session, which cannot exist here: {_unavailable}";
 
-        int ITableBlockChannel.MaxBlockBytes => DefaultTableFrameBytes - TableBlockFormatSizes.FrameHeaderSize;
+        int ITableBlockChannel.MaxBlockBytes => _tables.MaxBlockBytes;
 
-        TableBlockLimits ITableBlockChannel.BlockLimits => TableBlockLimits.Default;
+        TableBlockLimits ITableBlockChannel.BlockLimits => _tables.BlockLimits;
 
         Task ITableBlockChannel.WaitUntilReadyAsync(CancellationToken token) => _connection.WaitUntilUpAsync(token);
 
         Task<TableBlockAck> ITableBlockChannel.PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token) =>
-            Task.FromResult(TableBlockAck.NotDelivered("the table connection of the collector session is not in this build yet (#1846)"));
+            _tables.PutAsync(producer, sequence, block, token);
 
         async Task<TableRegistrationResult> ITableBlockChannel.RegisterTablesAsync(IReadOnlyList<AddOrUpdateSensorRequest> registrations, CancellationToken token)
         {
@@ -119,6 +116,10 @@ namespace HSMDataCollector.Client.Session
                 // that faults on every repeat does not hold the healthy ones back (#1846 review, item 8).
                 unsettled = ack.Acked ? $"status {ack.Status}: {ack.Error}".TrimEnd(' ', ':') : ack.Error;
             }
+
+            // A table the server knows: its blocks need the table connection.
+            if (accepted.Count > 0)
+                _tables.Want();
 
             return new TableRegistrationResult(accepted, refused, unsettled);
         }
