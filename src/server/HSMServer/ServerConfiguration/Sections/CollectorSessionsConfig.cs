@@ -1,3 +1,4 @@
+using HSMServer.SensorApi.Sessions;
 using System;
 using System.Text.Json.Serialization;
 
@@ -72,9 +73,10 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public bool TablesEnabled => Enabled && MaxTableFrameBytes > 0;
 
-        // What one table frame beyond the free allowance reserves from MaxTableBytesInFlight.
+        // What one table frame beyond the free allowance reserves from MaxTableBytesInFlight; defined
+        // once, by the frame memory that takes and releases it.
         [JsonIgnore]
-        public long TableFrameReservation => 2L * MaxTableFrameBytes + 1;
+        public long TableFrameReservation => TableFrameMemory.ReservationFor(MaxTableFrameBytes);
 
         [JsonIgnore]
         public TimeSpan Heartbeat => TimeSpan.FromSeconds(HeartbeatSeconds);

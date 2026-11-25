@@ -220,8 +220,9 @@ namespace HSMServer.SensorApi.Sessions
     // the shared pool, so a large frame leaves nothing pooled behind. The reservation is held until
     // the frame is done (its put answered) and is taken while holding nothing else, so connections
     // waiting for it cannot hold each other up. `key` is the access key of the connection (one take
-    // per key); `reserved` is called once the reservation is held (the frame's deadline starts).
-    internal sealed class TableFrameMemory(TableFrameBudget budget, int maxFrameBytes, Guid key, Func<CancellationToken, Task> waitForBudget,
+    // per key); `waitForBudget` takes the amount it is given, the one EndFrame releases; `reserved`
+    // is called once the reservation is held (the frame's deadline starts).
+    internal sealed class TableFrameMemory(TableFrameBudget budget, int maxFrameBytes, Guid key, Func<long, CancellationToken, Task> waitForBudget,
         Action reserved = null) : IFrameMemory, IDisposable
     {
         public const int FreeAllowance = 64 * 1024;
@@ -229,7 +230,8 @@ namespace HSMServer.SensorApi.Sessions
         private long _reserved;
 
 
-        // What one large frame reserves.
+        // What one large frame reserves: the only definition (CollectorSessionsConfig.TableFrameReservation
+        // reads it).
         public static long ReservationFor(int maxFrameBytes) => 2L * maxFrameBytes + 1;
 
         public long Reserved => Interlocked.Read(ref _reserved);
@@ -245,7 +247,7 @@ namespace HSMServer.SensorApi.Sessions
                 var reservation = ReservationFor(maxFrameBytes);
 
                 if (!budget.TryTake(reservation, key))
-                    await waitForBudget(token).ConfigureAwait(false);
+                    await waitForBudget(reservation, token).ConfigureAwait(false);
 
                 Interlocked.Exchange(ref _reserved, reservation);
                 reserved?.Invoke();
