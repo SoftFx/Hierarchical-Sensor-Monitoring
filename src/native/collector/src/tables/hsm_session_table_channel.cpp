@@ -713,8 +713,8 @@ namespace hsm::collector::tables
                 }
 
                 AckedBinaryLink* link = link_.get();
-                const std::int64_t send_bound =
-                    options_.send_bound_ms_for_tests > 0 ? options_.send_bound_ms_for_tests : (std::max)(kMinSendBoundMs, link->HeartbeatMs() * 10);
+                const std::int64_t test_bound = options_.send_bound_ms_for_tests ? options_.send_bound_ms_for_tests(opened_.load()) : 0;
+                const std::int64_t send_bound = test_bound > 0 ? test_bound : (std::max)(kMinSendBoundMs, link->HeartbeatMs() * 10);
                 AckedLinkAck ack;
                 switch (link->Put(kKindBlock, frame, send_bound, options_.request_timeout_ms, ack))
                 {

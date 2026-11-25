@@ -3586,7 +3586,13 @@ namespace
                                        server.SetTableHello(64 * 1024 * 1024, 30);
                                        server.PauseTableReading(1);
                                    },
-                                   [](tables::SessionTableChannelOptions& options) { options.send_bound_ms_for_tests = 1000; } });
+                                   [](tables::SessionTableChannelOptions& options) {
+                                       // A short bound only on the first connection, the one that reads nothing;
+                                       // the second carries the block under a bound no healthy write comes near.
+                                       options.send_bound_ms_for_tests = [](std::int64_t connection) {
+                                           return connection == 1 ? std::int64_t{ 1000 } : std::int64_t{ 600000 };
+                                       };
+                                   } });
         Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
         rig.Start();
         rig.Register(table);
