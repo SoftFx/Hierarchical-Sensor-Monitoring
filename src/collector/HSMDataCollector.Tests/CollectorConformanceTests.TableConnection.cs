@@ -112,9 +112,12 @@ namespace HSMDataCollector.Tests
                 {
                     var server = TableServer(state, step.Action);
 
-                    Assert.True(await PollAsync(() => server.CloseOrder.Contains("table") && server.CloseOrder.Contains("session"), step.Arg(0)).ConfigureAwait(false),
-                                $"The collector did not close both connections; closes: {string.Join(", ", server.CloseOrder)}.");
-                    Assert.True(server.CloseOrder.IndexOf("table") < server.CloseOrder.IndexOf("session"), $"closes in the order {string.Join(", ", server.CloseOrder)}");
+                    // Not by the order in which the server read two close frames (two sockets: that order is the
+                    // server's own scheduling), but by the collector's state when its close of the session arrived.
+                    Assert.True(await PollAsync(() => !state.TableUpAtSessionClose.IsEmpty, step.Arg(0)).ConfigureAwait(false), "The collector did not close its session.");
+                    Assert.True(await PollAsync(() => server.TableCloses.Contains(1000), step.Arg(0)).ConfigureAwait(false),
+                                $"The collector closed no table connection with 1000; closes: {string.Join(",", server.TableCloses)}.");
+                    Assert.All(state.TableUpAtSessionClose, up => Assert.False(up, "the table connection was still up when the session was closed"));
                     return true;
                 }
             }
@@ -192,6 +195,19 @@ namespace HSMDataCollector.Tests
             }
 
             return false;
+        }
+
+        // Called when a session collector is created: from then on the state of its table connection is noted every
+        // time its close of a session arrives at the scripted server.
+        private static void WatchTableConnectionAtSessionClose(ContractState state, HSMDataCollector.Client.Session.SessionDataSender sender)
+        {
+            state.SessionServer.SessionCloseReceived = () => state.TableUpAtSessionClose.Enqueue(sender.TablesIfMade?.IsUp ?? false);
+        }
+
+        private sealed partial class ContractState
+        {
+            // Whether the collector's table connection was up, each time its close of a session reached the server.
+            public System.Collections.Concurrent.ConcurrentQueue<bool> TableUpAtSessionClose { get; } = new System.Collections.Concurrent.ConcurrentQueue<bool>();
         }
 
         private static ScriptedSessionServer.TableAnswer SessionAnswer(string outcome)

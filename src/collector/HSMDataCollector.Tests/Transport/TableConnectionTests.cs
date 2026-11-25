@@ -296,6 +296,9 @@ namespace HSMDataCollector.Tests.Transport
                 noAckInTime.SetResult(true);
                 await tick;
 
+                // The connection that got no ack was closed with a close frame, not cut.
+                await UntilAsync(() => rig.Server.TableCloses.Contains(1000), "the collector did not close the connection that got no ack");
+
                 var frames = rig.Server.TableFrames;
                 Assert.Equal(2, frames.Count);
                 Assert.Equal(frames[0].Producer, frames[1].Producer);
@@ -356,6 +359,38 @@ namespace HSMDataCollector.Tests.Transport
 
                 Assert.Equal(0L, Assert.Single(rig.Server.TableFrames).Sequence);
                 Assert.Equal(0, rig.Table.RowsDropped);
+            }
+        }
+
+        // A server restarted with table connections switched on (or upgraded) comes back with a new session: the
+        // refusal is asked again with it, not only when the long period is over.
+        [Theory]
+        [InlineData(404)]
+        [InlineData(400)]
+        public async Task A_table_upgrade_refused_for_good_is_asked_again_with_the_next_session(int status)
+        {
+            using (var rig = new Rig(s => s.RefuseTableUpgrades(status), o =>
+            {
+                o.SessionTimings.TableRefusedRetry = TimeSpan.FromHours(1);
+                o.SessionTimings.TableConnectionWait = TimeSpan.FromMilliseconds(300);
+            }))
+            {
+                await rig.StartAsync();
+                await UntilAsync(() => rig.Server.RefusedTableUpgrades == 1, "no table upgrade was tried");
+
+                Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
+                await rig.Collector.TickTablesAsync();
+
+                Assert.Equal(1, rig.Server.RefusedTableUpgrades);
+
+                rig.Server.AcceptTableUpgrades();
+                rig.Server.DropSessions();
+
+                await UntilAsync(() => rig.Link.IsUp, "the table connection was not asked for again with the next session");
+                await rig.Collector.TickTablesAsync();
+
+                Assert.Equal(rig.Server.SessionIds[1], rig.Server.TableUpgradeHeaders.Last()["X-Hsm-Session"]);
+                Assert.Single(rig.Server.StoredTableRowsOf("quotes/A"));
             }
         }
 
@@ -558,11 +593,22 @@ namespace HSMDataCollector.Tests.Transport
             {
                 await rig.StartAsync();
 
+                // The request timeout sets the drain budget here (2 s) and would end the wait for an ack at the same
+                // moment; which of the two came first would decide what the test sees. The wait for an ack never
+                // ends on its own: only the stop and its budget end it.
+                rig.Link.AckDeadlineForTests = () => new TaskCompletionSource<bool>().Task;
+
                 // Neither the delivery nor the drain's resend is answered.
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
+
+                // The collector's own state when its close of the session arrives at the server.
+                var tableUpAtSessionClose = new ConcurrentQueue<bool>();
+                var link = rig.Link;
+
+                rig.Server.SessionCloseReceived = () => tableUpAtSessionClose.Enqueue(link.IsUp);
 
                 var tick = Task.Run(() => rig.Collector.TickTablesAsync());
                 await UntilAsync(() => rig.Server.TableFrames.Count >= 1, "the block was not sent");
@@ -575,11 +621,10 @@ namespace HSMDataCollector.Tests.Transport
                 Assert.Equal(1, rig.Table.RowsDropped);
                 Assert.Single(rig.Logger.Errors.Where(e => e.StartsWith("Collector stop") && e.Contains("table row")));
 
-                // The table connection was closed by the collector before the session.
+                // The table connection was closed by the collector, with a close frame, before the session.
                 await UntilAsync(() => rig.Server.Closes.Count >= 1, "the session was not closed");
-                Assert.Contains(1000, rig.Server.TableCloses);
-                Assert.True(rig.Server.CloseOrder.IndexOf("table") < rig.Server.CloseOrder.IndexOf("session"),
-                            $"closes in the order {string.Join(", ", rig.Server.CloseOrder)}");
+                await UntilAsync(() => rig.Server.TableCloses.Contains(1000), "the table connection was not closed with 1000");
+                Assert.Equal(new[] { false }, tableUpAtSessionClose);
             }
         }
 

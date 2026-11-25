@@ -355,7 +355,9 @@ namespace HSMDataCollector.Tests.Transport
                             if (result.MessageType == WebSocketMessageType.Close)
                             {
                                 _closes.Enqueue((int)(result.CloseStatus ?? 0));
-                                _closeOrder.Enqueue("session");
+
+                                try { SessionCloseReceived?.Invoke(); }
+                                catch (Exception) { }
 
                                 // Nothing to answer when the close is itself the answer to
                                 // CloseSessions.

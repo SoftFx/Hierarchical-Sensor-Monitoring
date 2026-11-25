@@ -38,8 +38,11 @@
 # expect_table_probe_before_blocks                 every table connection that carried a block had a probe first
 # expect_table_frame_connections|c0,c1,...         the table connection (1 = first accepted) of every block frame
 # expect_table_close_code|code|timeout_s           the collector closed a table connection with this code
-# expect_table_closed_before_session|timeout_s     the collector's close of the table connection came before the
-#                                                  close of its session
+# expect_table_closed_before_session|timeout_s     the collector closed its table connection, with 1000, before it
+#                                                  closed its session. Judged by the collector's own state at the
+#                                                  moment its close of the session reaches the server (the table
+#                                                  connection is down by then), never by the order in which the server
+#                                                  reads the close frames of two sockets
 
 # --- the connection and one block ---
 

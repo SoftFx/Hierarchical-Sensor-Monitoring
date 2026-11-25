@@ -37,7 +37,6 @@ namespace HSMDataCollector.Tests.Transport
         private readonly ConcurrentQueue<Dictionary<string, string>> _tableUpgrades = new ConcurrentQueue<Dictionary<string, string>>();
         private readonly ConcurrentDictionary<string, TableFrame> _storedBlocks = new ConcurrentDictionary<string, TableFrame>(StringComparer.Ordinal);
         private readonly ConcurrentQueue<long> _tableProbes = new ConcurrentQueue<long>();
-        private readonly ConcurrentQueue<string> _closeOrder = new ConcurrentQueue<string>();
 
         private int _tableRefuseStatus;
         private int _tableConnections;
@@ -110,8 +109,13 @@ namespace HSMDataCollector.Tests.Transport
         /// <summary>The close codes the collector sent on table connections, in order.</summary>
         public IReadOnlyList<int> TableCloses => _tableCloses.ToArray();
 
-        /// <summary>"session" and "table", in the order the collector's close frames arrived.</summary>
-        public System.Collections.Generic.List<string> CloseOrder => _closeOrder.ToList();
+        /// <summary>
+        /// Runs when the collector's close frame of a session arrives, before it is answered. The order in which this
+        /// server reads the close frames of two sockets says nothing about the order they were sent in, so a test that
+        /// asks "was the table connection closed first" reads the collector's own state here: at this moment the
+        /// collector has sent the session's close, and must have closed its table connection before.
+        /// </summary>
+        public Action SessionCloseReceived { get; set; }
 
         /// <summary>The blocks the server stored (each once), in order of their first frame.</summary>
         public IReadOnlyList<TableFrame> StoredTableBlocks => TableFrames.Where(f => f.Stored).ToList();
@@ -208,7 +212,6 @@ namespace HSMDataCollector.Tests.Transport
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             _tableCloses.Enqueue((int)(result.CloseStatus ?? 0));
-                            _closeOrder.Enqueue("table");
 
                             if (socket.State == WebSocketState.CloseReceived)
                                 await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None).ConfigureAwait(false);

@@ -278,8 +278,8 @@ the refusal is reported once until it changes.
 
 | Status | What the server says | The collector |
 |---|---|---|
-| `404` | table connections are off (`CollectorSessions.MaxTableFrameBytes = 0`), or sessions are | asks again every 5 minutes (`SessionTimings.TableRefusedRetry`) |
-| `400` | it does not know `hsm.tables.v1` (a server before table sensors) | asks again every 5 minutes |
+| `404` | table connections are off (`CollectorSessions.MaxTableFrameBytes = 0`), or sessions are | asks again every 5 minutes (`SessionTimings.TableRefusedRetry`) and with the next session (a restarted server comes with one) |
+| `400` | it does not know `hsm.tables.v1` (a server before table sensors) | asks again every 5 minutes and with the next session |
 | `409` | `X-Hsm-Session` names no live session of this key | no further attempt with that session; the next session is the next chance |
 | `406` | the key cannot send | tries again with the session's backoff |
 | `503` | it is shutting down | tries again with the session's backoff |
@@ -403,7 +403,8 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - The table connection, both TFMs, against `ScriptedSessionServer` (which takes the table upgrade, sends a hello with
   settable limits, decodes each binary frame with the block reader and answers it as scripted): `TableConnectionTests`:
   the upgrade, hello and probe; every ack status; a lost ack and its `duplicate` (the end of the wait is decided by the
-  test through `AckDeadlineForTests`, not by a clock); `1013`; `1000`; each upgrade refusal (404, 400, 409, 406, 503);
+  test through `AckDeadlineForTests`, not by a clock); `1013`; `1000`; each upgrade refusal (404, 400, 409, 406, 503)
+  and the 404 / 400 asked again with the next session;
   a block in flight across a new session; splitting by the hello's frame limit and block limits, and a block packed
   before a smaller hello; a stop with a block in flight; a binary frame, an oversized frame, a text that is not JSON
   and a foreign ack from the server; the heartbeat; start, stop, start; dispose and stop from every state; no table

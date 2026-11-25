@@ -1149,6 +1149,7 @@ namespace HSMDataCollector.Tests
                         collectPeriodMs: int.Parse(step.Arg(1)),
                         requestTimeoutMs: int.Parse(step.Arg(2)),
                         directives: state.Directives);
+                    WatchTableConnectionAtSessionClose(state, (HSMDataCollector.Client.Session.SessionDataSender)OptionsOf(state.Collector).DataSender);
                     break;
 
                 case "session_server_push_directive":

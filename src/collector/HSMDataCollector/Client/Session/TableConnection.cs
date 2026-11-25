@@ -343,14 +343,17 @@ namespace HSMDataCollector.Client.Session
             {
                 case 404:
                     // Table connections (or sessions) are off on the server: nothing changes until an operator does.
-                    Report($"The server refused the table connection with 404: table connections are switched off on {_session.Url} (CollectorSessions.MaxTableFrameBytes = 0). Table blocks are kept (CollectorOptions.MaxTableBacklogBytes, the oldest dropped and counted); asking again every {Minutes(_timings.TableRefusedRetry)}.");
-                    await Task.Delay(_timings.TableRefusedRetry, token).ConfigureAwait(false);
+                    // A new session is the first sign that someone did (a server restarted with another setting), so
+                    // it is asked again with the next session as well as on the long period.
+                    Report($"The server refused the table connection with 404: table connections are switched off on {_session.Url} (CollectorSessions.MaxTableFrameBytes = 0). Table blocks are kept (CollectorOptions.MaxTableBacklogBytes, the oldest dropped and counted); asking again every {Minutes(_timings.TableRefusedRetry)} and with the next session.");
+                    await WaitAsync(sessionEnded, token, _timings.TableRefusedRetry).ConfigureAwait(false);
                     return;
 
                 case 400:
-                    // A server older than table sensors knows only hsm.sensors.v1.
-                    Report($"The server refused the table connection with 400: {_session.Url} does not know the subprotocol {SessionProtocol.TablesSubprotocol} (a server older than table sensors). Table blocks are kept (CollectorOptions.MaxTableBacklogBytes, the oldest dropped and counted); asking again every {Minutes(_timings.TableRefusedRetry)}.");
-                    await Task.Delay(_timings.TableRefusedRetry, token).ConfigureAwait(false);
+                    // A server older than table sensors knows only hsm.sensors.v1; an upgraded one comes with a new
+                    // session.
+                    Report($"The server refused the table connection with 400: {_session.Url} does not know the subprotocol {SessionProtocol.TablesSubprotocol} (a server older than table sensors). Table blocks are kept (CollectorOptions.MaxTableBacklogBytes, the oldest dropped and counted); asking again every {Minutes(_timings.TableRefusedRetry)} and with the next session.");
+                    await WaitAsync(sessionEnded, token, _timings.TableRefusedRetry).ConfigureAwait(false);
                     return;
 
                 case 409:
@@ -669,12 +672,16 @@ namespace HSMDataCollector.Client.Session
                 link.End(why);
                 MarkDown(link);
 
+                // The close is said before the loops are cancelled: cancelling a receive that is under way aborts a
+                // ClientWebSocket, and the server would then see a reset where the collector meant a closure (a block
+                // without an ack in time, the end of the session).
+                await CloseQuietlyAsync(link.Socket, link.CloseCode, link.CloseReason, link.SendLock).ConfigureAwait(false);
+
                 serving.Cancel();
                 Observe(receive);
                 Observe(heartbeat);
             }
 
-            await CloseQuietlyAsync(link.Socket, link.CloseCode, link.CloseReason, link.SendLock).ConfigureAwait(false);
             link.Socket.Dispose();
 
             return new LinkEnd(why, link.ServerClose, link.ProtocolError, sessionWentAway);
@@ -930,7 +937,8 @@ namespace HSMDataCollector.Client.Session
             using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
             {
                 var deadline = AckDeadlineForTests?.Invoke() ?? Task.Delay(_requestTimeout, wait.Token);
-                var first = await Task.WhenAny(waiter, link.Ended, deadline).ConfigureAwait(false);
+                var cancelled = Task.Delay(Timeout.Infinite, wait.Token);
+                var first = await Task.WhenAny(waiter, link.Ended, deadline, cancelled).ConfigureAwait(false);
 
                 wait.Cancel();
 
