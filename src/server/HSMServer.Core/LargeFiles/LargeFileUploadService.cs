@@ -49,6 +49,9 @@ namespace HSMServer.Core.LargeFiles
     /// <paramref name="SourceIdentity"/> is optional and opaque (a file id, an inode), at most 256 characters.
     /// <paramref name="ClientName"/> and <paramref name="RemoteAddress"/> say where the file came from (the session's client
     /// name and remote address): optional, at most 256 characters each, kept in the record of a new upload only.
+    /// <paramref name="Secure"/> is the mark the application sets at the send (secure by default: a dump, its archive under
+    /// the product's dump password; or not: the same zip without a password): kept in the record of a new upload and never
+    /// changed; a later begin of the same file gets the record's mark back in its result.
     /// </summary>
     public sealed record LargeFileBeginRequest(
         Guid ProductId,
@@ -60,7 +63,8 @@ namespace HSMServer.Core.LargeFiles
         int PieceSize,
         int MaxPieceSize,
         string ClientName = null,
-        string RemoteAddress = null);
+        string RemoteAddress = null,
+        bool Secure = true);
 
 
     /// <summary>
@@ -171,7 +175,7 @@ namespace HSMServer.Core.LargeFiles
 
             var key = new LargeFileUploadKey(request.ProductId, sensor.Id, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity);
 
-            return Task.FromResult(Store.Begin(key, ExtensionOf(request.Name), request.PieceSize, request.MaxPieceSize, request.ClientName, request.RemoteAddress));
+            return Task.FromResult(Store.Begin(key, ExtensionOf(request.Name), request.PieceSize, request.MaxPieceSize, request.ClientName, request.RemoteAddress, request.Secure));
         }
 
         public Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct)

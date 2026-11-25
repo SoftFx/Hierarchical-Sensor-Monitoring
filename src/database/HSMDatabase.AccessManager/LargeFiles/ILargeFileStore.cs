@@ -54,6 +54,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// <summary>Where the file came from: the remote address of that session (optional, at most 256 characters).</summary>
         public string RemoteAddress { get; init; }
 
+        /// <summary>
+        /// The mark the application set at the send, never changed afterwards: secure (a dump: its archive is encrypted under
+        /// the product's dump password) or not (the same zip without a password). A record without the member is secure.
+        /// </summary>
+        public bool Secure { get; init; } = true;
+
         /// <summary>Original bytes per piece; the last piece holds the remainder.</summary>
         public int PieceSize { get; init; }
 
@@ -158,7 +164,14 @@ namespace HSMDatabase.AccessManager.LargeFiles
         long PieceCount,
         int PieceSize,
         TimeSpan? RetryAfter,
-        string Error);
+        string Error)
+    {
+        /// <summary>
+        /// The record's mark (secure or not): the begin's on Started, the record's on Continue, AlreadyStored, Checking and
+        /// Busy (it never changes, whatever a later begin says), true for a refusal.
+        /// </summary>
+        public bool Secure { get; init; } = true;
+    }
 
 
     public enum LargeFileAppendOutcome : byte
@@ -442,7 +455,8 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// within 65,536 .. <paramref name="maxPieceSize"/>. A new upload must find room for its whole reservation: the
         /// announced size for the part and the announced size + 1 MiB for its archive.
         /// </summary>
-        LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null);
+        LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null,
+            bool secure = true);
 
         /// <summary>True while the end check of the file runs (a finish between its start and its end).</summary>
         bool IsChecking(Guid fileId);

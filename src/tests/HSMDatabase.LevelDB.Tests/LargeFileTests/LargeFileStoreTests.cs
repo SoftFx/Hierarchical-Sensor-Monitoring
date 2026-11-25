@@ -797,6 +797,40 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         }
 
         [Fact]
+        public void The_secure_mark_is_set_by_the_first_begin_never_changed_and_a_record_without_it_reads_as_secure()
+        {
+            var store = Open();
+
+            var open = store.Begin(Key("open.zip", 2 * Piece), null, Piece, Piece, secure: false);
+            Assert.False(open.Secure);
+            Append(store, open.Lease, 0, Content(Piece));
+            store.Release(open.Lease);
+
+            // A begin of the same file with the other mark continues it with the record's mark.
+            var continued = store.Begin(Key("open.zip", 2 * Piece), null, Piece, Piece, secure: true);
+            Assert.Equal(LargeFileBeginOutcome.Continue, continued.Outcome);
+            Assert.Equal(open.FileId, continued.FileId);
+            Assert.False(continued.Secure);
+
+            var dump = Begin(store, Key("app.dmp", Piece));
+            Assert.True(dump.Secure);
+            Append(store, dump.Lease, 0, Content(Piece)); // a part with no piece would go with its lease at the restart
+            Assert.True(Refused(store).Secure);
+            store.Dispose();
+
+            var reopened = Open();
+            Assert.False(reopened.TryGetFile(open.FileId).Secure);
+            Assert.True(reopened.TryGetFile(dump.FileId).Secure);
+
+            // A record written before the mark existed: secure (fail closed).
+            var text = File.ReadAllText(PathOf(open.FileId, ".rec"));
+            Assert.Contains("\"secure\":false", text);
+            Assert.True(LargeFileRecordFormat.Read(text.Replace(",\"secure\":false", "").Replace("\"secure\":false,", "")).Secure);
+        }
+
+        private LargeFileBeginResult Refused(LargeFileStore store) => store.Begin(Key("negative", -1), null, Piece, Piece, secure: false);
+
+        [Fact]
         public void A_file_is_being_checked_from_the_start_of_its_finish_to_its_end()
         {
             var store = Open();

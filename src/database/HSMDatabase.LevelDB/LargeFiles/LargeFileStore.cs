@@ -195,7 +195,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 return _files.TryGetValue(fileId, out var entry) && !entry.Removed && entry.Checking;
         }
 
-        public LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null)
+        public LargeFileBeginResult Begin(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, string clientName = null, string remoteAddress = null,
+            bool secure = true)
         {
             key = key with { SourceModifiedUtc = AsUtc(key.SourceModifiedUtc), Name = key.Name ?? string.Empty };
 
@@ -232,15 +233,15 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         var record = entry.Record;
 
                         if (record.State != LargeFileState.Uploading)
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.AlreadyStored, default, record.FileId, record.TotalPieces, record.TotalPieces, record.PieceSize, null, null);
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.AlreadyStored, default, record.FileId, record.TotalPieces, record.TotalPieces, record.PieceSize, null, null) { Secure = record.Secure };
 
                         if (entry.Checking)
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.Checking, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize, CheckingRetry, null);
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.Checking, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize, CheckingRetry, null) { Secure = record.Secure };
 
                         if (IsLive(entry, Mono(), limits))
                             return new LargeFileBeginResult(LargeFileBeginOutcome.Busy, default, record.FileId, record.PieceCount, record.TotalPieces, record.PieceSize,
                                 Max(TimeSpan.FromMilliseconds(entry.LeaseTouched + (long)limits.LeaseTimeout.TotalMilliseconds - Mono()), TimeSpan.FromSeconds(1)),
-                                "Another connection uploads this file.");
+                                "Another connection uploads this file.") { Secure = record.Secure };
 
                         if (record.PieceSize == pieceSize)
                         {
@@ -249,7 +250,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                             var lease = Grant(entry, now, maxPieceSize);
 
-                            return new LargeFileBeginResult(LargeFileBeginOutcome.Continue, lease, record.FileId, record.PieceCount, pieceCount, record.PieceSize, null, null);
+                            return new LargeFileBeginResult(LargeFileBeginOutcome.Continue, lease, record.FileId, record.PieceCount, pieceCount, record.PieceSize, null, null) { Secure = record.Secure };
                         }
 
                         if (round > 0)
@@ -281,7 +282,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             return Refused(LargeFileBeginOutcome.NoRoom, "Too little free space on the server for this file.", NoRoomRetry);
                         }
 
-                        (created, createdLease) = Prepare(key, extension, pieceSize, maxPieceSize, now, clientName, remoteAddress);
+                        (created, createdLease) = Prepare(key, extension, pieceSize, maxPieceSize, now, clientName, remoteAddress, secure);
                         createdPieces = pieceCount;
                     }
                 }
@@ -298,7 +299,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
         // Under _lock: the entry of a new upload, registered while its files are written (pending: it holds its lease, its
         // reservation and its place among the parts; nothing else touches it).
         private (Entry, UploadLease) Prepare(LargeFileUploadKey key, string extension, int pieceSize, int maxPieceSize, DateTime now,
-            string clientName, string remoteAddress)
+            string clientName, string remoteAddress, bool secure)
         {
             var record = new LargeFileRecord
             {
@@ -312,6 +313,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 SourceIdentity = key.SourceIdentity,
                 ClientName = clientName,
                 RemoteAddress = remoteAddress,
+                Secure = secure,
                 PieceSize = pieceSize,
                 State = LargeFileState.Uploading,
                 CreatedUtc = now,
@@ -362,7 +364,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
             _logger.Info($"Large file upload {record.FileId:N} started: product {record.ProductId}, sensor {record.SensorId}, {record.Size} bytes in {pieceCount} pieces");
 
-            return new LargeFileBeginResult(LargeFileBeginOutcome.Started, lease, record.FileId, 0, pieceCount, record.PieceSize, null, null);
+            return new LargeFileBeginResult(LargeFileBeginOutcome.Started, lease, record.FileId, 0, pieceCount, record.PieceSize, null, null) { Secure = record.Secure };
         }
 
         // Creates a folder and the ones above it that are missing, each made durable in its parent (Linux).
