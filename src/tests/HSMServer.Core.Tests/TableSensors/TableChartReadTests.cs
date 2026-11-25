@@ -523,6 +523,41 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
 
+        [Fact]
+        public async Task A_merged_hour_is_selected_by_the_range_of_the_class_that_holds_the_sensors_rows_not_through_the_gap_between_two_classes()
+        {
+            // The review's sequence: one hour with rows of a (kept one week, P1) only at minute 1 and rows of c (kept five
+            // weeks, P5) only at minute 30.
+            var a = await RegisterAsync("a");
+            var c = await RegisterAsync("c");
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = c.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(40);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)]), ("c", [Row(Hour0.AddMinutes(30).Ticks, 3, 3)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            Assert.Equal([(1, Hour0.AddMinutes(1).Ticks), (5, Hour0.AddMinutes(30).Ticks)],
+                _batches.GetHour(_product, Hour0.Ticks).Classes.Select(x => (x.PeriodWeeks, x.MinTime)));
+
+            // Every index record of the hour survives without its bytes.
+            _batches.BatchMissing = (hour, _) => hour == Hour0.Ticks;
+
+            // A range between the two classes' rows can hold no row of a: the hour is not read for it, and nothing failed.
+            var (from, to) = (Hour0.AddMinutes(10), Hour0.AddMinutes(11));
+            var read = _service.Read(a.Id, from, to).Value;
+            var chart = _service.Reduce(a.Id, from, to, Columns, 10).Value;
+            Assert.Equal((0, 0), (read.RowCount, read.BatchesFailed));
+            Assert.Equal((0L, 0, false), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
+
+            // A range that holds a's row reads the hour and reports the batch it could not read.
+            read = _service.Read(a.Id, From, To).Value;
+            chart = Reduce(a, 10);
+            _batches.BatchMissing = null;
+            Assert.Equal((0, 1), (read.RowCount, read.BatchesFailed));
+            Assert.Equal((0L, 1, true), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
+        }
+
+
         // === The plan: one generation of the store (the third review) ===
 
         [Fact]

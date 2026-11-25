@@ -527,20 +527,12 @@ namespace HSMServer.Core.TableSensors
                     if (hour.LastBlockSequence < table.FirstSequence)
                         continue;
 
-                    // The class that holds the sensor's rows of the hour, and the hour's rows by the union of its record's
-                    // ranges: the sensor's rows may be in a class the record does not name (moved there from one it names),
-                    // and their times are within the record's ranges. The class's database of the week must exist.
+                    // The class that holds the sensor's rows of the hour; its database of the week must exist.
                     int period = placement.ClassOf(hour.HourTicks);
                     if (!weekSet.Contains(new TableBatchWeek(StorageWeek.GetStartTicks(hour.HourTicks), period)))
                         continue;
 
-                    long min = long.MaxValue, max = long.MinValue;
-                    foreach (var range in hour.Classes)
-                        if (range.Batches > 0)
-                        {
-                            min = Math.Min(min, range.MinTime);
-                            max = Math.Max(max, range.MaxTime);
-                        }
+                    var (min, max) = RowTimes(hour, period);
 
                     if (min < toTicks && max >= fromTicks)
                         sources.Add(new ReadSourceItem(Math.Max(min, fromTicks), hour.HourTicks, null, period));
@@ -554,6 +546,35 @@ namespace HSMServer.Core.TableSensors
             sources.Sort((a, b) => a.MinTime != b.MinTime ? a.MinTime.CompareTo(b.MinTime) : a.Hour.CompareTo(b.Hour));
 
             return new ReadPlan(product, store, batches, tableId, table.Id, sources, keptUnreadable, generation, stale);
+        }
+
+        // The row times a merged hour can hold for a sensor whose rows of it are in the given class: the hour is read only
+        // when they meet the range asked for.
+        // - The record names the class: the sensor's rows were merged into it, so they are within that class's own range.
+        //   Not the union of every class of the record: with rows of P1 only at 10:00 and of P5 only at 12:00, a read of
+        //   the P1 sensor for 11:00 would select the hour through the gap between the two, and report a batch it could not
+        //   read (BatchesFailed) for a range that can hold none of its rows.
+        // - The record does not name the class: the sensor's rows of the hour are there only if they were moved there from
+        //   a class the record names, and their times are within the union of the record's ranges (dropped classes
+        //   included: rows moved out of one are within its range).
+        // For the move (#1850 part 4c): rows moved into a class the record already names are within the range of the class
+        // they came from, not of the one they are in; the move must make this function answer the union for such an hour.
+        private static (long Min, long Max) RowTimes(TableBatchHour hour, int period)
+        {
+            long min = long.MaxValue, max = long.MinValue;
+
+            foreach (var range in hour.Classes)
+                if (range.PeriodWeeks == period)
+                    return range.Batches > 0 ? (range.MinTime, range.MaxTime) : (min, max);
+
+            foreach (var range in hour.Classes)
+                if (range.Batches > 0)
+                {
+                    min = Math.Min(min, range.MinTime);
+                    max = Math.Max(max, range.MaxTime);
+                }
+
+            return (min, max);
         }
 
         private void ReadSource(ReadPlan plan, ReadSourceItem source, ITableRowSink sink, long fromTicks, long toTicks, CancellationToken token)
