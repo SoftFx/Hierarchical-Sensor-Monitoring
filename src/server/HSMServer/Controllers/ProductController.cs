@@ -132,8 +132,13 @@ namespace HSMServer.Controllers
         // product they had no role on there and receive that role on it.
         public async Task<IActionResult> MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
-            if (DenyUnlessManager(productId, out _) is { } denied)
+            if (DenyUnlessManager(productId, out var node) is { } denied)
                 return denied;
+
+            // A folder holds root products, which is all the page offers to move. A node below the root
+            // keeps its place in its product: roles and the tree are read from the root it belongs to.
+            if (!node.IsRoot)
+                return BadRequest();
 
             if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
                 await _folderManager.MoveProduct(product, fromFolderId, toFolderId, CurrentInitiator);

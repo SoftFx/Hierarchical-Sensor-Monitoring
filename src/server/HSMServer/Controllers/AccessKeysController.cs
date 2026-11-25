@@ -42,9 +42,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult AvailableAccessKeys() => PartialView("_AllAccessKeys", GenerateFullViewModel());
 
+        // The key list of one product, opened from the tree ("Access keys") for a product the user sees.
+        // An unknown id and a product the user has no role on answer the same 404.
         [HttpGet]
-        public IActionResult AccessKeysForProduct(string productId) => 
-            GetPartialProductAccessKeys(productId.ToGuid());
+        public IActionResult AccessKeysForProduct(string productId) =>
+            _treeViewModel.Nodes.TryGetValue(productId.ToGuid(), out var node) && UserTreeAccess.IsVisibleTo(CurrentUser, node)
+                ? PartialView("_ProductAccessKeys", node)
+                : NotFound();
         
         [HttpGet]
         [AuthorizeIsAdmin]

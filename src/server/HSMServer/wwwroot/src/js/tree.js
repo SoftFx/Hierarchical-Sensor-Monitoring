@@ -363,10 +363,13 @@ window.loadEditSensorStatusModal = function (id) {
         datatype: 'json',
         async: true,
         success: (viewData) => {
+            // An empty answer (the sensor is gone, or is not the user's to edit) leaves the form in place.
+            if (!viewData)
+                return;
+
             $('#editSensorStatus_form').replaceWith(viewData);
+            $('#editSensorStatus_modal').modal('show');
         }
-    }).done(function () {
-        $('#editSensorStatus_modal').modal('show');
     });
 }
 

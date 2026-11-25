@@ -4211,13 +4211,23 @@
             The rule is the one the tree itself is built by (<see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetUserProducts(HSMServer.Model.Authentication.User)"/>): a
             sensor or node is visible when the user is an admin or holds any role on its ROOT product; a folder
             is visible when the user is an admin, holds a role on the folder, or sees one of its products.
-            Whether the user may CHANGE what they see (Manager role) is a separate question this class does
-            not answer.
+            </para>
+            <para>
+            Whether the user may CHANGE what they see is the second rule, answered by the <c>Managed</c>
+            lookups: a sensor or node is managed by an admin and by a Manager of its ROOT product, a folder by
+            an admin and by a Manager of the folder. An entity the user sees but does not manage is "not
+            found" for these lookups, like an unknown id.
             </para>
             </summary>
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsVisible(HSMServer.Model.Authentication.User,System.Guid)">
             <summary>True when <paramref name="id"/> is a sensor, node or folder the user can see.</summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsVisibleTo(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.NodeViewModel)">
+            <summary>
+            The visibility rule for a node or sensor the caller already holds. Static for a controller
+            outside the tree page that keeps the tree itself (the key list of the access key page).
+            </summary>
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)">
             <summary>
@@ -4225,10 +4235,18 @@
             in it (a per-product role removal narrows the folder role), so the folder's own list is not it.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetSensorIds(HSMServer.Model.Authentication.User,System.Guid)">
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetManagedProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)">
             <summary>
-            Ids of the sensors under <paramref name="id"/> (a sensor itself, a node subtree, or the visible
-            products of a folder). Empty for an unknown id and for one the user cannot see.
+            The products of a folder the user manages. The folder Manager role does not imply the Manager
+            role on every product in it: a user who already held a role on a product keeps that role when
+            the product enters the folder, and a product role can be changed afterwards.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetManagedSensorIds(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>
+            Ids of the sensors under <paramref name="id"/> that the user may change: a managed sensor
+            itself, the subtree of a managed node, or the managed products of a managed folder. Empty for
+            an unknown id and for one the user does not manage.
             </summary>
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.TryGetBackgroundSensor(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.SensorNodeViewModel,System.Boolean,HSMServer.Model.TreeViewModel.SensorNodeViewModel@)">
