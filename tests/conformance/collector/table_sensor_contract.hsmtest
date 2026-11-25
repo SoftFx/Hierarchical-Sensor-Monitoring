@@ -274,3 +274,19 @@ stop_drops_and_counts_what_it_cannot_deliver|add_table_row|t|2000|2.0
 stop_drops_and_counts_what_it_cannot_deliver|stop
 stop_drops_and_counts_what_it_cannot_deliver|expect_table_rows|t|0
 stop_drops_and_counts_what_it_cannot_deliver|expect_table_rows_dropped|t|2
+
+# SensorBlocked is not final: a user can unblock the sensor on the server. The rows of the refused block are lost and
+# counted, the sensor stays registered, and its later rows go out.
+blocked_sensor_is_not_final|create_collector
+blocked_sensor_is_not_final|create_table_sensor|t|bid:double
+blocked_sensor_is_not_final|start
+blocked_sensor_is_not_final|table_server_refuse_table_next|t|SensorBlocked
+blocked_sensor_is_not_final|add_table_row|t|1000|1.0
+blocked_sensor_is_not_final|table_tick
+blocked_sensor_is_not_final|expect_table_state|t|registered
+blocked_sensor_is_not_final|expect_table_rows_dropped|t|1
+blocked_sensor_is_not_final|add_table_row|t|2000|2.0
+blocked_sensor_is_not_final|table_tick
+blocked_sensor_is_not_final|expect_table_registration_count|1
+blocked_sensor_is_not_final|expect_table_rows|t|1
+blocked_sensor_is_not_final|expect_table_row|t|0|2000|2.0
