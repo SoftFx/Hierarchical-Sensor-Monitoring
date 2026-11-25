@@ -73,7 +73,8 @@ namespace HSMDataCollector.Client.Session
         Task<TableBlockAck> ITableBlockChannel.PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token) =>
             Tables.PutAsync(producer, sequence, block, token);
 
-        // The table connection closes at the end of the stop's table drain, inside its budget and before the session.
+        // The table connection closes at the end of the stop's table drain, before the session: within its budget but
+        // for the close frame and the wait for its loop (TableConnection.StopAsync).
         // The next Start of the transport starts it again.
         Task ITableBlockChannel.CloseAsync(CancellationToken budget) =>
             Volatile.Read(ref _tables)?.StopAsync(CloseLinger, budget) ?? Task.CompletedTask;

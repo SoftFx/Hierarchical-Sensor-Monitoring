@@ -491,7 +491,8 @@ namespace HSMDataCollector.Tables
                 NoteFault("The table stop drain", ex);
             }
 
-            // The table connection closes inside the drain budget, before the transport (the session) does.
+            // The table connection closes within the drain budget (but for its close frame and the end of its loop, at
+            // most 1.25 s more), before the transport (the session) does.
             await CloseChannelAsync(drainBudget).ConfigureAwait(false);
             await CloseRunAsync(run).ConfigureAwait(false);
         }

@@ -196,11 +196,11 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
    drain back). It takes the run out of the pipeline and begins its drain: from that moment the run's rows are refused
    and counted until the next `Start`, also while the collector is still `Stopping` for its value queues. It ends the
    tick and the loop, runs the final pack (after a pack of the run that is under way), delivers until the budget is
-   spent or a block is not delivered, closes the table connection (inside the budget, before the session is
-   closed), then closes the run (nothing of it is packed or enqueued again) and drops and counts the rest (the
-   backlog, and rows of sensors still `Pending`). A start rollback does the same without
-   delivering. An answer to a registration request of an earlier run changes nothing: every run registers its sensors
-   itself.
+   spent or a block is not delivered, closes the table connection (before the session is closed; within the budget
+   but for at most 1.25 s, see "Stop" below), then closes the run (nothing of it is packed or enqueued again) and
+   drops and counts the rest (the backlog, and rows of sensors still `Pending`). A start rollback does the same
+   without delivering. An answer to a registration request of an earlier run changes nothing: every run registers
+   its sensors itself.
 
 ### Registration
 
