@@ -2033,6 +2033,9 @@
         <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.IsPreviewEnabled">
             <summary>A text preview of an ordinary csv or txt file small enough; never for a large value.</summary>
         </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Kind">
+            <summary>The kind of a large file: "secure" (its archive under the dump password) or "not secure".</summary>
+        </member>
         <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Reason">
             <summary>Why a large file cannot be downloaded yet; null when it can.</summary>
         </member>
@@ -2052,13 +2055,16 @@
             <summary>A page of the file values of one File sensor, newest first.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.Uploads">
-            <summary>The uploads in progress, on the first page only.</summary>
+            <summary>The uploads in progress, on the first page only, at most a page of them.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.MoreUploads">
+            <summary>Uploads in progress beyond those listed.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.OlderThanTicks">
             <summary>The time to ask the next (older) page before; null when there is none.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.ShowPasswordMissing">
-            <summary>The product has no dump password and the page lists large files: say what is missing and who sets it.</summary>
+            <summary>The product has no dump password and the page lists secure large files: say what is missing and who sets it.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.PasswordSettingsUrl">
             <summary>The user may set the password (a Manager of the product or an admin): the notice links the settings.</summary>
@@ -2099,8 +2105,9 @@
         </member>
         <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.Decide(HSMServer.Model.FileSensors.LargeFileStoredFacts,System.Boolean)">
             <summary>
-            The state of a large value's file: its record and archive first, then, for a file not packed, the product's
-            password before the builder's state (a product without one waits whatever the builder last said).
+            The state of a large value's file: its record and archive first, then, for a secure file not packed, the
+            product's password before the builder's state (a product without one waits whatever the builder last said). A not
+            secure file never waits for a password.
             </summary>
         </member>
         <member name="T:HSMServer.Model.FileSensors.LargeFileUploadFacts">
@@ -2111,6 +2118,9 @@
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsChecking">
             <summary>The end check of the upload is running (or every piece is in and the file is not verified yet).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsSecure">
+            <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Application">
             <summary>The collector's client name; null when the record has none.</summary>
@@ -2123,6 +2133,9 @@
             A verified or packed large file, in the vocabulary of the download (#1885): <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> "verified" or
             "packed", <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.BuildState"/> "none", "queued", "building", "waitingForPassword", "waitingForRoom" or "failed".
             </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.IsSecure">
+            <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.NotReadyReason">
             <summary>Why the file cannot be downloaded yet; null when it can.</summary>
@@ -2160,6 +2173,9 @@
             bundled Caddy serves the web UI on), else <c>Agent.ExternalConnectionUrl</c>, else none: the link is then the path
             of the page alone, which a chat does not make clickable.
             </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.#ctor(HSMServer.ServerConfiguration.IServerConfig,System.Func{System.Guid,System.Guid,System.Boolean})">
+            <param name="waitsForDumpPassword">(product, file): a secure large file of a product without a dump password.</param>
         </member>
         <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.BaseAddress">
             <summary>Scheme, host and an explicit port, without a trailing slash; empty when none is known.</summary>

@@ -236,7 +236,7 @@ namespace HSMServer.Core.Tests.Model.Policies
 
 
         private static HSMServer.Model.FileSensors.ServerFileAlertContext Context(HSMServer.ServerConfiguration.IServerConfig config, string domain) =>
-            new(config, _ => true, () => domain);
+            new(config, (_, _) => false, () => domain);
 
         private static (BaseSensorModel Sensor, Policy Policy) FilePolicy(string template)
         {
@@ -286,7 +286,7 @@ namespace HSMServer.Core.Tests.Model.Policies
         {
             public string SensorPageLink(Guid sensorId) => $"{baseAddress}{FileAlertContext.SensorPagePath(sensorId)}";
 
-            public bool WaitsForDumpPassword(Guid productId) => waitsForPassword;
+            public bool WaitsForDumpPassword(Guid productId, Guid fileId) => waitsForPassword;
         }
     }
 }

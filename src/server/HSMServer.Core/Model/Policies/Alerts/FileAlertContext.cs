@@ -14,8 +14,11 @@ namespace HSMServer.Core.Model.Policies
         /// <summary>The link to the sensor's page: absolute when the server knows its public address, else the path alone.</summary>
         string SensorPageLink(Guid sensorId);
 
-        /// <summary>True when the product has no dump password, so its large files are kept and cannot be downloaded.</summary>
-        bool WaitsForDumpPassword(Guid productId);
+        /// <summary>
+        /// True when the file is a secure large file of a product without a dump password: kept, and not downloadable
+        /// until a password is set. A not secure file never waits for one.
+        /// </summary>
+        bool WaitsForDumpPassword(Guid productId, Guid fileId);
     }
 
 
@@ -43,7 +46,7 @@ namespace HSMServer.Core.Model.Policies
 
             public string SensorPageLink(Guid sensorId) => SensorPagePath(sensorId);
 
-            public bool WaitsForDumpPassword(Guid productId) => false;
+            public bool WaitsForDumpPassword(Guid productId, Guid fileId) => false;
         }
     }
 
@@ -100,7 +103,8 @@ namespace HSMServer.Core.Model.Policies
         }
 
         public static string FileNote(FileValue file, BaseSensorModel sensor) =>
-            file.IsLargeFile() && sensor?.Root is { } product && FileAlertContext.Current.WaitsForDumpPassword(product.Id)
+            file.IsLargeFile() && file.LargeFileIdOrDefault() is { } fileId && sensor?.Root is { } product &&
+            FileAlertContext.Current.WaitsForDumpPassword(product.Id, fileId)
                 ? WaitsForPasswordNote
                 : string.Empty;
     }

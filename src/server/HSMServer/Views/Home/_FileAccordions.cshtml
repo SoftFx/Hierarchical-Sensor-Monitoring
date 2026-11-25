@@ -13,7 +13,7 @@
 @if (Model.ShowPasswordMissing)
 {
     <div class="alert alert-warning py-2 my-2 large-file-password-missing" role="alert">
-        Large files of this product are kept and cannot be downloaded: the product has no dump password yet.
+        Secure large files of this product are kept and cannot be downloaded: the product has no dump password yet.
         A Manager of the product or an admin sets it in the product settings.
         @if (Model.PasswordSettingsUrl is not null)
         {
@@ -30,6 +30,7 @@
                 <div class="text-break">
                     <i class="fas fa-cloud-upload-alt me-1"></i>
                     <span class="large-file-name">@upload.Name</span>
+                    <span class="badge bg-light text-dark ms-2 large-file-kind">@upload.Kind</span>
                     <span class="badge bg-secondary ms-2 large-file-state">@upload.StateText</span>
                 </div>
                 <div class="d-flex flex-md-column align-items-end" style="font-size: smaller">
@@ -64,6 +65,10 @@
                                     <span class="file-row-name">@row.Name</span>
                                     @if (row.IsLarge)
                                     {
+                                        @if (row.Kind is not null)
+                                        {
+                                            <span class="badge bg-light text-dark ms-2 large-file-kind">@row.Kind</span>
+                                        }
                                         <span class="badge bg-secondary ms-2 large-file-state">@row.StateText</span>
                                     }
                                     <div class="d-flex text-break pt-2">
@@ -159,6 +164,11 @@
             </div>
         </div>
     </div>
+}
+
+@if (Model.MoreUploads > 0)
+{
+    <div class="text-muted my-1" style="font-size: smaller">and @Model.MoreUploads more uploads in progress</div>
 }
 
 @if (Model.OlderThanTicks is { } olderThan)

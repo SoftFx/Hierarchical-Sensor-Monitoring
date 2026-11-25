@@ -24,6 +24,9 @@ namespace HSMServer.Model.FileSensors
         /// <summary>The end check of the upload is running (or every piece is in and the file is not verified yet).</summary>
         public bool IsChecking { get; init; }
 
+        /// <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
+        public bool IsSecure { get; init; } = true;
+
         /// <summary>The collector's client name; null when the record has none.</summary>
         public string Application { get; init; }
 
@@ -43,6 +46,9 @@ namespace HSMServer.Model.FileSensors
         public string State { get; init; }
 
         public string BuildState { get; init; }
+
+        /// <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
+        public bool IsSecure { get; init; } = true;
 
         /// <summary>Why the file cannot be downloaded yet; null when it can.</summary>
         public string NotReadyReason { get; init; }

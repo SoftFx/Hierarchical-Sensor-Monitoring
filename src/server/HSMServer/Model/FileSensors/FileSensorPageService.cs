@@ -100,16 +100,20 @@ namespace HSMServer.Model.FileSensors
             var page = files.Take(PageSize).ToList();
             var productId = sensor.Root?.Id ?? Guid.Empty;
             var canManage = user is not null && user.IsManager(productId);
-            var uploads = firstPage ? _largeFiles.GetUploads(sensorId).Select(ToUploadRow).ToList() : [];
-            var rows = page.Select(file => ToRow(file, productId, canManage)).ToList();
+            var allUploads = firstPage ? _largeFiles.GetUploads(sensorId) : [];
+            var uploads = allUploads.Take(PageSize).Select(ToUploadRow).ToList();
+            var hasPassword = _largeFiles.HasDumpPassword(productId);
+            var rows = page.Select(file => ToRow(file, productId, hasPassword, canManage)).ToList();
 
-            var listsLarge = uploads.Count > 0 || rows.Any(row => row.IsLarge) || (sensor.LastValue is FileValue lastFile && IsLarge(lastFile));
-            var passwordMissing = firstPage && listsLarge && !_largeFiles.HasDumpPassword(productId);
+            // Only a secure file waits for the password; a not secure one is given out without one.
+            var listsSecure = allUploads.Any(upload => upload.IsSecure) || rows.Any(row => row.IsLarge && row.Kind == SecureKind);
+            var passwordMissing = firstPage && listsSecure && !hasPassword;
 
             return new FileValuesPageViewModel
             {
                 EncodedId = encodedId,
                 Uploads = uploads,
+                MoreUploads = allUploads.Count - uploads.Count,
                 Rows = rows,
                 OlderThanTicks = files.Count > PageSize ? page[^1].Time.Ticks : null,
                 ShowPasswordMissing = passwordMissing,
@@ -118,12 +122,17 @@ namespace HSMServer.Model.FileSensors
         }
 
 
+        public const string SecureKind = "secure";
+
+        public const string NotSecureKind = "not secure";
+
         /// <summary>The settings page of a product, where its dump password is set.</summary>
         public static string ProductSettingsPath(Guid productId) => $"/Product/EditProduct?Product={productId}";
 
         /// <summary>
-        /// The state of a large value's file: its record and archive first, then, for a file not packed, the product's
-        /// password before the builder's state (a product without one waits whatever the builder last said).
+        /// The state of a large value's file: its record and archive first, then, for a secure file not packed, the
+        /// product's password before the builder's state (a product without one waits whatever the builder last said). A not
+        /// secure file never waits for a password.
         /// </summary>
         internal static (LargeFileRowState State, string Text) Decide(LargeFileStoredFacts facts, bool hasPassword)
         {
@@ -135,12 +144,12 @@ namespace HSMServer.Model.FileSensors
                     ? (LargeFileRowState.Ready, "ready (being re-encrypted under the new password)")
                     : (LargeFileRowState.Ready, "ready");
 
-            if (!hasPassword)
+            if (facts.IsSecure && !hasPassword)
                 return (LargeFileRowState.WaitingForPassword, "waiting for the product's password");
 
             return facts.BuildState switch
             {
-                "waitingForPassword" => (LargeFileRowState.WaitingForPassword, "waiting for the product's password"),
+                "waitingForPassword" when facts.IsSecure => (LargeFileRowState.WaitingForPassword, "waiting for the product's password"),
                 "waitingForRoom" => (LargeFileRowState.WaitingForRoom, "being packed (waiting for disk space)"),
                 "failed" => (LargeFileRowState.PackingFailed, "packing failed"),
                 _ => (LargeFileRowState.Packing, "being packed"),
@@ -158,7 +167,7 @@ namespace HSMServer.Model.FileSensors
         }
 
 
-        private FileValueRowViewModel ToRow(FileValue file, Guid productId, bool canManage)
+        private FileValueRowViewModel ToRow(FileValue file, Guid productId, bool hasPassword, bool canManage)
         {
             var row = FileValueRowViewModel.From(file);
 
@@ -166,7 +175,7 @@ namespace HSMServer.Model.FileSensors
                 return row;
 
             var facts = _largeFiles.Describe(fileId);
-            var (state, text) = Decide(facts, _largeFiles.HasDumpPassword(productId));
+            var (state, text) = Decide(facts, hasPassword);
 
             return new FileValueRowViewModel
             {
@@ -178,6 +187,7 @@ namespace HSMServer.Model.FileSensors
                 Status = row.Status,
                 Comment = row.Comment,
                 IsLarge = true,
+                Kind = facts is null ? null : KindOf(facts.IsSecure),
                 LargeState = state,
                 StateText = text,
                 Reason = state == LargeFileRowState.Ready ? null : facts?.NotReadyReason,
@@ -198,6 +208,7 @@ namespace HSMServer.Model.FileSensors
                 FileId = upload.FileId,
                 Name = upload.Name,
                 Size = upload.Size.ToReadableMemoryFormat(),
+                Kind = KindOf(upload.IsSecure),
                 State = state,
                 StateText = text,
                 Percent = percent,
@@ -207,6 +218,8 @@ namespace HSMServer.Model.FileSensors
                 Host = Shown(upload.Host),
             };
         }
+
+        private static string KindOf(bool secure) => secure ? SecureKind : NotSecureKind;
 
         private static string Shown(string value) => string.IsNullOrWhiteSpace(value) ? FileValueRowViewModel.Unknown : value;
 

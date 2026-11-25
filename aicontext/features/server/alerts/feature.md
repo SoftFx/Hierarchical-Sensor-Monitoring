@@ -264,7 +264,7 @@ ADR-0022 points 17, 18. Code: `AlertState` (the variables), `FilePolicy.GetState
 | `$fileName` | the name the value is shown under (below), made safe for a message and cut to 200 characters with `…` | the same |
 | `$fileSize` | the size, as the page shows it (`2.00 KB`, `12.40 GB`) | the same |
 | `$link` | the address of the sensor page, `<base>/Home/<sensorId>` | the same |
-| `$fileNote` | `waits for the product's dump password` for a large value of a product without a dump password; empty otherwise | empty |
+| `$fileNote` | `waits for the product's dump password` for a secure large value of a product without a dump password; empty otherwise (a not secure file never waits) | empty |
 
 - **The name rule** (`FileValueNameExtensions.GetDisplayName`, also the page and the management API): a name that already ends in an extension is shown as it is (a large value carries the whole original name), a name without one gets the value's extension; nothing prints `dump.dmp.dmp`.
 - **A file name is the client's text.** Before it is substituted, `<`, `>` and `&` are replaced by look-alikes (`‹ › ＆`) and line breaks and control characters by a space: the Telegram path decodes HTML entities and honours `<markdown>…</markdown>` spans anywhere in a message, and the web comment renders markup too. `$value` and `$prevValue` of a file print the type name of its byte array, as before; the content never reaches a message.
@@ -277,6 +277,7 @@ ADR-0022 points 17, 18. Code: `AlertState` (the variables), `FilePolicy.GetState
 - Only at creation. A sensor that already exists gets nothing from a later registration with the flag: one registered by an older collector, one created by an ordinary value, one a registration reaches through an alias. Other sensor types ignore the flag.
 - The old default status-change alert (`AddDefault`) stays switched off; this is a separate call for this flag only.
 - A server older than this step ignores the flag: the cast keeps the bit and nothing reads it.
+- An ordinary `SendFile` whose content travels on the file connection (above about 1 MiB) becomes a not secure large value of an ordinary File sensor: the flag is not involved and no default alert is added for it; the sensor's own alerts see it as a new value when the file is verified.
 - A product without chats sends nothing (as for any `FromParent` policy). Telegram cuts a message at 1,000 characters; the name is cut to 200 so a single message keeps its link, while in a group of alerts aggregated in one message the later lines may lose theirs.
 
 ## Notes

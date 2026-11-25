@@ -7,7 +7,9 @@
 
 ## Overview
 
-The "Files" tab of a File sensor shows its last value on its own and, under it, the list of its values, newest first, page by page with no limit on how far back. An ordinary file value keeps its preview (csv up to 5 MiB, txt up to 1 MiB) and its download. A large file value (ADR-0022, epic #1882) is listed with its state, the time of the source file and the time it was accepted, the application and the host it came from, and its download once its archive is ready; it never has a preview. Uploads that are not values yet are listed first, with their percentage. A product without a dump password says what is missing and who can set it.
+The "Files" tab of a File sensor shows its last value on its own and, under it, the list of its values, newest first, page by page with no limit on how far back. An ordinary file value keeps its preview (csv up to 5 MiB, txt up to 1 MiB) and its download. A large file value (ADR-0022, epic #1882) is listed with its state, the time of the source file and the time it was accepted, the application and the host it came from, and its download once its archive is ready; it never has a preview. Uploads that are not values yet are listed first, with their percentage (a page of them; the rest are counted). A product without a dump password says what is missing and who can set it.
+
+A large file is of one of two kinds, marked by the application at the send (the owner's amendment of 2026-11-25): **secure** (a dump: its archive under the product's dump password) or **not secure** (the same zip without a password, downloadable by everyone who sees the product whether or not the product has a password). The page shows the kind of every large value; only a secure file waits for the password. A File sensor may hold ordinary and large values side by side: the content of an ordinary `SendFile` above about 1 MiB travels on the file connection and is stored as a not secure large file, so a sensor may hold hundreds of small large values; the list is paged and reads the store once per row of the page.
 
 Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, the password and the download step 3 (#1885).
 
@@ -33,15 +35,15 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 |---|---|
 | store record `Uploading`, pieces missing | uploading, N% |
 | store record `Uploading`, every piece in or the end check running | being checked |
-| `verified`, the product has no dump password (asked before the builder's state) | waiting for the product's password |
+| `verified`, secure, the product has no dump password (asked before the builder's state) | waiting for the product's password |
 | `verified`, builder `none`, `queued`, `building` (none: after a restart, before the builder lists the file) | being packed |
 | `verified`, builder `waitingForRoom` | being packed (waiting for disk space) |
 | `verified`, builder `failed` | packing failed |
-| `verified`, builder `waitingForPassword` | waiting for the product's password |
+| `verified`, secure, builder `waitingForPassword` | waiting for the product's password (a not secure file is "being packed") |
 | `packed` | ready (with "being re-encrypted under the new password" while a re-encryption runs; the old archive stays downloadable) |
 | a large value whose file the store has no record of | file is missing (no button) |
 
-There is no "removed by retention" state: retention removes a value's row by its key range and the store's pass then removes the file, so a large value leaves the list with its history, as any value does. The texts of why a file cannot be downloaded are step 3's (`LargeFileDto.notReadyReason`). Where the store has no application or host, the row shows `—`.
+There is no "removed by retention" state: retention removes a value's row by its key range and the store's pass then removes the file, so a large value leaves the list with its history, as any value does. The password notice appears only when a secure large file is listed. The texts of why a file cannot be downloaded are step 3's (`LargeFileDto.notReadyReason`). Where the store has no application or host, the row shows `—`.
 
 ## API / Public Contracts
 

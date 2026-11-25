@@ -284,6 +284,44 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.False(PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor))).ShowPasswordMissing);
         }
 
+
+        [Theory]
+        [InlineData("none", false, LargeFileRowState.Packing)]
+        [InlineData("waitingForPassword", false, LargeFileRowState.Packing)]
+        [InlineData("failed", false, LargeFileRowState.PackingFailed)]
+        [InlineData("waitingForRoom", true, LargeFileRowState.WaitingForRoom)]
+        public void ANotSecureFile_NeverWaitsForAPassword(string buildState, bool hasPassword, LargeFileRowState expected)
+        {
+            var facts = new LargeFileStoredFacts { FileId = Guid.NewGuid(), State = "verified", BuildState = buildState, IsSecure = false };
+
+            Assert.Equal(expected, FileSensorPageService.Decide(facts, hasPassword).State);
+        }
+
+        [Fact]
+        public async Task OnlySecureFiles_BringThePasswordNotice()
+        {
+            _largeFiles.HasPassword = false;
+            _largeFiles.Uploads[_sensor.Id] = [new LargeFileUploadFacts { FileId = Guid.NewGuid(), Name = "big.csv", PiecesTotal = 2, IsSecure = false }];
+
+            var page = PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor)));
+
+            Assert.False(page.ShowPasswordMissing);
+            Assert.Equal(FileSensorPageService.NotSecureKind, Assert.Single(page.Uploads).Kind);
+        }
+
+        [Fact]
+        public async Task HundredsOfUploads_ListAPage_AndCountTheRest()
+        {
+            _largeFiles.Uploads[_sensor.Id] = Enumerable.Range(0, 300)
+                .Select(i => new LargeFileUploadFacts { FileId = Guid.NewGuid(), Name = $"f{i}.bin", PiecesTotal = 1, IsSecure = false })
+                .ToList();
+
+            var page = PageOf(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor)));
+
+            Assert.Equal(FileSensorPageService.PageSize, page.Uploads.Count);
+            Assert.Equal(300 - FileSensorPageService.PageSize, page.MoreUploads);
+        }
+
         private static FileValuesPageViewModel PageOf(IActionResult result) =>
             Assert.IsType<FileValuesPageViewModel>(Assert.IsType<PartialViewResult>(result).Model);
 

@@ -86,6 +86,9 @@ namespace HSMServer.Model.FileSensors
 
         public bool IsLarge { get; init; }
 
+        /// <summary>The kind of a large file: "secure" (its archive under the dump password) or "not secure".</summary>
+        public string Kind { get; init; }
+
         public LargeFileRowState LargeState { get; init; }
 
         public string StateText { get; init; }
@@ -133,6 +136,8 @@ namespace HSMServer.Model.FileSensors
 
         public string Size { get; init; }
 
+        public string Kind { get; init; }
+
         public LargeFileRowState State { get; init; }
 
         public string StateText { get; init; }
@@ -154,15 +159,18 @@ namespace HSMServer.Model.FileSensors
     {
         public string EncodedId { get; init; }
 
-        /// <summary>The uploads in progress, on the first page only.</summary>
+        /// <summary>The uploads in progress, on the first page only, at most a page of them.</summary>
         public IReadOnlyList<LargeFileUploadRowViewModel> Uploads { get; init; } = [];
+
+        /// <summary>Uploads in progress beyond those listed.</summary>
+        public int MoreUploads { get; init; }
 
         public IReadOnlyList<FileValueRowViewModel> Rows { get; init; } = [];
 
         /// <summary>The time to ask the next (older) page before; null when there is none.</summary>
         public long? OlderThanTicks { get; init; }
 
-        /// <summary>The product has no dump password and the page lists large files: say what is missing and who sets it.</summary>
+        /// <summary>The product has no dump password and the page lists secure large files: say what is missing and who sets it.</summary>
         public bool ShowPasswordMissing { get; init; }
 
         /// <summary>The user may set the password (a Manager of the product or an admin): the notice links the settings.</summary>

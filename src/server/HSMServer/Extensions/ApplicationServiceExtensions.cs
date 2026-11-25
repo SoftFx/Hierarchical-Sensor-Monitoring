@@ -196,7 +196,7 @@ namespace HSMServer.ServiceExtensions
             // The alert variables of File sensors (#1886): the link to the sensor page and whether a product's large
             // files wait for its dump password (the dump password arrives with the download step, #1885).
             services.AddSingleton<HSMServer.Core.Model.Policies.IFileAlertContext>(provider =>
-                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, _ => true));
+                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, (_, _) => false));
 
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its

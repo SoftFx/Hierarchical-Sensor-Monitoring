@@ -15,23 +15,24 @@ namespace HSMServer.Model.FileSensors
 
         private readonly IServerConfig _config;
         private readonly Func<string> _domain;
-        private readonly Func<Guid, bool> _hasDumpPassword;
+        private readonly Func<Guid, Guid, bool> _waitsForDumpPassword;
 
 
-        public ServerFileAlertContext(IServerConfig config, Func<Guid, bool> hasDumpPassword)
-            : this(config, hasDumpPassword, () => Environment.GetEnvironmentVariable(DomainVariable)) { }
+        /// <param name="waitsForDumpPassword">(product, file): a secure large file of a product without a dump password.</param>
+        public ServerFileAlertContext(IServerConfig config, Func<Guid, Guid, bool> waitsForDumpPassword)
+            : this(config, waitsForDumpPassword, () => Environment.GetEnvironmentVariable(DomainVariable)) { }
 
-        internal ServerFileAlertContext(IServerConfig config, Func<Guid, bool> hasDumpPassword, Func<string> domain)
+        internal ServerFileAlertContext(IServerConfig config, Func<Guid, Guid, bool> waitsForDumpPassword, Func<string> domain)
         {
             _config = config;
-            _hasDumpPassword = hasDumpPassword;
+            _waitsForDumpPassword = waitsForDumpPassword;
             _domain = domain;
         }
 
 
         public string SensorPageLink(Guid sensorId) => $"{BaseAddress()}{FileAlertContext.SensorPagePath(sensorId)}";
 
-        public bool WaitsForDumpPassword(Guid productId) => !_hasDumpPassword(productId);
+        public bool WaitsForDumpPassword(Guid productId, Guid fileId) => _waitsForDumpPassword(productId, fileId);
 
 
         /// <summary>Scheme, host and an explicit port, without a trailing slash; empty when none is known.</summary>
