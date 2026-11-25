@@ -80,12 +80,20 @@ namespace HSMDataCollector.DefaultSensors
 
                 if (flushPartialBar)
                 {
+                    // A periodic send in flight goes first (#1846 review). It may have taken its snapshot
+                    // already: a value added after that snapshot is in the live bar only, and the final send
+                    // below, finding the send guard held, used to skip and leave that value in no published
+                    // bar. The send loop is stopped here, with the same bounded wait base.StopAsync would
+                    // spend on that send; with no send in flight this does nothing, and the final send is
+                    // what it always was.
+                    await StopSendLoopAsync().ConfigureAwait(false);
+
                     // Flush the in-progress partial bar before base.StopAsync bumps the lifecycle
                     // epoch and the data queues drain — otherwise everything accumulated since the
                     // last CloseTime is lost at shutdown. Same roll-on-successful-send contract as
-                    // CheckCurrentBar: if a periodic send is in flight (TrySendValue returns false),
-                    // that send publishes the snapshot itself and the bar intentionally stays
-                    // un-rolled (the server merges partial bars by OpenTime).
+                    // CheckCurrentBar: if a periodic send outlived the bounded wait above (TrySendValue
+                    // returns false), that send publishes its snapshot itself and the bar intentionally
+                    // stays un-rolled (the server merges partial bars by OpenTime).
                     lock (_lockBar)
                     {
                         if (_internalBar.Count > 0 && TrySendValue())

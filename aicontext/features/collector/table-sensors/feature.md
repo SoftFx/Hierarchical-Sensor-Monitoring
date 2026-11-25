@@ -225,7 +225,10 @@ Every lost row is counted in its sensor's `RowsDropped` and in the **loss ledger
 gate). At every tick and at the end of the table drain the ledger reports what it gathered: one deduplicated line per
 reason through `Collector errors`, and the rows to the `Queue overflow` diagnostic sensor under the queue
 **"Table rows"** while that sensor takes values (from its start until it has published its last bar of the run; the
-sensor refuses them after that, atomically with its last bar). Rows the sensor did not take stay in the ledger.
+sensor refuses them after that, atomically with its last bar). Rows the sensor did not take stay in the ledger. The
+sensor's stop first lets a periodic send in flight end (the bounded wait of every sensor stop) and then publishes its
+last bar: a loss the sensor took after that send's snapshot is in the last bar (`BarMonitoringSensorBase.StopCoreAsync`,
+the same for every bar sensor).
 
 At the very end of the collector's stop (after the sensors stopped, the value drain and the table drain), **one line**
 says what the ledger still holds: `Collector stop: N table row(s) were lost during this run and are not in the Queue
@@ -286,6 +289,9 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - Rows of refused tables beyond the first 100 of one acknowledgement are not in `RowsDropped`: the server lists at
   most 100 refusals and gives only the number of the rest (`refusedCount`), so the collector knows neither their tables
   nor their rows. The collector logs both numbers.
+- **A last bar that cannot be published.** A periodic send of `Queue overflow` that outlives the bounded wait of the
+  sensor's stop (1 s; the send only enqueues a value) still owns the send guard when the last bar is due: that bar is
+  not published, and the losses the sensor took after that send's snapshot are in no report.
 
 ## Open Points
 
