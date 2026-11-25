@@ -94,8 +94,12 @@ namespace HSMServer.Core.TableSensors
 
             // Nothing is opened here: a store that cannot open costs table puts only, never the construction of this
             // service or of whatever it is injected into. The sequence floor is raised by the first put (EnsureSequenceFloor).
-            Merge = new TableMergeJob(_database, _cache, _options, _gate, EnsureMergeState);
+            Merge = new TableMergeJob(_database, _cache, _options, _gate, EnsureMergeState) { Feed = Feed };
         }
+
+
+        /// <summary>The counters the feed sensors of table sensors are posted from (#1847).</summary>
+        public TableFeedCounters Feed { get; } = new();
 
 
         /// <summary>The hourly merge of blocks into batches (#1850), run by the server's background service.</summary>
@@ -142,7 +146,7 @@ namespace HSMServer.Core.TableSensors
             {
                 AfterReserve?.Invoke(ticket.Sequence);
 
-                var refusals = Match(productId, directory, ticket.Sequence, out var detailed);
+                var refusals = Match(productId, directory, ticket.Sequence, out var detailed, out var accepted);
                 var envelope = new TableBlockEnvelope
                 {
                     ProductId = productId,
@@ -180,6 +184,7 @@ namespace HSMServer.Core.TableSensors
 
                     case TableBlockAppendOutcome.NotStored:
                         CountRefusals(refusals, detailed);
+                        Feed.AddRefused(productId, refusals.Count);
                         return new TableBlockPutResult
                         {
                             Outcome = TableBlockPutOutcome.AllRefused,
@@ -191,6 +196,7 @@ namespace HSMServer.Core.TableSensors
 
                     default:
                         CountRefusals(refusals, detailed);
+                        Feed.AddStored(productId, accepted, appended.Entry.StoredLength, refusals.Count, header.LastTime, appended.Entry.ArrivalTicks);
                         return new TableBlockPutResult
                         {
                             Outcome = TableBlockPutOutcome.Stored,
@@ -370,19 +376,25 @@ namespace HSMServer.Core.TableSensors
 
         // The refused tables of a block, in directory order: every one (for the envelope), and the first
         // MaxDetailedRefusals with their identifiers (for the result). Outside any lock of the store: the put holds a
-        // reserved ticket, which only makes later puts wait for their turn to write.
-        private List<TableRefusal> Match(Guid productId, TableBlockDirectory directory, long sequence, out List<TableRefusalInfo> detailed)
+        // reserved ticket, which only makes later puts wait for their turn to write. `accepted` is the sensor and the rows
+        // of every table taken, for the feed counters (#1847).
+        private List<TableRefusal> Match(Guid productId, TableBlockDirectory directory, long sequence, out List<TableRefusalInfo> detailed,
+            out List<(Guid SensorId, int Rows)> accepted)
         {
             var refusals = new List<TableRefusal>();
             detailed = new List<TableRefusalInfo>();
+            accepted = new List<(Guid, int)>(directory.Entries.Count);
 
             for (int i = 0; i < directory.Entries.Count; i++)
             {
                 var entry = directory.Entries[i];
-                var reason = Refuse(productId, entry, sequence, out var path);
+                var reason = Refuse(productId, entry, sequence, out var path, out var table);
 
                 if (reason is not { } refused)
+                {
+                    accepted.Add((table.Id, entry.RowCount));
                     continue;
+                }
 
                 refusals.Add(new TableRefusal(i, refused));
 
@@ -396,8 +408,10 @@ namespace HSMServer.Core.TableSensors
             return refusals;
         }
 
-        private TableRefusalReason? Refuse(Guid productId, TableDirectoryEntry entry, long sequence, out string path)
+        private TableRefusalReason? Refuse(Guid productId, TableDirectoryEntry entry, long sequence, out string path, out TableSensorModel table)
         {
+            table = null;
+
             try
             {
                 path = StrictUtf8.GetString(entry.TableId);
@@ -411,8 +425,10 @@ namespace HSMServer.Core.TableSensors
             if (!_cache.TryGetSensorByPath(productId, path, out var sensor))
                 return TableRefusalReason.UnknownSensor;
 
-            if (sensor is not TableSensorModel table)
+            if (sensor is not TableSensorModel found)
                 return TableRefusalReason.NotATableSensor;
+
+            table = found;
 
             if (table.State is SensorState.Blocked)
                 return TableRefusalReason.SensorBlocked;
