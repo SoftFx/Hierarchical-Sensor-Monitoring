@@ -26,12 +26,20 @@ public class SelectedNodeViewModel
     public bool ShowChartTab { get; set; }
 
 
+    // One user may have several requests in flight (two browser tabs). Selecting an entity and loading
+    // its children is one step: a refresh that checked the selection must not write its list after
+    // another request has selected something else.
+    private readonly object _selection = new();
+
     public void ConnectNode(ProductNodeViewModel newNode)
     {
-        Subscribe(newNode);
-        
-        _nodes.Load(newNode.Nodes);
-        _sensors.Load(newNode.Sensors);
+        lock (_selection)
+        {
+            Subscribe(newNode);
+
+            _nodes.Load(newNode.Nodes);
+            _sensors.Load(newNode.Sensors);
+        }
     }
 
     /// <param name="newFolder">The selected folder.</param>
@@ -41,10 +49,13 @@ public class SelectedNodeViewModel
     /// </param>
     public void ConnectFolder(FolderModel newFolder, IDictionary<Guid, ProductNodeViewModel> visibleProducts)
     {
-        Subscribe(newFolder);
+        lock (_selection)
+        {
+            Subscribe(newFolder);
 
-        _nodes.Load(visibleProducts, "Products");
-        _sensors.Reset();
+            _nodes.Load(visibleProducts, "Products");
+            _sensors.Reset();
+        }
     }
 
     /// <summary>
@@ -53,8 +64,11 @@ public class SelectedNodeViewModel
     /// </summary>
     public void RefreshFolderProducts(Guid folderId, IDictionary<Guid, ProductNodeViewModel> visibleProducts)
     {
-        if (_selectedNode?.Id == folderId)
-            _nodes.Load(visibleProducts, "Products");
+        lock (_selection)
+        {
+            if (_selectedNode?.Id == folderId)
+                _nodes.Load(visibleProducts, "Products");
+        }
     }
 
     public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest) => pageRequest.IsNodes ? _nodes.Reload(pageRequest) : _sensors.Reload(pageRequest);

@@ -61,7 +61,8 @@ public class JournalController : BaseController
         // A folder's own records (its settings) follow the rule of the global Journal page: they are the
         // folder Manager's to read, while the records of its products follow the products.
         bool IsOwnerVisible(Guid id) =>
-            _tree.TryGetFolder(user, id, out var folder) ? user.IsFolderManager(folder.Id) : _tree.IsVisible(user, id);
+            _tree.TryGetSensor(user, id, out _) || _tree.TryGetNode(user, id, out _) ||
+            (_tree.TryGetFolder(user, id, out var folder) && user.IsFolderManager(folder.Id));
 
         var (recordsFromDb, filteredRecords, totalRecords) = StoredUser.Journal.GetPage(parameters, IsOwnerVisible);
         foreach (var recordFromDb in recordsFromDb)
