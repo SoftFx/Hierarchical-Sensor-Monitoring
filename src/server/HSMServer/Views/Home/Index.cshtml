@@ -158,14 +158,16 @@
         var id = dataObject.id;
         let isFile = dataObject.sensorType === 6;
 
-        $('#value_' + id).empty().append(dataObject.value);
+        // value, fileNameString and a file's comment are plain text (the same strings the server
+        // renders HTML-encoded on the first load): they are set as text, never parsed as HTML.
+        $('#value_' + id).text(dataObject.value ?? '');
         $('#validation_' + id).empty();
 
         if (isFile) {
-            $(`#last_file_name_${id}`).empty().append(dataObject.fileNameString);
+            $(`#last_file_name_${id}`).text(dataObject.fileNameString ?? '');
 
             if (dataObject.comment !== null)
-                $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
+                $('#validation_' + id).append($('<span class="d-flex text-break"></span>').text(`Comment: ${dataObject.comment}`));
         }
 
         if (dataObject.isValidationErrorVisible) {

@@ -316,6 +316,24 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task JournalFeed_SendsPlainCellsEncoded()
+        {
+            // The per-node journal table inserts every cell as HTML; an initiator is a user or key name.
+            var tree = new WebAccessFixture();
+
+            tree.Journal.Initiator = "<img src=x onerror=alert(1)>";
+            await tree.Home(tree.Admin).SelectNode(tree.Cpu.Id.ToString());
+
+            var parameters = new DataTableParameters(
+                Columns: [new DataTableColumn(0, nameof(ColumnName.Initiator), false, false, new Search(false, string.Empty))],
+                Draw: 1, Length: 50, Order: [], Search: new Search(false, string.Empty), Start: 0, NeedSearchPath: false);
+
+            var cell = ((DataTableResultSet)tree.JournalFeed(tree.Admin).GetPage(parameters).Value).Data.Single().Single();
+
+            Assert.Equal("&lt;img src=x onerror=alert(1)&gt;", cell);
+        }
+
+        [Fact]
         public async Task FilesOfAnotherSensor_AreNotServedFromTheSelectedOne()
         {
             var tree = new WebAccessFixture();

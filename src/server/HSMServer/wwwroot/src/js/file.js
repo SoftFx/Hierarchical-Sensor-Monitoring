@@ -22,9 +22,7 @@ window.openFileInBrowser = function (path, fileName, viewFileAction, time = unde
                 fileType = "text/html";
             }
 
-            let blob = new Blob([response], { type: fileType });
-            let url = window.URL.createObjectURL(blob);
-            window.open(url);
+            openFileContent(response, fileType);
 
             $("#spinner").css("display", "none");
             $("#mainContainer").css("display", "block");
@@ -36,6 +34,31 @@ window.openFileInBrowser = function (path, fileName, viewFileAction, time = unde
             $("#navbar").css("display", "block");
         }
     });
+}
+
+// The content of a file sensor comes from whoever holds an access key of the product. A PDF goes to the
+// browser's viewer. Anything else is shown as a page, but inside a sandboxed frame: the page may run its
+// own scripts, in an origin of its own, with no access to this site's cookies, storage or pages.
+function openFileContent(content, fileType) {
+    if (fileType === 'application/pdf') {
+        window.open(window.URL.createObjectURL(new Blob([content], { type: fileType })));
+        return;
+    }
+
+    const page = window.open('', '_blank');
+
+    if (!page)
+        return;
+
+    const frame = page.document.createElement('iframe');
+
+    frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-modals');
+    frame.setAttribute('style', 'position:fixed;top:0;left:0;width:100%;height:100%;border:0');
+    frame.srcdoc = typeof content === 'string' ? content : String(content);
+
+    page.document.title = 'File preview';
+    page.document.body.style.margin = '0';
+    page.document.body.appendChild(frame);
 }
 
 const csvStringToArray = (data) => {
@@ -74,8 +97,9 @@ window.previewFile = function(url, id, extension, time = null, fileNumber = null
 
                 let columns = [];
 
+                // DataTables takes titles and cells as HTML: the file's text is shown as text.
                 dataSet[0].forEach(el => {
-                    columns.push({ "title": el })
+                    columns.push({ "title": escapeHtml(el), "render": $.fn.dataTable.render.text() })
                 });
 
                 $(`#preview${fileId}`).removeClass('d-none container');
@@ -90,7 +114,7 @@ window.previewFile = function(url, id, extension, time = null, fileNumber = null
             }
             else if (extension === 'txt') {
                 $(`#preview${fileId}`).removeClass('d-none container');
-                $(`#preview-content${fileId}`).addClass('w-100 mw-100 text-break').html(file);
+                $(`#preview-content${fileId}`).addClass('w-100 mw-100 text-break').text(file);
             }
         }
     })

@@ -72,8 +72,8 @@ window.changeAccessKey = function(url, id, name) {
 
 window.deleteAccessKey = function(url, id, name) {
     showConfirmationModal(
-        `Removing ${name} access key`,
-        `Do you really want to remove selected access key <strong>${name}</strong>?`,
+        `Removing ${escapeHtml(name)} access key`,
+        `Do you really want to remove selected access key <strong>${escapeHtml(name)}</strong>?`,
         function () {
             $.ajax({
                 type: 'POST',

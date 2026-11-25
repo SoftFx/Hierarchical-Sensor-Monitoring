@@ -299,8 +299,10 @@
     // channels stay intact. On success the form reopens on the just-cleared channel's tab so
     // the user can paste a new URL without an extra click.
     function removeChannel(channelName, channelTab, actionUrl, confirmText) {
+        const chatName = escapeHtml(@Json.Serialize(Model.Name));
+
         showConfirmationModal(
-            `Removing ${channelName} from chat '@Model.Name'`,
+            `Removing ${escapeHtml(channelName)} from chat '${chatName}'`,
             confirmText,
             function () {
                 $.ajax({

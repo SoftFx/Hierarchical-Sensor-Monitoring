@@ -43,7 +43,7 @@
                 <tr id="row_folder_@folder.Id">
                     <td class="text-break">
                         <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@folder.Id">
-                            @Html.Raw(folder.Name)
+                            @folder.Name
                         </a>
                     </td>
                     <td class="text-break">@string.Join(", ", folder.UserRoles.Where(ur => ur.Value is ProductRoleEnum.ProductManager).Select(ur => ur.Key.Name))</td>

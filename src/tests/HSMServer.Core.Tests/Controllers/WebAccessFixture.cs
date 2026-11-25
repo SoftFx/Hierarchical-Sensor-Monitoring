@@ -300,6 +300,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             public List<Guid> Asked { get; } = [];
 
+            /// <summary>Who the stored records name as their author.</summary>
+            public string Initiator { get; set; } = "System";
+
             public async IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request)
             {
                 await Task.Yield();
@@ -310,7 +313,7 @@ namespace HSMServer.Core.Tests.Controllers
                 yield return
                 [
                     new(new JournalKey(request.Id, new DateTime(2024, 1, 1).Ticks, RecordType.Changes).GetBytes(),
-                        new JournalRecordEntity { Initiator = "System", OldValue = "old", NewValue = "new", PropertyName = "Description" }),
+                        new JournalRecordEntity { Initiator = Initiator, OldValue = "old", NewValue = "new", PropertyName = "Description" }),
                 ];
             }
 
