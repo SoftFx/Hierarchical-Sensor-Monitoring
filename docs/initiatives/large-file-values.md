@@ -36,14 +36,14 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 - Wire: `FileSensorValue : SensorValueBase<List<byte>>` with `Name` and `Extension` (`src/api/HSMSensorDataObjects/SensorValueRequests/FileSensorValue.cs`). A byte of the file is a number in a JSON array, up to four bytes of JSON.
 - Managed collector: the whole file is read into one array; `FileSensorOptions.MaxFileSizeBytes` is 10 MiB by default with a ceiling of 128 MiB (`src/collector/HSMDataCollector/Options/SensorOptions.cs`, `Sensors/InstantSensors/FileSensorInstant.cs`).
 - Native collector: the whole file is read into memory on the caller's thread; the cap is a constant 10 MiB (`src/native/collector/src/hsm_collector.cpp`, `MaxFileSensorBytes`). There is no streaming upload of any kind, no compression library, and the session is text only: a binary message is an error (`src/native/collector/src/hsm_ws_connection.hpp`). Its dependencies are curl and nlohmann-json.
-- On a session a file is one element of a `list` frame: about 1 MiB at the default `MaxFrameBytes` of 4 MiB; a larger one is dropped and counted. Over HTTP the body limit is 50 MB for every route (`src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs`).
+- On a session a file is one element of a `list` frame: about 1 MiB at the default `MaxFrameBytes` of 4 MiB; a larger one is dropped and counted. Over HTTP the body limit is 50 MiB for every route (`src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs`).
 - Server: the value is model-bound whole, deflated in memory and written as one row of the ordinary weekly sensor-values database, key `sensor id | time` (`src/database/HSMDatabase/DatabaseWorkCore/DatabaseCore.cs`). The last value of every File sensor stays in memory, decompressed (`FileValuesStorage.CacheSize => 1`). Nothing limits the size of a value; a failed write is logged and not reported to the sender.
-- Download in the web UI: `HomeController.GetFile` and three more actions return the content from memory, the last 20 values at most, without streaming or ranges (`src/server/HSMServer/Controllers/HomeController.cs`, region "File"). Their product access checks belong to the web UI access-check work and are a precondition of step 3.
+- Download in the web UI: the content is returned from memory, the last 20 values at most, without streaming or ranges (`src/server/HSMServer/Controllers/HomeController.cs`, region "File").
 - API: an access key with `CanReadSensorData` gets the content as base64 inside JSON (`POST /api/sensors/history`), whole in memory. An API token (`/api/v1`, MCP) gets name, extension and size only: "file CONTENT is never serialized anywhere in the area" (`aicontext/features/server/management-api/feature.md`).
-- Retention is by age only ("Keep sensor history"), key by key.
+- Retention is by age only ("Keep sensor history"): a delete of the sensor's key range up to a time. The values are not enumerated, so nothing today could remove a file that belongs to a value.
 - Alerts: "new data has been received" exists for a File sensor; the message template has no variable for the file name, its size or a link. A Telegram message is limited to 1,000 characters and carries no attachment.
 
-**The heavy-data connection of table sensors** (branch `feature/1842-table-sensors`, not in `master`): a second WebSocket of the collector session, subprotocol `hsm.tables.v1`, tied to the live session by `X-Hsm-Session`; binary frames of up to 4 MiB by default (64 MiB at most), each answered with a text acknowledgement, one in flight; a server-wide memory budget for frames over 64 KiB with one reservation per access key; close code `1013` when the budget is not available in time (`aicontext/features/api/wire-contract/feature.md`, "Table connection"; `aicontext/features/server/collector-session/feature.md`). The managed collector's client of it is being finished; the native collector has none (step 6, #1848, not started).
+**The heavy-data connection of table sensors** (branch `feature/1842-table-sensors`, not in `master`): a second WebSocket of the collector session, subprotocol `hsm.tables.v1`, tied to the live session by `X-Hsm-Session`; binary frames of up to 4 MiB by default (64 MiB at most), each answered with a text acknowledgement, one in flight; a server-wide memory budget for frames over 64 KiB with one reservation per access key; close code `1013` when the budget is not available in time (`aicontext/features/api/wire-contract/feature.md`, "Table connection"; `aicontext/features/server/collector-session/feature.md`). The managed collector's client of it is on local branches (`feature/1846-table-collector`, `feature/1846-table-connection-client`), not on this one; the native collector has none (step 6, #1848, not started).
 
 ## The owner's decisions (2026-11-25)
 
@@ -62,7 +62,7 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 | 11 | Connection | A WebSocket of its own on the session, open only while a file is uploaded. Not the table connection. |
 | 12 | A half-uploaded file | Kept 7 days from its last piece, then deleted and reported. |
 | 13 | Load on the application | A speed limit by default (10 MB/s), one upload at a time, one background thread. |
-| 14 | Where the password is applied | On the server, when a file is downloaded. Set per product. |
+| 14 | Where the password is applied | On the server, not in the collector: the server makes the zip. Set per product. |
 | 16 | Scope of the mechanism | Any large file of a File sensor; a dump is a use of it. |
 | 17 | Collectors | Native (C++) first, managed right after it in the same epic; the server part before both. |
 | 18 | Notification | On by default for a sensor set up for dumps. |
@@ -70,15 +70,17 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 | 20 | UI | The sensor page. |
 | 21 | Branch | An epic and an integration branch of its own, cut from `feature/1842-table-sensors`. |
 | — | The store | Files on the server's disk, given out by Caddy ("сначала я планировал хранить это на диске и отдавать его напрямую через Caddy"). |
-| 22 | Access when Caddy serves | HSM checks every download and writes the journal; Caddy moves the bytes. |
+| 22 | Access when Caddy serves | HSM checks every download and records it; Caddy moves the bytes. |
 
 Not answered: how often dumps appear.
+
+The rules below that are not in this table are the design's, not the owner's: they were added to make the decisions hold in the cases an independent review of 2026-11-25 raised (a restart between the check and the zip, two files with one time, a full disk in the middle, bytes that lie about their size, a file that changes while it is sent).
 
 ## Proposed Direction
 
 ### Terms
 
-- **Large file value**: a value of a File sensor whose content is not part of the value. The value holds what describes the file (name, size, hash, state); the content lies in the large file store and travels in pieces.
+- **Large file value**: a value of a File sensor whose content is not part of the value. The value holds what describes the file (name, size, hash, state, the modification time of the source file); the content lies in the large file store and travels in pieces.
 - **Dump**: a file with a snapshot of a process, delivered as a large file value. To HSM it is bytes.
 - **Piece**: a fixed-size part of the source file (the last one may be shorter), compressed by itself. A piece number names a place in the file.
 - **File connection**: the WebSocket of a collector session that carries pieces.
@@ -87,28 +89,35 @@ Not answered: how often dumps appear.
 ### The collector
 
 - The application names a folder, a name mask and a sensor path (`WatchLargeFiles(folder, mask, sensorPath, options)`), or hands over one file (`SendLargeFile(sensorPath, filePath)`). Both are additions to the public API; `SendFile` and its limits do not change.
-- A file in a watched folder is taken when its size and modification time have not changed for N seconds and it opens for reading with no writer. Files found at start are taken by the same rule, oldest first.
+- A file in a watched folder is taken when its size and modification time have not changed for N seconds and, on Windows, it opens for reading with no writer. Linux has no such check: there only the settle time decides. Files found at start are taken by the same rule, oldest first.
+- For the whole upload the collector keeps the file open and, where the system allows it, denies writing and deleting. Before `end`, and again before it deletes the file, it compares the size, the modification time and the identity of the file (file id or inode) with what it began with. A file that changed is not finished: the upload is discarded on the server and begun again when the file has settled.
 - One upload at a time, on one background thread of lowered priority: read a piece, compress it with zstd level 3, send it, wait for the acknowledgement. The collector holds one piece in memory.
-- A speed limit, 10 MB/s by default, set by the application.
-- The collector keeps a small state file in its data folder: which files it has delivered. A file is deleted from the application's disk only after the server answered that the whole file is stored and its hash matched. A per-folder option keeps the file instead.
+- A speed limit, 10 MB/s by default, set by the application. It is kept by waiting between pieces; a piece, once begun, is sent at full speed, so the server's deadline for a frame holds whatever the limit is.
+- The collector keeps a small state file in its data folder: which files it has delivered, each by name, size, modification time and identity. A new file under an old name is a new file. The file that was sent, and only that one, is deleted from the application's disk after the server answered `stored`. A per-folder option keeps the file instead.
+- A refusal for space is not final: the file stays and is tried again later. A final refusal (a file over the limit, a sensor or a product that is gone, a key that may no longer send) leaves the file where it is, is reported once and is not tried again before the collector's next start.
 - What the collector cannot see: a file whose writer died for good looks complete and is sent as it is.
 - Large files need the session transport, as table sensors do.
 
 ### The wire: the file connection
 
-A further WebSocket on `GET {base}session` with its own subprotocol (working name `hsm.files.v1`), tied to the live session by `X-Hsm-Session`, taking no session slot, as the table connection does. It is opened for an upload and closed after it. The loop, the heartbeat, the access check for every frame, the acknowledgements and the close codes are those of the table connection; its memory accounting is reused with a budget of its own.
+A further WebSocket on `GET {base}session` with its own subprotocol (working name `hsm.files.v1`), tied to the live session by `X-Hsm-Session`, taking no session slot, as the table connection does. It is opened for an upload and closed after it. The loop, the heartbeat, the access check for every frame, the acknowledgements and the close codes are those of the table connection. A server then holds at most three sockets per session, not two.
 
-- **Begin** (text request): the sensor path, the file's name, size and modification time, the piece size. The server answers with the number of the next piece it wants (0 for a new file, N for one it holds a part of), or refuses: no room on the disk (to be tried again later), a file over the limit, a sensor that cannot take it. The refusal comes before a byte of the file is sent.
-- **Piece** (binary frame): a header (request id, upload id, piece number, lengths, checksum) and the zstd frame of that piece. One in flight; the acknowledgement names the next piece.
-- **End** (text request): the hash of the whole file. The server reads what it stored, checks the hash and answers `stored`; only then the value exists, the alert fires and the collector may delete the source. A mismatch discards the upload, and the collector sends the file again.
+Memory: file frames have a budget of their own, so a piece never takes the reservation of a table block. The rule of the table connection, one large-frame reservation per access key, is **not** carried over: collectors that share a key would queue behind each other's files. What bounds the memory instead is the number of uploads in progress on the whole server, a setting; an upload beyond it is refused at `begin`, to be tried again later.
+
+- **Begin** (text request): the sensor path, the file's name, size and modification time, the piece size. The server answers with the number of the next piece it wants (0 for a new file, N for one it holds a part of), or refuses before a byte of the file is sent: no room (below), a file over the limit, too many uploads in progress, a sensor that cannot take it. The piece size is fixed here and kept in the upload's record; a `begin` that names the same file with another piece size starts the upload again from piece 0. A part has one live upload: a second `begin` for it while the first connection is alive is refused as busy.
+- **Room.** At `begin` the server reserves the announced size in the store's own accounting and keeps the reservation until the upload is packed or abandoned; the free-space check counts every reservation, so uploads that begin together cannot pass on the same free bytes.
+- **Piece** (binary frame): a header (request id, upload id, piece number, the length of the piece before and after compression, a checksum of the compressed bytes) and the zstd frame of that piece. One in flight; the acknowledgement names the next piece. The piece size announced in the hello is the frame limit less the header and less the most zstd can add to bytes that do not compress, so a piece always fits a frame.
+- **What a piece may be.** The number of pieces is the size divided by the piece size, rounded up, and no more. Every piece must decompress to exactly the piece size, the last one to the remainder. The server decompresses into a buffer of that size with a bounded window, so a small frame cannot unfold into gigabytes and the bytes sent cannot exceed the size that was checked against the limit and the free space. A piece that breaks this is answered `400` and the upload is discarded.
+- **An acknowledgement means the piece is on the disk**: the piece and the upload's record are flushed to the disk before the answer. A write that fails, a full disk in the middle included, is answered `503` with a time to try again; nothing is acknowledged and nothing accepted before it is lost.
+- **End** (text request): the hash of the whole file. The server reads what it stored, checks the hash and marks the upload **verified** in its record on the disk; then it answers `stored`. Only then the value exists, the alert fires and the collector may delete the source. A mismatch discards the upload, and the collector sends the file again.
 - A connection that drops in the middle costs one piece. After a restart of either side the collector begins again with the same file and continues from the server's number.
-- The piece size is at most the frame limit; the default frame limit of 4 MiB needs about 47 KB/s of link speed to pass the 90-second deadline of a reserved frame.
+- With the default frame limit of 4 MiB a link needs about 47 KB/s to pass the 90-second deadline of a reserved frame; below that no piece gets through, and the collector reports it.
 
 Details to settle in the step: the header layout, whether the whole-file hash is a hash of the bytes or of the pieces' hashes (the second lets both sides resume without reading the file again), how the collector learns the result of a check that takes minutes.
 
 ### Where the bytes live on the server
 
-**Direction of the owner (2026-11-25): files on the server's disk, given out by Caddy.** The comparison with LevelDB is being measured and its numbers are added here when the run ends; they are the record of why a second kind of store is justified here, when it was refused for table sensors (ADR-0021).
+**Direction of the owner (2026-11-25): files on the server's disk, given out by Caddy.** The comparison with LevelDB was measured (below); the numbers are the record of why a second kind of store is justified here, when it was refused for table sensors (ADR-0021).
 
 The two candidates:
 
@@ -119,17 +128,24 @@ Why files fit this data and did not fit table rows: a large file is written once
 
 The layout:
 
-- A folder set in the server's settings (it may be another volume than the databases), one subfolder per product.
-- While a file is uploaded: `<file id>.part`, the pieces appended as they arrive, with a small record beside it (the description from `begin`, the number of pieces accepted).
-- After `end`: the server reads the part once, checks the hash and writes `<file id>.zip` under the product's password, then removes the part. A file of a product without a password stays in its compressed form until a password is set.
-- The value in the sensor's history points at the file by its id; the file's name on the disk tells nothing.
-- At start the server compares the folder with the values: a part without a live upload record is kept its 7 days; a zip without a value, or a value without its zip, is reported and not silently fixed.
+- A folder set in the server's settings (it may be another volume than the databases). Two subtrees: one for uploads in progress and checked files, one for the archives that are given out. Only the second is ever shown to Caddy.
+- A file on the disk is named by its id, a GUID the server makes; nothing a client sent is part of a path.
+- An upload has a record beside its part and one of three states, written to the disk:
+  - **uploading**: pieces are appended to `<file id>.part`. The 7 days count for this state only.
+  - **verified**: the hash matched and the collector was told `stored`. From here the server owns the only copy and never removes it for age. The value exists.
+  - **packed**: the archive is built and checked, and the part is removed.
+- The archive is written under a temporary name and renamed into place when it is complete and its content was read back. A build that fails (a full disk, a fault of the library) removes the temporary file, keeps the part, is tried again and raises an alert. Before a build the server checks that the part and the archive fit together.
+- A file of a product without a password stays **verified** until a password is set, then it is packed.
+- The value in the sensor's history points at the file by its id.
+- At start: a part longer than its record says is cut back to the record; an **uploading** part waits for its collector its 7 days; a **verified** part goes on to its build; an archive without a value, or a value without its file, is reported and not silently fixed.
+- **Removal is the store's own pass.** The cleanup of sensor history deletes a range of keys and never looks at the values, so the store compares its files with the values that exist and removes the files of values that are gone: by retention, by clear-history, with a removed sensor or product. Each removal is logged and counted.
+- A File sensor that holds large values cannot be moved to another product in the first version: its archives lie under the first product's password. A move inside the product changes nothing, the sensor keeps its id.
 
 What the second store costs: two things to keep consistent (the value and the file), a folder that is not in the databases' folder, and a store that needs its own free-space check and its own retention pass.
 
 ### The store, measured (2026-11-25)
 
-Both candidates were run the same way: a Linux container (Docker Desktop on WSL2, kernel 5.15), the data on a fresh ext4 volume for each scenario; `SoftFX.LevelDB.Standard` 1.2.2 opened as the table block store opens its database (no compression, 8 MiB write buffer); files of 8 GiB of incompressible bytes, as a compressed dump is; pieces of 1, 4 and 16 MiB. Most rows are single runs; the cold reads were repeated three times. The code is a throwaway console project on the local branch `experiment/dump-store-bench`.
+Both candidates were run the same way: a Linux container (Docker Desktop on WSL2, kernel 5.15), the data on a fresh ext4 volume for each scenario; `SoftFX.LevelDB.Standard` 1.2.2 opened as the table block store opens its database (no compression, 8 MiB write buffer); files of 8 GiB of incompressible bytes, as a compressed dump is; pieces of 1, 4 and 16 MiB. Most rows are single runs; the cold reads were repeated three times. Sizes here are GiB; the limit of 64 GB is the owner's figure and a setting in bytes. The code is a throwaway console project on the local branch `experiment/dump-store-bench`.
 
 | | LevelDB, one key per piece | One file |
 |---|---|---|
@@ -146,42 +162,50 @@ Both candidates were run the same way: a Linux container (Docker Desktop on WSL2
 | Deleting one file of three: the space is back | only after a compaction of the range, 1.4–6.5 s | at once |
 | After a kill of the writer | every acknowledged piece kept | every acknowledged piece kept |
 
-- LevelDB did not rewrite data while it took the pieces: no compaction, only moves of tables. Its space overhead is at most 0.06%.
-- From 2 to 8 GiB the times grew 3.8 to 4.7 times and the bytes written and the number of tables exactly 4 times. **Extrapolated to 64 GiB, not measured:** a durable write of about 580 s into LevelDB and 520 s into a file, about 128 GiB written to the disk by LevelDB, 8,192 tables for one file and about 82,000 for ten.
+- LevelDB did not rewrite data while it took the pieces of one file at a time: no compaction, only moves of tables. Uploads that interleave their keys were not run. Its space overhead is at most 0.06%.
+- From 2 to 8 GiB the times grew 3.8 to 4.7 times and the bytes written and the number of tables exactly 4 times. **Extrapolated to 64 GiB at pieces of 4 MiB, not measured:** a durable write of about 580 s into LevelDB and 520 s into a file, about 128 GiB written to the disk by LevelDB, 8,192 tables for one file and about 82,000 for ten.
 - The wrapper cannot set LevelDB's table size, and its reads always return a new array: a read through its ordinary API allocates the whole file again on the managed heap.
+- "Durable" here is a flush on the virtual disk of Docker Desktop, which may not reach the physical disk: the write times with a flush per piece are a lower bound, and the kill of the writer could not tell a flushed piece from one still in the system's cache.
+- The resident memory of the LevelDB reader is mapped file pages: it counts in the container's memory and the system can take it back, unlike memory of the heap.
 - Not measured: files of 64 GiB (the disk of the development machine), a power loss (only a kill of the process), a cache that is cold for certain, the production disk.
+- Not measured at all, and the larger part of the work on a file of 64 GB: the check after `end` (reading and decompressing the whole file), the build of the archive, a re-encryption. They are measured in step 3 before its design is fixed.
 
-What the numbers say: LevelDB can hold the pieces and loses none in a crash, at twice the disk writes and with a reader whose memory grows by the size of what it reads. A file costs less at every row, and it is the only one of the two that a web server can give out without HSM touching the bytes.
+What the numbers say: LevelDB can hold the pieces and loses none in a crash, at twice the disk writes and with a reader whose mapped memory grows by the size of what it reads. A file costs less at every row, and it is the only one of the two that a web server can give out without HSM touching the bytes.
 
 ### Giving a file out
 
-- The only outward form is a zip with AES encryption under the product's password, holding the file under its original name. The classic zip password is not used: it can be broken when part of the content is known, and the header of a dump is known. Such a zip opens in 7-Zip and WinRAR, as a rule not in the archiver built into Windows.
-- The password is set and seen by a Manager of the product and by an admin, in the product's settings. Its changes go to the journal. While a product has no password, its large files are accepted and kept and cannot be downloaded.
-- **The zip is built once**, after the upload, and kept as the stored file. A download is then a plain file with byte ranges: a cut download continues, and no CPU of the server is spent on it. A change of the password re-encrypts the kept archives in the background; until an archive is re-encrypted it is given out under the password it has, and the page says which.
-- **HSM decides, Caddy gives out** (owner, 2026-11-25). The download request comes to HSM: it checks the sign-in or the API token and that the caller may see the product, writes the journal record, and answers with an instruction to Caddy to serve the file. The bytes go from Caddy, not through HSM. For this the folder of large files is mounted into the Caddy container read-only, and the bundled Caddyfile gets one block. Without Caddy (`docker-compose.direct.yml`) HSM serves the same file itself, with ranges.
-- A download that is cut must fail visibly for the client, never look like a whole file: the size is announced, and the hash of the archive is in a header and on the page.
-- Every download is written to the journal: who (the user, or the token and its owner), when, which file. The record is made when the download is allowed; whether the bytes all arrived is in Caddy's access log.
+- The only outward form is a zip with AES-256 encryption (the WinZip AES format, AE-2) and Zip64, under the product's password, holding the original file, decompressed from its pieces and compressed again by the zip, under its original name. The classic zip password is not used: it can be broken when part of the content is known, and the header of a dump is known. Such a zip opens in 7-Zip and WinRAR, as a rule not in the archiver built into Windows.
+- **What the password does not hide:** the name of the file inside, its sizes and its time are readable without it. A name of a dump often carries the host, the application and a process id.
+- **The password has to be strong.** The format derives its key with 1,000 rounds of PBKDF2, so a short password a person made up is found by trying, offline, by anyone who has the archive. HSM therefore offers a generated password of 20 random characters or more; a password typed by a person has to pass a minimum length.
+- **Where the password is.** Set and seen by a Manager of the product and by an admin, on a page of the web UI, signed in. It is stored in the server's configuration database as it is, because the server needs it to make an archive, and so it is in that database's backups. It is never part of an answer of `/api/v1` or of an MCP tool, whatever the token. A change is recorded in the journal as "dump password changed" without the old and the new value: the journal is readable by everyone who sees the product.
+- While a product has no password, its large files are accepted and kept and cannot be downloaded.
+- **The zip is built once**, after the upload, and kept as the stored file. A download is then a plain file with byte ranges: a cut download continues, and no CPU of the server is spent on it.
+- **A change of the password** re-encrypts the kept archives in the background. Every archive records the version of the password it was made under, and the job goes by that version, so an archive that was being built during the change is not missed. A replaced password is kept until its last archive is rewritten. A rewritten archive is a new file with a new id: a download of the old one that is continued later gets `404`, never bytes of two archives joined. Until an archive is rewritten it is given out under the password it has, and the page says which.
+- **HSM decides, Caddy gives out** (owner, 2026-11-25). The download request comes to HSM: it checks the sign-in or the API token and that the caller may see the product, records the download, and answers with an instruction to Caddy to serve the file. The bytes go from Caddy, not through HSM. Only the subtree of finished archives is mounted into the Caddy container, read-only; parts and checked files are never there. No public route of Caddy reaches that folder: a file is served only as the answer to HSM's instruction. The path is built by HSM from the id of the file, parsed as a GUID, under a fixed root. Without Caddy (`docker-compose.direct.yml`) HSM serves the same file itself, with ranges.
+- A link to a download works only with the sign-in or the token of the caller. There are no signed links: a link that carried its own permission would be a credential in a chat or in the transcript of an AI agent.
+- A download that is cut must fail visibly for the client, never look like a whole file: the size is announced, the answer carries an `ETag`, and the hash of the archive is in a header and on the page.
+- **Every download is recorded in a download log**: who (the user, or the token and its owner), when, which file. It is a record of its own and not the journal, which holds changes of configuration and never refuses an action when its write fails. A download that cannot be recorded is refused. One record covers the requests of one caller for one file within a short time, so a download manager that asks in ranges does not write hundreds. Whether the bytes all arrived is in Caddy's access log.
 
 ### Access
 
 - Web UI: everyone who may see the product downloads the zip. An unknown file and a file of a product the user may not see get the same `404`.
-- The same rule holds for ordinary file values: the product access checks of the existing file actions are a precondition of the download step.
+- The download step relies on the web UI access-check work.
 - API token: `GET /api/v1/...` streams the same zip to a token whose owner may see the product, with the size and the hash in headers. The MCP tool returns the description of a file and the link; the bytes never go through MCP. An AI agent gets the password from its operator, not from HSM.
 - An access key (`Key` header) sends and never downloads a large file. `POST /api/sensors/history` returns the description of a large value, not its content.
 
 ### The sensor, retention, notification, UI
 
-- A large value belongs to an ordinary File sensor. Its time is the modification time of the source file; the time it was accepted is kept beside it.
-- Retention is the sensor's "Keep sensor history": a value past its period is removed with its bytes. A half-uploaded file is removed 7 days after its last piece.
-- Before an upload the server compares the free space with a configured minimum plus the size announced; below it the upload is refused and the refusal is counted in a self-monitoring sensor with an alert.
-- A sensor registered for dumps gets the alert "new data has been received" by default. New template variables carry the file name, the size and a link to the sensor page. The message is sent once, when the file is stored.
-- The sensor page lists the large values: name, size, time, application and host, state (uploading with a percentage, stored, removed by retention), and the download button. No preview.
-- Self-monitoring: uploads in progress, bytes stored, refusals, files removed.
+- A large value belongs to an ordinary File sensor. **Its time is the time the server accepted it**, made unique within the sensor. The modification time of the source file is a field of the description. (A value's key is the sensor and the time: two files with one modification time would overwrite each other, a file older than the last value would take the path of late values, and a file older than the history period would be removed right after its upload.)
+- Retention is the sensor's "Keep sensor history", counted from that time: a value past its period is removed, and the store's pass removes its file. A half-uploaded file is removed 7 days after its last piece. A file that is being downloaded when it is removed is read to its end by the download in progress; a download continued later gets `404`.
+- Before an upload the server compares the free space with a configured minimum, the reservations of the uploads in progress and the size announced; below it the upload is refused and the refusal is counted in a self-monitoring sensor with an alert.
+- A sensor registered for dumps gets the alert "new data has been received" by default. New template variables carry the file name, the size and a link to the sensor page. The message is sent once, when the file is verified.
+- The sensor page lists the large values: name, size, time, application and host, the download button, and the state: uploading with a percentage, being checked, being packed, waiting for the product's password, packing failed, ready, removed by retention. No preview.
+- Self-monitoring: uploads in progress, bytes stored, refusals, files removed, builds that failed, files waiting for a password.
 
 ## Open questions
 
 - How exactly HSM hands a file to Caddy (an internal redirect answered by `reverse_proxy` with `handle_response`, or `forward_auth` in front of a `file_server`): to be tried against the bundled Caddy 2.11 and `caddy/test.sh` in the step.
-- The zip library for AES on the server (the zip built into .NET has no encryption).
+- The zip library for AES-256 and Zip64 on the server (the zip built into .NET has no encryption), and what a build and a re-encryption of a large file cost: not measured.
 - The compression ratio and speed on a real dump: needs a sample from the owner, measured on his machine, numbers only.
 - How often dumps appear, and the link speed between the application hosts and the server: both decide the defaults (speed limit, free-space minimum).
 - The retention period a dump sensor gets by default.
@@ -196,7 +220,7 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 | 0 | — | The measurement of the store | Done, above |
 | 1 | #1883 | Server: the large file store (files in a folder) and the large value of a File sensor: write, read, delete, retention, the free-space check, the check at start | No dependency on table sensors |
 | 2 | #1884 | Server: the file connection (begin, piece, end, continue, limits, budget) | Reuses the session loop of #1845 |
-| 3 | #1885 | Server: the product's dump password, the zip, the download for the web UI, `/api/v1` and Caddy, the journal, the MCP tool | Relies on the product access checks of the web UI's file actions |
+| 3 | #1885 | Server: the product's dump password, the zip, the download for the web UI, `/api/v1` and Caddy, the download log, the MCP tool | Relies on the web UI access-check work |
 | 4 | #1886 | Server: the sensor page, the alert variables, the default alert, self-monitoring | |
 | 5 | #1887 | Native collector: reading a file in pieces, the watched folder, the state file, the speed limit; conformance scenarios | Binary frames and zstd shared with #1848; first to production |
 | 6 | #1888 | Managed collector: the same behaviour; the conformance scenarios pass in the .NET driver | net6.0 and net472 |
@@ -204,7 +228,7 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 
 ## Risks
 
-- A dump holds the memory of a process: keys, passwords, client data. With download open to everyone who sees the product, the password is the only protection of the content. A shared password cannot be taken back from one person, and the journal shows who downloaded, not who opened.
+- A dump holds the memory of a process: keys, passwords, client data. With download open to everyone who sees the product, the password is the only protection of the content. A shared password cannot be taken back from one person, and the download log shows who downloaded, not who opened. An archive that left the server can be attacked offline for as long as it exists; its strength is the strength of the password.
 - The server knows the password and holds a file without it while the file is uploaded and checked. The password protects a downloaded copy, not the server.
 - A second kind of store beside LevelDB: the value and its file can disagree after a crash or a manual change of the folder; the check at start reports it.
 - The bundled Caddy gains access to the folder of large files and a rule of its own; an installation with its own reverse proxy has to repeat that rule or let HSM serve the files.
@@ -221,4 +245,4 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 - Conformance scenarios in both drivers.
 - One real dump of the owner's application, end to end, with the measured compression ratio, times and the disk written.
 - The download through the bundled Caddy and without it (`caddy/test.sh`, which runs only in WSL on the development machine).
-- `aicontext/` updated with each step; the ADR after the owner agrees with this document.
+- `aicontext/` updated with each step.
