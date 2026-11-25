@@ -12,6 +12,7 @@
 #include "../src/tables/hsm_table_schema.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -570,7 +571,7 @@ namespace
     void ExpectRefused(TableBlockStatus actual, TableBlockStatus expected, const std::string& what, const TableBlockWriter& writer)
     {
         CheckStatus(actual, expected, what, writer);
-        Check(actual == TableBlockStatus::Ok || !writer.LastError().empty(), what + ": a refusal says why");
+        Check(actual == TableBlockStatus::Ok || *writer.LastError() != 0, what + ": a refusal says why");
     }
 
     void LimitsAndRulesRefused()
@@ -850,7 +851,7 @@ namespace
 
         ExpectRefused(writer.Finish(framed, 40, size + 39), TableBlockStatus::FrameTooLarge, "a block one byte over the frame limit", writer);
         Check(framed.empty(), "a block over the frame limit leaves nothing in out");
-        Check(writer.LastError().find("split") != std::string::npos, "the refusal says the block must be split");
+        Check(std::string(writer.LastError()).find("split") != std::string::npos, "the refusal says the block must be split");
 
         // The writer keeps its tables: the caller can still take them (PR 3 splits them).
         CheckStatus(writer.Finish(block), TableBlockStatus::Ok, "Finish again after the refusal", writer);
@@ -943,6 +944,226 @@ namespace
         }
     }
 
+    // Review of PR 1, finding 1: a front reservation is checked before it is added to anything.
+    void FinishRefusesImpossibleReservations()
+    {
+        TableBlockWriter writer;
+        AddTables(writer, GoldenInput("single-row"));
+        std::vector<std::uint8_t> out;
+
+        ExpectRefused(writer.Finish(out, std::numeric_limits<std::size_t>::max()), TableBlockStatus::InvalidArgument, "a front reservation of SIZE_MAX", writer);
+        Check(out.empty(), "a refused reservation leaves nothing in out");
+        ExpectRefused(writer.Finish(out, out.max_size() - 43), TableBlockStatus::InvalidArgument, "a front reservation of max_size() - 43", writer);
+        ExpectRefused(writer.Finish(out, TableBlockWriter::kMaxReserveFront + 1), TableBlockStatus::InvalidArgument, "a front reservation one byte over the maximum", writer);
+        ExpectRefused(writer.Finish(out, 40, 40 + 44), TableBlockStatus::FrameTooLarge, "a frame limit the header alone fills", writer);
+
+        CheckStatus(writer.Finish(out, TableBlockWriter::kMaxReserveFront), TableBlockStatus::Ok, "the largest front reservation", writer);
+        const std::vector<std::uint8_t> block(out.begin() + static_cast<std::ptrdiff_t>(TableBlockWriter::kMaxReserveFront), out.end());
+        AssertSame(GoldenInput("single-row"), reader::ReadTableBlock(block), "the block after the largest reservation");
+    }
+
+    // Finding 2: limit arithmetic cannot overflow (UBSan of the asan preset aborts on signed overflow).
+    void LimitArithmeticCannotOverflow()
+    {
+        const std::uint8_t a = 'a';
+        const std::uint8_t b = 'b';
+        const std::vector<std::uint64_t> one_time = Longs({ kT0 });
+        TableBlockWriter writer;
+        CheckStatus(writer.BeginTable(&a, 1, 1, 1), TableBlockStatus::Ok, "table", writer);
+        CheckStatus(writer.AddColumn(TableColumnType::Time, one_time.data(), 1), TableBlockStatus::Ok, "time", writer);
+
+        ExpectRefused(writer.BeginTable(&b, 1, 1, std::numeric_limits<std::int64_t>::max()), TableBlockStatus::LimitExceeded, "INT64_MAX rows after one row", writer);
+        ExpectRefused(writer.BeginTable(&b, 1, 1, std::numeric_limits<std::int64_t>::min()), TableBlockStatus::InvalidArgument, "INT64_MIN rows", writer);
+        ExpectRefused(writer.BeginTable(&b, 1, 1, -1), TableBlockStatus::InvalidArgument, "a negative row count", writer);
+        ExpectRefused(writer.BeginTable(&b, std::numeric_limits<std::size_t>::max(), 1, 1), TableBlockStatus::LimitExceeded, "an identifier of SIZE_MAX bytes", writer);
+
+        TableBlockLimits wide;
+        wide.max_rows = std::numeric_limits<std::int32_t>::max();
+        TableBlockWriter wide_writer(wide);
+        CheckStatus(wide_writer.BeginTable(&a, 1, 1, 1), TableBlockStatus::Ok, "table", wide_writer);
+        CheckStatus(wide_writer.AddColumn(TableColumnType::Time, one_time.data(), 1), TableBlockStatus::Ok, "time", wide_writer);
+        ExpectRefused(wide_writer.BeginTable(&b, 1, 1, std::numeric_limits<std::int32_t>::max()), TableBlockStatus::LimitExceeded, "INT32_MAX rows after one row", wide_writer);
+
+        std::vector<std::uint8_t> block;
+        CheckStatus(writer.Finish(block), TableBlockStatus::Ok, "Finish after the refusals", writer);
+        Check(reader::ReadTableBlock(block).row_count == 1, "the refusals left the block of one row");
+    }
+
+    // Adds the tables and stops at the first call that is not Ok; that call's status, Ok when none.
+    TableBlockStatus TryAddTables(TableBlockWriter& writer, const std::vector<TestTable>& tables, std::int64_t& length_before)
+    {
+        for (const TestTable& table : tables)
+        {
+            length_before = writer.DecompressedLength();
+            TableBlockStatus status = writer.BeginTable(table.id.data(), table.id.size(), table.schema_id, static_cast<std::int64_t>(table.Rows()));
+            if (status != TableBlockStatus::Ok)
+                return status;
+            for (std::size_t c = 0; c < table.columns.size(); ++c)
+            {
+                std::vector<std::uint8_t> map;
+                if (table.nullable[c])
+                    map = NullMap(table.Rows(), table.null_rows[c]);
+                length_before = writer.DecompressedLength();
+                status = writer.AddColumn(table.types[c], table.columns[c].data(), table.columns[c].size(), map.data(), map.size());
+                if (status != TableBlockStatus::Ok)
+                    return status;
+            }
+        }
+        return TableBlockStatus::Ok;
+    }
+
+    // Finding 3: a failed allocation at any point throws nothing, leaves the content consistent, and
+    // leaves the writer failed until Reset (from Finish: only that block fails).
+    void AllocationFailureLeavesTheWriterFailed()
+    {
+        const auto tables = GoldenInput("nulls");
+        const auto expected = Write(tables);
+        const std::vector<std::uint64_t> one_time = Longs({ kT0 });
+        const std::uint8_t z = 'z';
+
+        int add_failures = 0;
+        int finish_failures = 0;
+        for (std::int64_t n = 0;; ++n)
+        {
+            TableBlockWriter writer;
+            writer.FailAllocationAfterForTests(n);
+            std::vector<std::uint8_t> block;
+            std::int64_t before = 0;
+            const TableBlockStatus added = TryAddTables(writer, tables, before);
+            const std::string at = "allocation " + std::to_string(n);
+            if (added != TableBlockStatus::Ok)
+            {
+                CheckStatus(added, TableBlockStatus::OutOfMemory, at, writer);
+                Check(writer.DecompressedLength() == before, at + ": the failed call added nothing");
+                writer.FailAllocationAfterForTests(-1);
+                CheckStatus(writer.BeginTable(&z, 1, 1, 1), TableBlockStatus::OutOfMemory, at + ": failed until Reset (BeginTable)", writer);
+                CheckStatus(writer.AddColumn(TableColumnType::Time, one_time.data(), 1), TableBlockStatus::OutOfMemory, at + ": failed until Reset (AddColumn)", writer);
+                CheckStatus(writer.Finish(block), TableBlockStatus::OutOfMemory, at + ": failed until Reset (Finish)", writer);
+                writer.Reset();
+                ++add_failures;
+            }
+            else
+            {
+                const TableBlockStatus finished = writer.Finish(block);
+                if (finished == TableBlockStatus::Ok)
+                {
+                    Check(block == expected, at + ": the block when nothing failed");
+                    break;
+                }
+                CheckStatus(finished, TableBlockStatus::OutOfMemory, at + ": Finish", writer);
+                Check(block.empty(), at + ": a failed Finish leaves nothing in out");
+                writer.FailAllocationAfterForTests(-1);
+                // A failed Finish leaves the tables: the next Finish writes the block.
+                CheckStatus(writer.Finish(block), TableBlockStatus::Ok, at + ": Finish again", writer);
+                Check(block == expected, at + ": the block after a failed Finish");
+                writer.Reset();
+                ++finish_failures;
+            }
+
+            CheckStatus(TryAddTables(writer, tables, before), TableBlockStatus::Ok, at + ": after Reset", writer);
+            CheckStatus(writer.Finish(block), TableBlockStatus::Ok, at + ": Finish after Reset", writer);
+            Check(block == expected, at + ": the block after Reset");
+        }
+        Check(add_failures >= 5 && finish_failures >= 1, "allocation failures were injected into the adds and into Finish");
+    }
+
+    // Finding 4: the byte order of a column, both paths on every host; null cells written as zero.
+    void ByteSwapWritesLittleEndian()
+    {
+        // Three values as a big-endian host holds them: most significant byte first.
+        const std::vector<std::uint8_t> big = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                                0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+                                                0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88 };
+        std::vector<std::uint8_t> out(24, 0xA5);
+        hsm::collector::tables::CopyColumnLe(out.data(), big.data(), 3, nullptr, true);
+        const std::vector<std::uint8_t> little = { 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+                                                   0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
+                                                   0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
+        Check(out == little, "the swap path writes every value little-endian");
+
+        const std::uint8_t middle = 0x02;
+        hsm::collector::tables::CopyColumnLe(out.data(), big.data(), 3, &middle, true);
+        auto expected = little;
+        std::fill(expected.begin() + 8, expected.begin() + 16, std::uint8_t{ 0 });
+        Check(out == expected, "the swap path writes a null cell as zero");
+
+        hsm::collector::tables::CopyColumnLe(out.data(), big.data(), 3, nullptr, false);
+        Check(out == big, "the copy path keeps the bytes");
+        hsm::collector::tables::CopyColumnLe(out.data(), big.data(), 3, &middle, false);
+        expected = big;
+        std::fill(expected.begin() + 8, expected.begin() + 16, std::uint8_t{ 0 });
+        Check(out == expected, "the copy path writes a null cell as zero");
+
+        // On this host the writer takes the path that gives little-endian bytes.
+        const std::vector<std::uint64_t> value = { 0x0102030405060708ULL };
+        const std::uint8_t q = 'q';
+        TableBlockWriter writer;
+        std::vector<std::uint8_t> block;
+        CheckStatus(writer.BeginTable(&q, 1, 1, 1), TableBlockStatus::Ok, "table", writer);
+        CheckStatus(writer.AddColumn(TableColumnType::Time, value.data(), 1), TableBlockStatus::Ok, "time", writer);
+        CheckStatus(writer.Finish(block), TableBlockStatus::Ok, "Finish", writer);
+        const auto payload = reader::ReadTableBlock(block).payload;
+        Check(std::equal(little.begin(), little.begin() + 8, payload.end() - 8), "the host path writes the value little-endian");
+    }
+
+    // Finding 5: the buffers grow geometrically. A thousand one-row tables of 64 columns: a reserve of
+    // size + 1 per column would reallocate the offsets 64,000 times.
+    void BuffersGrowGeometrically()
+    {
+        TableBlockWriter writer;
+        std::vector<TestTable> tables;
+        for (int t = 0; t < 1000; ++t)
+        {
+            TestTable table = MakeTable(Bytes("t" + std::to_string(t)), 1, { kT0 + t });
+            for (int c = 1; c < 64; ++c)
+                table.Add(TableColumnType::Int64, Longs({ static_cast<std::int64_t>(t) * 64 + c }));
+            tables.push_back(std::move(table));
+        }
+        AddTables(writer, tables);
+        std::vector<std::uint8_t> block;
+        CheckStatus(writer.Finish(block), TableBlockStatus::Ok, "Finish", writer);
+
+        const std::size_t reallocations = writer.ReallocationsForTests();
+        Check(reallocations < 200, "64,000 columns took " + std::to_string(reallocations) + " reallocations: the buffers do not grow geometrically");
+        const auto read = reader::ReadTableBlock(block);
+        Check(read.payload.size() < 600000, "the payload is under 0.6 MB");
+        AssertSame(tables, read, "a thousand tables of 64 columns");
+    }
+
+    // Finding 8: Finish never changes the writer, whatever it returns.
+    void RefusedFinishKeepsTheWriter()
+    {
+        const std::uint8_t a = 'a';
+        const std::uint8_t b = 'b';
+        const std::vector<std::uint64_t> times = Longs({ kT0, kT0 + 1 });
+        const std::vector<std::uint64_t> values = Doubles({ 1.5, 2.5 });
+        TableBlockWriter writer;
+        std::vector<std::uint8_t> block;
+        CheckStatus(writer.BeginTable(&a, 1, 1, 2), TableBlockStatus::Ok, "table", writer);
+        CheckStatus(writer.AddColumn(TableColumnType::Time, times.data(), 2), TableBlockStatus::Ok, "time", writer);
+        const std::int64_t length = writer.DecompressedLength();
+
+        ExpectRefused(writer.Finish(block, 0, 1), TableBlockStatus::FrameTooLarge, "a frame limit of one byte", writer);
+        Check(writer.DecompressedLength() == length && writer.TableCount() == 1, "a refused Finish keeps the tables");
+        CheckStatus(writer.AddColumn(TableColumnType::Double, values.data(), 2), TableBlockStatus::Ok, "the open table takes a column after a refused Finish", writer);
+        CheckStatus(writer.Finish(block), TableBlockStatus::Ok, "Finish", writer);
+        Check(reader::ReadTableBlock(block).tables[0].columns.size() == 2, "the block has the column added after the refusal");
+
+        // After a written block the writer is unchanged too: more tables follow, Finish writes all.
+        CheckStatus(writer.BeginTable(&b, 1, 2, 2), TableBlockStatus::Ok, "a table after a written block", writer);
+        CheckStatus(writer.AddColumn(TableColumnType::Time, times.data(), 2), TableBlockStatus::Ok, "time", writer);
+        CheckStatus(writer.Finish(block), TableBlockStatus::Ok, "Finish of both", writer);
+        Check(reader::ReadTableBlock(block).tables.size() == 2, "the second block holds both tables");
+
+        // A duplicate is refused by Finish and stays until Reset.
+        CheckStatus(writer.BeginTable(&a, 1, 3, 2), TableBlockStatus::Ok, "a table with the identifier of the first", writer);
+        CheckStatus(writer.AddColumn(TableColumnType::Time, times.data(), 2), TableBlockStatus::Ok, "time", writer);
+        ExpectRefused(writer.Finish(block), TableBlockStatus::DuplicateTable, "a duplicate", writer);
+        ExpectRefused(writer.Finish(block), TableBlockStatus::DuplicateTable, "the duplicate is still there", writer);
+        writer.Reset();
+        Check(writer.TableCount() == 0 && writer.DecompressedLength() == 0, "Reset forgets every table");
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Vectors for the managed reader (NativeBlockVectorTests, HSM_NATIVE_TABLE_BLOCKS_DIR).
 
@@ -1023,6 +1244,12 @@ const std::map<std::string, std::function<void(const std::string&)>>& TableBlock
         { "native_table_block_over_frame_limit_is_refused", [](const std::string&) { BlockOverFrameLimitIsRefused(); } },
         { "native_table_writer_is_reusable", [](const std::string&) { WriterIsReusable(); } },
         { "native_table_test_reader_is_strict", [](const std::string&) { TestReaderIsStrict(); } },
+        { "native_table_finish_refuses_impossible_reservations", [](const std::string&) { FinishRefusesImpossibleReservations(); } },
+        { "native_table_limit_arithmetic_cannot_overflow", [](const std::string&) { LimitArithmeticCannotOverflow(); } },
+        { "native_table_allocation_failure_leaves_the_writer_failed", [](const std::string&) { AllocationFailureLeavesTheWriterFailed(); } },
+        { "native_table_byte_swap_writes_little_endian", [](const std::string&) { ByteSwapWritesLittleEndian(); } },
+        { "native_table_buffers_grow_geometrically", [](const std::string&) { BuffersGrowGeometrically(); } },
+        { "native_table_refused_finish_keeps_the_writer", [](const std::string&) { RefusedFinishKeepsTheWriter(); } },
         { "native_table_write_vectors", [](const std::string& directory) { WriteVectors(directory); } },
     };
     return tests;

@@ -6,7 +6,6 @@
 #include <cstring>
 #include <limits>
 #include <new>
-#include <utility>
 
 // The format stores doubles by their IEEE 754 binary64 bits; a platform with another double cannot
 // write it by copying.
@@ -70,6 +69,39 @@ namespace hsm::collector::tables
         return static_cast<std::uint32_t>(crc32_z(crc, data, size));
     }
 
+    void CopyColumnLe(std::uint8_t* destination, const std::uint8_t* source, std::size_t count,
+                      const std::uint8_t* nulls, bool swap) noexcept
+    {
+        constexpr std::size_t kSize = TableBlockFormat::kValueSize;
+        if (nulls == nullptr && !swap)
+        {
+            std::memcpy(destination, source, count * kSize);
+            return;
+        }
+
+        for (std::size_t row = 0; row < count; ++row)
+        {
+            std::uint8_t* to = destination + row * kSize;
+            // A null cell is decided by the map first: its source is never read.
+            if (nulls != nullptr && IsNull(nulls, row))
+            {
+                std::memset(to, 0, kSize);
+                continue;
+            }
+
+            const std::uint8_t* from = source + row * kSize;
+            if (swap)
+            {
+                for (std::size_t k = 0; k < kSize; ++k)
+                    to[k] = from[kSize - 1 - k];
+            }
+            else
+            {
+                std::memcpy(to, from, kSize);
+            }
+        }
+    }
+
     TableBlockWriter::TableBlockWriter(const TableBlockLimits& limits, int level)
         : limits_(limits), limits_valid_(limits.Valid()), compressor_(level)
     {
@@ -93,34 +125,42 @@ namespace hsm::collector::tables
         max_columns_ = 0;
         column_count_offset_ = -1;
         failed_ = false;
-        error_.clear();
+        error_ = "";
     }
 
-    TableBlockStatus TableBlockWriter::Fail(TableBlockStatus status, std::string message)
+    TableBlockStatus TableBlockWriter::Fail(TableBlockStatus status, const char* message) noexcept
     {
-        if (status == TableBlockStatus::OutOfMemory)
-            failed_ = true;
-        try
-        {
-            error_ = std::move(message);
-        }
-        catch (...)
-        {
-            // The status still says what happened.
-        }
+        error_ = message;
         return status;
     }
 
-    TableBlockStatus TableBlockWriter::CheckGrowth(std::int64_t bytes)
+    template <typename T>
+    void TableBlockWriter::Reserve(std::vector<T>& buffer, std::size_t needed)
     {
-        if (DecompressedLength() + bytes > limits_.max_decompressed_bytes)
-            return Fail(TableBlockStatus::LimitExceeded,
-                        "the payload would exceed " + std::to_string(limits_.max_decompressed_bytes) +
-                            " bytes: send the block and start a new one");
+        if (needed <= buffer.capacity())
+            return;
+
+        if (fail_allocation_after_ == 0)
+            throw std::bad_alloc();
+        if (fail_allocation_after_ > 0)
+            --fail_allocation_after_;
+
+        // Geometric growth: one reallocation per doubling, whatever the order of the calls.
+        const std::size_t doubled = buffer.capacity() <= buffer.max_size() / 2 ? buffer.capacity() * 2 : buffer.max_size();
+        buffer.reserve(std::max(needed, doubled));
+        ++reallocations_;
+    }
+
+    TableBlockStatus TableBlockWriter::CheckGrowth(std::uint64_t bytes) noexcept
+    {
+        // The writer never holds more than the limit, so the room left is not negative.
+        const std::uint64_t room = static_cast<std::uint64_t>(limits_.max_decompressed_bytes - DecompressedLength());
+        if (bytes > room)
+            return Fail(TableBlockStatus::LimitExceeded, "the payload would exceed the decompressed length limit: send the block and start a new one");
         return TableBlockStatus::Ok;
     }
 
-    TableBlockStatus TableBlockWriter::BeginTable(const std::uint8_t* id, std::size_t id_length, std::uint32_t schema_id, std::int64_t row_count)
+    TableBlockStatus TableBlockWriter::BeginTable(const std::uint8_t* id, std::size_t id_length, std::uint32_t schema_id, std::int64_t row_count) noexcept
     {
         if (failed_)
             return Fail(TableBlockStatus::OutOfMemory, "the writer ran out of memory: Reset it first");
@@ -131,63 +171,65 @@ namespace hsm::collector::tables
         if (id == nullptr || id_length < 1)
             return Fail(TableBlockStatus::InvalidArgument, "a table identifier has at least one byte");
         if (id_length > static_cast<std::size_t>(limits_.max_table_id_length))
-            return Fail(TableBlockStatus::LimitExceeded,
-                        "the identifier is " + std::to_string(id_length) + " bytes, at most " +
-                            std::to_string(limits_.max_table_id_length) + " are allowed");
+            return Fail(TableBlockStatus::LimitExceeded, "the table identifier is longer than the limit");
         if (row_count < 1)
             return Fail(TableBlockStatus::InvalidArgument, "a table has at least one row");
-        if (tables_.size() + 1 > static_cast<std::size_t>(limits_.max_tables))
-            return Fail(TableBlockStatus::LimitExceeded, "the block would hold more than " + std::to_string(limits_.max_tables) + " tables");
-        // max_rows is an int32, so this also keeps every row count inside the format's int32.
-        if (row_count_ + row_count > limits_.max_rows)
-            return Fail(TableBlockStatus::LimitExceeded, "the block would hold more than " + std::to_string(limits_.max_rows) + " rows");
+        if (tables_.size() >= static_cast<std::size_t>(limits_.max_tables))
+            return Fail(TableBlockStatus::LimitExceeded, "the block would hold more tables than the limit");
+        // Against the room left, never as a sum: 0 <= row_count_ <= max_rows always holds. max_rows is
+        // an int32, so this also keeps every row count inside the format's int32.
+        if (row_count > limits_.max_rows - row_count_)
+            return Fail(TableBlockStatus::LimitExceeded, "the block would hold more rows than the limit");
 
+        // At most 65,535 + 11 and 2^31 * 8: no overflow in 64 bits.
         const std::size_t entry_length = TableBlockFormat::kEntryFixedSize + id_length;
         // The entry, its first column's type byte and the first column's values.
-        const TableBlockStatus growth = CheckGrowth(static_cast<std::int64_t>(entry_length) + 1 +
-                                                    row_count * static_cast<std::int64_t>(TableBlockFormat::kValueSize));
+        const TableBlockStatus growth = CheckGrowth(static_cast<std::uint64_t>(entry_length) + 1 +
+                                                    static_cast<std::uint64_t>(row_count) * TableBlockFormat::kValueSize);
         if (growth != TableBlockStatus::Ok)
             return growth;
 
+        // Every allocation first; nothing below can throw once they have succeeded.
         try
         {
-            const std::size_t start = directory_.size();
-            tables_.reserve(tables_.size() + 1);
-            directory_.resize(start + entry_length);
-
-            std::uint8_t* entry = directory_.data() + start;
-            StoreLe(entry, id_length, 2);
-            std::memcpy(entry + 2, id, id_length);
-            StoreLe(entry + 2 + id_length, schema_id, 4);
-            StoreLe(entry + 6 + id_length, static_cast<std::uint64_t>(row_count), 4);
-            entry[10 + id_length] = 0;
-
-            tables_.push_back(TableInfo{ start + 2, id_length, data_.size(), row_count, column_maps_.size(), 0 });
-            column_count_offset_ = static_cast<std::int64_t>(start + entry_length - 1);
-            row_count_ += row_count;
+            Reserve(tables_, tables_.size() + 1);
+            Reserve(directory_, directory_.size() + entry_length);
         }
-        catch (const std::bad_alloc&)
+        catch (...)
         {
-            return Fail(TableBlockStatus::OutOfMemory, "the directory could not grow");
+            failed_ = true;
+            return Fail(TableBlockStatus::OutOfMemory, "the directory could not grow: Reset the writer");
         }
 
+        const std::size_t start = directory_.size();
+        directory_.resize(start + entry_length);
+        std::uint8_t* entry = directory_.data() + start;
+        StoreLe(entry, id_length, 2);
+        std::memcpy(entry + 2, id, id_length);
+        StoreLe(entry + 2 + id_length, schema_id, 4);
+        StoreLe(entry + 6 + id_length, static_cast<std::uint64_t>(row_count), 4);
+        entry[10 + id_length] = 0;
+
+        tables_.push_back(TableInfo{ start + 2, id_length, data_.size(), row_count, column_maps_.size(), 0 });
+        column_count_offset_ = static_cast<std::int64_t>(start + entry_length - 1);
+        row_count_ += row_count;
         return TableBlockStatus::Ok;
     }
 
     TableBlockStatus TableBlockWriter::AddColumn(TableColumnType type, const std::uint64_t* values, std::size_t count,
-                                                 const std::uint8_t* nulls, std::size_t nulls_length)
+                                                 const std::uint8_t* nulls, std::size_t nulls_length) noexcept
     {
         return AddColumnBytes(type, values, count, nulls, nulls_length, false);
     }
 
     TableBlockStatus TableBlockWriter::AddDoubleColumn(const double* values, std::size_t count,
-                                                       const std::uint8_t* nulls, std::size_t nulls_length)
+                                                       const std::uint8_t* nulls, std::size_t nulls_length) noexcept
     {
         return AddColumnBytes(TableColumnType::Double, values, count, nulls, nulls_length, true);
     }
 
     TableBlockStatus TableBlockWriter::AddColumnBytes(TableColumnType type, const void* values, std::size_t count,
-                                                      const std::uint8_t* nulls, std::size_t nulls_length, bool doubles)
+                                                      const std::uint8_t* nulls, std::size_t nulls_length, bool doubles) noexcept
     {
         if (failed_)
             return Fail(TableBlockStatus::OutOfMemory, "the writer ran out of memory: Reset it first");
@@ -200,12 +242,11 @@ namespace hsm::collector::tables
         const bool first = table.columns == 0;
         if (first && type != TableColumnType::Time)
             return Fail(TableBlockStatus::WrongOrder, "the first column of a table is the time column");
-        if (table.columns + 1 > static_cast<std::size_t>(limits_.max_columns_per_table))
-            return Fail(TableBlockStatus::LimitExceeded,
-                        "a table would have more than " + std::to_string(limits_.max_columns_per_table) + " columns");
+        if (table.columns >= static_cast<std::size_t>(limits_.max_columns_per_table))
+            return Fail(TableBlockStatus::LimitExceeded, "the table would have more columns than the limit");
+        // table.rows is within 1..max_rows (an int32), so count * 8 below cannot overflow.
         if (count != static_cast<std::size_t>(table.rows))
-            return Fail(TableBlockStatus::InvalidArgument,
-                        "the column has " + std::to_string(count) + " values, the table " + std::to_string(table.rows) + " rows");
+            return Fail(TableBlockStatus::InvalidArgument, "the column does not have one value per row of the table");
         if (values == nullptr)
             return Fail(TableBlockStatus::InvalidArgument, "the column has no values");
 
@@ -214,11 +255,8 @@ namespace hsm::collector::tables
         bool has_nulls = false;
         if (nulls != nullptr && nulls_length > 0)
         {
-            const std::size_t needed = MapLength(table.rows);
-            if (nulls_length != needed)
-                return Fail(TableBlockStatus::InvalidArgument,
-                            "the null map has " + std::to_string(nulls_length) + " bytes, a column of " +
-                                std::to_string(table.rows) + " rows needs " + std::to_string(needed));
+            if (nulls_length != MapLength(table.rows))
+                return Fail(TableBlockStatus::InvalidArgument, "the null map does not have ceil(rows / 8) bytes");
             const unsigned tail = static_cast<unsigned>(table.rows & 7);
             if (tail != 0 && (nulls[nulls_length - 1] >> tail) != 0)
                 return Fail(TableBlockStatus::InvalidArgument, "the null map has bits set past the last row");
@@ -249,53 +287,42 @@ namespace hsm::collector::tables
         }
 
         // The type byte and the values (the first column was counted by BeginTable), and the map.
-        const std::int64_t growth = (first ? 0 : 1 + static_cast<std::int64_t>(bytes)) +
-                                    (has_nulls ? static_cast<std::int64_t>(nulls_length) : 0);
-        if (growth > 0)
-        {
-            const TableBlockStatus status = CheckGrowth(growth);
-            if (status != TableBlockStatus::Ok)
-                return status;
-        }
+        const std::uint64_t growth = (first ? 0 : 1 + static_cast<std::uint64_t>(bytes)) +
+                                     (has_nulls ? static_cast<std::uint64_t>(nulls_length) : 0);
+        const TableBlockStatus status = CheckGrowth(growth);
+        if (status != TableBlockStatus::Ok)
+            return status;
 
+        // Every allocation first; nothing below can throw once they have succeeded, so a failure
+        // leaves the writer's content as it was.
         try
         {
-            column_maps_.reserve(column_maps_.size() + 1);
+            Reserve(column_maps_, column_maps_.size() + 1);
+            Reserve(directory_, directory_.size() + 1);
+            Reserve(data_, data_.size() + bytes);
             if (has_nulls)
-                null_data_.reserve(null_data_.size() + nulls_length);
-            directory_.push_back(static_cast<std::uint8_t>(static_cast<std::uint8_t>(type) | (has_nulls ? TableBlockFormat::kNullFlag : 0)));
-            const std::size_t at = data_.size();
-            data_.resize(at + bytes);
-
-            std::uint8_t* destination = data_.data() + at;
-            if (kLittleEndian)
-            {
-                std::memcpy(destination, source, bytes);
-            }
-            else
-            {
-                for (std::size_t i = 0; i < count; ++i)
-                    StoreLe(destination + i * TableBlockFormat::kValueSize, LoadValue(source + i * TableBlockFormat::kValueSize), TableBlockFormat::kValueSize);
-            }
-
-            if (has_nulls)
-            {
-                // A null cell holds eight zero bytes, whatever the caller left in it.
-                for (std::size_t row = 0; row < count; ++row)
-                    if (IsNull(nulls, row))
-                        std::memset(destination + row * TableBlockFormat::kValueSize, 0, TableBlockFormat::kValueSize);
-
-                column_maps_.push_back(static_cast<std::int64_t>(null_data_.size()));
-                null_data_.insert(null_data_.end(), nulls, nulls + nulls_length);
-            }
-            else
-            {
-                column_maps_.push_back(-1);
-            }
+                Reserve(null_data_, null_data_.size() + nulls_length);
         }
-        catch (const std::bad_alloc&)
+        catch (...)
         {
-            return Fail(TableBlockStatus::OutOfMemory, "the column could not be stored");
+            failed_ = true;
+            return Fail(TableBlockStatus::OutOfMemory, "the column could not be stored: Reset the writer");
+        }
+
+        directory_.push_back(static_cast<std::uint8_t>(static_cast<std::uint8_t>(type) | (has_nulls ? TableBlockFormat::kNullFlag : 0)));
+        const std::size_t at = data_.size();
+        data_.resize(at + bytes);
+        // Null cells are written as zero without reading the caller's value.
+        CopyColumnLe(data_.data() + at, source, count, has_nulls ? nulls : nullptr, !kLittleEndian);
+
+        if (has_nulls)
+        {
+            column_maps_.push_back(static_cast<std::int64_t>(null_data_.size()));
+            null_data_.insert(null_data_.end(), nulls, nulls + nulls_length);
+        }
+        else
+        {
+            column_maps_.push_back(-1);
         }
 
         if (first)
@@ -312,10 +339,11 @@ namespace hsm::collector::tables
         return TableBlockStatus::Ok;
     }
 
-    bool TableBlockWriter::FindDuplicate(std::size_t& first)
+    bool TableBlockWriter::FindDuplicate()
     {
         // Sort the tables by identifier bytes and compare neighbours: O(n log n) comparisons whatever
         // the identifiers are.
+        Reserve(order_, tables_.size());
         order_.resize(tables_.size());
         for (std::size_t i = 0; i < order_.size(); ++i)
             order_[i] = i;
@@ -330,17 +358,12 @@ namespace hsm::collector::tables
         std::sort(order_.begin(), order_.end(), compare);
 
         for (std::size_t i = 1; i < order_.size(); ++i)
-        {
             if (!compare(order_[i - 1], order_[i]))
-            {
-                first = std::min(order_[i - 1], order_[i]);
                 return true;
-            }
-        }
         return false;
     }
 
-    void TableBlockWriter::LayOut(std::uint8_t* payload) const
+    void TableBlockWriter::LayOut(std::uint8_t* payload) const noexcept
     {
         std::memcpy(payload, directory_.data(), directory_.size());
         std::size_t at = directory_.size();
@@ -377,7 +400,7 @@ namespace hsm::collector::tables
         }
     }
 
-    TableBlockStatus TableBlockWriter::Finish(std::vector<std::uint8_t>& out, std::size_t reserve_front, std::uint64_t max_frame_bytes)
+    TableBlockStatus TableBlockWriter::Finish(std::vector<std::uint8_t>& out, std::size_t reserve_front, std::uint64_t max_frame_bytes) noexcept
     {
         out.clear();
         if (failed_)
@@ -386,64 +409,65 @@ namespace hsm::collector::tables
             return Fail(TableBlockStatus::WrongOrder, "a block holds at least one table");
         if (tables_.back().columns == 0)
             return Fail(TableBlockStatus::WrongOrder, "the open table has no columns: add its time column first");
+        // Checked before it is added to anything: the reservation is a frame header, not a buffer.
+        if (reserve_front > kMaxReserveFront)
+            return Fail(TableBlockStatus::InvalidArgument, "the front reservation is larger than kMaxReserveFront");
 
+        // Finish changes none of the writer's tables: a refusal below leaves them for the caller.
+        // The limit kept the payload within 1 GiB, so every length below fits the header's int32 and
+        // reserve_front + 44 + ZSTD_compressBound(payload) fits a size_t.
+        const std::size_t payload_length = static_cast<std::size_t>(DecompressedLength());
+        const std::size_t header_at = reserve_front;
+        const std::size_t capacity = reserve_front + TableBlockFormat::kHeaderSize + ZSTD_compressBound(payload_length);
+        const char* error = nullptr;
         try
         {
-            std::size_t duplicate = 0;
-            if (FindDuplicate(duplicate))
-                return Fail(TableBlockStatus::DuplicateTable,
-                            "table " + std::to_string(duplicate) + " has the identifier of another table: a table appears once in a block");
-            column_count_offset_ = -1;
+            if (FindDuplicate())
+                return Fail(TableBlockStatus::DuplicateTable, "two tables have the same identifier: a table appears once in a block");
 
-            // The limit kept this within 1 GiB, so every length below fits the header's int32.
-            const std::size_t payload_length = static_cast<std::size_t>(DecompressedLength());
+            Reserve(payload_, payload_length);
             payload_.resize(payload_length);
             LayOut(payload_.data());
 
-            const std::size_t header_at = reserve_front;
+            out.reserve(capacity);
             out.assign(reserve_front + TableBlockFormat::kHeaderSize, 0);
-            std::string error;
             if (!compressor_.CompressFrame(payload_.data(), payload_length, out, error))
             {
                 out.clear();
-                return Fail(TableBlockStatus::CompressionFailed, std::move(error));
+                return Fail(TableBlockStatus::CompressionFailed, error);
             }
-
-            const std::size_t compressed = out.size() - header_at - TableBlockFormat::kHeaderSize;
-            if (compressed > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()) ||
-                (max_frame_bytes != 0 && out.size() > max_frame_bytes))
-            {
-                const std::size_t size = out.size();
-                out.clear();
-                return Fail(TableBlockStatus::FrameTooLarge,
-                            "the block takes " + std::to_string(size) + " bytes with its frame header, the frame limit is " +
-                                std::to_string(max_frame_bytes) + ": split it");
-            }
-
-            std::uint8_t* header = out.data() + header_at;
-            header[0] = 'H';
-            header[1] = 'T';
-            header[2] = 'B';
-            header[3] = 'K';
-            header[4] = TableBlockFormat::kVersion;
-            // Bytes 5..7 are reserved and stay zero.
-            StoreLe(header + 8, static_cast<std::uint64_t>(row_count_), 4);
-            StoreLe(header + 12, tables_.size(), 4);
-            StoreLe(header + 16, first_time_, 8);
-            StoreLe(header + 24, last_time_, 8);
-            StoreLe(header + 32, compressed, 4);
-            StoreLe(header + 36, payload_length, 4);
-
-            std::uint32_t crc = TableBlockCrc32(header, TableBlockFormat::kChecksumOffset);
-            crc = TableBlockCrc32(header + TableBlockFormat::kHeaderSize, compressed, crc);
-            StoreLe(header + TableBlockFormat::kChecksumOffset, crc, 4);
         }
-        catch (const std::bad_alloc&)
+        catch (...)
         {
             out.clear();
-            return Fail(TableBlockStatus::OutOfMemory, "the block could not be built");
+            return Fail(TableBlockStatus::OutOfMemory, "the block could not be built: out of memory");
         }
 
+        const std::size_t compressed = out.size() - header_at - TableBlockFormat::kHeaderSize;
+        if (compressed > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()) ||
+            (max_frame_bytes != 0 && out.size() > max_frame_bytes))
+        {
+            out.clear();
+            return Fail(TableBlockStatus::FrameTooLarge, "the block does not fit the frame limit: split it");
+        }
+
+        std::uint8_t* header = out.data() + header_at;
+        header[0] = 'H';
+        header[1] = 'T';
+        header[2] = 'B';
+        header[3] = 'K';
+        header[4] = TableBlockFormat::kVersion;
+        // Bytes 5..7 are reserved and stay zero.
+        StoreLe(header + 8, static_cast<std::uint64_t>(row_count_), 4);
+        StoreLe(header + 12, tables_.size(), 4);
+        StoreLe(header + 16, first_time_, 8);
+        StoreLe(header + 24, last_time_, 8);
+        StoreLe(header + 32, compressed, 4);
+        StoreLe(header + 36, payload_length, 4);
+
+        std::uint32_t crc = TableBlockCrc32(header, TableBlockFormat::kChecksumOffset);
+        crc = TableBlockCrc32(header + TableBlockFormat::kHeaderSize, compressed, crc);
+        StoreLe(header + TableBlockFormat::kChecksumOffset, crc, 4);
         return TableBlockStatus::Ok;
     }
 } // namespace hsm::collector::tables

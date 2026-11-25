@@ -339,7 +339,13 @@ if(HSM_COLLECTOR_TABLES)
             native_table_thousand_tables
             native_table_block_over_frame_limit_is_refused
             native_table_writer_is_reusable
-            native_table_test_reader_is_strict)
+            native_table_test_reader_is_strict
+            native_table_finish_refuses_impossible_reservations
+            native_table_limit_arithmetic_cannot_overflow
+            native_table_allocation_failure_leaves_the_writer_failed
+            native_table_byte_swap_writes_little_endian
+            native_table_buffers_grow_geometrically
+            native_table_refused_finish_keeps_the_writer)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
     # The managed golden blocks: the test reader must accept them, and the native writer must give
