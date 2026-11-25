@@ -40,7 +40,7 @@ namespace HSMServer.Controllers
         /// <param name="author">Author substring filter (case-insensitive).</param>
         /// <param name="fromUtc">Recorded at or after (UTC ISO 8601; default now - 30 days).</param>
         /// <param name="toUtc">Recorded at or before (UTC ISO 8601).</param>
-        /// <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder or other.</param>
+        /// <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, chat, serverSettings or other.</param>
         /// <param name="productId">Only records of this root product.</param>
         /// <param name="entityId">Only records keyed by this entity id.</param>
         /// <param name="limit">Page size, 1..200 (default 100).</param>

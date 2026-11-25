@@ -5,6 +5,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
@@ -236,7 +237,8 @@ namespace HSMServer.Core.Tests.Notifications
             var config = new Mock<IServerConfig>(MockBehavior.Loose);
             config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = "test_bot", BotToken = "test_token" });
 
-            return new ChatsManager(db.Object, users.Object, config.Object);
+            return new ChatsManager(db.Object, users.Object, config.Object,
+                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
         }
 
         private static Chat BuildSlackOnlyChat() => new()
