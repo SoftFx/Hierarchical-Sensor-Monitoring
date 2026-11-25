@@ -541,7 +541,19 @@ namespace hsm::collector::tables
                 result.unsettled_reason = "cancelled";
                 return result;
             }
-            const std::size_t room = session != nullptr ? session->MaxBodyBytes() : 0;
+            // The run's first registration is asked for at Start, when the session is usually still
+            // opening: it waits for the session as a put waits for its connection (the managed pipeline
+            // waits until the channel is ready), so a start is not reported as a failed registration.
+            std::size_t room = session != nullptr ? session->MaxBodyBytes() : 0;
+            const auto deadline = Clock::now() + std::chrono::milliseconds(options_.connection_wait_ms);
+            while (session != nullptr && room == 0 && Clock::now() < deadline &&
+                   WaitFor((std::min)(Clock::now() + std::chrono::milliseconds(kLinkPollMs), deadline)))
+                room = session->MaxBodyBytes();
+            if (cancelled_.load())
+            {
+                result.unsettled_reason = "cancelled";
+                return result;
+            }
             if (room == 0)
             {
                 result.unsettled_reason = "no collector session";
