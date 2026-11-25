@@ -145,6 +145,16 @@ namespace HSMServer.Core.Tests.Controllers
             }
 
             Cache.Setup(c => c.GetProducts()).Returns([Own, Sibling, Foreign]);
+            Cache.Setup(c => c.TryGetProductByName(It.IsAny<string>(), out It.Ref<ProductModel>.IsAny))
+                .Returns((string name, ProductModel _) => RootProducts().Any(p => p.DisplayName == name))
+                .Callback(new TryGetProductByName((string name, out ProductModel found) =>
+                    found = RootProducts().FirstOrDefault(p => p.DisplayName == name)));
+            Cache.Setup(c => c.TryGetSensorByPath(It.IsAny<Guid>(), It.IsAny<string>(), out It.Ref<BaseSensorModel>.IsAny))
+                .Returns((Guid product, string path, BaseSensorModel _) => SensorByPath(product, path) is not null)
+                .Callback(new TryGetSensorByPath((Guid product, string path, out BaseSensorModel found) =>
+                    found = SensorByPath(product, path)));
+            Cache.Setup(c => c.UpdateSensorAsync(It.IsAny<HSMServer.Core.Cache.UpdateEntities.SensorUpdate>()))
+                .ReturnsAsync(HSMCommon.TaskResult.TaskResult.Ok);
             Cache.Setup(c => c.GetSensorValuesPage(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<RequestOptions>()))
                 .Returns((Guid id, DateTime _, DateTime _, int _, RequestOptions _) => Page(id));
             Cache.Setup(c => c.GetSensorHistoryInfo(It.IsAny<Guid>())).Returns(new SensorHistoryInfo());
@@ -182,20 +192,24 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        public HomeController Home(User user)
-        {
-            var recorder = new ChangeSetRecorder(ChangeSetTestHelpers.Journal(), ChangeSetTestHelpers.JournalService(),
-                CommonMoqs.CreateNullLogger<ChangeSetRecorder>());
-
-            var policyWriter = new PolicyAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object,
-                Chats.Object, Folders.Object, Schedules.Object, recorder);
-
-            return new HomeController(Cache.Object, Folders.Object, Access, Users.Object, Journal, Chats.Object,
-                new Mock<IDatabaseCore>().Object, Schedules.Object, policyWriter,
+        public HomeController Home(User user) =>
+            new(Cache.Object, Folders.Object, Access, Users.Object, Journal, Chats.Object,
+                new Mock<IDatabaseCore>().Object, Schedules.Object, PolicyWriter(),
                 new SensorMoveAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object))
             {
                 ControllerContext = Context(user),
             };
+
+        public AlertsController Alerts(User user) =>
+            new(Chats.Object, Folders.Object, Tree, Cache.Object, Users.Object, PolicyWriter()) { ControllerContext = Context(user) };
+
+        private PolicyAdministrationService PolicyWriter()
+        {
+            var recorder = new ChangeSetRecorder(ChangeSetTestHelpers.Journal(), ChangeSetTestHelpers.JournalService(),
+                CommonMoqs.CreateNullLogger<ChangeSetRecorder>());
+
+            return new PolicyAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object,
+                Chats.Object, Folders.Object, Schedules.Object, recorder);
         }
 
         public SensorHistoryController History(User user) =>
@@ -274,6 +288,13 @@ namespace HSMServer.Core.Tests.Controllers
         private static ControllerContext Context(User user) =>
             new() { HttpContext = new DefaultHttpContext { User = user } };
 
+        private ProductModel[] RootProducts() => [Own, Sibling, Foreign];
+
+        // The sensor a path names inside a root product; the path may start with the separator.
+        private BaseSensorModel SensorByPath(Guid productId, string path) =>
+            new[] { ServiceAlive, Cpu, Mem, Report, SiblingCpu, ForeignCpu }
+                .FirstOrDefault(s => s.Root.Id == productId && s.Path.Trim('/') == path?.Trim('/'));
+
         private static ProductModel BuildProduct(string name, Guid? folderId) =>
             new(EntitiesFactory.BuildProductEntity(name: name) with { Id = Guid.NewGuid().ToString(), FolderId = folderId?.ToString() });
 
@@ -300,6 +321,10 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         private delegate void TryGetProduct(Guid id, out ProductModel product);
+
+        private delegate void TryGetProductByName(string name, out ProductModel product);
+
+        private delegate void TryGetSensorByPath(Guid productId, string path, out BaseSensorModel sensor);
 
         private delegate void TryGetFolder(Guid id, out FolderModel folder);
 

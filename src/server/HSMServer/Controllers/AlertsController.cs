@@ -64,6 +64,7 @@ namespace HSMServer.Controllers
             _folders = folders;
             _cache = cache;
             _tree = tree;
+            _policies = policies;
         }
 
 
