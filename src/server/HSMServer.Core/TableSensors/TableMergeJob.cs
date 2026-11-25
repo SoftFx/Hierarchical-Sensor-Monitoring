@@ -72,6 +72,19 @@ namespace HSMServer.Core.TableSensors
         /// </summary>
         internal static long RowBytes(int columns) => 8L * columns + (columns + 7) / 8 + 20;
 
+        /// <summary>
+        /// The bytes the merge holds for one table of a block: its rows by <see cref="RowBytes"/> plus what the block reader
+        /// allocates once per table, whatever its rows (64-bit runtime: an object header is 16 bytes, an array's 24, a
+        /// reference 8). Per table 104 + the id's length: the <c>BlockTable</c> (16 + two references + schema id and row count, = 40),
+        /// its id array (24 + the id, padded: up to 7 more, so 32), its <c>BlockColumn[]</c> (24) and its reference in the
+        /// sensor's list (8). Per column 80: the value array's header (24), the <c>BlockColumn</c> (16 + three references
+        /// and its type, = 48) and its reference in the column array (8). Per column with a null map 32: that array's header
+        /// and its padding to 8 bytes (the bits themselves are in <see cref="RowBytes"/>). Blocks hold about six rows of a
+        /// table, so for a wide schema these terms are larger than the rows.
+        /// </summary>
+        internal static long TableBytes(int rows, int columns, int nullMaps, int idLength) =>
+            rows * RowBytes(columns) + 104 + idLength + 80L * columns + 32L * nullMaps;
+
         private static readonly Logger _logger = LogManager.GetLogger("TableMerge");
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
@@ -342,7 +355,7 @@ namespace HSMServer.Core.TableSensors
             long weekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
 
             // The shares of the tables, by path: one share (null: every table) while the rows held fit the budget, several
-            // otherwise, each table weighed by its columns (RowBytes). The index gives the hour's rows but not their width, so
+            // otherwise, each table weighed by TableBytes. The index gives the hour's rows but not their width, so
             // one pass is tried when the rows fit at the narrowest weight; it weighs each table it keeps and gives up as soon
             // as the budget is passed, before anything is encoded, and the tables are then split by their directories.
             List<HashSet<string>> shares = rows * RowBytes(1) <= budget ? [null] : Shares(product, entries, unreadable, budget);
@@ -417,7 +430,7 @@ namespace HSMServer.Core.TableSensors
                             continue;
                         }
 
-                        held += t.RowCount * RowBytes(t.Columns.Count);
+                        held += TableBytes(t.RowCount, t.Columns.Count, t.Columns.Count(c => c.NullMap is not null), t.TableId.Length);
                         if (share is null && held > budget)
                         {
                             overBudget = true;
@@ -508,16 +521,17 @@ namespace HSMServer.Core.TableSensors
         }
 
         // The tables of the hour split into shares whose rows fit the budget, by path: a pass over the blocks' directories
-        // weighs each path's rows by its columns (RowBytes, as the pass that holds them); paths are given to shares heaviest
+        // weighs each path's tables by TableBytes, as the pass that holds them; paths are given to shares heaviest
         // first, each to the first share it fits (a path heavier than the budget gets a share of its own). Blocks that cannot
         // be read are noted (a block noted already is not read again).
         private List<HashSet<string>> Shares(Guid product, List<TableBlockIndexEntry> entries, List<long> unreadable, long budget)
         {
             var bytesByPath = new Dictionary<string, long>();
+            var noted = new HashSet<long>(unreadable);
 
             foreach (var entry in entries)
             {
-                if (unreadable.Contains(entry.Sequence))
+                if (noted.Contains(entry.Sequence))
                     continue;
 
                 var record = Blocks.ReadBlock(entry, readErrorIsFault: true);
@@ -548,7 +562,8 @@ namespace HSMServer.Core.TableSensors
                         continue;
 
                     var e = directory.Entries[i];
-                    bytesByPath[path] = bytesByPath.GetValueOrDefault(path) + e.RowCount * RowBytes(e.ColumnTypes.Count);
+                    var nullMaps = Enumerable.Range(0, e.ColumnTypes.Count).Count(e.HasNulls);
+                    bytesByPath[path] = bytesByPath.GetValueOrDefault(path) + TableBytes(e.RowCount, e.ColumnTypes.Count, nullMaps, e.TableId.Length);
                 }
             }
 

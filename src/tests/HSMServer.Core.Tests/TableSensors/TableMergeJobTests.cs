@@ -739,8 +739,9 @@ namespace HSMServer.Core.Tests.TableSensors
             _now = Hour0.AddMinutes(65);
             AssertStored(Put(Block(Enumerable.Range(0, 4).Select(s => ($"n{s}", NarrowRows())).ToArray())));
 
-            // The hour's rows fit at 3 columns, so the narrow hour is one pass; the wide one is not and is split by table.
-            _server.Job.MemoryBudgetBytes = 4 * RowsPerTable * TableMergeJob.RowBytes(Quotes.Columns.Count);
+            // The narrow hour's weight exactly, so the narrow hour is one pass; the wide one is not and is split by table.
+            _server.Job.MemoryBudgetBytes = Enumerable.Range(0, 4)
+                .Sum(s => TableMergeJob.TableBytes(RowsPerTable, Quotes.Columns.Count, 0, Encoding.UTF8.GetByteCount($"{_root}/n{s}")));
 
             Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
             Assert.Equal(4, _server.Job.LastPasses);
@@ -758,6 +759,103 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(split, Stored(wide));
         }
 
+
+        [Fact]
+        public async Task Many_one_row_tables_are_weighed_by_what_each_table_allocates_and_split()
+        {
+            // 48 sensors, one row each in each of 6 blocks: about what 10-second blocks of an hour hold of a quiet table.
+            var sensors = new List<BaseSensorModel>();
+            for (int s = 0; s < 48; s++)
+                sensors.Add(await RegisterAsync($"t{s}"));
+
+            for (int block = 0; block < 6; block++)
+            {
+                _now = Hour0.AddMinutes(5 + block);
+                AssertStored(Put(Block(Enumerable.Range(0, 48).Select(s => ($"t{s}", new[] { (Hour0.AddSeconds(block * 10 + s), (double?)s, (long?)block) })).ToArray())));
+            }
+
+            // By the rows alone (45 bytes a row at 3 columns) the 288 rows fit four times over; by what the tables allocate they do not.
+            var budget = 4 * 288 * TableMergeJob.RowBytes(Quotes.Columns.Count);
+            Assert.True(288 * TableMergeJob.TableBytes(1, Quotes.Columns.Count, 0, Encoding.UTF8.GetByteCount($"{_root}/t0")) > budget);
+            _server.Job.MemoryBudgetBytes = budget;
+
+            var hour = Hour0.AddHours(1).AddMinutes(3);
+            Assert.Equal(1, Pass(hour).HoursMerged);
+            Assert.True(_server.Job.LastPasses > 1, $"{_server.Job.LastPasses} passes");
+            var split = Stored(sensors);
+
+            // The same hour in one pass: the same batches.
+            await RestartAsync(crash: false, beforeOpen: settings => Directory.Delete(Path.Combine(settings.PathToTableBlocks, TableBatchDatabase.FolderName), recursive: true));
+            Assert.Equal(1, Pass(hour).HoursMerged);
+            Assert.Equal(1, _server.Job.LastPasses);
+            Assert.Equal(split, Stored(sensors));
+        }
+
+        [Fact]
+        public async Task A_single_pass_given_up_at_the_budget_counts_dropped_expired_and_unreadable_rows_once_as_one_pass_does()
+        {
+            var kept = await RegisterAsync("k");
+            var expiring = await RegisterAsync("e");
+            var removed = await RegisterAsync("r");
+            var wideSchema = new TableSchema([new TableSchemaColumn("time", TableColumnType.Time),
+                .. Enumerable.Range(1, 39).Select(c => new TableSchemaColumn($"c{c}", TableColumnType.Double))]);
+            var wide = await RegisterAsync("w", schema: wideSchema);
+
+            foreach (var (sensor, days) in new[] { (kept, 49), (expiring, 7), (wide, 49) })
+                Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(days).Ticks) })).IsOk);
+
+            // Block 1: rows to keep, to drop (their sensor is removed and created again) and expired at the merge; block 2
+            // unreadable; block 3 the wide table, which passes the budget after both were met.
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("k", [(Hour0.AddMinutes(1), 1.0, 1)]), ("r", [(Hour0.AddMinutes(1), 2.0, 2), (Hour0.AddMinutes(2), 3.0, 3)]),
+                ("e", [(Hour0.AddMinutes(3), 4.0, 4)]))));
+            var corrupt = Put(Block(("k", [(Hour0.AddMinutes(4), 5.0, 5)]))).Sequence.Value;
+            AssertStored(Put(WideBlock(wideSchema, ["w"], 250, new Random(5))));
+
+            await _server.Cache.RemoveSensorAsync(removed.Id);
+            await RegisterAsync("r");
+
+            void Corrupt() => _server.Blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == corrupt)
+                    throw new Exception("Corruption: block checksum mismatch: 000005.ldb");
+            };
+
+            // Merged after the expiring sensor's period has passed for the week of the hour.
+            var late = Hour0.AddDays(15);
+            Corrupt();
+
+            // The hour fits by its rows at the narrowest weight, not by the wide table: the single pass is tried and given up.
+            var rows = 1 + 2 + 1 + 1 + 250;
+            var budget = 20_000L;
+            Assert.True(rows * TableMergeJob.RowBytes(1) <= budget);
+            Assert.True(250 * TableMergeJob.RowBytes(wideSchema.Columns.Count) > budget);
+            _server.Job.MemoryBudgetBytes = budget;
+
+            Assert.Equal(1, Pass(late).HoursMerged);
+            Assert.True(_server.Job.LastPasses > 1, $"{_server.Job.LastPasses} passes");
+            var split = Counters();
+            var splitBatches = Stored([kept, wide]);
+
+            // The same hour in one pass under the default budget.
+            await RestartAsync(crash: false, beforeOpen: settings => Directory.Delete(Path.Combine(settings.PathToTableBlocks, TableBatchDatabase.FolderName), recursive: true));
+            Corrupt();
+            Assert.Equal(1, Pass(late).HoursMerged);
+            Assert.Equal(1, _server.Job.LastPasses);
+
+            Assert.Equal((2L, 1L, 1L), (split.Dropped, split.Expired, split.Unreadable));
+            Assert.Equal([corrupt], split.List);
+            var single = Counters();
+            Assert.Equal((split.Dropped, split.Expired, split.Unreadable), (single.Dropped, single.Expired, single.Unreadable));
+            Assert.Equal(split.List, single.List);
+            Assert.Equal(splitBatches, Stored([kept, wide]));
+
+            (long Dropped, long Expired, long Unreadable, IReadOnlyList<long> List) Counters()
+            {
+                var stats = _server.Batches.MergeStatistics;
+                return (stats.RowsDropped, stats.RowsExpired, stats.UnreadableBlocksKept, _server.Batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+            }
+        }
 
         // === The period class ===
 
