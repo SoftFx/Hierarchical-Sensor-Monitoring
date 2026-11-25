@@ -31,6 +31,17 @@ namespace HSMServer.Core.TableSensors
         /// defect found in that time loses nothing. Reads take a merged hour from its batches and ignore those blocks.
         /// </summary>
         public int DeleteMergedBlocksAfterHours { get; init; } = DefaultDeleteMergedBlocksAfterHours;
+
+        public const int DefaultMergeMemoryBudgetMb = 256;
+
+        /// <summary>
+        /// The memory the merge of one product's hour may take for its rows (#1850), estimated at 40 bytes a row: an hour above
+        /// it is merged in several passes over its blocks, each keeping a share of the tables.
+        /// </summary>
+        public int MergeMemoryBudgetMb { get; init; } = DefaultMergeMemoryBudgetMb;
+
+        /// <summary>How long after its end an arrival hour is merged: blocks of a put in flight at the boundary are in by then.</summary>
+        public TimeSpan MergeGrace { get; init; } = TimeSpan.FromMinutes(2);
     }
 
 
@@ -128,5 +139,11 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>Blocks that could not be read (missing or damaged); their rows are not in the result.</summary>
         public int BlocksFailed { get; init; }
+
+        /// <summary>Batches of merged hours decoded for the read (#1850).</summary>
+        public int BatchesRead { get; init; }
+
+        /// <summary>Batches that could not be read (a damaged record or batch); their rows are not in the result.</summary>
+        public int BatchesFailed { get; init; }
     }
 }

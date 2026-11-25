@@ -77,6 +77,8 @@ namespace HSMServer.BackgroundServices
                 "Blocks in the store now.");
             Add("Duplicate blocks", () => Interlocked.Read(ref stats.DuplicateBlocks), false,
                 "Blocks sent again (same producer and producer sequence) and not stored twice since the server started.");
+            Add("Duplicates by watermark", () => Interlocked.Read(ref stats.MergedDuplicateBlocks), false,
+                "Of the duplicate blocks, those recognised by their producer's watermark because their hour was merged (#1850): their sequence and refusals are not known any more.");
             Add("Tables refused", () => Interlocked.Read(ref stats.TablesRefused), false,
                 "Tables of blocks the server refused since the server started: unknown or blocked sensor, another kind, another schema, an invalid identifier. Their rows are never served; the log has the reasons.");
             Add("Blocks not stored", () => Interlocked.Read(ref stats.BlocksNotStored), false,
@@ -106,21 +108,46 @@ namespace HSMServer.BackgroundServices
             Add("Batch write failures", () => Interlocked.Read(ref stats.WriteFailures), true,
                 "Writes and opens of the batch store that failed since the server started; a merged hour that failed is not committed and is merged again. Error in the sample in which it grew.", _batchCounters);
             Add("Batch read failures", () => Interlocked.Read(ref stats.ReadFailures), true,
-                "Batch records that could not be read since the server started. Error in the sample in which it grew.", _batchCounters);
+                "Batch records and batches that could not be read since the server started; their rows are not served. Error in the sample in which it grew.", _batchCounters);
+
+            // The merge job (#1850 part 3).
+            var merge = _batches.MergeStatistics;
+
+            Add("Arrival hours merged", () => Interlocked.Read(ref merge.HoursMerged), false,
+                "Arrival hours of table blocks merged into batches for every product with blocks in them since the server started.", _batchCounters);
+            Add("Merge lag", () => Interlocked.Read(ref merge.LagHours), false,
+                "Closed arrival hours due for the merge and not merged at the end of the last merge pass (0 when the merge keeps up; hours whose batches did not verify are not counted here).", _batchCounters, Unit.Count);
+            Add("Last merge duration", () => Interlocked.Read(ref merge.LastMergeMilliseconds), false,
+                "How long the last merged arrival hour took, all its products (ms).", _batchCounters, Unit.Milliseconds);
+            Add("Rows merged", () => Interlocked.Read(ref merge.RowsMerged), false,
+                "Rows written into batches by the merge since the server started.", _batchCounters);
+            AddMb("Merged blocks size", () => Interlocked.Read(ref merge.BlockBytesMerged),
+                "Stored size of the blocks merged since the server started (MB): the bytes before the merge.", _batchCounters);
+            AddMb("Merged batches size", () => Interlocked.Read(ref merge.BatchBytesWritten),
+                "Size of the batches the merge wrote since the server started (MB): the bytes after the merge.", _batchCounters);
+            Add("Verification mismatches", () => Interlocked.Read(ref merge.VerificationMismatches), false,
+                "Batches that did not decode to their rows bit for bit since the server started: their product's hour was not written and is served from its blocks. Must stay 0; Error while above 0.", _batchCounters, errorWhenNonZero: true);
+            Add("Unreadable blocks kept", () => Interlocked.Read(ref merge.UnreadableBlocksKept), true,
+                "Blocks the merge could not read since the server started: kept in the block store and listed in their hour's record; their rows are not served once the hour is merged. Error in the sample in which it grew.", _batchCounters);
+            Add("Rows of removed sensors dropped", () => Interlocked.Read(ref merge.RowsDropped), false,
+                "Rows the merge dropped since the server started because no table sensor is on their path any more, or the sensor there was created after their block.", _batchCounters);
+            Add("Merged hours holding blocks", () => Interlocked.Read(ref merge.MergedHoursHoldingBlocks), false,
+                "Arrival hours merged for every product whose blocks are still in the block store, waiting for TableSensors.DeleteMergedBlocksAfterHours.", _batchCounters);
 
             _batchesCreated = true;
         }
 
-        private void Add(string name, Func<long> read, bool errorWhenGrown, string description, List<Counter> counters = null)
+        private void Add(string name, Func<long> read, bool errorWhenGrown, string description, List<Counter> counters = null, Unit unit = Unit.Count,
+            bool errorWhenNonZero = false)
         {
-            var sensor = _collector.CreateIntSensor($"{NodeName}/{name}", Options(description, Unit.Count));
-            (counters ?? _counters).Add(new Counter(read, errorWhenGrown, (value, error) => sensor.AddValue((int)Math.Min(value, int.MaxValue), error ? SensorStatus.Error : SensorStatus.Ok)));
+            var sensor = _collector.CreateIntSensor($"{NodeName}/{name}", Options(description, unit));
+            (counters ?? _counters).Add(new Counter(read, errorWhenGrown, (value, error) => sensor.AddValue((int)Math.Min(value, int.MaxValue), error ? SensorStatus.Error : SensorStatus.Ok), errorWhenNonZero));
         }
 
-        private void AddMb(string name, Func<long> read, string description)
+        private void AddMb(string name, Func<long> read, string description, List<Counter> counters = null)
         {
             var sensor = _collector.CreateDoubleSensor($"{NodeName}/{name}", Options(description, Unit.MB));
-            _counters.Add(new Counter(read, false, (value, _) => sensor.AddValue(DatabaseSensorsBase.GetRoundedDouble(value))));
+            (counters ?? _counters).Add(new Counter(read, false, (value, _) => sensor.AddValue(DatabaseSensorsBase.GetRoundedDouble(value))));
         }
 
         private static InstantSensorOptions Options(string description, Unit unit) => new()
@@ -133,8 +160,9 @@ namespace HSMServer.BackgroundServices
         };
 
         // Posts a counter when it changes. A failure counter (errorWhenGrown) is Error when it grew since the previous
-        // sample and goes back to Ok at the next sample without growth.
-        private sealed class Counter(Func<long> read, bool errorWhenGrown, Action<long, bool> post)
+        // sample and goes back to Ok at the next sample without growth. One that must stay 0 (errorWhenNonZero) is Error
+        // whenever it is above 0.
+        private sealed class Counter(Func<long> read, bool errorWhenGrown, Action<long, bool> post, bool errorWhenNonZero = false)
         {
             private long? _posted;
             private bool _postedError;
@@ -142,6 +170,17 @@ namespace HSMServer.BackgroundServices
             public void Post()
             {
                 var value = read();
+
+                if (errorWhenNonZero)
+                {
+                    if (value != _posted)
+                    {
+                        _posted = value;
+                        post(value, value > 0);
+                    }
+
+                    return;
+                }
 
                 if (value == _posted)
                 {

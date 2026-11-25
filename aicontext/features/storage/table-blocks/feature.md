@@ -1,6 +1,6 @@
 # Feature: Table block store
 
-> Owner: storage | Last reviewed: 2026-11-24 | Canonical: yes
+> Owner: storage | Last reviewed: 2026-11-25 | Canonical: yes
 > Scope: where and how the server stores the blocks of table sensors as they arrive, finds them for a read, detects a block sent twice, and recovers from a crash (#1844, part 2b of epic #1842; ADR-0021 point 8). The block format: `aicontext/features/api/table-block/feature.md`. The table sensor kind: `aicontext/features/server/table-sensors/feature.md`. The transport that sends blocks is #1845; the hourly merge and retention are #1850.
 
 ---
@@ -141,9 +141,11 @@ So a block numbered before a sensor existed is never read for it: its tables wer
 
 `TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null)`: the rows of a table sensor with a time in `[from, to)`. Times are UTC: a time of kind `Unspecified` is taken as UTC (as row times are), a `Local` one is converted.
 
-- **Finding blocks.** From the in-memory index of the sensor's root product: blocks with a sequence at or above the sensor's `FirstSequence` whose header range `[first time, last time]` meets `[from, to)`. A late block with old times is found by its header, wherever it is in the sequence. Nothing else is opened.
+**Since the merge (#1850 part 3) the read joins batches and blocks**: an arrival hour committed for the sensor's product is read from its batches only, any other from its blocks only, never both and never neither; the order and the early stop of the row limit are in `aicontext/features/storage/table-batches/feature.md`, section "The read". What follows is the part of the read that takes blocks.
+
+- **Finding blocks.** From the in-memory index of the sensor's root product: blocks with a sequence at or above the sensor's `FirstSequence` whose header range `[first time, last time]` meets `[from, to)`, in an arrival hour not committed by the merge. A late block with old times is found by its header, wherever it is in the sequence.
 - **Rows.** Each candidate is read (one LevelDB get), its table read out by identifier (`TableBlockReader.ReadTable`, which decompresses the block), skipped when the envelope marks it refused, and its rows filtered to the range.
-- **Order.** By time, then by block sequence (arrival), then by the row's position in its block: a stable sort of the rows in the order they arrived.
+- **Order.** By time, then by arrival hour, then by block sequence, then by the row's position in its block: a stable sort of the rows in the order they arrived (an hour from batches keeps the same order).
 - **Limit.** At most `maxRows` rows (capped by `TableSensors.MaxReadRows`, default 1,000,000), the earliest ones, `Truncated` when more matched. Memory stays within about twice the limit: past it, the rows collected so far are sorted and the latest dropped.
 - **Null cells (#1859).** Every column of `TableRows` but the time may have rows without a value: `TableRowsColumn.NullMap` (the bit order of `TableNullMap`, `ceil(RowCount / 8)` bytes), `HasNulls`, `IsNull(row)`; the value array holds 0 at a null row. The collector keeps, per value column, one flag per collected row, created at the first null row of that column (nothing for a column without one), and moves it with its row through the range filter, the stable sort, the trims and the limit, so a column with a map in one block and none in another is right. `NullMap` is null when no returned row of the column is null, also when a block had a map whose null rows fell outside `[from, to)` or past the limit. A row whose every value is null is returned like any other. The put needs nothing new: `ReadDirectory` gives the plain column types, which pass the schema check, and it refuses a malformed map (`Invalid`, `CorruptNullMap`).
 - **Damage.** A block that is missing or cannot be read is counted (`Read failures`, `BlocksFailed` in the result) and skipped.
@@ -165,13 +167,14 @@ Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read
 | `MaxColumnsPerTable` | 64 | |
 | `MaxTableIdLength` | 1,024 | |
 | `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request). |
-| `MinFreeDiskMb` | 1,024 | Puts are refused (a fault) while the store's disk has less free; 0 turns the check off. |
+| `MinFreeDiskMb` | 1,024 | Puts are refused (a fault) while the store's disk has less free; 0 turns the check off. The merge does not write batches below it either (#1850). |
+| `MaxOpenBatchDatabases`, `DeleteMergedBlocksAfterHours`, `MergeMemoryBudgetMb` | 32, 24, 256 | The batch store and the merge (#1850): `aicontext/features/storage/table-batches/feature.md`. |
 
 There is no switch: the feature does nothing until a table sensor exists.
 
 ## Self-monitoring
 
-Under `Database/Tables` (`TableBlockSensors`), posted from the 5-minute self-monitoring sample, **only once the store has been opened in this process**: a server without table sensors creates none of these sensors. Counters since the process started, posted when they change: `Blocks stored`, `Rows stored`, `Stored` (MB), `Blocks in store`, `Duplicate blocks`, `Tables refused`, `Blocks not stored` (every table refused), `Invalid blocks`, `Write failures`, `Read failures`, `Index rebuilds`. `Write failures` also counts a failed open of the store, whether a put or a read started it (the store cannot take puts until it opens), so on a server where only reads arrive it can grow about once a minute with no put attempted. `Invalid blocks`, `Write failures` and `Read failures` are Error in the sample in which they grew, and Ok again at the next sample without a new failure (posted once more with the same value), so one transient failure does not stay Error until a restart.
+Under `Database/Tables` (`TableBlockSensors`), posted from the 5-minute self-monitoring sample, **only once the store has been opened in this process**: a server without table sensors creates none of these sensors. Counters since the process started, posted when they change: `Blocks stored`, `Rows stored`, `Stored` (MB), `Blocks in store`, `Duplicate blocks`, `Duplicates by watermark` (of them, those recognised by a producer's watermark after their hour was merged, #1850), `Tables refused`, `Blocks not stored` (every table refused), `Invalid blocks`, `Write failures`, `Read failures`, `Index rebuilds`. `Write failures` also counts a failed open of the store, whether a put or a read started it (the store cannot take puts until it opens), so on a server where only reads arrive it can grow about once a minute with no put attempted. `Invalid blocks`, `Write failures` and `Read failures` are Error in the sample in which they grew, and Ok again at the next sample without a new failure (posted once more with the same value), so one transient failure does not stay Error until a restart.
 
 The daily database sizes get `Database/Tables data size` once the folder exists. `IDatabaseCore.TableBlocksDbSize` is the folder's size (0 without the folder; nothing is opened); `TotalDbSize` includes it. The Configuration page shows it read-only as "Table blocks (MB)". The weekly export list, the Unseal button and the Compact button do not concern it.
 
@@ -213,7 +216,7 @@ Synthetic feed shaped like the measured real hour: one collector, a block every 
 - Answer a `TableBlockPutResult` per block: `Stored` and `Duplicate` are acknowledgements (with the refused tables), `AllRefused` and `Invalid` are final refusals (4xx-like: sending again does not help unless the sensors change), and `TableBlockStoreException` is a fault (5xx-like: the collector keeps the block and sends it again). `Read` throws the same exception when the store cannot be used (cannot open, failed and in its backoff): a fault, answered 5xx, not an error result, which would say the request is wrong.
 - Check the key's permission to send data before calling `Put`; the block service does not see keys.
 
-**The merge step (#1850):** the block store's part is built (`CloseHour`, `DeleteMergedHour`, watermarks in memory; `aicontext/features/storage/table-batches/feature.md`, section "The block store's part"); the merge job that calls it is #1850 part 3.
+**The merge step (#1850):** built: the block store's part (`CloseHour`, `DeleteMergedHour`, watermarks in memory, `GetProducts`) and the merge job with the joined read (part 3); `aicontext/features/storage/table-batches/feature.md`, sections "The block store's part" and "The merge". The list below is what it had to do, kept for the record.
 - After an hour is merged, delete it from both databases as one range and compact that range (`TableBlockDatabase.DeleteArrivalHour` does this today, for the benchmark), with the blocks and index entries leaving the in-memory index and the duplicate map.
 - Keep **duplicate detection** working after the blocks are gone: a per-producer watermark per product (the highest producer sequence merged for a product and producer, the same key as the duplicate map), persisted with the batches, so that a resend of a merged block is answered as a duplicate. This relies on in-order delivery per producer (step 3).
 - The sequence is kept by the sequence mark (above): deleting every block does not take the next sequence back.

@@ -1,0 +1,744 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using HSMDatabase.AccessManager.TableBatches;
+using HSMDatabase.AccessManager.TableBlocks;
+using HSMDatabase.LevelDB.TableBatches;
+using HSMDatabase.LevelDB.TableBlocks;
+using HSMCommon.Model;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableSensors;
+using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Core.Tests.MonitoringCoreTests;
+using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
+using HSMTableBlocks;
+using Xunit;
+
+namespace HSMServer.Core.Tests.TableSensors
+{
+    public sealed class TableMergeFixture : DatabaseFixture
+    {
+        protected override string DatabaseFolder => nameof(TableMergeJobTests);
+    }
+
+
+    /// <summary>
+    /// The hourly merge of table blocks into batches and the read that joins them (#1850 part 3): the crash points of the
+    /// merge and of the deletion, the read at every stage, products apart, damaged blocks, verification, faults, removed
+    /// sensors, nulls and sizes, watermarks across a restart, the deletion delay, the row limit and the memory budget.
+    /// No timing: the job's clock is a parameter, the stores' clocks are seams.
+    /// </summary>
+    [Collection("Database collection")]
+    public class TableMergeJobTests : MonitoringCoreTestsBase<TableMergeFixture>, IAsyncLifetime
+    {
+        private static readonly DateTime Hour0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);
+        private static readonly DateTime From = Hour0.AddHours(-3), To = Hour0.AddHours(12);
+
+        private static readonly TableSchema Quotes = new([
+            new TableSchemaColumn("time", TableColumnType.Time),
+            new TableSchemaColumn("bid", TableColumnType.Double),
+            new TableSchemaColumn("size", TableColumnType.Int64),
+        ]);
+
+        private readonly Guid _product = TestProductsManager.ProductId;
+        private readonly Guid _producer = Guid.NewGuid();
+        private readonly string _root = $"m{Guid.NewGuid():N}"[..12];
+        private readonly List<IAsyncDisposable> _restarted = [];
+        private readonly List<IDisposable> _databases = [];
+        private long _producerSequence;
+        private int _restarts;
+        private DateTime _now = Hour0;
+
+        private Server _server;
+
+
+        public TableMergeJobTests(TableMergeFixture fixture, DatabaseRegisterFixture registerFixture) : base(fixture, registerFixture)
+        {
+            _server = Build(_databaseCoreManager.DatabaseCore, _valuesCache);
+        }
+
+
+        Task IAsyncLifetime.InitializeAsync() => InitializeAsync();
+
+        async Task IAsyncLifetime.DisposeAsync()
+        {
+            foreach (var cache in _restarted)
+                await cache.DisposeAsync();
+
+            foreach (var database in _databases)
+                database.Dispose();
+        }
+
+
+        // === Crash points ===
+
+        [Theory]
+        [InlineData("encoded")]
+        [InlineData("part-written")]
+        [InlineData("before-commit")]
+        [InlineData("committed")]
+        [InlineData("watermarks-raised")]
+        [InlineData("after-hour-blocks-deleted")]
+        [InlineData("before-hour-compaction")]
+        public async Task A_crash_at_any_point_of_the_merge_keeps_every_read_the_same_and_a_rerun_completes_and_then_changes_nothing(string point)
+        {
+            var (a, b) = await SeedAsync();
+            var before = All(a, b);
+            var merge = Hour0.AddHours(1).AddMinutes(3);
+            var deletion = point is "after-hour-blocks-deleted" or "before-hour-compaction";
+
+            if (deletion)
+            {
+                Assert.Null(Pass(merge).Fault);
+                Assert.True(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            }
+
+            Crash(point);
+            var report = Pass(deletion ? merge.AddHours(25) : merge);
+            Assert.NotNull(report.Fault);
+
+            await RestartAsync(crash: true);
+
+            // Committed exactly when the crash came after the commit.
+            Assert.Equal(deletion || point is "committed" or "watermarks-raised", _server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // The same rows in the same order, nothing doubled, wherever the crash left the hour.
+            Assert.Equal(before, All(a, b));
+
+            var rerun = Pass(deletion ? merge.AddHours(25) : merge);
+            Assert.Null(rerun.Fault);
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.Equal(before, All(a, b));
+
+            if (deletion)
+                Assert.DoesNotContain(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.Ticks);
+
+            // A second rerun is a no-op: nothing merged, written or deleted.
+            var written = _server.Batches.Statistics.BatchesWritten;
+            var again = Pass(deletion ? merge.AddHours(25) : merge);
+            Assert.Equal((0, 0, null), (again.HoursMerged, again.HoursDeleted, again.Fault));
+            Assert.Equal(written, _server.Batches.Statistics.BatchesWritten);
+            Assert.Equal(before, All(a, b));
+        }
+
+        // === The read rule ===
+
+        [Fact]
+        public async Task A_read_at_every_stage_returns_the_same_rows_with_equal_times_across_a_merged_hour_an_unmerged_hour_and_a_late_block()
+        {
+            var (a, _) = await SeedAsync();
+
+            var expected = new List<(long, double?, long?)>
+            {
+                (Hour0.AddMinutes(1).Ticks, 2.0, 20),
+                (Hour0.AddMinutes(5).Ticks, null, 10),  // block 1, hour 0
+                (Hour0.AddMinutes(5).Ticks, 3.0, 30),   // block 2, hour 0
+                (Hour0.AddMinutes(5).Ticks, 5.0, null), // block 3, hour 1 (late)
+                (Hour0.AddMinutes(9).Ticks, 4.0, 40),
+                (Hour0.AddMinutes(65).Ticks, 6.0, 60),
+            };
+
+            Assert.Equal(expected, Rows(a));
+
+            // Hour 0 merged: its blocks stay for the delay and are ignored; hour 1 (with the late block) from blocks.
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            Assert.Contains(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.Ticks);
+            var merged = _server.Service.Read(a.Id, From, To).Value;
+            Assert.Equal(expected, Snapshot(merged));
+            Assert.True(merged.BatchesRead > 0);
+
+            // Both merged.
+            Assert.Equal(1, Pass(Hour0.AddHours(2).AddMinutes(3)).HoursMerged);
+            Assert.Equal(expected, Rows(a));
+
+            // Hour 0's blocks deleted after the delay; hour 1's not yet.
+            var deleted = Pass(Hour0.AddHours(1).AddMinutes(3).AddHours(24).AddMinutes(1));
+            Assert.Equal(1, deleted.HoursDeleted);
+            Assert.DoesNotContain(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.Ticks);
+            Assert.Contains(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.AddHours(1).Ticks);
+            Assert.Equal(expected, Rows(a));
+
+            Pass(Hour0.AddHours(30));
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+            var batchesOnly = _server.Service.Read(a.Id, From, To).Value;
+            Assert.Equal(expected, Snapshot(batchesOnly));
+            Assert.Equal(0, batchesOnly.BlocksRead);
+        }
+
+        [Fact]
+        public async Task One_product_committed_and_another_not_reads_the_same_and_the_hour_is_deleted_only_once_both_are()
+        {
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            var a = await RegisterAsync("a");
+            var o = await RegisterAsync("o", other);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            AssertStored(_server.Service.Put(other, _producer, 1, Block(("o", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+            var before = All(a, o);
+
+            // The second product's hour fails at its encoding: the first is committed, the second is not.
+            int encoded = 0;
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "encoded" && ++encoded == 2)
+                    throw new IOException("crash");
+            };
+
+            var merge = Hour0.AddHours(1).AddMinutes(3);
+            Assert.NotNull(Pass(merge).Fault);
+            _server.Job.Checkpoint = null;
+
+            var committed = new[] { _product, other }.Where(p => _server.Batches.IsHourMerged(p, Hour0.Ticks)).ToList();
+            Assert.Single(committed);
+            Assert.Equal(before, All(a, o));
+
+            // Past the delay of the committed one: nothing deleted, the hour is not merged for every product.
+            Assert.Equal(1, Pass(merge.AddMinutes(1)).HoursMerged);
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.Ticks) && _server.Batches.IsHourMerged(other, Hour0.Ticks));
+            Assert.Equal(before, All(a, o));
+
+            Assert.Equal(1, Pass(merge.AddHours(25)).HoursDeleted);
+            Assert.Equal(before, All(a, o));
+        }
+
+        // === Damage, verification, faults ===
+
+        [Fact]
+        public async Task A_damaged_block_is_kept_listed_and_counted_and_the_rest_of_its_hour_is_merged()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            var damaged = Put(Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)]))).Sequence.Value;
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(3), 3.0, 3)]))));
+
+            await RestartAsync(crash: false, beforeOpen: settings =>
+            {
+                // A byte of the block (after its envelope) changed: the block's checksum fails, the envelope reads.
+                using var db = new global::LevelDB.DB(Path.Combine(settings.PathToTableBlocks, TableBlockDatabase.BlocksName), new global::LevelDB.Options());
+                var key = TableBlockDatabase.Key(Hour0.Ticks, damaged);
+                var value = db.Get(key);
+                value[^1] ^= 0x55;
+                db.Put(key, value, new global::LevelDB.WriteOptions { Sync = true });
+            });
+
+            var before = _server.Service.Read(a.Id, From, To).Value;
+            Assert.Equal(1, before.BlocksFailed);
+            Assert.Equal([1.0, 3.0], before.Columns[1].DoubleValues);
+
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+
+            var hour = _server.Batches.GetHour(_product, Hour0.Ticks);
+            Assert.Equal([damaged], hour.UnreadableBlocks);
+            Assert.Equal(2, hour.BlocksMerged);
+            Assert.Equal(1, _server.Batches.MergeStatistics.UnreadableBlocksKept);
+            Assert.Equal([1.0, 3.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+
+            // Past the delay the other blocks go; the damaged one stays.
+            Pass(Hour0.AddHours(30));
+            Assert.Equal([damaged], _server.Blocks.GetBlocks(_product).Select(e => e.Sequence));
+            Assert.Equal([1.0, 3.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+        }
+
+        [Fact]
+        public async Task A_verification_mismatch_writes_nothing_for_its_product_is_counted_and_the_blocks_stay()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1), (Hour0.AddMinutes(2), 2.0, 2)]))));
+            var before = Rows(a);
+
+            _server.Job.AfterDecode = (_, batch) => batch.Columns[1].DoubleValues[1] = 2.5;
+
+            var report = Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.Null(report.Fault);
+            Assert.Equal(1, report.Mismatches);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.Equal(0, _server.Batches.Statistics.BatchesWritten);
+            Assert.Equal(1, _server.Batches.MergeStatistics.VerificationMismatches);
+            Assert.Equal(before, Rows(a));
+
+            // Not tried again in this process, and its blocks are never deleted while it is not merged.
+            var later = Pass(Hour0.AddHours(30));
+            Assert.Equal((0, 0, 0), (later.HoursMerged, later.HoursDeleted, later.Mismatches));
+            Assert.Single(_server.Blocks.GetBlocks(_product));
+
+            // After a restart (the defect fixed) it is merged.
+            await RestartAsync(crash: false);
+            Assert.Equal(1, Pass(Hour0.AddHours(30)).HoursMerged);
+            Assert.Equal(before, Rows(a));
+        }
+
+        [Fact]
+        public async Task A_store_fault_in_the_middle_of_an_hour_stops_the_pass_and_a_later_pass_merges_the_hour()
+        {
+            var (a, b) = await SeedAsync();
+            var before = All(a, b);
+
+            _server.Batches.Checkpoint = p =>
+            {
+                if (p == "before-commit")
+                    throw new IOException("disk gone");
+            };
+
+            var failed = Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.NotNull(failed.Fault);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+            Assert.Equal(1, _server.Batches.MergeStatistics.Faults);
+            Assert.Equal(1, _server.Batches.Statistics.WriteFailures);
+            Assert.Equal(before, All(a, b));
+
+            _server.Batches.Checkpoint = null;
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(4)).HoursMerged);
+            Assert.Equal(before, All(a, b));
+        }
+
+        [Fact]
+        public async Task Too_little_free_disk_is_a_fault_before_any_batch_is_written()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+
+            await RestartAsync(crash: false, options: new TableBlockOptions { MinFreeDiskMb = 10 });
+            _server.Job.FreeBytes = () => 5L << 20;
+
+            Assert.Contains("free disk", Pass(Hour0.AddHours(2)).Fault);
+            Assert.Equal(0, _server.Batches.Statistics.BatchesWritten);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            _server.Job.FreeBytes = () => 50L << 20;
+            Assert.Equal(1, Pass(Hour0.AddHours(2)).HoursMerged);
+            Assert.Equal([1.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+        }
+
+        // === Sensors ===
+
+        [Fact]
+        public async Task A_sensor_removed_and_created_again_between_the_put_and_the_merge_never_sees_the_old_rows()
+        {
+            var old = await RegisterAsync("q");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("q", [(Hour0.AddMinutes(1), 1.0, 1), (Hour0.AddMinutes(2), 2.0, 2)]))));
+
+            await _server.Cache.RemoveSensorAsync(old.Id);
+            var renewed = await RegisterAsync("q");
+            AssertStored(Put(Block(("q", [(Hour0.AddMinutes(3), 3.0, 3)]))));
+
+            Assert.Equal([3.0], _server.Service.Read(renewed.Id, From, To).Value.Columns[1].DoubleValues);
+
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+
+            Assert.Equal([3.0], _server.Service.Read(renewed.Id, From, To).Value.Columns[1].DoubleValues);
+            Assert.Equal(2, _server.Batches.MergeStatistics.RowsDropped);
+            Assert.Equal(1, _server.Batches.MergeStatistics.RowsMerged);
+            Assert.Empty(_server.Batches.ReadSensor(_product, old.Id, TablePeriodClass.Of(renewed, DateTime.UtcNow), [Hour0.Ticks]));
+        }
+
+        [Fact]
+        public async Task Nulls_a_large_hour_a_single_row_and_rows_out_of_order_read_back_the_same_after_the_merge()
+        {
+            var nulls = await RegisterAsync("nulls");
+            var large = await RegisterAsync("large");
+            var single = await RegisterAsync("single");
+
+            var random = new Random(1850);
+            _now = Hour0.AddMinutes(5);
+
+            for (int block = 0; block < 3; block++)
+            {
+                // 1,700 rows a block in shuffled times (equal times too), a null in some cells.
+                var rows = Enumerable.Range(0, 1700).Select(i =>
+                    (Hour0.AddSeconds(random.Next(0, 3000)), (double?)(random.Next(10_000) / 100.0), (long?)random.Next(100))).ToArray();
+                var nullRows = Enumerable.Range(0, 40).Select(i => (Hour0.AddSeconds(random.Next(0, 3000)), i % 2 == 0 ? (double?)null : 1.5, i % 3 == 0 ? (long?)null : 7)).ToArray();
+
+                AssertStored(Put(Block(("large", rows), ("nulls", nullRows))));
+                _now = _now.AddMinutes(5);
+            }
+
+            AssertStored(Put(Block(("single", [(Hour0.AddMinutes(30), null, null)]))));
+
+            var before = All(nulls, large, single);
+            Assert.Equal(5100, Rows(large).Count);
+            Assert.Contains(Rows(nulls), r => r.Item2 is null);
+
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            Assert.Equal(before, All(nulls, large, single));
+
+            // 5,100 rows: two batches of 2,550, in time order.
+            var batches = _server.Batches.ReadSensor(_product, large.Id, TablePeriodClass.Of(large, DateTime.UtcNow), [Hour0.Ticks]);
+            Assert.Equal([2550, 2550], batches.Select(r => r.RowCount));
+            Assert.True(batches[0].LastTime <= batches[1].FirstTime);
+            Assert.Equal(5100 + 120 + 1, _server.Batches.MergeStatistics.RowsMerged);
+        }
+
+        // === Watermarks and the deletion delay ===
+
+        [Fact]
+        public async Task A_resend_of_a_merged_and_deleted_block_is_a_duplicate_after_a_restart_per_product_and_no_block_lands_in_a_merged_hour()
+        {
+            var a = await RegisterAsync("a");
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            await RegisterAsync("a", other);
+
+            _now = Hour0.AddMinutes(10);
+            for (long s = 1; s <= 3; s++)
+                AssertStored(_server.Service.Put(_product, _producer, s, Block(("a", [(Hour0.AddMinutes(s), s, s)]))));
+
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+            Assert.Equal(1, Pass(Hour0.AddHours(26)).HoursDeleted);
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+
+            await RestartAsync(crash: false);
+
+            // The clock is behind: without the newest merged hour closed, the block would go into hour 0, already merged.
+            _now = Hour0.AddMinutes(20);
+            var resent = _server.Service.Put(_product, _producer, 2, Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)])));
+            Assert.Equal(TableBlockPutOutcome.Duplicate, resent.Outcome);
+            Assert.False(resent.RefusalsKnown);
+            Assert.Equal(1, _server.Blocks.Statistics.MergedDuplicateBlocks);
+
+            // The same producer and sequence under another product is that product's block.
+            AssertStored(_server.Service.Put(other, _producer, 2, Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+
+            var next = _server.Service.Put(_product, _producer, 4, Block(("a", [(Hour0.AddMinutes(4), 4.0, 4)])));
+            AssertStored(next);
+            Assert.Equal(Hour0.AddHours(1).Ticks, _server.Blocks.GetBlocks(_product).Single().ArrivalHourTicks);
+
+            Assert.Equal([1.0, 2.0, 3.0, 4.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+        }
+
+        [Fact]
+        public async Task The_blocks_of_a_merged_hour_stay_until_the_delay_after_its_commit_also_across_a_restart()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+
+            // Merged late (a catch-up): the delay runs from the commit, not from the end of the hour.
+            var commit = Hour0.AddHours(10);
+            Assert.Equal(1, Pass(commit).HoursMerged);
+            Assert.Equal(commit.Ticks, _server.Batches.GetHour(_product, Hour0.Ticks).CommitTicks);
+
+            await RestartAsync(crash: false);
+
+            var holding = Pass(commit.AddHours(23));
+            Assert.Equal(0, holding.HoursDeleted);
+            Assert.Single(_server.Blocks.GetBlocks(_product));
+            Assert.Equal(1, _server.Batches.MergeStatistics.MergedHoursHoldingBlocks);
+            Assert.Equal([1.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+
+            Assert.Equal(1, Pass(commit.AddHours(24)).HoursDeleted);
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+            Assert.Equal(0, _server.Batches.MergeStatistics.MergedHoursHoldingBlocks);
+            Assert.Equal([1.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
+        }
+
+        // === The row limit ===
+
+        [Fact]
+        public async Task The_row_limit_returns_the_unlimited_result_cut_at_the_limit_across_overlapping_hours()
+        {
+            var a = await RegisterAsync("a");
+
+            // Four arrival hours whose rows overlap in time, with equal times across them; the first two merged.
+            for (int h = 0; h < 4; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(10);
+                AssertStored(Put(Block(("a", Enumerable.Range(0, 6).Select(i => (Hour0.AddMinutes(h * 20 + i * 15), (double?)(h * 100 + i), (long?)i)).ToArray()))));
+            }
+
+            Pass(Hour0.AddHours(2).AddMinutes(3));
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.AddHours(2).Ticks));
+
+            var all = Rows(a);
+            Assert.Equal(24, all.Count);
+
+            for (int limit = 1; limit <= 25; limit++)
+            {
+                var limited = _server.Service.Read(a.Id, From, To, limit).Value;
+                Assert.Equal(all.Take(limit), Snapshot(limited));
+                Assert.Equal(limit < 24, limited.Truncated);
+            }
+        }
+
+        [Fact]
+        public async Task The_row_limit_stops_before_the_hours_that_start_after_the_rows_it_keeps()
+        {
+            var a = await RegisterAsync("a");
+
+            for (int h = 0; h < 6; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(10);
+                AssertStored(Put(Block(("a", Enumerable.Range(0, 10).Select(i => (Hour0.AddHours(h).AddMinutes(i), (double?)(h * 10 + i), (long?)i)).ToArray()))));
+            }
+
+            Pass(Hour0.AddHours(3).AddMinutes(3));
+
+            // 15 rows: hour 0 (merged) gives 10, hour 1 (merged) the rest; hours 2 to 5 are not read.
+            var limited = _server.Service.Read(a.Id, From, To, 15).Value;
+            Assert.Equal(Rows(a).Take(15), Snapshot(limited));
+            Assert.True(limited.Truncated);
+            Assert.Equal(2, limited.BatchesRead);
+            Assert.Equal(0, limited.BlocksRead);
+
+            var fromBlocks = _server.Service.Read(a.Id, Hour0.AddHours(3), To, 15).Value;
+            Assert.Equal(2, fromBlocks.BlocksRead);
+            Assert.True(fromBlocks.Truncated);
+        }
+
+        // === The memory budget ===
+
+        [Fact]
+        public async Task A_budget_that_forces_several_passes_writes_the_same_bytes_as_one_pass()
+        {
+            var sensors = new List<BaseSensorModel>();
+            for (int s = 0; s < 5; s++)
+                sensors.Add(await RegisterAsync($"s{s}"));
+
+            var random = new Random(7);
+            for (int block = 0; block < 4; block++)
+            {
+                _now = Hour0.AddMinutes(5 + block);
+                AssertStored(Put(Block(Enumerable.Range(0, 5).Select(s => ($"s{s}", Enumerable.Range(0, 100 * (s + 1)).Select(i =>
+                    (Hour0.AddSeconds(random.Next(3600)), random.Next(4) == 0 ? (double?)null : random.Next(1000) / 10.0, (long?)i)).ToArray())).ToArray())));
+            }
+
+            var before = sensors.Select(Rows).ToList();
+            var hour = Hour0.AddHours(1).AddMinutes(3);
+
+            // About a third of the hour's rows per share.
+            _server.Job.MemoryBudgetBytes = 1200L * TableMergeJob.BytesPerRowEstimate;
+            Assert.Equal(1, Pass(hour).HoursMerged);
+            Assert.True(_server.Job.LastPasses > 2, $"{_server.Job.LastPasses} passes");
+            var several = Stored(sensors);
+            Assert.Equal(before, sensors.Select(Rows).ToList());
+
+            // The same hour merged again in one pass: the batch store removed, the blocks still there (the delay).
+            await RestartAsync(crash: false, beforeOpen: settings => Directory.Delete(Path.Combine(settings.PathToTableBlocks, TableBatchDatabase.FolderName), recursive: true));
+            Assert.Equal(1, Pass(hour).HoursMerged);
+            Assert.Equal(1, _server.Job.LastPasses);
+
+            Assert.Equal(several, Stored(sensors));
+            Assert.Equal(before, sensors.Select(Rows).ToList());
+        }
+
+
+        // === The period class ===
+
+        public static TheoryData<TimeIntervalModel, int> PeriodClasses => new()
+        {
+            { new TimeIntervalModel(TimeInterval.Month), 5 },
+            { new TimeIntervalModel(TimeInterval.ThreeMonths), 14 },
+            { new TimeIntervalModel(TimeInterval.SixMonths), 27 },
+            { new TimeIntervalModel(TimeInterval.Year), 53 },
+            { new TimeIntervalModel(TimeInterval.None), 0 },
+            { TimeIntervalModel.None, 0 },
+            { new TimeIntervalModel(TimeSpan.FromDays(7).Ticks), 1 },
+            { new TimeIntervalModel(TimeSpan.FromDays(10).Ticks), 2 },
+            { new TimeIntervalModel(TimeSpan.FromHours(1).Ticks), 1 },
+            { new TimeIntervalModel(TimeSpan.FromDays(14).Ticks), 2 },
+            { new TimeIntervalModel(TimeSpan.FromDays(400).Ticks), 58 },
+            { new TimeIntervalModel(long.MaxValue), 0 },
+            { new TimeIntervalModel(TimeInterval.Ticks, 0), 0 },
+            // Inherited from a folder: a custom period keeps its ticks, a dynamic preset arrives with 0 ticks and is kept for
+            // ever, as the cleanup of ordinary history treats it; Forever is long.MaxValue.
+            { new TimeIntervalModel(TimeSpan.FromDays(30).Ticks).ToFromFolderModel(), 5 },
+            { new TimeIntervalModel(TimeInterval.Month).ToFromFolderModel(), 0 },
+            { new TimeIntervalModel(TimeInterval.Year).ToFromFolderModel(), 0 },
+            { TimeIntervalModel.None.ToFromFolderModel(), 0 },
+            { new TimeIntervalModel(TimeInterval.FromParent), 0 },
+        };
+
+        [Theory]
+        [MemberData(nameof(PeriodClasses))]
+        public void The_period_class_is_the_history_setting_in_whole_weeks_rounded_up_or_0_for_ever(TimeIntervalModel policy, int weeks)
+        {
+            Assert.Equal(weeks, TablePeriodClass.Weeks(policy, Hour0));
+        }
+
+        [Fact]
+        public async Task A_sensor_with_its_own_period_is_merged_into_the_database_of_its_class()
+        {
+            var (a, b) = await SeedAsync();
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+
+            Assert.Equal(1, TablePeriodClass.Of(b, DateTime.UtcNow));
+            Assert.NotEqual(1, TablePeriodClass.Of(a, DateTime.UtcNow));
+            Assert.Contains(new TableBatchWeek(HSMDatabase.AccessManager.StorageWeek.GetStartTicks(Hour0.Ticks), 1), _server.Batches.GetWeeks(_product));
+            Assert.Equal(2, _server.Batches.GetHour(_product, Hour0.Ticks).Classes.Count);
+        }
+
+
+        // === Helpers ===
+
+        private sealed record Server(IDatabaseCore Database, ITreeValuesCache Cache, TableBlockService Service, TableBlockDatabase Blocks, TableBatchDatabase Batches)
+        {
+            public TableMergeJob Job => Service.Merge;
+        }
+
+        private Server Build(IDatabaseCore database, ITreeValuesCache cache, TableBlockOptions options = null)
+        {
+            var service = new TableBlockService(database, cache, options ?? new TableBlockOptions { MinFreeDiskMb = 0 });
+            var blocks = (TableBlockDatabase)database.TableBlocks;
+            var batches = (TableBatchDatabase)database.TableBatches;
+
+            blocks.Clock = () => _now;
+            batches.Clock = () => _now;
+
+            return new Server(database, cache, service, blocks, batches);
+        }
+
+        private TableMergePassReport Pass(DateTime now)
+        {
+            _now = now;
+            return _server.Job.RunPass(now);
+        }
+
+        private void Crash(string point)
+        {
+            void Throw(string p)
+            {
+                if (p == point)
+                    throw new IOException($"crash at {p}");
+            }
+
+            _server.Job.Checkpoint = Throw;
+            _server.Batches.Checkpoint = Throw;
+            _server.Blocks.FaultHook = Throw;
+        }
+
+        // A restart of the server over the same folders; with crash, the batch store stops without flushing its databases.
+        private async Task RestartAsync(bool crash, Action<HSMDatabase.AccessManager.IDatabaseSettings> beforeOpen = null, TableBlockOptions options = null)
+        {
+            var settings = _server.Database.DatabaseSettings;
+
+            if (crash)
+                _server.Batches.CloseWithoutFlush();
+
+            _server.Database.Dispose();
+            beforeOpen?.Invoke(settings);
+
+            var restart = ((HSMDatabase.Settings.DatabaseSettings)settings) with
+            {
+                ServerLayoutDatabaseName = settings.ServerLayoutDatabaseName + $"_r{++_restarts}",
+                ChangeSetsDatabaseName = settings.ChangeSetsDatabaseName + $"_r{_restarts}",
+                SnaphotsDatabaseName = settings.SnaphotsDatabaseName + $"_r{_restarts}",
+            };
+
+            var database = new HSMDatabase.DatabaseWorkCore.DatabaseCore(restart);
+            var snapshot = new Moq.Mock<HSMServer.Core.TreeStateSnapshot.ITreeStateSnapshot>();
+            snapshot.Setup(s => s.Keys).Returns(new HSMServer.Core.TreeStateSnapshot.StateCollection<
+                HSMServer.Core.TreeStateSnapshot.States.LastKeyState, HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity.LastKeyStateEntity>());
+
+            var cache = new TreeValuesCache(database, snapshot.Object, new HSMServer.Core.Journal.JournalService(database),
+                new HSMServer.Core.Schedule.AlertScheduleProvider(database), new HSMServer.Core.ChangeSets.ChangeSetJournal(database));
+
+            _restarted.Add(cache);
+            _databases.Add(database);
+            _server = Build(database, cache, options);
+
+            await Task.CompletedTask;
+        }
+
+        // Sensor a (the product's period) and b (one week): hour 0 holds blocks 1 and 2, hour 1 a late block with rows of
+        // hour 0, equal times across all three.
+        private async Task<(BaseSensorModel A, BaseSensorModel B)> SeedAsync()
+        {
+            var a = await RegisterAsync("a");
+            var b = await RegisterAsync("b");
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(5), null, 10), (Hour0.AddMinutes(1), 2.0, 20)]), ("b", [(Hour0.AddMinutes(5), 1.0, 1)]))));
+            _now = Hour0.AddMinutes(20);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(9), 4.0, 40), (Hour0.AddMinutes(5), 3.0, 30)]), ("b", [(Hour0.AddMinutes(5), 2.0, 2)]))));
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(65), 6.0, 60), (Hour0.AddMinutes(5), 5.0, null)]), ("b", [(Hour0.AddMinutes(5), 3.0, 3)]))));
+
+            return (a, b);
+        }
+
+        private async Task<BaseSensorModel> RegisterAsync(string name, Guid? product = null)
+        {
+            var path = $"{_root}/{name}";
+            var result = await _server.Cache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(product ?? _product, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty },
+                Type = SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = Quotes,
+            });
+
+            Assert.True(result.IsOk, result.Error);
+            Assert.True(_server.Cache.TryGetSensorByPath(product ?? _product, path, out var sensor));
+            return sensor;
+        }
+
+        private TableBlockPutResult Put(byte[] block) => _server.Service.Put(_product, _producer, ++_producerSequence, block);
+
+        private static void AssertStored(TableBlockPutResult result)
+        {
+            Assert.Equal(TableBlockPutOutcome.Stored, result.Outcome);
+            Assert.Empty(result.Refusals);
+        }
+
+        private List<(long, double?, long?)> Rows(BaseSensorModel sensor)
+        {
+            var result = _server.Service.Read(sensor.Id, From, To);
+            Assert.True(result.IsOk, result.Error);
+            Assert.Equal(0, result.Value.BlocksFailed);
+            Assert.Equal(0, result.Value.BatchesFailed);
+            return Snapshot(result.Value);
+        }
+
+        // The rows of several sensors one after another, a separator between them.
+        private List<(long, double?, long?)> All(params BaseSensorModel[] sensors) =>
+            sensors.SelectMany(s => Rows(s).Append((-1L, null, null))).ToList();
+
+        private static List<(long, double?, long?)> Snapshot(TableRows rows) =>
+            Enumerable.Range(0, rows.RowCount).Select(r => (rows.Time[r],
+                rows.Columns[1].IsNull(r) ? null : (double?)rows.Columns[1].DoubleValues[r],
+                rows.Columns[2].IsNull(r) ? null : (long?)rows.Columns[2].Int64Values[r])).ToList();
+
+        // Every stored batch of the sensors in hour 0, in order.
+        private List<byte[]> Stored(List<BaseSensorModel> sensors) =>
+            sensors.SelectMany(s => _server.Batches.ReadSensor(_product, s.Id, TablePeriodClass.Of(s, DateTime.UtcNow), [Hour0.Ticks]).Select(r => r.Batch)).ToList();
+
+        // One block of tables of the schema; a null bid or size is a cell without a value.
+        private byte[] Block(params (string Name, (DateTime Time, double? Bid, long? Size)[] Rows)[] tables)
+        {
+            using var writer = new TableBlockWriter();
+
+            foreach (var (name, rows) in tables)
+            {
+                var bidNulls = new byte[TableNullMap.ByteLength(rows.Length)];
+                var sizeNulls = new byte[TableNullMap.ByteLength(rows.Length)];
+                bool anyBid = false, anySize = false;
+
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    if (rows[i].Bid is null) { TableNullMap.SetNull(bidNulls, i); anyBid = true; }
+                    if (rows[i].Size is null) { TableNullMap.SetNull(sizeNulls, i); anySize = true; }
+                }
+
+                writer.BeginTable(Encoding.UTF8.GetBytes($"{_root}/{name}"), Quotes.Id, rows.Length);
+                writer.AddTimeColumn(rows.Select(r => r.Time.Ticks).ToArray());
+                writer.AddDoubleColumn(rows.Select(r => r.Bid ?? -7.0).ToArray(), anyBid ? bidNulls : null);
+                writer.AddInt64Column(rows.Select(r => r.Size ?? -7L).ToArray(), anySize ? sizeNulls : null);
+            }
+
+            return writer.ToArray();
+        }
+    }
+}

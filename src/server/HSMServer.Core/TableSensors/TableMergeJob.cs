@@ -1,0 +1,741 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using HSMDatabase.AccessManager.TableBatches;
+using HSMDatabase.AccessManager.TableBlocks;
+using HSMDatabase.SealedHistory;
+using HSMServer.Core.Cache;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model;
+using HSMTableBlocks;
+using NLog;
+
+namespace HSMServer.Core.TableSensors
+{
+    /// <summary>What one merge pass did.</summary>
+    public sealed record TableMergePassReport
+    {
+        /// <summary>Arrival hours committed for every product with blocks in them.</summary>
+        public int HoursMerged { get; init; }
+
+        /// <summary>Arrival hours whose blocks were deleted after their delay.</summary>
+        public int HoursDeleted { get; init; }
+
+        /// <summary>Product hours not written because a batch did not verify.</summary>
+        public int Mismatches { get; init; }
+
+        /// <summary>The pass stopped on a fault of a store; the hour it was on is merged again by a later pass.</summary>
+        public string Fault { get; init; }
+
+        /// <summary>The pass stopped because the server is stopping; the hour it was on is untouched or committed.</summary>
+        public bool Stopped { get; init; }
+
+        /// <summary>Another pass was running.</summary>
+        public bool Busy { get; init; }
+    }
+
+
+    /// <summary>
+    /// The hourly merge of table blocks into batches (#1850 part 3, ADR-0021 point 9). One pass, run by the server's
+    /// background service every minute on one thread:
+    /// <list type="number">
+    /// <item>The closed arrival hours (an hour after its end plus <see cref="TableBlockOptions.MergeGrace"/>) that hold blocks
+    /// of a product not committed for that hour are merged one at a time, oldest first, so the job catches up after a
+    /// downtime. For an hour H: <c>CloseHour(H)</c>; per product with blocks in H, the blocks are read, the refused tables
+    /// skipped, each table resolved to its sensor by path, rows without a sensor or from a block below the sensor's first
+    /// sequence dropped (counted); each sensor's rows sorted stably by (time, block sequence, row), cut evenly into batches of
+    /// at most 4,096 rows, encoded, decoded again and compared cell by cell and null by null; then <c>WriteHour</c> into
+    /// the class database of the period the sensor has now. Once every product of H is committed, the block store's
+    /// watermarks are raised.</item>
+    /// <item>The blocks of an hour committed for every product are deleted (except the blocks the merge could not read)
+    /// once the configured delay has passed since the latest commit of its products, under the write side of the read gate.</item>
+    /// </list>
+    /// A batch that does not verify leaves that product's hour unwritten (its blocks serve it), counted as an Error, and it
+    /// is not tried again until the next start. A block that cannot be read stays, is listed in the hour's record and
+    /// counted. A fault of a store ends the pass; a later pass merges the hour again, and a rerun of a committed hour or of
+    /// parts already written changes nothing. Nothing holds a store's lock while blocks are read or batches encoded.
+    /// </summary>
+    public sealed class TableMergeJob
+    {
+        internal const int BytesPerRowEstimate = 40;
+
+        private static readonly Logger _logger = LogManager.GetLogger("TableMerge");
+        private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
+        private readonly IDatabaseCore _database;
+        private readonly ITreeValuesCache _cache;
+        private readonly TableBlockOptions _options;
+        private readonly TableHourGate _gate;
+        private readonly Action _ensureState;
+
+        private readonly object _runLock = new();
+
+        // Product hours whose batches did not verify: not tried again until the next start (a codec defect is
+        // deterministic; trying every minute would only repeat the Error).
+        private readonly HashSet<(Guid Product, long Hour)> _failedVerification = [];
+
+
+        internal TableMergeJob(IDatabaseCore database, ITreeValuesCache cache, TableBlockOptions options, TableHourGate gate, Action ensureState)
+        {
+            _database = database;
+            _cache = cache;
+            _options = options;
+            _gate = gate;
+            _ensureState = ensureState;
+        }
+
+
+        /// <summary>Called at the points a test stands a crash at: "encoded" (a product's batches built and verified, nothing written), "watermarks-raised".</summary>
+        internal Action<string> Checkpoint { get; set; }
+
+        /// <summary>Called with every decoded batch before it is compared with its rows. Test seam for a verification mismatch.</summary>
+        internal Action<Guid, TableBatch> AfterDecode { get; set; }
+
+        /// <summary>Free bytes on the disk of the batch store. Test seam; the drive's free space by default.</summary>
+        internal Func<long> FreeBytes { get; set; }
+
+        /// <summary>The memory budget in bytes; the option by default. Test seam.</summary>
+        internal long? MemoryBudgetBytes { get; set; }
+
+        /// <summary>Passes over the blocks of the last product hour merged (1 within the budget). For tests.</summary>
+        internal int LastPasses { get; private set; }
+
+        private ITableBlockStore Blocks => _database.TableBlocks;
+
+        private ITableBatchStore Batches => _database.TableBatches;
+
+        private TableMergeStatistics Stats => Batches.MergeStatistics;
+
+
+        /// <summary>One pass at <paramref name="utcNow"/>. Never throws: a fault is logged and reported.</summary>
+        public TableMergePassReport RunPass(DateTime utcNow, CancellationToken token = default)
+        {
+            if (!Monitor.TryEnter(_runLock))
+                return new TableMergePassReport { Busy = true };
+
+            int merged = 0, deleted = 0, mismatches = 0;
+
+            try
+            {
+                if (Blocks is null || Batches is null)
+                    return new TableMergePassReport();
+
+                _ensureState();
+
+                foreach (var hour in DueHours(utcNow))
+                {
+                    if (token.IsCancellationRequested)
+                        return new TableMergePassReport { HoursMerged = merged, Mismatches = mismatches, Stopped = true };
+
+                    var outcome = MergeHour(hour, utcNow, token, ref mismatches);
+                    if (outcome == HourOutcome.Stopped)
+                        return new TableMergePassReport { HoursMerged = merged, Mismatches = mismatches, Stopped = true };
+
+                    if (outcome == HourOutcome.Merged)
+                        merged++;
+                }
+
+                deleted = DeleteDue(utcNow, token);
+                Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
+
+                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches };
+            }
+            catch (Exception ex)
+            {
+                if (Batches is not null)
+                    Stats.Add(ref Stats.Faults);
+
+                _logger.Error(ex, $"Table merge pass stopped on a fault; the hour is merged again by a later pass: {ex.Message}");
+                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = ex.Message };
+            }
+            finally
+            {
+                Monitor.Exit(_runLock);
+            }
+        }
+
+
+        // === Which hours ===
+
+        // Product -> its blocks, per arrival hour, in sequence order: a snapshot of the block store's index.
+        private SortedDictionary<long, Dictionary<Guid, List<TableBlockIndexEntry>>> BlocksByHour()
+        {
+            var byHour = new SortedDictionary<long, Dictionary<Guid, List<TableBlockIndexEntry>>>();
+
+            foreach (var product in Blocks.GetProducts())
+                foreach (var entry in Blocks.GetBlocks(product))
+                {
+                    if (!byHour.TryGetValue(entry.ArrivalHourTicks, out var products))
+                        byHour[entry.ArrivalHourTicks] = products = [];
+
+                    if (!products.TryGetValue(product, out var list))
+                        products[product] = list = [];
+
+                    list.Add(entry);
+                }
+
+            return byHour;
+        }
+
+        // Closed hours with a product not committed (and not failed verification in this process), oldest first.
+        private List<long> DueHours(DateTime utcNow)
+        {
+            var due = new List<long>();
+
+            foreach (var (hour, products) in BlocksByHour())
+            {
+                if (hour + TimeSpan.TicksPerHour + _options.MergeGrace.Ticks > utcNow.Ticks)
+                    break;
+
+                if (products.Keys.Any(p => !Batches.IsHourMerged(p, hour) && !_failedVerification.Contains((p, hour))))
+                    due.Add(hour);
+            }
+
+            return due;
+        }
+
+
+        // === One hour ===
+
+        private enum HourOutcome { Merged, NotComplete, Stopped }
+
+        private HourOutcome MergeHour(long hour, DateTime utcNow, CancellationToken token, ref int mismatches)
+        {
+            var watch = Stopwatch.StartNew();
+
+            // From here on no block is appended to the hour; the listing taken after it is the whole hour.
+            Blocks.CloseHour(hour);
+
+            var products = new List<(Guid Product, List<TableBlockIndexEntry> Entries)>();
+            foreach (var product in Blocks.GetProducts())
+            {
+                var entries = Blocks.GetBlocks(product).Where(e => e.ArrivalHourTicks == hour).ToList();
+                if (entries.Count > 0)
+                    products.Add((product, entries));
+            }
+
+            foreach (var (product, entries) in products)
+            {
+                if (Batches.IsHourMerged(product, hour) || _failedVerification.Contains((product, hour)))
+                    continue;
+
+                if (token.IsCancellationRequested)
+                    return HourOutcome.Stopped;
+
+                if (!MergeProduct(product, hour, entries, utcNow, token, out var stopped))
+                {
+                    if (stopped)
+                        return HourOutcome.Stopped;
+
+                    _failedVerification.Add((product, hour));
+                    mismatches++;
+                }
+            }
+
+            if (!products.All(p => Batches.IsHourMerged(p.Product, hour)))
+                return HourOutcome.NotComplete;
+
+            // Every product of the hour is committed: a resend of one of its blocks is a duplicate by the watermark from here
+            // on, also once the blocks are deleted. (Until then the duplicate map answers it as well.)
+            Blocks.RaiseWatermarks(Watermarks(products.Select(p => p.Product)));
+            Checkpoint?.Invoke("watermarks-raised");
+
+            Stats.Add(ref Stats.HoursMerged);
+            Stats.Set(ref Stats.LastMergeMilliseconds, watch.ElapsedMilliseconds);
+            _logger.Info($"Table hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} merged: {products.Count} products, " +
+                         $"{products.Sum(p => p.Entries.Count)} blocks, {watch.ElapsedMilliseconds} ms");
+
+            return HourOutcome.Merged;
+        }
+
+        private List<TableBlockWatermark> Watermarks(IEnumerable<Guid> products) =>
+            products.SelectMany(p => Batches.GetWatermarks(p).Select(w => new TableBlockWatermark(p, w.Key, w.Value))).ToList();
+
+
+        // === One product's hour ===
+
+        // The rows of one sensor in one hour: the tables of its blocks, in block sequence order, unchanged.
+        private sealed class SensorRows(TableSensorModel sensor, int period)
+        {
+            public readonly TableSensorModel Sensor = sensor;
+            public readonly int Period = period;
+            public readonly List<BlockTable> Tables = [];
+            public long Rows;
+        }
+
+        // False when a batch did not verify (nothing written; stopped false) or the server is stopping (stopped true).
+        // Throws on a fault of a store: nothing of this product's hour is committed.
+        private bool MergeProduct(Guid product, long hour, List<TableBlockIndexEntry> entries, DateTime utcNow, CancellationToken token, out bool stopped)
+        {
+            stopped = false;
+
+            var budget = MemoryBudgetBytes ?? (long)_options.MergeMemoryBudgetMb * 1024 * 1024;
+            var rows = entries.Sum(e => (long)e.RowCount);
+            var resolved = new Dictionary<string, (TableSensorModel Sensor, int Period)>();
+            var unreadable = new List<long>();
+            long dropped = 0;
+
+            // The shares of the tables, by path: one share (null: every table) within the budget, several otherwise.
+            List<HashSet<string>> shares;
+
+            if (rows * BytesPerRowEstimate <= budget)
+                shares = [null];
+            else
+                shares = Shares(product, entries, unreadable, resolved, budget / BytesPerRowEstimate, utcNow);
+
+            LastPasses = shares.Count;
+
+            var encoded = new List<(TableSensorModel Sensor, int Period, List<TableBatchToWrite> Batches)>();
+            var unreadableSet = new HashSet<long>(unreadable);
+            var firstPass = true;
+
+            foreach (var share in shares)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    stopped = true;
+                    return false;
+                }
+
+                var sensors = new Dictionary<Guid, SensorRows>();
+
+                foreach (var entry in entries)
+                {
+                    if (unreadableSet.Contains(entry.Sequence))
+                        continue;
+
+                    var block = ReadBlock(entry);
+                    if (block is null)
+                    {
+                        // Read in the first pass (or the only one) and not now: the same bytes cannot be read twice
+                        // differently, so it is a fault, not damage: the hour is merged again later.
+                        if (!firstPass || shares.Count > 1)
+                            throw new TableBlockStoreException($"Table block {entry.Sequence} read before could not be read again during the merge.");
+
+                        unreadable.Add(entry.Sequence);
+                        unreadableSet.Add(entry.Sequence);
+                        continue;
+                    }
+
+                    var (envelope, table) = block.Value;
+
+                    for (int i = 0; i < table.Tables.Count; i++)
+                    {
+                        if (envelope.IsRefused(i))
+                            continue;
+
+                        var t = table.Tables[i];
+                        var path = Path(t.TableId);
+
+                        if (share is not null && (path is null || !share.Contains(path)))
+                            continue;
+
+                        var (sensor, period) = Resolve(product, path, resolved, utcNow);
+
+                        if (sensor is null || entry.Sequence < sensor.FirstSequence || !Matches(sensor, t))
+                        {
+                            // Counted once: in the share that holds the path, or in the first pass when the path has none.
+                            if (share is not null || firstPass)
+                                dropped += t.RowCount;
+                            continue;
+                        }
+
+                        if (!sensors.TryGetValue(sensor.Id, out var sensorRows))
+                            sensors[sensor.Id] = sensorRows = new SensorRows(sensor, period);
+
+                        sensorRows.Tables.Add(t);
+                        sensorRows.Rows += t.RowCount;
+                    }
+                }
+
+                firstPass = false;
+
+                foreach (var sensorRows in sensors.Values)
+                {
+                    var batches = EncodeSensor(sensorRows);
+                    if (batches is null)
+                        return false;
+
+                    encoded.Add((sensorRows.Sensor, sensorRows.Period, batches));
+                }
+            }
+
+            Checkpoint?.Invoke("encoded");
+
+            if (token.IsCancellationRequested)
+            {
+                stopped = true;
+                return false;
+            }
+
+            // The parts: per class, the sensors by id, each sensor's batches in row order. The same for any number of passes.
+            var parts = encoded.GroupBy(e => e.Period).OrderBy(g => g.Key)
+                               .Select(g => new TableBatchHourPart(g.Key, g.OrderBy(e => e.Sensor.Id).SelectMany(e => e.Batches).ToList()))
+                               .ToList();
+
+            var watermarks = new Dictionary<Guid, long>(Batches.GetWatermarks(product));
+            foreach (var entry in entries)
+                if (!watermarks.TryGetValue(entry.ProducerId, out var current) || entry.ProducerSequence > current)
+                    watermarks[entry.ProducerId] = entry.ProducerSequence;
+
+            var commit = new TableBatchHourCommit
+            {
+                HourTicks = hour,
+                FirstBlockSequence = entries.Min(e => e.Sequence),
+                LastBlockSequence = entries.Max(e => e.Sequence),
+                BlocksMerged = entries.Count - unreadable.Count,
+                UnreadableBlocks = unreadable.OrderBy(s => s).ToArray(),
+                Watermarks = watermarks,
+            };
+
+            CheckDisk();
+            Batches.WriteHour(product, commit, parts);
+
+            // Counted once committed.
+            var unreadableSorted = new HashSet<long>(unreadable);
+            Stats.Add(ref Stats.RowsMerged, parts.Sum(p => p.Batches.Sum(b => (long)b.RowCount)));
+            Stats.Add(ref Stats.BatchBytesWritten, parts.Sum(p => p.Batches.Sum(b => (long)b.Batch.Length)));
+            Stats.Add(ref Stats.BlockBytesMerged, entries.Where(e => !unreadableSorted.Contains(e.Sequence)).Sum(e => (long)e.StoredLength));
+            Stats.Add(ref Stats.RowsDropped, dropped);
+            Stats.Add(ref Stats.UnreadableBlocksKept, unreadable.Count);
+
+            if (unreadable.Count > 0)
+                _logger.Error($"Table hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} of product {product}: {unreadable.Count} blocks could not be read " +
+                              $"and are kept in the block store ({string.Join(", ", unreadable)})");
+
+            return true;
+        }
+
+        // The tables of the hour split into shares whose rows fit the budget, by path: a pass over the blocks' directories
+        // counts each path's rows; paths are given to shares largest first, each to the first share it fits (a path larger
+        // than the budget gets a share of its own). Blocks that cannot be read are noted.
+        private List<HashSet<string>> Shares(Guid product, List<TableBlockIndexEntry> entries, List<long> unreadable,
+            Dictionary<string, (TableSensorModel, int)> resolved, long rowsPerShare, DateTime utcNow)
+        {
+            var rowsByPath = new Dictionary<string, long>();
+
+            foreach (var entry in entries)
+            {
+                var record = Blocks.ReadBlock(entry);
+                TableBlockDirectory directory = null;
+
+                if (record is not null)
+                {
+                    try
+                    {
+                        directory = TableBlockReader.ReadDirectory(record.Block.Span, TableRowCollector.StoredBlockLimits);
+                    }
+                    catch (TableBlockFormatException ex)
+                    {
+                        Blocks.Statistics.Add(ref Blocks.Statistics.ReadFailures);
+                        _logger.Error($"Stored table block {entry.Sequence} cannot be read by the merge ({ex.Error}): {ex.Message}");
+                    }
+                }
+
+                if (directory is null)
+                {
+                    unreadable.Add(entry.Sequence);
+                    continue;
+                }
+
+                for (int i = 0; i < directory.Entries.Count; i++)
+                {
+                    if (record.Envelope.IsRefused(i) || Path(directory.Entries[i].TableId) is not { } path)
+                        continue;
+
+                    rowsByPath[path] = rowsByPath.GetValueOrDefault(path) + directory.Entries[i].RowCount;
+                }
+            }
+
+            var shares = new List<(HashSet<string> Paths, long Rows)>();
+
+            foreach (var (path, count) in rowsByPath.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal))
+            {
+                var index = shares.FindIndex(s => s.Rows + count <= rowsPerShare);
+                if (index < 0)
+                {
+                    shares.Add(([path], count));
+                    continue;
+                }
+
+                shares[index].Paths.Add(path);
+                shares[index] = (shares[index].Paths, shares[index].Rows + count);
+            }
+
+            return shares.Count == 0 ? [new HashSet<string>()] : shares.Select(s => s.Paths).ToList();
+        }
+
+        // The envelope and every table of a stored block; null when it cannot be read (counted, logged).
+        private (TableBlockEnvelope Envelope, TableBlock Block)? ReadBlock(in TableBlockIndexEntry entry)
+        {
+            var record = Blocks.ReadBlock(entry);
+            if (record is null)
+                return null;
+
+            try
+            {
+                return (record.Envelope, TableBlockReader.Read(record.Block.Span, TableRowCollector.StoredBlockLimits));
+            }
+            catch (TableBlockFormatException ex)
+            {
+                Blocks.Statistics.Add(ref Blocks.Statistics.ReadFailures);
+                _logger.Error($"Stored table block {entry.Sequence} cannot be read by the merge ({ex.Error}): {ex.Message}");
+                return null;
+            }
+        }
+
+        private (TableSensorModel Sensor, int Period) Resolve(Guid product, string path, Dictionary<string, (TableSensorModel, int)> resolved, DateTime utcNow)
+        {
+            if (path is null)
+                return (null, 0);
+
+            if (!resolved.TryGetValue(path, out var found))
+            {
+                found = _cache.TryGetSensorByPath(product, path, out var sensor) && sensor is TableSensorModel table
+                    ? (table, TablePeriodClass.Of(table, utcNow))
+                    : (null, 0);
+
+                resolved[path] = found;
+            }
+
+            return found;
+        }
+
+        private static string Path(byte[] tableId)
+        {
+            try
+            {
+                return StrictUtf8.GetString(tableId);
+            }
+            catch (DecoderFallbackException)
+            {
+                return null;
+            }
+        }
+
+        // The put checked the types against the schema; a table that differs is not the sensor's (a damaged store).
+        private static bool Matches(TableSensorModel sensor, BlockTable table)
+        {
+            if (table.Columns.Count != sensor.Schema.Columns.Count)
+                return false;
+
+            for (int c = 0; c < table.Columns.Count; c++)
+                if (table.Columns[c].Type != sensor.Schema.Columns[c].Type)
+                    return false;
+
+            return true;
+        }
+
+
+        // === Encoding and verification ===
+
+        // The sensor's batches of the hour in row order, each verified; null when one does not verify (logged, counted).
+        private List<TableBatchToWrite> EncodeSensor(SensorRows rows)
+        {
+            int count = checked((int)rows.Rows);
+            var schema = rows.Sensor.Schema;
+
+            // Flattened in block sequence order, then row order: the index order is (block sequence, row).
+            var tableOf = new int[count];
+            var rowOf = new int[count];
+            var time = new long[count];
+            int n = 0;
+
+            for (int t = 0; t < rows.Tables.Count; t++)
+            {
+                var ticks = rows.Tables[t].Time;
+                for (int r = 0; r < ticks.Length; r++, n++)
+                {
+                    tableOf[n] = t;
+                    rowOf[n] = r;
+                    time[n] = ticks[r];
+                }
+            }
+
+            var order = new int[count];
+            for (int i = 0; i < count; i++)
+                order[i] = i;
+
+            var sorted = true;
+            for (int i = 1; i < count && sorted; i++)
+                sorted = time[i] >= time[i - 1];
+
+            // Stable by (time, index): equal times keep (block sequence, row).
+            if (!sorted)
+                Array.Sort(order, (a, b) => time[a] != time[b] ? time[a].CompareTo(time[b]) : a.CompareTo(b));
+
+            int batchCount = (count + TableBatchCodec.MaxRows - 1) / TableBatchCodec.MaxRows;
+            int baseSize = count / batchCount, larger = count % batchCount;
+            var result = new List<TableBatchToWrite>(batchCount);
+            int start = 0;
+
+            for (int b = 0; b < batchCount; b++)
+            {
+                int size = baseSize + (b < larger ? 1 : 0);
+                var batch = Slice(rows, schema, order, tableOf, rowOf, time, start, size);
+                start += size;
+
+                byte[] bytes;
+                string failure;
+
+                try
+                {
+                    bytes = TableBatchCodec.Encode(batch);
+                    var decoded = TableBatchCodec.Decode(bytes);
+                    AfterDecode?.Invoke(rows.Sensor.Id, decoded);
+                    failure = Compare(batch, decoded);
+                }
+                catch (Exception ex) when (ex is TableBatchFormatException or ArgumentException)
+                {
+                    bytes = null;
+                    failure = ex.Message;
+                }
+
+                if (failure is not null)
+                {
+                    Stats.Add(ref Stats.VerificationMismatches);
+                    _logger.Error($"Table merge: a batch of sensor {rows.Sensor.Id} ({rows.Sensor.FullPath}) does not verify ({failure}); " +
+                                  "nothing of its product's hour is written, its blocks stay, and it is tried again after a restart");
+                    return null;
+                }
+
+                result.Add(new TableBatchToWrite(rows.Sensor.Id, batch.Time[0], batch.Time[^1], size, bytes));
+            }
+
+            return result;
+        }
+
+        private static TableBatch Slice(SensorRows rows, TableSchema schema, int[] order, int[] tableOf, int[] rowOf, long[] time, int start, int size)
+        {
+            var columns = new TableBatchColumn[schema.Columns.Count];
+            var ticks = new long[size];
+
+            for (int i = 0; i < size; i++)
+                ticks[i] = time[order[start + i]];
+
+            columns[0] = TableBatchColumn.Time(ticks);
+
+            for (int c = 1; c < columns.Length; c++)
+            {
+                byte[] nulls = null;
+                var isDouble = schema.Columns[c].Type == TableColumnType.Double;
+                var doubles = isDouble ? new double[size] : null;
+                var longs = isDouble ? null : new long[size];
+
+                for (int i = 0; i < size; i++)
+                {
+                    var index = order[start + i];
+                    var column = rows.Tables[tableOf[index]].Columns[c];
+                    var row = rowOf[index];
+
+                    if (column.NullMap is { } map && TableNullMap.IsNull(map, row))
+                    {
+                        TableNullMap.SetNull(nulls ??= new byte[TableNullMap.ByteLength(size)], i);
+                        continue;
+                    }
+
+                    if (isDouble)
+                        doubles[i] = column.DoubleValues[row];
+                    else
+                        longs[i] = column.Int64Values[row];
+                }
+
+                columns[c] = new TableBatchColumn(schema.Columns[c].Type, longs, doubles, nulls);
+            }
+
+            return new TableBatch(schema.Id, columns);
+        }
+
+        // Null when the decoded batch holds the same rows bit for bit: every value of a row with one (doubles by their bits)
+        // and every null.
+        internal static string Compare(TableBatch expected, TableBatch decoded)
+        {
+            if (decoded.SchemaId != expected.SchemaId)
+                return $"schema id {decoded.SchemaId}, not {expected.SchemaId}";
+
+            if (decoded.Columns.Count != expected.Columns.Count || decoded.RowCount != expected.RowCount)
+                return $"{decoded.Columns.Count} columns of {decoded.RowCount} rows, not {expected.Columns.Count} of {expected.RowCount}";
+
+            for (int c = 0; c < expected.Columns.Count; c++)
+            {
+                var e = expected.Columns[c];
+                var d = decoded.Columns[c];
+
+                if (d.Type != e.Type)
+                    return $"column {c} of type {d.Type}, not {e.Type}";
+
+                for (int row = 0; row < expected.RowCount; row++)
+                {
+                    var isNull = e.IsNull(row);
+                    if (d.IsNull(row) != isNull)
+                        return $"column {c}, row {row}: null {d.IsNull(row)}, not {isNull}";
+
+                    if (isNull)
+                        continue;
+
+                    var same = e.Type == TableColumnType.Double
+                        ? BitConverter.DoubleToInt64Bits(d.DoubleValues[row]) == BitConverter.DoubleToInt64Bits(e.DoubleValues[row])
+                        : d.Int64Values[row] == e.Int64Values[row];
+
+                    if (!same)
+                        return $"column {c}, row {row}: another value";
+                }
+            }
+
+            return null;
+        }
+
+        private void CheckDisk()
+        {
+            if (_options.MinFreeDiskMb <= 0)
+                return;
+
+            var minimum = _options.MinFreeDiskMb * 1024 * 1024;
+            var folder = _database.DatabaseSettings.PathToTableBlocks;
+            var free = FreeBytes?.Invoke() ?? new DriveInfo(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(folder))).AvailableFreeSpace;
+
+            if (free < minimum)
+                throw new TableBatchStoreException($"Not enough free disk space to write table batches: {free} bytes free, {minimum} required.");
+        }
+
+
+        // === Deleting merged hours ===
+
+        // The blocks of every hour committed for each product with blocks in it, except the blocks the merge could not read,
+        // once the delay has passed since the latest of its commits.
+        private int DeleteDue(DateTime utcNow, CancellationToken token)
+        {
+            int deleted = 0, holding = 0;
+            var delay = TimeSpan.FromHours(_options.DeleteMergedBlocksAfterHours).Ticks;
+
+            foreach (var (hour, products) in BlocksByHour())
+            {
+                var records = products.Keys.Select(p => Batches.GetHour(p, hour)).ToList();
+                if (records.Any(r => r is null))
+                    continue;
+
+                var keep = records.SelectMany(r => r.UnreadableBlocks).ToHashSet();
+                if (products.Values.All(list => list.All(e => keep.Contains(e.Sequence))))
+                    continue;
+
+                if (token.IsCancellationRequested || utcNow.Ticks < records.Max(r => r.CommitTicks) + delay)
+                {
+                    holding++;
+                    continue;
+                }
+
+                using (_gate.Delete())
+                    Blocks.DeleteMergedHour(hour, keep, Watermarks(products.Keys));
+
+                deleted++;
+            }
+
+            Stats.Set(ref Stats.MergedHoursHoldingBlocks, holding);
+            return deleted;
+        }
+    }
+}

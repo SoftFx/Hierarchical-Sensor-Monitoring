@@ -1,7 +1,7 @@
 # Feature: Table batches (format and store)
 
 > Owner: storage | Last reviewed: 2026-11-25 | Canonical: yes
-> Scope: the byte format of a stored batch of a table sensor (#1850, part 1; ADR-0021 points 9 and 11): the header, the payload, the column streams, the rule that chooses a stream, the exception list, nulls, versioning, and the codec `TableBatchCodec` that writes and reads it. And the batch store (#1850, part 2; ADR-0021 points 10 and 12): where batches live, how a merged hour is committed, the week databases and their bound, and what the block store gives the merge. The merge job and the read that joins batches with blocks are part 3; retention and the move between period classes are part 4. The block a collector sends: `aicontext/features/api/table-block/feature.md`. The block store: `aicontext/features/storage/table-blocks/feature.md`.
+> Scope: the byte format of a stored batch of a table sensor (#1850, part 1; ADR-0021 points 9 and 11): the header, the payload, the column streams, the rule that chooses a stream, the exception list, nulls, versioning, and the codec `TableBatchCodec` that writes and reads it. And the batch store (#1850, part 2; ADR-0021 points 10 and 12): where batches live, how a merged hour is committed, the week databases and their bound, and what the block store gives the merge. And the merge job with the read that joins batches with blocks (#1850, part 3). Retention and the move between period classes are part 4. The block a collector sends: `aicontext/features/api/table-block/feature.md`. The block store: `aicontext/features/storage/table-blocks/feature.md`.
 
 ---
 
@@ -198,7 +198,7 @@ Per product opened: the merged hours with, per class, the minimum and maximum ro
 
 ### Self-monitoring
 
-Under `Database/Tables`, once a product of the batch store was opened in this process: `Batch databases open`, `Batch week databases`, `Merged hours`, `Batch write failures` and `Batch read failures` (Error in the sample in which they grew).
+Under `Database/Tables`, once a product of the batch store was opened in this process: `Batch databases open`, `Batch week databases`, `Merged hours` (product hours committed), `Batch write failures` and `Batch read failures` (Error in the sample in which they grew), and the merge's sensors (section "Self-monitoring of the merge").
 
 ### Measured (2026-11-25, `TableBatchStoreBenchmark`)
 
@@ -226,9 +226,85 @@ What it says:
 - **The week stays the unit.** A month would cut a year's 53 opens to 13 (about 0.5 s less for a read of a year at a bound of 8) and nothing else: the seeks per hour, the bytes read and the memory per open database are the same. It would cost a coarser retention (rows kept up to a month past their period). Not built. A read of a long range is bound by its seeks per hour; a summary per sensor and week (which hours hold it) would remove most of them, if long reads of quiet tables matter (not built, not needed by any decision yet).
 - Not measured: Linux; a cold disk (every figure is warm or nearly); the whole feed (four times the bytes; the counts of databases, opens and seeks do not change with it); the read with the row limit of a real read (1 M rows would stop the busiest table's year after about two days).
 
+## The merge (#1850, part 3)
+
+`TableMergeJob` (`src/server/HSMServer.Core/TableSensors/TableMergeJob.cs`), owned by `TableBlockService` (`Merge`) and run by `TableMergeService` (`src/server/HSMServer/BackgroundServices/DatabaseServices/`): one pass a minute after a start delay of a minute, one pass at a time, at below normal priority. A pass does nothing and opens nothing on a server without a `Tables` folder. The pass takes its clock as a parameter (`RunPass(utcNow, token)`); it never throws: a fault is logged, counted and reported in its `TableMergePassReport`.
+
+### A pass
+
+1. **The state after a start** (`TableBlockService.EnsureMergeState`, once, before the first put and before the first pass): the watermarks of every product with a folder in the batch store are raised in the block store (`GetWatermarks` → `RaiseWatermarks`), and the newest committed hour of any product (`GetNewestHour`) is closed (`CloseHour`). A failure leaves the flag unset: the put is a fault (`TableBlockStoreException`) and the next one tries again, like the sequence floor.
+2. **Due hours**: the arrival hours with blocks of a product not committed for them, whose end plus `MergeGrace` (2 minutes) has passed, oldest first, every one of them (a pass catches up after a downtime).
+3. **One hour H**: `CloseHour(H)`; the blocks of H are listed after it (an append in flight is published under the store's lock, so the listing is the whole hour). Per product with blocks in H that is not committed (in the order of the products' ids):
+   - Within the memory budget (the hour's rows, the sum of `RowCount`, times 40 bytes, at most `TableSensors.MergeMemoryBudgetMb`, 256 MB by default) one pass reads every block; above it a first pass reads only the directories, counts each table's rows, and gives the tables (by path) to shares that fit the budget, largest first (a table larger than the budget gets a share of its own); then one pass per share reads the blocks again and keeps the share's tables. A table's rows are never split across shares, and the batches written are byte for byte those of one pass.
+   - A block whose record or bytes cannot be read (`ReadBlock` null, `TableBlockFormatException`) is unreadable: kept in the block store, listed in the hour's record, counted. A block read in the first pass and not in a later one is a fault.
+   - Refused tables (the envelope) are skipped. A table is resolved to the table sensor on its path in the product (strict UTF-8, `TryGetSensorByPath`); rows without one, of a block below the sensor's `FirstSequence`, or whose column types are not the sensor's are dropped and counted.
+   - Per sensor: its rows (the block tables kept as they are, not copied) are ordered stably by (time, block sequence, row) — no sort when they are in order already — and cut evenly into batches of at most 4,096 rows. Each batch is encoded, decoded and compared value by value (doubles by their bits) and null by null with its rows. A mismatch, a decode failure or an encode refusal stops the product: nothing is written for it, `Verification mismatches` grows (Error), its blocks stay, and the product hour is not tried again in this process (a codec defect is deterministic; it is tried after the next start).
+   - The parts: one per period class, the sensors by id, each sensor's batches in row order. The commit: first and last block sequence, the blocks merged, the unreadable ones, and the watermarks (the product's newest map from `GetWatermarks` raised by every block of the hour, unreadable ones included).
+   - The free disk of the `Tables` folder is checked against `TableSensors.MinFreeDiskMb` (a fault below it), the stop token is checked, and `WriteHour` writes and commits the product's hour.
+   Once every product with blocks in H is committed, the block store's watermarks are raised for those products.
+4. **Deletions**: every arrival hour whose every product with blocks in it is committed, and that holds a block not listed as unreadable, is deleted once `DeleteMergedBlocksAfterHours` have passed since the latest commit time of its products (the record's commit time, so the delay holds across a restart), with `DeleteMergedHour(H, keep: the unreadable blocks, watermarks: the products' newest)`, under the write side of the read gate (`TableHourGate`).
+5. **Faults**: any exception of a store (a `TableBlockStoreException`, a `TableBatchStoreException`, too little disk) ends the pass; the hour stays as it is (committed products stay committed, the others untouched) and a later pass merges it again.
+6. **Shutdown**: the token is checked between hours, products and shares and before a product's `WriteHour`; a product's hour is committed or untouched.
+
+### Crash points
+
+Each pinned by `TableMergeJobTests.A_crash_at_any_point_of_the_merge_...` (a theory over the points): the hook throws, the batch store stops without flushing its databases, the server restarts over the same folders, and then a read returns the same rows in the same order as before the merge, the hour is committed exactly when the crash came after its commit, a rerun completes the hour (or its deletion), and a second rerun merges, writes and deletes nothing.
+
+| Point | Hook | Left on disk | After the restart |
+|---|---|---|---|
+| After encode | `TableMergeJob.Checkpoint("encoded")` | nothing of the hour | served from blocks; the rerun merges |
+| After one class's part | `TableBatchDatabase.Checkpoint("part-written")` | one part with its mark | served from blocks; the rerun skips the part and commits |
+| Before the `Hours` commit | `"before-commit"` | every part | the same |
+| After the commit | `"committed"` | the commit | served from batches; the rerun raises the watermarks only |
+| After the watermarks | `TableMergeJob.Checkpoint("watermarks-raised")` | the commit (watermarks are in memory) | the start state raises them again |
+| Between the two deletes | `TableBlockDatabase.FaultHook("after-hour-blocks-deleted")` | blocks gone, index entries left | the hour is committed, its listed blocks are ignored; the rerun removes the entries |
+| Before the compaction | `"before-hour-compaction"` | the deletes | the rerun deletes nothing more and compacts |
+
+### The read (`TableBlockService.Read`)
+
+Under the read side of `TableHourGate` (shared; a deletion takes it alone, so no hour's blocks are deleted while a read uses them, also with a delay of 0):
+
+1. The sensor's product's blocks are listed (`GetBlocks`); the candidates are those at or above the sensor's `FirstSequence` whose header range meets `[from, to)`.
+2. For each arrival hour of a candidate, `IsHourMerged(product, hour)` is asked once: a committed hour's blocks are ignored (kept ones and those within the delay included); the others are read from blocks.
+3. The committed hours are listed afterwards (`GetHours`, with their classes' row ranges). An hour is read from its batches when it has the sensor's current period class with a range that meets `[from, to)`, its last block sequence is at or above the sensor's first sequence, and it was not found uncommitted in step 2 (a commit between the two steps: its blocks are still there, the gate holds their deletion off). So an hour is read from batches or from blocks, never both and never neither, at any moment of a merge and at any crash point. Late blocks are found by the row-time ranges of the hours that merged them.
+4. **Sources** — the blocks of one arrival hour, or one merged hour — are visited in the order of their earliest row in the range (then by hour). A merged hour's batches are read with one `ReadSensor` per hour (bounded memory for long reads), skipped by their index range, decoded and added; a batch that does not decode, or whose columns are not the sensor's, is counted (`BatchesFailed`, the store's `Batch read failures`) and skipped.
+5. **Order**: time, then arrival hour, then rank within the hour — `(block sequence << 24) | row` for a block, `(moved << 62) | (ordinal << 12) | row` for a batch. Within a merged hour the ordinals follow the merge's (time, block sequence, row) order, so the order is the same before, during and after a merge.
+6. **The limit stops early**: past the limit the collected rows are sorted and the latest dropped (as before); before each source, once rows have been dropped past the limit, the read stops when the source's earliest row is after the latest row kept. `Truncated` stays exact (a row was dropped); the result equals the unlimited result cut at the limit.
+7. A fault of the batch store is thrown as a `TableBlockStoreException`: one fault type for the caller (5xx).
+
+`TableRows` gains `BatchesRead` and `BatchesFailed`.
+
+### The period class (`TablePeriodClass`)
+
+`Weeks(policy, utcNow)`: the presets by their nominal length (`TimeInterval.Month` 31 days → 5, three months → 14, six months → 27, a year → 53), custom ticks rounded up to weeks (at least 1), 0 for kept for ever. It applies the rule of the ordinary history cleanup: what never expires there is 0 here — `None`, `FromFolder` with 0 or fewer ticks, ticks at or past `utcNow.Ticks`, and a class above 65,535 weeks. **Finding (an open question for the owner, not worked around):** a dynamic preset (a month, a year) inherited from a folder reaches the sensor as `FromFolder` with 0 ticks (`TimeIntervalModel.ToFromFolderModel` of a preset), which says nothing about its length; such a table sensor is kept for ever, exactly as an ordinary sensor's history is kept for ever today. Pinned by `TableMergeJobTests.The_period_class_is_...`.
+
+The read uses the class the sensor has at the read. Until the move between classes (part 4) exists, a sensor whose period was changed does not see its batches of hours merged under the old class.
+
+### Configuration
+
+`TableSensors.MergeMemoryBudgetMb` (256 by default, 1..1,048,576). `DeleteMergedBlocksAfterHours` is now used. The grace after the end of an hour (2 minutes) is `TableBlockOptions.MergeGrace`, not configurable.
+
+### Self-monitoring of the merge
+
+Under `Database/Tables`, created with the batch store's sensors (once a product of the batch store was opened in this process), from `ITableBatchStore.MergeStatistics`: `Arrival hours merged`, `Merge lag` (closed hours due and not merged at the end of the last pass, hours that did not verify left out), `Last merge duration` (ms), `Rows merged`, `Merged blocks size` and `Merged batches size` (MB: bytes before and after), `Verification mismatches` (Error whenever above 0, it must stay 0), `Unreadable blocks kept` (Error in the sample in which it grew), `Rows of removed sensors dropped`, `Merged hours holding blocks` (hours committed for every product whose blocks wait for the delay). With the block store's sensors: `Duplicates by watermark`. `Batch read failures` also counts batches the read could not decode.
+
+### Measured (2026-11-25, `TableMergeBenchmark`, `HSM_TABLE_STORE_BENCH=1`)
+
+Windows, .NET 8.0.28, Release, 24 logical CPUs, one NVMe machine shared with other work (timings approximate). One synthetic busy hour: 1,000 table sensors (time, bid, ask) registered in a real tree, 360 blocks of the feed of `TableBlockStoreBenchmark` (random walk, no real data; its noise compresses far worse than real quotes, so every byte figure is pessimistic), 2,415,571 rows, put through the block service, then one merge pass with the stores. Memory: the process's private memory and the managed heap sampled every 20 ms during the pass, against their values after a full GC before it; the managed heap figure counts garbage not yet collected.
+
+| What | Result |
+|---|---|
+| Put of the hour (360 synced puts) | 2.1 s; 31.1 MB of blocks, 13.5 B/row |
+| The merge, one pass (budget 256 MB) | 2.2 s, 0.93 µs/row; allocated 902 MB, managed heap peak +235 MB, private memory peak +173 MB |
+| The same hour, budget 32 MB | 3 passes over the blocks; 2.5 s, 1.03 µs/row; allocated 1,518 MB, managed heap peak +206 MB, private memory peak +49 MB |
+| Bytes before / after | 31.1 MB of blocks → 12.5 MB of batches (5.41 B/row on this noise), 1,313 batches |
+| Read of the busiest table (229,551 rows) for the hour | 153 ms from blocks, 22 ms from batches |
+
+What it says: the merge takes about a microsecond per row on one core, as phase A measured in memory (1.7 s for 2.4 M rows), so a busy hour costs about two seconds a hour. Every block read materializes all its tables (`TableBlockReader.Read`), so the bytes allocated are several times the hour's rows; the private memory, not the allocations, is what the budget bounds: 173 MB at one pass, 49 MB at three passes for 0.25 s more. The managed heap peak barely moves with the budget because it counts the garbage of the block reads before a collection. Not measured: Linux, a cold disk, real data, several products in one hour, the read across many merged hours with the early stop.
+
 ## What the merge (part 3) and retention (part 4) must do
 
-Built in parts 1 and 2 and meant to be called as described here. The decisions behind it are in issue #1850 (the owner's decisions of 2026-11-25 and the architect's answers to the phase A report) and ADR-0021 points 9 to 12.
+Built in parts 1 and 2 and meant to be called as described here; part 3 (above) calls it so. The decisions behind it are in issue #1850 (the owner's decisions of 2026-11-25 and the architect's answers to the phase A report) and ADR-0021 points 9 to 12.
 
 ### The API to call
 
@@ -244,7 +320,7 @@ Built in parts 1 and 2 and meant to be called as described here. The decisions b
 | `ITableBlockStore.DeleteMergedHour(hour, keep, watermarks)` | `ITableBlockStore.cs` | After the commit and after `TableSensors.DeleteMergedBlocksAfterHours` (24 h by default): delete the hour's blocks except the unreadable ones, raising the watermarks in the same lock. Idempotent; a repeat also removes index entries left by a crash between its two writes. |
 | `ITableBatchStore.DropWeek(product, week)`, `GetWeeks(product)` | `ITableBatchStore.cs` | Retention: drop a week database as a folder when its period class has passed for it (rows may stay up to a week longer). |
 | `TableBatchDatabase.WriteMoved(product, week, hour, batches)` (internal) | `src/database/HSMDatabase.LevelDB/TableBatches/TableBatchDatabase.cs` | The move of a sensor to another period class: writes into the region of moved batches of the target week (after every hour key, so it never overlaps ingest). Nothing more of the move is built. |
-| `TableSensors.MaxOpenBatchDatabases`, `DeleteMergedBlocksAfterHours` | `src/server/HSMServer/ServerConfiguration/Sections/TableSensorsConfig.cs`, `TableBlockOptions` | The bound on open week databases (set on the store by `TableBlockService`'s constructor) and the delay before the blocks of a merged hour are deleted (not used yet). |
+| `TableSensors.MaxOpenBatchDatabases`, `DeleteMergedBlocksAfterHours` | `src/server/HSMServer/ServerConfiguration/Sections/TableSensorsConfig.cs`, `TableBlockOptions` | The bound on open week databases (set on the store by `TableBlockService`'s constructor) and the delay before the blocks of a merged hour are deleted (from the commit time, part 3). |
 
 ### Blocks or batches, never both, never neither
 
@@ -295,6 +371,11 @@ Measured in phase A (in memory, one busy hour of 2.4 M rows): about 1.7 s on one
 | `src/database/HSMDatabase.LevelDB/TableBlocks/TableBlockDatabase.cs` | `CloseHour`, `DeleteMergedHour`, watermarks |
 | `src/tests/HSMDatabase.LevelDB.Tests/TableBatchTests/` | The store's tests and `TableBatchStoreBenchmark` (`HSM_TABLE_BATCH_STORE_BENCH=1`) |
 | `src/tests/HSMDatabase.LevelDB.Tests/TableBlockTests/TableBlockMergeTests.cs` | The block store's part |
+| `src/server/HSMServer.Core/TableSensors/TableMergeJob.cs` | The merge job |
+| `src/server/HSMServer.Core/TableSensors/TableBlockService.cs`, `TableRowCollector.cs`, `TableHourGate.cs` | The read rule, the joined read, the start state, the gate |
+| `src/server/HSMServer.Core/TableSensors/TablePeriodClass.cs` | The period class of a sensor |
+| `src/server/HSMServer/BackgroundServices/DatabaseServices/TableMergeService.cs` | The schedule |
+| `src/tests/HSMServer.Core.Tests/TableSensors/TableMergeJobTests.cs`, `TableMergeBenchmark.cs` | The merge's tests and measurement |
 
 ## Tests
 
@@ -307,10 +388,14 @@ Measured in phase A (in memory, one busy hour of 2.4 M rows): about 1.7 s on one
 
 The store (`src/tests/HSMDatabase.LevelDB.Tests/TableBatchTests/TableBatchDatabaseTests.cs`): nothing created before the first write; an hour read back by sensor in its order with its ranges and watermarks; two period classes in two databases; two weeks in two databases joined in hour order; a second write of a committed hour changes nothing; a crash after the first of two parts, before the commit and after it, then a reopen and a repeat (merged or not, every part once); a stop without a flush replays every committed hour; hours and the newest watermarks after a restart; `Hours` rebuilt from the marks without the hour whose part is missing; a damaged `Hours` put aside and rebuilt; a week flushed when a later one is written (no log left); a read across more weeks than the bound returns every batch and leaves the bound respected; a dropped week gone from disk, from the hours and from the ranges, also after a reopen; two products apart; the region of moved batches after every hour key and read with the hour region; merged hours cause no real compaction (LevelDB's `LOG`); the open retried on the `.dbtmp` failure and on no other.
 
-The block store (`TableBlockMergeTests`): a closed hour takes no block, also with the clock behind; a merged hour deleted except the kept blocks, its resends duplicates by the watermark (not another producer's or product's), also after a reopen; watermarks only grow and need no open store; a crash between the deletes of the blocks and of their index entries is completed by a repeat; a delete in a store never opened only raises the watermarks. The service (`TableBlockServiceTests`): a resend after the merge is a duplicate with its refusals unknown; the bound on open databases comes from the options. Configuration and self-monitoring: `TableBlockOperationsTests`.
+The block store (`TableBlockMergeTests`): a closed hour takes no block, also with the clock behind; a merged hour deleted except the kept blocks, its resends duplicates by the watermark (not another producer's or product's), also after a reopen; watermarks only grow and need no open store; a crash between the deletes of the blocks and of their index entries is completed by a repeat; a delete in a store never opened only raises the watermarks. The service (`TableBlockServiceTests`): a resend after the merge is a duplicate with its refusals unknown; the bound on open databases comes from the options. Configuration and self-monitoring: `TableBlockOperationsTests`. The block store also: a crash before the compaction of a deleted hour, completed by a repeat; the products listed, none without a folder. The store: the commit time survives a restart; a rebuilt `Hours` takes the time of the rebuild.
+
+The merge and the read (`src/tests/HSMServer.Core.Tests/TableSensors/TableMergeJobTests.cs`, over a real `DatabaseCore` and tree, restarted over the same folders): every crash point (table above); a read at every stage (before, one hour merged with its blocks still there, both merged, after each deletion) for a sensor with rows in a merged hour, an unmerged hour and a late block with equal times across the three; one product committed and another not (the read the same, nothing deleted until both are); a damaged block kept, listed, counted and left by the deletion; a verification mismatch injected after the decode (nothing written, counted, blocks stay, not retried in the process, merged after a restart); a store fault before the commit (a fault, retried by the next pass); too little free disk (a fault before any write); a sensor removed and created again on its path between the put and the merge (the new one never sees the old rows; they are dropped and counted); nulls, 5,100 rows of one table in an hour (two batches of 2,550), an hour of one row of nulls only, rows out of order within and across blocks; a resend of a merged and deleted block after a restart is a duplicate with its refusals unknown, per product, and with the clock behind no block lands in the merged hour; the blocks of an hour merged late stay until commit + delay across a restart; the row limit from 1 to 25 over four overlapping hours (two merged) equals the unlimited result cut at the limit, with `Truncated` exact, and stops before the hours after the rows it keeps; a budget forcing four shares writes the same batch bytes as one pass; the period class of every preset and the inherited forms; a sensor with its own period merged into its class's database.
 
 ## Known Issues / Limitations
 
 - The choice against raw at zstd 1 was measured on synthetic quotes, where raw wins only for a few tiny batches; a column of unrelated whole numbers (sizes) is where raw should win.
 - Not measured on real data: the check of the codec over the two private hours of the epic was skipped (their converted files cannot be read without the old benchmark); it stays open for the rollout step (#1849).
-- The merge job, the read that joins batches with blocks, retention and the move between period classes are the later parts of #1850.
+- Retention and the move between period classes are part 4 of #1850. Until the move exists, a table sensor whose period changes does not see the batches of hours merged under its old class.
+- A table sensor that inherits a dynamic preset (a month, a year) from a folder is kept for ever (see "The period class"): an open question for the owner.
+- An hour committed with no batch at all (every table of its blocks refused or dropped) has no mark in any week database: an `Hours` rebuilt from the marks loses it, and with it the watermarks of that hour if it was the newest; the hour is then merged again from its blocks while they are kept, and its producers' resends after the deletion are not recognised until the next merged hour raises them.
