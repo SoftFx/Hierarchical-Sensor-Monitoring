@@ -399,6 +399,38 @@ if(HSM_COLLECTOR_TABLES)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
     set_tests_properties(native_table_stress_writers_ticks_and_restarts PROPERTIES TIMEOUT 600)
+    # The table connection of the collector session (#1848 part 4), against the scripted table side of
+    # tests/ws_test_server.hpp: the tables build with the session transport only.
+    if(HSM_COLLECTOR_HTTP)
+        foreach(name
+                native_table_block_after_hello_and_probe
+                native_table_every_ack_status_maps_to_its_answer
+                native_table_lost_ack_then_duplicate
+                native_table_close_1013_sends_the_same_frame
+                native_table_close_1000_sends_the_same_frame
+                native_table_upgrade_404_asked_again_later
+                native_table_upgrade_400_asked_again_later
+                native_table_upgrade_404_asked_with_the_next_session
+                native_table_upgrade_400_asked_with_the_next_session
+                native_table_upgrade_406_uses_the_backoff
+                native_table_upgrade_503_uses_the_backoff
+                native_table_upgrade_409_waits_for_the_next_session
+                native_table_block_in_flight_across_a_new_session
+                native_table_splits_by_the_hello_limits
+                native_table_block_packed_before_a_smaller_hello
+                native_table_stop_with_a_block_in_flight
+                native_table_server_protocol_errors
+                native_table_heartbeat
+                native_table_start_stop_start
+                native_table_dispose_from_every_state
+                native_table_no_connection_without_a_table_sensor
+                native_table_link_carries_4_and_16_mib_frames
+                native_table_stress_writers_reconnects_and_stop)
+            add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+        endforeach()
+        set_tests_properties(native_table_stress_writers_reconnects_and_stop native_table_dispose_from_every_state
+                             native_table_every_ack_status_maps_to_its_answer PROPERTIES TIMEOUT 600)
+    endif()
     # A report written under a lock the host's callback takes again deadlocks: the timeout fails it.
     set_tests_properties(native_table_reports_reach_the_host_with_no_lock_held PROPERTIES TIMEOUT 120)
     # Blocks and their rows as text, read by the managed reader in NativeBlockVectorTests
@@ -961,6 +993,11 @@ if(HSM_COLLECTOR_TABLES)
         COMMAND hsm_collector_tests meta_must_fail
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_table_rows_wrong_count.hsmtest
     )
+    # The table connection of the collector session (#1848 part 4): the scripted session server takes it,
+    # so it needs the session transport too.
+    if(HSM_COLLECTOR_HTTP)
+        add_conformance_test(conformance_table_connection_contract table_connection_contract.hsmtest)
+    endif()
 endif()
 
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads

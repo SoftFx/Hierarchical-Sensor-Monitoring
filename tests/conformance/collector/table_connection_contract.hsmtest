@@ -7,8 +7,8 @@
 # a block, and answers a block of a producer and sequence it stored before with "duplicate", as the real server does.
 # When the session ends the server closes its table connection with 1000, as the real server does.
 #
-# The managed collector implements it (4.1.0); the native collector gets table sensors with step 6 (#1848): its driver
-# marks every new verb below CONFORMANCE-UNSUPPORTED (#1848) and does not register this fixture until then.
+# The managed collector implements it (4.1.0), the native collector since 0.15.1 (#1848 part 4; its driver runs the
+# fixture in builds with the session transport and table sensors).
 #
 # No case is decided by a duration; a timeout in a verb only fails a case. A tick waits in the delivery, and a put that
 # finds no table connection waits for one only for a while (SessionTimings.TableConnectionWait, which a driver may
