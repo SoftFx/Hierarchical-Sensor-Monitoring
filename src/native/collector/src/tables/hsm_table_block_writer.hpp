@@ -15,20 +15,20 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <vector>
 
 namespace hsm::collector::tables
 {
-    /// What a call of the writer did. Every status but Ok comes with LastError().
+    /// What a call of the writer did. Every status but Ok comes with LastError(), a static text.
     enum class TableBlockStatus
     {
         Ok = 0,
         /// A call out of order: a column before BeginTable, a first column that is not the time, a
-        /// table without columns, a block without tables, a call after OutOfMemory without Reset.
+        /// table without columns, a block without tables.
         WrongOrder,
-        /// The input breaks a rule of the format: a wrong value or map length, map padding bits, a
-        /// null time, a time out of range, an empty identifier, a table without rows.
+        /// The input breaks a rule of the format or of the call: a wrong value or map length, map
+        /// padding bits, a null time, a time out of range, an empty identifier, a row count below 1,
+        /// a front reservation above kMaxReserveFront.
         InvalidArgument,
         /// A limit would be exceeded (tables, rows, columns per table, identifier length, payload
         /// length). Nothing was written: send what the writer holds and start a new block.
@@ -39,48 +39,70 @@ namespace hsm::collector::tables
         FrameTooLarge,
         /// libzstd refused.
         CompressionFailed,
-        /// Memory could not grow. The writer must be Reset before it is used again.
+        /// Memory could not grow. From BeginTable or AddColumn: the writer is failed and refuses every
+        /// call with OutOfMemory until Reset. From Finish: only that block could not be built.
         OutOfMemory,
     };
 
+    /// Copies `count` 8-byte values from `source` (host byte order) to `destination` in little-endian:
+    /// as they are when `swap` is false (a little-endian host), each value's bytes reversed when it is
+    /// true (a big-endian host). A row marked in `nulls` (null: none) is written as eight zero bytes and
+    /// its source is not read. The writer passes swap = !little-endian host; the function takes it as an
+    /// argument so that the big-endian path is tested on every host.
+    void CopyColumnLe(std::uint8_t* destination, const std::uint8_t* source, std::size_t count,
+                      const std::uint8_t* nulls, bool swap) noexcept;
+
     /// Builds one block from tables. Add a table with BeginTable, then its time column, then its other
     /// columns; Finish writes the block. The rows keep the order given: the writer neither sorts nor
-    /// requires time order. Every check runs before anything is written, so a refused call leaves the
-    /// writer as it was (except OutOfMemory, after which only Reset is accepted).
+    /// requires time order.
+    ///
+    /// Refusals. Every argument and limit is checked, in overflow-safe arithmetic, before anything is
+    /// written, so a refused BeginTable or AddColumn leaves the writer exactly as it was. The one
+    /// exception is OutOfMemory from BeginTable or AddColumn: the writer is then failed (its content
+    /// stays consistent, nothing is half added) and refuses every call until Reset.
+    ///
+    /// Finish never changes the writer, whatever it returns: the tables stay, the last table stays open
+    /// (more columns may still be added to it) and more tables may follow; a later Finish writes them
+    /// all. So after FrameTooLarge (or LimitExceeded from an add) the caller still holds every table it
+    /// added, and splits by Reset and adding a part of its rows again: the pipeline packs the parts from
+    /// its own rows, and DecompressedLength() lets it cut before a limit is reached.
     ///
     /// Not thread-safe: one owner thread. Meant to be reused, one block per tick: Reset keeps the
-    /// buffers and the zstd context. No call throws.
+    /// buffers and the zstd context. No call throws, and no failure path allocates.
     class TableBlockWriter
     {
     public:
+        /// The largest front reservation Finish accepts (room for a transport frame header).
+        static constexpr std::size_t kMaxReserveFront = 64 * 1024;
+
         explicit TableBlockWriter(const TableBlockLimits& limits = TableBlockLimits{}, int level = ZstdCompressor::kDefaultLevel);
 
         TableBlockWriter(const TableBlockWriter&) = delete;
         TableBlockWriter& operator=(const TableBlockWriter&) = delete;
 
-        /// Opens a table of `row_count` rows and closes the previous one. The identifier is opaque bytes,
-        /// unique within the block (Finish checks that).
-        TableBlockStatus BeginTable(const std::uint8_t* id, std::size_t id_length, std::uint32_t schema_id, std::int64_t row_count);
+        /// Opens a table of `row_count` rows. The identifier is opaque bytes, unique within the block
+        /// (Finish checks that).
+        TableBlockStatus BeginTable(const std::uint8_t* id, std::size_t id_length, std::uint32_t schema_id, std::int64_t row_count) noexcept;
 
         /// Adds a column of the open table: `count` (the table's row count) values as their 64-bit
         /// patterns (int64 two's complement, double IEEE 754 bits, time as ticks within
         /// 0..kMaxTimeTicks). `nulls` is null/empty (no nulls) or a map of ceil(rows / 8) bytes, row i
         /// at bit i % 8 of byte i / 8, padding bits zero; a map with no bit set is no map. The values of
-        /// null rows are written as zero. The first column is the time and is never null.
+        /// null rows are written as zero and not read. The first column is the time and is never null.
         TableBlockStatus AddColumn(TableColumnType type, const std::uint64_t* values, std::size_t count,
-                                   const std::uint8_t* nulls = nullptr, std::size_t nulls_length = 0);
+                                   const std::uint8_t* nulls = nullptr, std::size_t nulls_length = 0) noexcept;
 
         /// AddColumn of a double column, copied bit for bit.
         TableBlockStatus AddDoubleColumn(const double* values, std::size_t count,
-                                         const std::uint8_t* nulls = nullptr, std::size_t nulls_length = 0);
+                                         const std::uint8_t* nulls = nullptr, std::size_t nulls_length = 0) noexcept;
 
-        /// Closes the open table and writes the block into `out` (replacing its content) after
-        /// `reserve_front` zero bytes the caller fills later (a transport's frame header). When
-        /// `max_frame_bytes` is not 0, `reserve_front` plus the block must fit it, else FrameTooLarge and
-        /// `out` is empty. The writer keeps its tables; call Reset for the next block.
-        TableBlockStatus Finish(std::vector<std::uint8_t>& out, std::size_t reserve_front = 0, std::uint64_t max_frame_bytes = 0);
+        /// Writes the block of every table added into `out` (replacing its content) after
+        /// `reserve_front` zero bytes (at most kMaxReserveFront) that the caller fills later, a transport
+        /// frame header. When `max_frame_bytes` is not 0, `reserve_front` plus the block must fit it,
+        /// else FrameTooLarge. On any refusal `out` is empty. The writer is not changed (see the class).
+        TableBlockStatus Finish(std::vector<std::uint8_t>& out, std::size_t reserve_front = 0, std::uint64_t max_frame_bytes = 0) noexcept;
 
-        /// Forgets every table, keeps the buffers and the zstd context.
+        /// Forgets every table and clears a failure; keeps the buffers and the zstd context.
         void Reset() noexcept;
 
         std::int32_t TableCount() const noexcept { return static_cast<std::int32_t>(tables_.size()); }
@@ -88,8 +110,13 @@ namespace hsm::collector::tables
         /// The exact payload length now: directory, every column and every null map added.
         std::int64_t DecompressedLength() const noexcept;
         const TableBlockLimits& Limits() const noexcept { return limits_; }
-        /// What the last refused call said.
-        const std::string& LastError() const noexcept { return error_; }
+        /// What the last refused call said: a static text, empty while nothing was refused.
+        const char* LastError() const noexcept { return error_; }
+
+        /// Test seam: how many times a buffer of the writer has been reallocated (never reset).
+        std::size_t ReallocationsForTests() const noexcept { return reallocations_; }
+        /// Test seam: the buffer growth after `successes` more succeed throws std::bad_alloc (-1: never).
+        void FailAllocationAfterForTests(std::int64_t successes) noexcept { fail_allocation_after_ = successes; }
 
     private:
         struct TableInfo
@@ -102,12 +129,15 @@ namespace hsm::collector::tables
             std::size_t columns;
         };
 
-        TableBlockStatus Fail(TableBlockStatus status, std::string message);
-        TableBlockStatus CheckGrowth(std::int64_t bytes);
+        TableBlockStatus Fail(TableBlockStatus status, const char* message) noexcept;
+        TableBlockStatus CheckGrowth(std::uint64_t bytes) noexcept;
         TableBlockStatus AddColumnBytes(TableColumnType type, const void* values, std::size_t count,
-                                        const std::uint8_t* nulls, std::size_t nulls_length, bool doubles);
-        bool FindDuplicate(std::size_t& first);
-        void LayOut(std::uint8_t* payload) const;
+                                        const std::uint8_t* nulls, std::size_t nulls_length, bool doubles) noexcept;
+        // Makes room for `needed` elements, growing geometrically. May throw (bad_alloc, length_error).
+        template <typename T>
+        void Reserve(std::vector<T>& buffer, std::size_t needed);
+        bool FindDuplicate();
+        void LayOut(std::uint8_t* payload) const noexcept;
 
         TableBlockLimits limits_;
         bool limits_valid_;
@@ -130,6 +160,8 @@ namespace hsm::collector::tables
         // The open table: the offset of its column count byte in the directory, or -1.
         std::int64_t column_count_offset_ = -1;
         bool failed_ = false;
-        std::string error_;
+        const char* error_ = "";
+        std::size_t reallocations_ = 0;
+        std::int64_t fail_allocation_after_ = -1;
     };
 } // namespace hsm::collector::tables

@@ -13,7 +13,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -69,8 +68,10 @@ namespace hsm::collector::tables
 
         /// Compresses [data, data + size) as exactly one zstd frame that declares its content size, and
         /// appends it to `out` (after out.size()). False with `error` set when libzstd refuses; `out` is
-        /// then left as it was. May throw std::bad_alloc from growing `out`.
-        bool CompressFrame(const void* data, std::size_t size, std::vector<std::uint8_t>& out, std::string& error)
+        /// then left as it was. `error` is a static text (libzstd's own error names are static too), so
+        /// a failure allocates nothing. Growing `out` may throw (std::bad_alloc, std::length_error) unless
+        /// the caller reserved out.size() + ZSTD_compressBound(size) first.
+        bool CompressFrame(const void* data, std::size_t size, std::vector<std::uint8_t>& out, const char*& error)
         {
             ZSTD_CCtx* context = Context();
             if (context == nullptr)
@@ -87,7 +88,7 @@ namespace hsm::collector::tables
                 result = ZSTD_CCtx_setParameter(context, ZSTD_c_contentSizeFlag, 1);
             if (ZSTD_isError(result))
             {
-                error = std::string("zstd refused the parameters: ") + ZSTD_getErrorName(result);
+                error = ZSTD_getErrorName(result);
                 return false;
             }
 
@@ -98,7 +99,7 @@ namespace hsm::collector::tables
             if (ZSTD_isError(written))
             {
                 out.resize(start);
-                error = std::string("zstd could not compress the payload: ") + ZSTD_getErrorName(written);
+                error = ZSTD_getErrorName(written);
                 return false;
             }
 
