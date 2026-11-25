@@ -141,6 +141,17 @@ namespace hsm_wrapper
 	private:
 		// Applies the transport choice if none is in place yet (see transport_chosen_).
 		void EnsureTransport();
+		// Caller holds lifecycle_mutex_: waits for a StopAsync in flight and settles its request.
+		void WaitForPendingStop();
+
+		// What the host last asked of the lifecycle, guarded by lifecycle_mutex_. The collector's own
+		// status cannot serve here: after StartAsync it stays Stopped until the start's thread runs.
+		enum class Lifecycle
+		{
+			Idle,           // no start requested since the last stop (or ever)
+			StartRequested, // Start or StartAsync was called and no stop since
+			StopRequested,  // StopAsync was called; stop_future_ finishes it
+		};
 
 		hsm::collector::Collector collector_;
 		// True once collector_ has a transport: the session, chosen by the constructor, or HTTP,
@@ -152,7 +163,15 @@ namespace hsm_wrapper
 		// call effectively synchronous (managed StartAsync/StopAsync are fire-and-forget). Expected
 		// usage is one-shot (a single StartAsync, a single StopAsync); calling StartAsync again while a
 		// prior start is still pending blocks on the move-assignment until the prior task finishes.
-		std::future<void> start_future_;
+		//
+		// lifecycle_mutex_ serializes Start, StartAsync, Stop, StopAsync and UseHttpTransport, so the
+		// transport never changes while a start is requested or running. Stop waits for a pending
+		// StartAsync; a StopAsync runs after it on its own thread, and the next Start, StartAsync or
+		// UseHttpTransport waits for that stop. Declared after collector_, so they are destroyed (and a
+		// pending task waited for) before it.
+		std::mutex lifecycle_mutex_;
+		Lifecycle lifecycle_ = Lifecycle::Idle;
+		std::shared_future<void> start_future_;
 		std::future<void> stop_future_;
 		std::mutex file_sensors_mutex_;
 		std::unordered_map<std::string, hsm::collector::FileSensor> file_sensors_;

@@ -34,6 +34,28 @@ if(NOT DEFINED HSM_COLLECTOR_TABLES)
     set(HSM_COLLECTOR_TABLES ON CACHE BOOL "Build table sensor support (needs zstd and zlib)" FORCE)
 endif()
 
+# The default transport is the collector session, which needs a libcurl 8.14.0 or newer with
+# WebSocket (ws/wss). find_package(CURL) accepts any curl, and a wrapper built against one without
+# WebSocket would configure, link and load, then send nothing at run time (1.x built the same way
+# worked over HTTP). So such a build is refused here. It reads what curl's own CMake package states
+# (CURL_SUPPORTS_WS/WSS and CURL_VERSION, as vcpkg's curl installs it; FindCURL looks for that
+# package first); a curl that does not state it is refused as well.
+if(HSM_COLLECTOR_HTTP)
+    find_package(CURL REQUIRED)
+    set(_hsm_curl_version "${CURL_VERSION}")
+    if(NOT _hsm_curl_version)
+        set(_hsm_curl_version "${CURL_VERSION_STRING}")
+    endif()
+    if(NOT CURL_SUPPORTS_WS OR NOT CURL_SUPPORTS_WSS OR NOT _hsm_curl_version OR _hsm_curl_version VERSION_LESS 8.14.0)
+        message(FATAL_ERROR
+            "HSMCppWrapper: the libcurl found (version '${_hsm_curl_version}', CURL_DIR '${CURL_DIR}') has no WebSocket "
+            "(ws/wss) support or is older than 8.14.0, or its CMake package does not say. The wrapper's default "
+            "transport, the collector session, cannot work with it. Build with the vcpkg manifest src/wrapper/vcpkg.json "
+            "(curl[websockets] at its pinned baseline): see src/wrapper/packaging/README.md.")
+    endif()
+    message(STATUS "HSMCppWrapper: libcurl ${_hsm_curl_version} with WebSocket")
+endif()
+
 # Bring in the native collector (provides hsm_collector_cpp -> hsm_collector_core).
 if(NOT TARGET hsm_collector_cpp)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../native/collector ${CMAKE_BINARY_DIR}/hsm_collector)
@@ -158,6 +180,10 @@ if(HSMWRAPPER_BUILD_TESTS AND HSM_COLLECTOR_HTTP AND HSM_COLLECTOR_TABLES)
             wrapper_default_transport_is_the_session
             wrapper_use_http_transport_sends_over_http_without_upgrade
             wrapper_use_http_transport_after_start_throws_and_keeps_the_session
+            wrapper_start_async_then_use_http_transport_throws_and_keeps_the_session
+            wrapper_stop_async_then_use_http_transport_waits_for_the_stop
+            wrapper_use_http_transport_after_stop_sends_over_http
+            wrapper_use_http_transport_is_kept_across_restarts
             wrapper_table_sensor_delivers_on_the_default_transport
             wrapper_table_sensor_is_unavailable_on_http)
         add_test(NAME ${_case} COMMAND WrapperTransportTests ${_case})

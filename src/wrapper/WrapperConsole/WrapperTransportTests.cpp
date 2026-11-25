@@ -89,14 +89,20 @@ namespace
 		return count;
 	}
 
-	bool AnyUpgradeRequest(const hsm::test::HttpRecordingServer& server)
+	size_t UpgradeRequests(const hsm::test::HttpRecordingServer& server)
 	{
+		size_t count = 0;
 		for (const auto& request : server.Requests())
 		{
 			if (request.path.find("/session") != std::string::npos)
-				return true;
+				++count;
 		}
-		return false;
+		return count;
+	}
+
+	bool AnyUpgradeRequest(const hsm::test::HttpRecordingServer& server)
+	{
+		return UpgradeRequests(server) != 0;
 	}
 
 	std::string StateName(hsm::collector::TableSensorState state)
@@ -187,6 +193,95 @@ namespace
 		proxy.UseHttpTransport();
 	}
 
+	// StartAsync returns before its thread has entered the native Start, so the collector's status
+	// is still Stopped then: the refusal must come from the request itself, whatever that thread did.
+	void StartAsyncThenUseHttpTransportThrowsAndKeepsTheSession()
+	{
+		hsm::test::WebSocketTestServer server(SessionServerOptions());
+		hsm_wrapper::DataCollectorProxy proxy(kKey, "http://127.0.0.1", server.Port(), "WrapperTests");
+		auto sensor = proxy.CreateIntSensor("wrapper/async_int", "an int");
+
+		proxy.StartAsync();
+		bool threw = false;
+		try
+		{
+			proxy.UseHttpTransport();
+		}
+		catch (const hsm::collector::Error& error)
+		{
+			threw = std::string(error.what()).find("before Start") != std::string::npos;
+		}
+		Require(threw, "UseHttpTransport right after StartAsync must throw hsm::collector::Error naming Start");
+
+		Require(WaitUntil([&] { return server.Upgrades() >= 1; }), "the started collector must open the session");
+		sensor.AddValue(4545);
+		Require(WaitUntil([&] { return SessionRequests(server, "list", "\"Value\":4545") >= 1; }),
+			"the collector must be on the session after the refused call");
+		Require(server.PlainHttpRequests() == 0, "nothing may go over plain HTTP");
+		proxy.Stop();
+	}
+
+	// A StopAsync in flight is waited for: UseHttpTransport after it is accepted, and the next Start
+	// sends over HTTP with no upgrade.
+	void StopAsyncThenUseHttpTransportWaitsForTheStop()
+	{
+		hsm::test::HttpRecordingServer server;
+		hsm_wrapper::DataCollectorProxy proxy(kKey, "http://127.0.0.1", server.Port(), "WrapperTests");
+		auto sensor = proxy.CreateIntSensor("wrapper/stopasync_int", "an int");
+
+		proxy.StartAsync();
+		proxy.StopAsync();
+		proxy.UseHttpTransport(); // must not throw: it waits for the stop
+		const size_t upgrades = UpgradeRequests(server);
+
+		proxy.Start();
+		sensor.AddValue(4646);
+		Require(WaitUntil([&] { return HttpRequests(server, "/list", "\"Value\":4646") >= 1; }),
+			"after the stop and the HTTP choice the value must arrive at the HTTP list route");
+		proxy.Stop();
+		Require(UpgradeRequests(server) == upgrades, "no upgrade may be asked for after the HTTP choice");
+	}
+
+	// The explicit choice made after a Stop holds for the next Start.
+	void UseHttpTransportAfterStopSendsOverHttp()
+	{
+		hsm::test::HttpRecordingServer server;
+		hsm_wrapper::DataCollectorProxy proxy(kKey, "http://127.0.0.1", server.Port(), "WrapperTests");
+		auto sensor = proxy.CreateIntSensor("wrapper/afterstop_int", "an int");
+
+		proxy.Start(); // on the session: this server has none, so nothing is delivered
+		proxy.Stop();
+		proxy.UseHttpTransport();
+		const size_t upgrades = UpgradeRequests(server);
+
+		proxy.Start();
+		sensor.AddValue(4747);
+		Require(WaitUntil([&] { return HttpRequests(server, "/list", "\"Value\":4747") >= 1; }),
+			"after UseHttpTransport the value must arrive at the HTTP list route");
+		proxy.Stop();
+		Require(UpgradeRequests(server) == upgrades, "no upgrade may be asked for after the HTTP choice");
+	}
+
+	// Start, Stop, Start: an explicit HTTP choice is kept, not replaced by the session at each Start.
+	void UseHttpTransportIsKeptAcrossRestarts()
+	{
+		hsm::test::HttpRecordingServer server;
+		hsm_wrapper::DataCollectorProxy proxy(kKey, "http://127.0.0.1", server.Port(), "WrapperTests");
+		proxy.UseHttpTransport();
+		auto sensor = proxy.CreateIntSensor("wrapper/restart_int", "an int");
+
+		proxy.Start();
+		sensor.AddValue(4848);
+		Require(WaitUntil([&] { return HttpRequests(server, "/list", "\"Value\":4848") >= 1; }), "the first run must send over HTTP");
+		proxy.Stop();
+
+		proxy.Start();
+		sensor.AddValue(4949);
+		Require(WaitUntil([&] { return HttpRequests(server, "/list", "\"Value\":4949") >= 1; }), "the second run must send over HTTP too");
+		proxy.Stop();
+		Require(!AnyUpgradeRequest(server), "a collector on HTTP must never ask for the session");
+	}
+
 	void TableSensorDeliversOnTheDefaultTransport()
 	{
 		hsm::test::WebSocketTestServer server(SessionServerOptions());
@@ -253,6 +348,10 @@ namespace
 			{ "wrapper_default_transport_is_the_session", &DefaultTransportIsTheSession },
 			{ "wrapper_use_http_transport_sends_over_http_without_upgrade", &UseHttpTransportSendsOverHttpWithoutUpgrade },
 			{ "wrapper_use_http_transport_after_start_throws_and_keeps_the_session", &UseHttpTransportAfterStartThrowsAndKeepsTheSession },
+			{ "wrapper_start_async_then_use_http_transport_throws_and_keeps_the_session", &StartAsyncThenUseHttpTransportThrowsAndKeepsTheSession },
+			{ "wrapper_stop_async_then_use_http_transport_waits_for_the_stop", &StopAsyncThenUseHttpTransportWaitsForTheStop },
+			{ "wrapper_use_http_transport_after_stop_sends_over_http", &UseHttpTransportAfterStopSendsOverHttp },
+			{ "wrapper_use_http_transport_is_kept_across_restarts", &UseHttpTransportIsKeptAcrossRestarts },
 			{ "wrapper_table_sensor_delivers_on_the_default_transport", &TableSensorDeliversOnTheDefaultTransport },
 			{ "wrapper_table_sensor_is_unavailable_on_http", &TableSensorIsUnavailableOnHttp },
 		};
