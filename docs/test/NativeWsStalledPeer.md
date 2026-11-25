@@ -75,8 +75,11 @@ Before 0.15.2 (the prototype of #1848 step 6 over the same `WebSocketConnection`
 - A send of one TLS record on a socket that `select` reported writable was accepted whole by Windows in
   every call measured (about 10,600 calls of the prototype, stalled and healthy peers; every call of the run
   above). Microsoft does not document it.
-- A server-initiated TLS renegotiation (TLS 1.2 and earlier) can still hold a call inside libcurl for up to
-  60 s (`MAX_RENEG_BLOCK_TIME` in `schannel.c`). Not tested.
+- Post-handshake TLS messages: a message that makes Schannel's DecryptMessage return `SEC_I_RENEGOTIATE`
+  (libcurl says that is "not necessarily literal TLS renegotiation") can still hold a call inside libcurl for up
+  to 60 s (`schannel_recv_renegotiate`, `MAX_RENEG_BLOCK_TIME`). The collector's deadline does not end it; a
+  cancel does within about a second, through the progress callback `Open` installs (read in libcurl's source,
+  not tested). Whether Windows returns that status for TLS 1.3 post-handshake messages was not checked.
 - A peer that has gone silent (packets dropped) could not be produced on Windows without a firewall rule.
   The bound acts on the local socket only, so the peer's state does not change it; on Linux (a container
   disconnected from its network) the send ended at its timeout.

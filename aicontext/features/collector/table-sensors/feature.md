@@ -656,7 +656,9 @@ for every lifecycle report).
   in the next run's first report instead of none (the managed known limit loses them from the reports).
 
 **What bounds a block's write (0.15.2, #1848 step 6).** A block's write ends at its bound (ten heartbeats, at least
-10 s) or at the stop's cancel, on every TLS backend: the connection waits for the socket to be writable before each
+10 s: 300 s with the server's default `heartbeatSeconds` of 30) or at the stop's cancel, on every TLS backend; a stop
+does not wait for the bound: it cancels the write when its own budget (the stop drain's, at most 5 s) is spent, and the
+cancel is seen within 100 ms: the connection waits for the socket to be writable before each
 call into libcurl, with the write's deadline and the cancel flag, and hands libcurl at most 16000 bytes per call (one
 TLS record), so no call into libcurl waits on its own (`aicontext/features/collector/http-client/feature.md`, "What
 bounds a send"). Before 0.15.2, on Windows with TLS (Schannel) a write to a server that stopped reading did not end at
@@ -671,9 +673,7 @@ ended at 2000–2014 ms; `docs/test/NativeWsStalledPeer.md` has the rest.
 
 **Known limits of the table connection (0.15.2).**
 
-- **A server-initiated TLS renegotiation can still hold a call inside libcurl for up to 60 s** (libcurl's Schannel
-  renegotiation, `MAX_RENEG_BLOCK_TIME`; only TLS 1.2 and earlier have one). Not tested; HSM's TLS front ends are not
-  known to renegotiate.
+- **Post-handshake TLS messages can still hold a call inside libcurl for up to 60 s** (Windows, Schannel): a message from the server that makes Schannel's DecryptMessage return `SEC_I_RENEGOTIATE` can still hold a call inside libcurl for up to 60 s: libcurl 8.21.0 handles every such status in `schannel_recv_renegotiate` (`lib/vtls/schannel.c`), which waits on the socket in slices of up to 1 s until the context is re-established, for at most `MAX_RENEG_BLOCK_TIME` (60 s); a send meeting a renegotiation in progress waits there too. libcurl's own comment says this is "not necessarily literal TLS renegotiation", so it is not limited to a TLS 1.2 renegotiation; whether Windows returns it for TLS 1.3 post-handshake messages was not checked against Microsoft's documentation. The collector's deadline does not end that wait; a cancel does, within about a second: the loop calls `Curl_pgrsUpdate` at every slice, which calls the progress callback `Open` installs (`CURLOPT_XFERINFOFUNCTION` over the cancel flag, with `CURLOPT_NOPROGRESS` 0, neither cleared after the open), and a non-zero answer ends it with `CURLE_ABORTED_BY_CALLBACK` (read in `lib/progress.c`, `pgrsupdate`; not tested). Not tested.
 - **The bound rests on an observation, not on a documented guarantee:** a send of one TLS record on a socket that
   `select` reported writable was accepted whole by Windows in every call measured (about 10,600 calls, stalled and
   healthy peers). Microsoft does not document it. Were a call ever to block there, it would hold the thread until the
