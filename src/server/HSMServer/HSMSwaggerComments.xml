@@ -1037,6 +1037,22 @@
             answering false would cut the whole web UI off).
             </summary>
         </member>
+        <member name="M:HSMServer.Folders.FolderManager.ReapplyFolderCalendarPresets">
+            <summary>
+            Re-derives, at start, the copy a product keeps of its folder's calendar
+            preset where that copy does not carry the preset's length (#1864).
+            </summary>
+            <remarks>
+            Until the fix, saving a folder's settings gave every inheriting product
+            FromFolder with 0 ticks for a month, three months, six months and a year,
+            which reads as "never". Such copies are in the stored product entities,
+            and nothing but another save of the folder would correct them. The
+            rewrite is the one a save of the folder does (the same update, the same
+            stored shape: FromFolder + ticks), it is journaled per setting and
+            logged per product, and it touches nothing else: a product's own period,
+            a folder period that is not a calendar preset, a copy that is right.
+            </remarks>
+        </member>
         <member name="T:HSMServer.Mcp.AccessKeysMcpTools">
             <summary>
             The access-key tools of the MCP surface (#1787/#1789): one product's
@@ -1838,6 +1854,18 @@
             The decision plus the server-ca.pem content (null unless <see cref="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Include"/>).
             <paramref name="servedCertificate"/> returns the certificate Kestrel serves and whether it is the
             bundled default; it is only evaluated when the server terminates TLS.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Folders.FolderPeriodRepair">
+            <summary>
+            One period a product inherits from its folder whose stored copy was re-derived
+            at start (#1864): what it was and what it is now.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Folders.FolderPeriodRepair.#ctor(System.Guid,System.String,System.String,System.String,HSMServer.Core.Model.TimeIntervalModel,HSMServer.Core.Model.TimeIntervalModel)">
+            <summary>
+            One period a product inherits from its folder whose stored copy was re-derived
+            at start (#1864): what it was and what it is now.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">

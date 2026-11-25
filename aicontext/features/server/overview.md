@@ -78,7 +78,7 @@ Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for pro
 ### Background Services
 - Data collection (self-monitoring)
 - Database snapshots
-- Data cleanup/retention
+- Data cleanup/retention (hourly `ClearDatabaseService`: history older than `KeepHistory`, sensors idle for longer than `SelfDestroy`, old empty nodes) — periods inherited from a folder: `inherited-periods/`
 - Notification delivery (Telegram, email)
 - Database backups (local + SFTP), self-monitored — see `database-backup-monitoring/`
 
@@ -115,6 +115,7 @@ TypeScript 5.3 + Webpack 5:
 - `sso-login/` - the optional OpenID Connect sign-in of the web UI (#1782): `Oidc` settings with an environment-only client secret, provider username = HSM login, auto-created users without roles, `IsAdmin` from an optional provider group, absolute cookie lifetime, local logout.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
+- `inherited-periods/` - how a root product takes "Keep sensor history", "Remove sensor after inactivity" and TTL from its folder: the stored copy (`FromFolder` + ticks, a calendar preset at its fixed length), the pass at start that re-derives copies left by a server from before #1864, what the hourly cleanup logs.
 - `sensor-move/` - moving a sensor to another path, same or another product, keeping its id, history, settings and policies; the old path becomes an alias that keeps routing values to it (#1718, ADR-0018).
 - `collector-session/` - the WebSocket session a collector may hold with the server (#1664): `GET /api/sensors/session`, acks with the HTTP route's status, the server-wide session cap, the session registry and the `Open sessions` self-monitoring sensor. Meant to replace the HTTP routes for collectors after a transition period. No collector uses it yet.
 - `database-backup-monitoring/` - self-monitoring of the server's own database backup (#1525): per-run `Backup result` (status + TTL so a missed run turns Timeout), backup file sizes, duration, and per-database sizes.

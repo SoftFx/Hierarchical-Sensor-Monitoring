@@ -1345,8 +1345,13 @@ namespace HSMServer.Core.Cache
 
                     if (policy.TimeIsUp(from))
                     {
-                        _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
-                        ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                        var to = policy.GetShiftedTime(DateTime.UtcNow, -1);
+
+                        // One line per cleared sensor, with what is erased: the
+                        // record an operator has of a period that starts to apply
+                        // (a folder's calendar preset after #1864).
+                        _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : from {from:O} up to {to:O}");
+                        ClearSensorHistory(new(sensor.Id, to));
                         cleared++;
                     }
                     else
@@ -3443,12 +3448,14 @@ namespace HSMServer.Core.Cache
                 // to them.
                 //
                 // Round-6: KeepHistory inherited from a folder reaches here as a
-                // FromFolder policy carrying the FOLDER model's ticks — Forever
-                // as long.MaxValue, the month presets as 0. The retention pass
-                // (TimeIsUp) treats both as "never expires", and the floor must
-                // agree: shifting long.MaxValue throws and would abort the whole
-                // batch loop, and shifting 0 floors at UtcNow and would refuse
-                // every out-of-order value. Any ticks window too large to
+                // FromFolder policy carrying the FOLDER's period as ticks — a
+                // calendar preset at its fixed length (31 days a month, #1864),
+                // Forever as long.MaxValue when the folder was saved last and as
+                // 0 when the product page was. The retention pass (TimeIsUp)
+                // treats both Forever shapes as "never expires", and the floor
+                // must agree: shifting long.MaxValue throws and would abort the
+                // whole batch loop, and shifting 0 floors at UtcNow and would
+                // refuse every out-of-order value. Any ticks window too large to
                 // represent below DateTime.MinValue is the same no-floor case.
                 var keepPolicy = sensor.Settings.KeepHistory.Value;
                 var keepFloor = keepPolicy.IsNone || (keepPolicy.UseTicks && (keepPolicy.Ticks <= 0L || keepPolicy.Ticks >= DateTime.UtcNow.Ticks))
@@ -4421,7 +4428,13 @@ namespace HSMServer.Core.Cache
             foreach (var (_, node) in product.SubProducts)
                 await ClearEmptyNodesAsync(node, token);
 
-            if (!product.IsRoot && product.IsEmpty && product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
+            // TimeIsUp, the question the sensor sweep asks, not a shifted date
+            // (#1864): a period inherited from a folder is FromFolder + ticks,
+            // and a folder's "Never" arrives as long.MaxValue ticks (shifting by
+            // it throws, which ended the sweep for every later product) or as 0
+            // ticks (shifting by it lands on the creation date, which removed
+            // the node the moment it was empty). Neither is ever up.
+            if (!product.IsRoot && product.IsEmpty && product.Settings.SelfDestroy.Value.TimeIsUp(product.CreationDate))
             {
                 await RemoveProductAsync(product.Id, InitiatorInfo.AsSystemForce("Old empty node"), token);
             }

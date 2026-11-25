@@ -79,11 +79,12 @@ namespace HSMServer.Core.Model
         // Forever retention (KeepHistory = None, never cleared) it is
         // DateTime.MinValue, so such sensors accept arbitrary past timestamps
         // and the weekly-database protection does NOT apply to them. The same
-        // MinValue applies to KeepHistory inherited from a folder when the
-        // folder window never expires for the retention pass (FromFolder with
-        // the folder's month presets, Ticks = 0) or is too large to shift
-        // (FromFolder Forever, long.MaxValue) — the floor mirrors TimeIsUp,
-        // not just IsNone.
+        // MinValue applies to KeepHistory inherited from a folder that keeps
+        // for ever: FromFolder with long.MaxValue ticks, too large to shift,
+        // or with 0 ticks, which never expires for the retention pass — the
+        // floor mirrors TimeIsUp, not just IsNone. A folder's calendar preset
+        // is inherited at its fixed length (31 days a month, #1864) and
+        // floors like any other period.
         internal long OutOfRetentionValues;
 
         // Upper bound of the last history clear (ClearSensorHistory), null =

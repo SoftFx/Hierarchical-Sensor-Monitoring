@@ -810,16 +810,19 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
-        public async Task OutOfOrderValue_InheritedMonthKeepHistory_IsStored_NotRefused()
+        public async Task OutOfOrderValue_InheritedZeroTicksKeepHistory_IsStored_NotRefused()
         {
-            // Round-6 P1, second shape: the folder month presets (Month,
-            // Three/Six Months, Year) inherit as FromFolder with Ticks = 0.
-            // TimeIsUp treats Ticks <= 0 as "never expires" — the retention
-            // pass never purges these sensors — but the floor shifted 0 ticks
-            // and landed at UtcNow, refusing EVERY out-of-order value as
-            // out-of-retention. No window means no floor: a value months back
-            // must be stored, exactly as the retention pass would keep it.
-            var path = "denseBatch/inheritedMonth";
+            // Round-6 P1, second shape: FromFolder with Ticks = 0. That is a
+            // folder's Forever inherited through the product page; until
+            // #1864 it was also what the folder's month presets (Month,
+            // Three/Six Months, Year) inherited as, and those now carry their
+            // length (FolderPresetRetentionTests). TimeIsUp treats Ticks <= 0
+            // as "never expires" — the retention pass never purges these
+            // sensors — but the floor shifted 0 ticks and landed at UtcNow,
+            // refusing EVERY out-of-order value as out-of-retention. No
+            // window means no floor: a value months back must be stored,
+            // exactly as the retention pass would keep it.
+            var path = "denseBatch/inheritedZeroTicks";
             var newest = DateTime.UtcNow.AddHours(-1);
 
             var seed = new SensorValueBase[]

@@ -62,6 +62,10 @@ namespace HSMServer.Core.Model
 
         public bool UseTicks => Interval is TimeInterval.Ticks or TimeInterval.FromFolder;
 
+        // A month, three months, six months, a year: their own values of the
+        // enum, carrying no ticks, judged by the calendar (AddMonths, AddYears).
+        public bool IsCalendarPreset => Interval is TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year;
+
 
         public TimeIntervalModel() : this(TimeInterval.FromParent) { }
 
@@ -97,7 +101,13 @@ namespace HSMServer.Core.Model
         };
 
 
-        public TimeIntervalModel ToFromFolderModel() => new(TimeInterval.FromFolder, Ticks);
+        // The copy a product keeps of its folder's period: FromFolder + ticks,
+        // judged by its ticks alone (UseTicks). A calendar preset has no ticks
+        // of its own, so it goes in at its fixed length, the value of the enum
+        // member (31 days a month, 365 a year), the same length the product
+        // page stores for it (TimeIntervalViewModel.ToModel). Carrying its
+        // zero ticks instead made the period "never" (#1864).
+        public TimeIntervalModel ToFromFolderModel() => new(TimeInterval.FromFolder, IsCalendarPreset ? (long)Interval : Ticks);
 
         public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
 

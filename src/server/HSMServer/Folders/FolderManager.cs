@@ -282,6 +282,83 @@ namespace HSMServer.Folders
             }
 
             await ResetServerPolicyForFolderProducts();
+            await ReapplyFolderCalendarPresets();
+        }
+
+        /// <summary>
+        /// Re-derives, at start, the copy a product keeps of its folder's calendar
+        /// preset where that copy does not carry the preset's length (#1864).
+        /// </summary>
+        /// <remarks>
+        /// Until the fix, saving a folder's settings gave every inheriting product
+        /// FromFolder with 0 ticks for a month, three months, six months and a year,
+        /// which reads as "never". Such copies are in the stored product entities,
+        /// and nothing but another save of the folder would correct them. The
+        /// rewrite is the one a save of the folder does (the same update, the same
+        /// stored shape: FromFolder + ticks), it is journaled per setting and
+        /// logged per product, and it touches nothing else: a product's own period,
+        /// a folder period that is not a calendar preset, a copy that is right.
+        /// </remarks>
+        internal async Task<List<FolderPeriodRepair>> ReapplyFolderCalendarPresets()
+        {
+            var repairs = new List<FolderPeriodRepair>();
+
+            foreach (var product in _cache.GetProducts())
+                if (TryGetValueById(product.FolderId, out var folder))
+                {
+                    var stale = new List<FolderPeriodRepair>(3);
+
+                    TimeIntervalModel Stale(TimeIntervalSettingProperty property, TimeIntervalViewModel folderSetting, string setting)
+                    {
+                        var copy = property.CurValue;
+                        var folderModel = folderSetting.ToModel();
+
+                        if (!copy.IsFromFolder || !folderModel.IsCalendarPreset)
+                            return null;
+
+                        var expected = folderModel.ToFromFolderModel();
+
+                        if (copy.Ticks == expected.Ticks)
+                            return null;
+
+                        stale.Add(new FolderPeriodRepair(product.Id, product.DisplayName, folder.Name, setting, copy, expected));
+
+                        return expected;
+                    }
+
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        TTL = Stale(product.Settings.TTL, folder.TTL, "TTL"),
+                        KeepHistory = Stale(product.Settings.KeepHistory, folder.KeepHistory, "Keep sensor history"),
+                        SelfDestroy = Stale(product.Settings.SelfDestroy, folder.SelfDestroy, "Remove sensor after inactivity"),
+
+                        // Forced: the setting was last changed by a user, and the user's
+                        // choice ("from folder") is what this update keeps.
+                        Initiator = InitiatorInfo.AsSystemMigrator(),
+                    };
+
+                    if (stale.Count == 0)
+                        continue;
+
+                    var result = await _cache.UpdateProductAsync(update);
+
+                    if (!result.IsOk)
+                    {
+                        _logger.Error($"Folder period not re-derived (#1864) for product '{product.DisplayName}' [{product.Id}], folder '{folder.Name}': {result.Error}");
+                        continue;
+                    }
+
+                    foreach (var repair in stale)
+                        _logger.Warn($"Folder period re-derived (#1864): product '{repair.ProductName}' [{repair.ProductId}], folder '{repair.FolderName}', '{repair.Setting}': {repair.Old} -> {repair.New}");
+
+                    repairs.AddRange(stale);
+                }
+
+            if (repairs.Count > 0)
+                _logger.Warn($"{repairs.Count} period(s) inherited from a folder's calendar preset were never applied before (#1864) and are applied from now on, in {repairs.Select(r => r.ProductId).Distinct().Count()} product(s). The next cleanup run (on the full hour) clears the history older than the folder's period and removes the sensors idle for longer than it; each cleared sensor is logged by that run ('Clearing history'), each removed one by 'Sensor removed'. An inherited TTL of a month starts to expire the sensors silent for longer.");
+
+            return repairs;
         }
 
 
