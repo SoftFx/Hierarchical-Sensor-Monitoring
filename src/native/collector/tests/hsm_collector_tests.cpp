@@ -3708,6 +3708,38 @@ namespace
         if (ExecuteTableConformanceStep(*state.tables, state.collector.value, step))
             return;
 
+        // The table connection of the session (tests/conformance/collector/table_connection_contract.hsmtest)
+        // comes with the next part of step 6 (#1848). Until then the fixture is not registered in CMakeLists.txt,
+        // and its verbs fail by name instead of as unknown ones, so the port backlog stays visible:
+        // CONFORMANCE-UNSUPPORTED: table_register (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_refuse_upgrades (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_accept_upgrades (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_connections (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_refused_table_upgrades_at_least (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_upgrade_names_session (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_probe_before_blocks (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_frame_connections (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_close_code (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_closed_before_session (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_wait_connection_up (#1848)
+        static const char* const kTableConnectionVerbs[] = {
+            "table_register",
+            "table_server_refuse_upgrades",
+            "table_server_accept_upgrades",
+            "expect_table_connections",
+            "expect_refused_table_upgrades_at_least",
+            "expect_table_upgrade_names_session",
+            "expect_table_probe_before_blocks",
+            "expect_table_frame_connections",
+            "expect_table_close_code",
+            "expect_table_closed_before_session",
+            "table_wait_connection_up",
+        };
+
+        for (const char* verb : kTableConnectionVerbs)
+            if (action == verb)
+                throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1848)");
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 

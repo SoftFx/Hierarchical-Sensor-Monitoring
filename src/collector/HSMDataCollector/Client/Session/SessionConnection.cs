@@ -33,6 +33,15 @@ namespace HSMDataCollector.Client.Session
 
         /// <summary>A frame that cannot be written in this time ends the session.</summary>
         internal TimeSpan SendTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// How long the table connection waits before it asks again after the server said it has none to give: a 404
+        /// (table connections switched off) or a 400 (a server that does not know the subprotocol).
+        /// </summary>
+        internal TimeSpan TableRefusedRetry { get; set; } = TimeSpan.FromMinutes(5);
+
+        /// <summary>How long a block waits for a table connection to come up before it is answered "not delivered".</summary>
+        internal TimeSpan TableConnectionWait { get; set; } = TimeSpan.FromSeconds(15);
     }
 
 
@@ -86,14 +95,25 @@ namespace HSMDataCollector.Client.Session
         {
             private readonly TaskCompletionSource<string> _reset =
                 new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _ended =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             private int _endedForNoAck;
 
-            internal Session(ClientWebSocket socket)
+            internal Session(ClientWebSocket socket, string id)
             {
                 Socket = socket;
+                Id = id;
             }
 
             internal ClientWebSocket Socket { get; }
+
+            /// <summary>The <c>sessionId</c> of its hello (#1845); null from a server that states none.</summary>
+            internal string Id { get; }
+
+            /// <summary>Completes when this session is over.</summary>
+            internal Task Ended => _ended.Task;
+
+            internal void MarkEnded() => _ended.TrySetResult(true);
 
             /// <summary>Completes, with the reason, when a request asks for this session to be ended.</summary>
             internal Task<string> Reset => _reset.Task;
@@ -117,6 +137,7 @@ namespace HSMDataCollector.Client.Session
         private volatile TaskCompletionSource<bool> _upSignal = NewSignal();
         private volatile string _downReason = NoSession;
         private int _maxFrameBytes;
+        private string _helloSessionId;
         private long _heartbeatTicks;
         private long _lastSentTicks;
         private long _lastReceivedTicks;
@@ -162,6 +183,23 @@ namespace HSMDataCollector.Client.Session
         /// very session was asked to end, however far the loop has got since.
         /// </summary>
         internal Task ResetOfCurrentSession => _session?.Reset;
+
+        /// <summary>
+        /// The session that is up now, in one read: its <c>sessionId</c> (null from a server that states none) and a task
+        /// that completes when that very session is over. False while no session is up.
+        /// </summary>
+        internal bool TryGetSession(out string id, out Task ended)
+        {
+            var session = _session;
+
+            id = session?.Id;
+            ended = session?.Ended;
+
+            return session != null;
+        }
+
+        /// <summary>The address of the session route; the table connection goes to the same one.</summary>
+        internal Uri Url => _url;
 
 
         /// <summary>Completes when a session is up; at once when one is up now.</summary>
@@ -389,6 +427,7 @@ namespace HSMDataCollector.Client.Session
 
                             Volatile.Write(ref _maxFrameBytes, hello.MaxFrameBytes);
                             Volatile.Write(ref _heartbeatTicks, TimeSpan.FromSeconds(hello.HeartbeatSeconds).Ticks);
+                            Volatile.Write(ref _helloSessionId, hello.SessionId);
                         }
                         catch (OperationCanceledException) when (!token.IsCancellationRequested)
                         {
@@ -475,9 +514,15 @@ namespace HSMDataCollector.Client.Session
             run.Cancellation.Dispose();
         }
 
-        private void Configure(ClientWebSocket socket)
+        private void Configure(ClientWebSocket socket) => Configure(socket, SessionProtocol.Subprotocol);
+
+        /// <summary>
+        /// Sets what every connection of this collector sends on its upgrade: the subprotocol, the <c>Key</c>,
+        /// <c>ClientName</c> and collector headers, and the certificate rule. The table connection uses it too.
+        /// </summary>
+        internal void Configure(ClientWebSocket socket, string subprotocol)
         {
-            socket.Options.AddSubProtocol(SessionProtocol.Subprotocol);
+            socket.Options.AddSubProtocol(subprotocol);
 
             foreach (var header in _headers)
                 socket.Options.SetRequestHeader(header.Key, header.Value);
@@ -553,7 +598,7 @@ namespace HSMDataCollector.Client.Session
             Volatile.Write(ref _lastSentTicks, now);
             Volatile.Write(ref _lastReceivedTicks, now);
 
-            var session = new Session(socket);
+            var session = new Session(socket, Volatile.Read(ref _helloSessionId));
 
             _session = session;
 
@@ -567,13 +612,18 @@ namespace HSMDataCollector.Client.Session
 
         private void MarkDown(ClientWebSocket socket)
         {
-            if (ReferenceEquals(_session?.Socket, socket))
+            var current = _session;
+
+            if (ReferenceEquals(current?.Socket, socket))
             {
                 _session = null;
 
                 // The next waiter waits for the next session.
                 if (_upSignal.Task.IsCompleted)
                     _upSignal = NewSignal();
+
+                // After the new signal: whoever wakes on the end and waits for the next session finds that one.
+                current.MarkEnded();
             }
 
             try { socket.Abort(); }
@@ -805,7 +855,7 @@ namespace HSMDataCollector.Client.Session
 
         // Exponential with jitter: between half of the step and the whole step, so a fleet that
         // lost its server together does not come back together.
-        private TimeSpan NextPause(int attempt)
+        internal TimeSpan NextPause(int attempt)
         {
             var step = _timings.MinBackoff.TotalMilliseconds * Math.Pow(2, Math.Min(attempt, 20));
             step = Math.Min(step, _timings.MaxBackoff.TotalMilliseconds);
@@ -820,7 +870,7 @@ namespace HSMDataCollector.Client.Session
         private static TimeSpan Elapsed(ref long sinceTicks) =>
             TimeSpan.FromSeconds((Stopwatch.GetTimestamp() - Volatile.Read(ref sinceTicks)) / (double)Stopwatch.Frequency);
 
-        private static string DescribeClose(ClientWebSocket socket)
+        internal static string DescribeClose(ClientWebSocket socket)
         {
             try
             {
@@ -841,7 +891,7 @@ namespace HSMDataCollector.Client.Session
 
         // The cause in one line. ClientWebSocket reports a refused upgrade as an exception whose
         // text, or whose inner exception's text, names the status the server answered with.
-        private static string Describe(Exception ex)
+        internal static string Describe(Exception ex)
         {
             var text = ex.Message;
 

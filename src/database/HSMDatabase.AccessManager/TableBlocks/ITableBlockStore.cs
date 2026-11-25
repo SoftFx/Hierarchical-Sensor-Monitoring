@@ -200,12 +200,14 @@ namespace HSMDatabase.AccessManager.TableBlocks
 
         /// <summary>
         /// Deletes the blocks of a merged arrival hour (#1850), except the sequences in <paramref name="keep"/> (blocks the
-        /// merge could not read stay, counted and reported), from both databases and from the in-memory index and the
+        /// merge could not read stay, counted and reported; the blocks of the hour's other products when one product's
+        /// blocks are deleted), from both databases and from the in-memory index and the
         /// duplicate map, after raising <paramref name="watermarks"/> under the same lock, so a block sent again is a
         /// duplicate at every moment. The deleted range is compacted afterwards, outside the lock appends take. Returns the
         /// number of blocks deleted. Throws <see cref="TableBlockStoreException"/> when the store cannot be used.
+        /// <paramref name="keep"/> is a set: it is asked for every key of the hour in both databases, under the store's lock.
         /// </summary>
-        int DeleteMergedHour(long hourTicks, IReadOnlyCollection<long> keep, IEnumerable<TableBlockWatermark> watermarks);
+        int DeleteMergedHour(long hourTicks, IReadOnlySet<long> keep, IEnumerable<TableBlockWatermark> watermarks);
 
         /// <summary>
         /// The stored value of a block, or null when it is not there or cannot be read (damage, counted as a read failure).

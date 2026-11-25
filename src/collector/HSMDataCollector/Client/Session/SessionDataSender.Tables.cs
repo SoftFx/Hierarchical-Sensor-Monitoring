@@ -16,25 +16,68 @@ namespace HSMDataCollector.Client.Session
     /// <summary>
     /// The table sensors on the collector session (ADR-0021 point 7): their registrations travel as a <c>commands</c>
     /// request of their own, never mixed with the registrations of other sensors, and the per-path errors of its ack say
-    /// which were refused. Blocks go on the table connection of the session (#1846 part 2): until it exists here, a block
-    /// is not delivered and stays in the collector's backlog.
+    /// which were refused. Blocks go on the table connection of the session (<see cref="TableConnection"/>, #1846 part 2),
+    /// which is opened once a registration was accepted; its hello's limits are the ones the pipeline packs for.
     /// </summary>
     internal sealed partial class SessionDataSender : ITableBlockChannel
     {
-        /// <summary>The frame limit the server announces by default (wire contract, "Table connection").</summary>
-        private const int DefaultTableFrameBytes = 4 * 1024 * 1024;
+        private readonly object _tablesGate = new object();
+        private readonly SessionTimings _sessionTimings;
+
+        // Made with the first table sensor (its pipeline asks for the limits when the sensor is created): a collector
+        // without table sensors has no table connection, no loop and no task of one. Written under _tablesGate.
+        private TableConnection _tables;
+
+        // Under _tablesGate: the transport is started, so a table connection made now is started with it.
+        private bool _started;
+
+        /// <summary>The table connection of this session, made on first use and started when the transport is.</summary>
+        internal TableConnection Tables
+        {
+            get
+            {
+                var tables = Volatile.Read(ref _tables);
+
+                if (tables != null)
+                    return tables;
+
+                lock (_tablesGate)
+                {
+                    if (_tables == null)
+                    {
+                        var made = new TableConnection(_connection, _logger, ReportError, _sessionTimings, _requestTimeout);
+
+                        if (_started)
+                            made.Start();
+
+                        Volatile.Write(ref _tables, made);
+                    }
+
+                    return _tables;
+                }
+            }
+        }
+
+        /// <summary>For tests: the table connection when one was made, else null.</summary>
+        internal TableConnection TablesIfMade => Volatile.Read(ref _tables);
 
         string ITableBlockChannel.TablesUnavailableReason =>
             _unavailable == null ? null : $"table sensors need the collector session, which cannot exist here: {_unavailable}";
 
-        int ITableBlockChannel.MaxBlockBytes => DefaultTableFrameBytes - TableBlockFormatSizes.FrameHeaderSize;
+        int ITableBlockChannel.MaxBlockBytes => Tables.MaxBlockBytes;
 
-        TableBlockLimits ITableBlockChannel.BlockLimits => TableBlockLimits.Default;
+        TableBlockLimits ITableBlockChannel.BlockLimits => Tables.BlockLimits;
 
         Task ITableBlockChannel.WaitUntilReadyAsync(CancellationToken token) => _connection.WaitUntilUpAsync(token);
 
         Task<TableBlockAck> ITableBlockChannel.PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token) =>
-            Task.FromResult(TableBlockAck.NotDelivered("the table connection of the collector session is not in this build yet (#1846)"));
+            Tables.PutAsync(producer, sequence, block, token);
+
+        // The table connection closes at the end of the stop's table drain, before the session: within its budget but
+        // for the close frame and the wait for its loop (TableConnection.StopAsync).
+        // The next Start of the transport starts it again.
+        Task ITableBlockChannel.CloseAsync(CancellationToken budget) =>
+            Volatile.Read(ref _tables)?.StopAsync(CloseLinger, budget) ?? Task.CompletedTask;
 
         async Task<TableRegistrationResult> ITableBlockChannel.RegisterTablesAsync(IReadOnlyList<AddOrUpdateSensorRequest> registrations, CancellationToken token)
         {
@@ -119,6 +162,10 @@ namespace HSMDataCollector.Client.Session
                 // that faults on every repeat does not hold the healthy ones back (#1846 review, item 8).
                 unsettled = ack.Acked ? $"status {ack.Status}: {ack.Error}".TrimEnd(' ', ':') : ack.Error;
             }
+
+            // A table the server knows: its blocks need the table connection.
+            if (accepted.Count > 0)
+                Tables.Want();
 
             return new TableRegistrationResult(accepted, refused, unsettled);
         }

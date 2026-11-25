@@ -24,6 +24,12 @@ namespace HSMDataCollector.Client.Session
         internal const string Subprotocol = "hsm.sensors.v1";
         internal const string EndpointSuffix = "/session";
 
+        /// <summary>The subprotocol of the table connection (#1845, ADR-0021 point 7): a second WebSocket of the session.</summary>
+        internal const string TablesSubprotocol = "hsm.tables.v1";
+
+        /// <summary>The request header a table connection names its session in: the <c>sessionId</c> of the session's hello.</summary>
+        internal const string SessionHeader = "X-Hsm-Session";
+
         internal const string CollectorKindHeader = "X-Collector-Kind";
         internal const string CollectorVersionHeader = "X-Collector-Version";
         internal const string CollectorKind = "managed";
@@ -50,6 +56,13 @@ namespace HSMDataCollector.Client.Session
         /// of per-path errors and stays far below this.
         /// </summary>
         internal const int MaxInboundFrameBytes = 8 * 1024 * 1024;
+
+        /// <summary>
+        /// The largest text frame the collector takes on a table connection: an ack lists at most 100 refused tables,
+        /// each name cut to 256 characters, so it stays within a few hundred kilobytes; a larger frame is a broken or
+        /// hostile server and closes the table connection.
+        /// </summary>
+        internal const int MaxTableInboundFrameBytes = 1024 * 1024;
 
         internal static readonly byte[] Ping = Encoding.UTF8.GetBytes("{\"op\":\"ping\"}");
         internal static readonly byte[] Pong = Encoding.UTF8.GetBytes("{\"op\":\"pong\"}");
@@ -134,7 +147,20 @@ namespace HSMDataCollector.Client.Session
 
         internal int HeartbeatSeconds { get; }
 
-        private SessionFrame(long? ack, int status, string op, string error, string body, bool bodyIsString, int maxFrameBytes, int heartbeatSeconds)
+        /// <summary>The <c>sessionId</c> of a session's hello (#1845): what its table connection names; null when absent.</summary>
+        internal string SessionId { get; }
+
+        /// <summary>The <c>retryAfter</c> of a failure ack, in seconds; null when absent.</summary>
+        internal int? RetryAfter { get; }
+
+        /// <summary>
+        /// The <c>blockLimits</c> of a table connection's hello as they were sent (null when absent): the limits a block
+        /// is checked against. Values the format cannot take are kept as they are, for the caller to refuse.
+        /// </summary>
+        internal TableHelloLimits BlockLimits { get; }
+
+        private SessionFrame(long? ack, int status, string op, string error, string body, bool bodyIsString, int maxFrameBytes, int heartbeatSeconds,
+                             string sessionId, int? retryAfter, TableHelloLimits blockLimits)
         {
             Ack = ack;
             Status = status;
@@ -144,6 +170,9 @@ namespace HSMDataCollector.Client.Session
             BodyIsString = bodyIsString;
             MaxFrameBytes = maxFrameBytes;
             HeartbeatSeconds = heartbeatSeconds;
+            SessionId = sessionId;
+            RetryAfter = retryAfter;
+            BlockLimits = blockLimits;
         }
 
         /// <summary>
@@ -174,6 +203,13 @@ namespace HSMDataCollector.Client.Session
                     var op = ReadString(root, "op");
                     var error = ReadString(root, "error");
 
+                    int? retryAfter = null;
+                    if (root.TryGetProperty("retryAfter", out var retryElement) && retryElement.ValueKind == JsonValueKind.Number && retryElement.TryGetInt32(out var seconds))
+                        retryAfter = seconds;
+
+                    string sessionId = null;
+                    TableHelloLimits blockLimits = null;
+
                     string body = null;
                     var bodyIsString = false;
                     var maxFrameBytes = 0;
@@ -190,10 +226,19 @@ namespace HSMDataCollector.Client.Session
                         {
                             maxFrameBytes = ReadInt(bodyElement, "maxFrameBytes");
                             heartbeatSeconds = ReadInt(bodyElement, "heartbeatSeconds");
+                            sessionId = ReadString(bodyElement, "sessionId");
+
+                            if (bodyElement.TryGetProperty("blockLimits", out var limits) && limits.ValueKind == JsonValueKind.Object)
+                                blockLimits = new TableHelloLimits(
+                                    ReadInt(limits, "maxDecompressedBytes"),
+                                    ReadInt(limits, "maxTables"),
+                                    ReadInt(limits, "maxRows"),
+                                    ReadInt(limits, "maxColumnsPerTable"),
+                                    ReadInt(limits, "maxTableIdLength"));
                         }
                     }
 
-                    frame = new SessionFrame(ack, status, op, error, body, bodyIsString, maxFrameBytes, heartbeatSeconds);
+                    frame = new SessionFrame(ack, status, op, error, body, bodyIsString, maxFrameBytes, heartbeatSeconds, sessionId, retryAfter, blockLimits);
 
                     return true;
                 }
@@ -209,5 +254,29 @@ namespace HSMDataCollector.Client.Session
 
         private static int ReadInt(JsonElement parent, string name) =>
             parent.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var value) ? value : 0;
+    }
+
+
+    /// <summary>The <c>blockLimits</c> of a table connection's hello, as sent (0 for a field that is missing or not a number).</summary>
+    internal sealed class TableHelloLimits
+    {
+        internal TableHelloLimits(int maxDecompressedBytes, int maxTables, int maxRows, int maxColumnsPerTable, int maxTableIdLength)
+        {
+            MaxDecompressedBytes = maxDecompressedBytes;
+            MaxTables = maxTables;
+            MaxRows = maxRows;
+            MaxColumnsPerTable = maxColumnsPerTable;
+            MaxTableIdLength = maxTableIdLength;
+        }
+
+        internal int MaxDecompressedBytes { get; }
+
+        internal int MaxTables { get; }
+
+        internal int MaxRows { get; }
+
+        internal int MaxColumnsPerTable { get; }
+
+        internal int MaxTableIdLength { get; }
     }
 }

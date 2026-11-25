@@ -29,7 +29,7 @@ namespace HSMDataCollector.Tests.Transport
     /// Used by the session tests of both collector test projects and by the managed
     /// conformance driver.
     /// </summary>
-    public sealed class ScriptedSessionServer : IDisposable
+    public sealed partial class ScriptedSessionServer : IDisposable
     {
         public const string Subprotocol = "hsm.sensors.v1";
 
@@ -39,6 +39,8 @@ namespace HSMDataCollector.Tests.Transport
         private readonly ConcurrentQueue<string> _httpRequests = new ConcurrentQueue<string>();
         private readonly ConcurrentQueue<int> _closes = new ConcurrentQueue<int>();
         private readonly ConcurrentDictionary<int, WebSocket> _open = new ConcurrentDictionary<int, WebSocket>();
+        // The HTTP context of each open session: dropping a session also drops its TCP connection through it.
+        private readonly ConcurrentDictionary<int, HttpListenerContext> _openContexts = new ConcurrentDictionary<int, HttpListenerContext>();
         // The open sessions that have had their hello: what a push goes to.
         private readonly ConcurrentDictionary<int, WebSocket> _greeted = new ConcurrentDictionary<int, WebSocket>();
         // A WebSocket takes one send at a time; acks come from the session loops, pushes from the test.
@@ -217,7 +219,19 @@ namespace HSMDataCollector.Tests.Transport
             {
                 try { session.Value.Abort(); }
                 catch (Exception) { }
+
+                // Aborting the WebSocket alone leaves the TCP connection open under the managed HttpListener of
+                // .NET on Linux and macOS (http.sys on Windows closes it): the collector would see nothing until its
+                // heartbeat gave the session up. Aborting the response closes the connection on every platform.
+                if (_openContexts.TryGetValue(session.Key, out var context))
+                    DropConnection(context);
             }
+        }
+
+        private static void DropConnection(HttpListenerContext context)
+        {
+            try { context.Response.Abort(); }
+            catch (Exception) { }
         }
 
         // --- what the collector did ---
@@ -303,11 +317,18 @@ namespace HSMDataCollector.Tests.Transport
                 foreach (var name in context.Request.Headers.AllKeys)
                     headers[name] = context.Request.Headers[name];
 
+                // A table connection (#1845) asks for its own subprotocol.
+                if (IsTableUpgrade(context))
+                {
+                    await HandleTableUpgradeAsync(context, headers).ConfigureAwait(false);
+                    return;
+                }
+
                 Volatile.Write(ref _upgradeHeaders, headers);
 
                 var upgraded = await context.AcceptWebSocketAsync(Subprotocol).ConfigureAwait(false);
 
-                await ServeAsync(upgraded.WebSocket).ConfigureAwait(false);
+                await ServeAsync(upgraded.WebSocket, context).ConfigureAwait(false);
             }
             catch (Exception)
             {
@@ -315,14 +336,20 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
-        private async Task ServeAsync(WebSocket socket)
+        private async Task ServeAsync(WebSocket socket, HttpListenerContext context)
         {
             var index = Interlocked.Increment(ref _sessions);
+            var sessionId = Guid.NewGuid().ToString("N");
+            _openContexts[index] = context;
             _open[index] = socket;
+            _liveSessions[sessionId] = index;
+            _sessionIds.Enqueue(sessionId);
 
             try
             {
-                await SendAsync(socket, $"{{\"op\":\"hello\",\"body\":{{\"maxFrameBytes\":{MaxFrameBytes},\"heartbeatSeconds\":{HeartbeatSeconds}}}}}").ConfigureAwait(false);
+                var idField = SendSessionId ? $",\"sessionId\":\"{sessionId}\"" : string.Empty;
+
+                await SendAsync(socket, $"{{\"op\":\"hello\",\"body\":{{\"maxFrameBytes\":{MaxFrameBytes},\"heartbeatSeconds\":{HeartbeatSeconds}{idField}}}}}").ConfigureAwait(false);
 
                 _greeted[index] = socket;
 
@@ -343,6 +370,9 @@ namespace HSMDataCollector.Tests.Transport
                             if (result.MessageType == WebSocketMessageType.Close)
                             {
                                 _closes.Enqueue((int)(result.CloseStatus ?? 0));
+
+                                try { SessionCloseReceived?.Invoke(); }
+                                catch (Exception) { }
 
                                 // Nothing to answer when the close is itself the answer to
                                 // CloseSessions.
@@ -366,7 +396,12 @@ namespace HSMDataCollector.Tests.Transport
             {
                 _greeted.TryRemove(index, out _);
                 _open.TryRemove(index, out _);
+                _openContexts.TryRemove(index, out _);
+                _liveSessions.TryRemove(sessionId, out _);
                 socket.Dispose();
+
+                // As the server does: a table connection lives as long as its session.
+                CloseTableConnectionOf(sessionId);
             }
         }
 

@@ -84,8 +84,13 @@ namespace HSMDataCollector.Tests.Tables
         /// <summary>The next block is answered by <paramref name="ack"/> (one per call, in order).</summary>
         public void AnswerNext(Func<SentBlock, TableBlockAck> ack) => _scriptedAcks.Enqueue(ack);
 
+        /// <summary>When set, every block that no <see cref="AnswerNext"/> answers is answered by this (in place of stored).</summary>
+        public Func<SentBlock, TableBlockAck> AnswerEvery { get; set; }
+
 
         public Task WaitUntilReadyAsync(CancellationToken token) => Task.CompletedTask;
+
+        public Task CloseAsync(CancellationToken budget) => Task.CompletedTask;
 
         public Task<TableRegistrationResult> RegisterTablesAsync(IReadOnlyList<AddOrUpdateSensorRequest> registrations, CancellationToken token)
         {
@@ -113,6 +118,8 @@ namespace HSMDataCollector.Tests.Tables
                 ack = scripted(sent);
             else if (Volatile.Read(ref _down) == 1)
                 ack = TableBlockAck.NotDelivered("scripted: down");
+            else if (AnswerEvery != null)
+                ack = AnswerEvery(sent);
             else
                 ack = TableBlockAck.Stored();
 

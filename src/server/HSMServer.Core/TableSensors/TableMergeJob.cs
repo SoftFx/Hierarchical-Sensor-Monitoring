@@ -36,6 +36,18 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>Another pass was running.</summary>
         public bool Busy { get; init; }
+
+        /// <summary>Week databases retention dropped (#1850 part 4).</summary>
+        public int WeeksDropped { get; init; }
+
+        /// <summary>Arrival hours retention deleted with blocks never merged whose period had passed (#1850 part 4).</summary>
+        public int ExpiredHoursDeleted { get; init; }
+
+        /// <summary>
+        /// Products left out of the pass because their placements could not be brought up to their sensors' periods at its
+        /// start (#1850 part 4b): nothing of them was merged, dropped or judged for expiry. The next pass tries again.
+        /// </summary>
+        public int ProductsNotReconciled { get; init; }
     }
 
 
@@ -51,8 +63,9 @@ namespace HSMServer.Core.TableSensors
     /// at most 4,096 rows, encoded, decoded again and compared cell by cell and null by null; then <c>WriteHour</c> into
     /// the class database of the period the sensor has now. Once every product of H is committed, the block store's
     /// watermarks are raised.</item>
-    /// <item>The blocks of an hour committed for every product are deleted (except the blocks the merge could not read)
-    /// once the configured delay has passed since the latest commit of its products, under the write side of the read gate.</item>
+    /// <item>A product's blocks of an hour it committed are deleted (except the blocks its merge could not read) once the
+    /// configured delay has passed since its commit, under the write side of the read gate; another product's blocks of
+    /// the same hour stay until that product has committed the hour too.</item>
     /// </list>
     /// A batch that does not verify leaves that product's hour unwritten (its blocks serve it), counted as an Error, and it
     /// is not tried again until the next start. A block that cannot be read stays, is listed in the hour's record and
@@ -60,7 +73,7 @@ namespace HSMServer.Core.TableSensors
     /// products and the deletions go on; a rerun of a committed hour or of
     /// parts already written changes nothing. Nothing holds a store's lock while blocks are read or batches encoded.
     /// </summary>
-    public sealed class TableMergeJob
+    public sealed partial class TableMergeJob
     {
         /// <summary>
         /// The bytes the merge holds per row of a table of <paramref name="columns"/> columns (the time column included) while
@@ -111,7 +124,11 @@ namespace HSMServer.Core.TableSensors
         }
 
 
-        /// <summary>Called at the points a test stands a crash at: "encoded" (a product's batches built and verified, nothing written), "watermarks-raised".</summary>
+        /// <summary>
+        /// Called at the points a test stands a crash or an event at: "reconciled" (the placements brought up to the
+        /// sensors' periods, nothing merged yet), "encoded" (a product's batches built and verified, nothing written),
+        /// "watermarks-raised".
+        /// </summary>
         internal Action<string> Checkpoint { get; set; }
 
         /// <summary>Called with every decoded batch before it is compared with its rows. Test seam for a verification mismatch.</summary>
@@ -157,18 +174,29 @@ namespace HSMServer.Core.TableSensors
                 // gives disk back when the merge cannot write (too little free disk), so a fault of the merge never holds it off.
                 deleted = DeleteDue(utcNow, token, ref fault);
 
-                // Products whose merge faulted in this pass: their later hours wait for the next pass, so a product's hours
-                // are committed in order; the other products go on.
-                var faulted = new HashSet<Guid>();
+                // Periods changed since the last pass (on a sensor, a folder, a product) are recorded before anything is merged.
+                // A product whose placements could not be brought up to date is not merged in this pass, fail closed: the
+                // merge needs a placement to know WHERE an hour's rows go, and one written after a change must be on disk
+                // before any hour from its cut-off on. Whether rows have expired does not depend on it: every expiry
+                // decision also reads the sensor's setting as it is then (TableBatchRetention.IsExpired), so retention and
+                // the deletion of expired blocks run for such a product.
+                var unreconciled = Reconcile(utcNow, ref fault);
+                Checkpoint?.Invoke("reconciled");
 
-                foreach (var hour in DueHours(utcNow))
+                // Products whose merge faulted in this pass: their later hours wait for the next pass, so a product's hours
+                // are committed in order; the other products go on. A product not reconciled starts as one of them.
+                var faulted = new HashSet<Guid>(unreconciled.Products);
+
+                foreach (var hour in unreconciled.All ? [] : DueHours(utcNow))
                 {
                     if (token.IsCancellationRequested)
-                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true };
+                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true,
+                            ProductsNotReconciled = unreconciled.Count };
 
                     var outcome = MergeHour(hour, utcNow, token, faulted, ref mismatches, ref fault);
                     if (outcome == HourOutcome.Stopped)
-                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true };
+                        return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault, Stopped = true,
+                            ProductsNotReconciled = unreconciled.Count };
 
                     if (outcome == HourOutcome.Merged)
                         merged++;
@@ -176,7 +204,11 @@ namespace HSMServer.Core.TableSensors
 
                 Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
 
-                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault };
+                // After the merge, so that a catch-up merges what it can before retention judges what is left.
+                var (weeks, expired) = RunRetention(utcNow, token, ref fault);
+
+                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
+                    WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count };
             }
             catch (Exception ex)
             {
@@ -253,8 +285,8 @@ namespace HSMServer.Core.TableSensors
 
         // A fault of one product's hour (a store, the disk, a block that could not be read) leaves that product's hour
         // untouched or committed, is logged and counted, and the product's later hours wait for the next pass; the other
-        // products of the hour and of later hours go on. Blocks are deleted only once every product of their own hour is
-        // committed, so an hour left on its blocks keeps them, whatever later hours do.
+        // products of the hour and of later hours go on. A product's blocks are deleted only once the product has committed
+        // their hour, so a product's hour left on its blocks keeps them, whatever later hours and other products do.
         private HourOutcome MergeHour(long hour, DateTime utcNow, CancellationToken token, HashSet<Guid> faulted, ref int mismatches, ref string fault)
         {
             var watch = Stopwatch.StartNew();
@@ -332,7 +364,8 @@ namespace HSMServer.Core.TableSensors
 
         // === One product's hour ===
 
-        // The rows of one sensor in one hour: the tables of its blocks, in block sequence order, unchanged.
+        // The rows of one sensor in one hour: the tables of its blocks, in block sequence order, unchanged; and the class that
+        // holds the hour for the sensor (its placement's ClassOf).
         private sealed class SensorRows(TableSensorModel sensor, int period)
         {
             public readonly TableSensorModel Sensor = sensor;
@@ -352,10 +385,14 @@ namespace HSMServer.Core.TableSensors
 
             var budget = MemoryBudgetBytes ?? (long)_options.MergeMemoryBudgetMb * 1024 * 1024;
             var rows = entries.Sum(e => (long)e.RowCount);
-            var resolved = new Dictionary<string, (TableSensorModel Sensor, int Period)>();
+            var resolved = new Dictionary<string, (TableSensorModel Sensor, TablePlacement Placement)>();
+            // Whether the rows of a sensor of this hour are left out: decided once per sensor (IsLeftOut).
+            var leftOut = new Dictionary<Guid, bool>();
             var unreadable = new List<long>();
             long dropped = 0, expired = 0;
             long weekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
+            // The first hour of the placement of a sensor that gets its placement in this merge.
+            long firstHour = FirstUncommittedHour(product, hour);
 
             // The shares of the tables, by path: one share (null: every table) while the rows held fit the budget, several
             // otherwise, each table weighed by TableBytes. The index gives the hour's rows but not their width, so
@@ -414,7 +451,7 @@ namespace HSMServer.Core.TableSensors
                         if (share is not null && (path is null || !share.Contains(path)))
                             continue;
 
-                        var (sensor, period) = Resolve(product, path, resolved, utcNow);
+                        var (sensor, placement) = Resolve(product, path, resolved, utcNow, createFrom: firstHour);
 
                         if (sensor is null || entry.Sequence < sensor.FirstSequence || !Matches(sensor, t))
                         {
@@ -424,14 +461,19 @@ namespace HSMServer.Core.TableSensors
                             continue;
                         }
 
-                        // The sensor's period has passed for the week of this hour (a catch-up after a long downtime): its rows
-                        // would go into a week database retention drops, or has dropped; they are left out and counted.
-                        if (TableBatchRetention.IsExpired(weekStart, period, utcNow))
+                        // The sensor's rows of this hour have expired (a catch-up after a long downtime), or the week database
+                        // they would go into was dropped: they are left out and counted.
+                        if (!leftOut.TryGetValue(sensor.Id, out var skip))
+                            leftOut[sensor.Id] = skip = IsLeftOut(product, sensor, placement, hour, weekStart, utcNow);
+
+                        if (skip)
                         {
                             if (share is not null || firstPass)
                                 expired += t.RowCount;
                             continue;
                         }
+
+                        int period = placement.ClassOf(hour);
 
                         held += TableBytes(t.RowCount, t.Columns.Count, t.Columns.Count(c => c.NullMap is not null), t.TableId.Length);
                         if (share is null && held > budget)
@@ -609,16 +651,34 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        private (TableSensorModel Sensor, int Period) Resolve(Guid product, string path, Dictionary<string, (TableSensorModel, int)> resolved, DateTime utcNow)
+        // Whether the merge leaves out a sensor's rows of an hour.
+        // - They have expired, by the one rule (TableBatchRetention.IsExpired of the placement and the sensor's setting as
+        //   read now): the class that holds the hour, the stored target and the setting have all passed for its week. A
+        //   sensor whose period was lengthened before its week expired keeps the rows of an hour that waited for its merge
+        //   past the old period: they are written into the class that holds the hour, whose week database the retention
+        //   guard keeps.
+        // - Or the week database they would go into was dropped by retention (its record): the rows merged there went
+        //   when the period the sensor had then passed, a change of period after that does not bring them back, and a
+        //   write into a dropped database is refused (it would hold the product's hour, and every later one, back for ever).
+        private bool IsLeftOut(Guid product, TableSensorModel sensor, TablePlacement placement, long hour, long weekStart, DateTime utcNow) =>
+            TableBatchRetention.IsExpired(placement, hour, utcNow, TablePeriodClass.Of(sensor, utcNow)) ||
+            Batches.IsWeekDropped(product, new TableBatchWeek(weekStart, placement.ClassOf(hour)));
+
+        // The table sensor on a path and its placement (#1850 part 4b), for the merge: it writes the rows of an hour into the
+        // class the placement gives it (ClassOf) and every read looks there; whether rows have expired is asked of the
+        // placement and the sensor's setting (TableBatchRetention.IsExpired). The merge creates the placement of a sensor that
+        // has none (createFrom: the first hour of such a placement). Retention writes no placement (StoredPlacement).
+        private (TableSensorModel Sensor, TablePlacement Placement) Resolve(Guid product, string path,
+            Dictionary<string, (TableSensorModel, TablePlacement)> resolved, DateTime utcNow, long? createFrom)
         {
             if (path is null)
-                return (null, 0);
+                return (null, null);
 
             if (!resolved.TryGetValue(path, out var found))
             {
                 found = _cache.TryGetSensorByPath(product, path, out var sensor) && sensor is TableSensorModel table
-                    ? (table, TablePeriodClass.Of(table, utcNow))
-                    : (null, 0);
+                    ? (table, PlaceSensor(product, table, utcNow, createFrom))
+                    : (null, null);
 
                 resolved[path] = found;
             }
@@ -826,8 +886,11 @@ namespace HSMServer.Core.TableSensors
 
         // === Deleting merged hours ===
 
-        // The blocks of every hour committed for each product with blocks in it, except the blocks the merge could not read,
-        // once the delay has passed since the latest of its commits.
+        // Per arrival hour and per product that committed it: the product's blocks of the hour, except the blocks its merge
+        // could not read, once the delay has passed since its commit. A product that has not committed the hour keeps its
+        // own blocks and holds no other product's: the block store deletes by sequence (DeleteMergedHour's keep), so a
+        // product that never merges (a batch that never verifies, placements that cannot be written) cannot hold the
+        // blocks of another product of the same hour for ever.
         private int DeleteDue(DateTime utcNow, CancellationToken token, ref string fault)
         {
             int deleted = 0, holding = 0;
@@ -850,22 +913,60 @@ namespace HSMServer.Core.TableSensors
             {
                 try
                 {
-                    var records = products.Keys.Select(p => Batches.GetHour(p, hour)).ToList();
-                    if (records.Any(r => r is null))
-                        continue;
+                    // The sequences of the hour that stay, and the products whose blocks go.
+                    var keep = new HashSet<long>();
+                    var due = new List<Guid>();
+                    var waiting = false;
 
-                    var keep = records.SelectMany(r => r.UnreadableBlocks).ToHashSet();
-                    if (products.Values.All(list => list.All(e => keep.Contains(e.Sequence))))
-                        continue;
-
-                    if (token.IsCancellationRequested || utcNow.Ticks < records.Max(r => r.CommitTicks) + delay)
+                    foreach (var (product, entries) in products)
                     {
-                        holding++;
-                        continue;
+                        TableBatchHour record;
+                        try
+                        {
+                            record = Batches.GetHour(product, hour);
+                        }
+                        catch (Exception ex)
+                        {
+                            // This product's batches cannot be read now: its blocks stay, the other products' go on.
+                            keep.UnionWith(entries.Select(e => e.Sequence));
+                            fault = ex.Message;
+                            Stats.Add(ref Stats.Faults);
+                            _logger.Error(ex, $"Table merge: the blocks of product {product} in the hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} were not " +
+                                              $"deleted, its merged hours could not be read; the next pass tries again: {ex.Message}");
+                            continue;
+                        }
+
+                        // Not committed for this product: its blocks serve its reads and wait for its merge.
+                        if (record is null)
+                        {
+                            keep.UnionWith(entries.Select(e => e.Sequence));
+                            continue;
+                        }
+
+                        var unreadable = record.UnreadableBlocks.ToHashSet();
+                        keep.UnionWith(entries.Where(e => unreadable.Contains(e.Sequence)).Select(e => e.Sequence));
+
+                        if (entries.All(e => unreadable.Contains(e.Sequence)))
+                            continue;
+
+                        if (token.IsCancellationRequested || utcNow.Ticks < record.CommitTicks + delay)
+                        {
+                            keep.UnionWith(entries.Select(e => e.Sequence));
+                            waiting = true;
+                            continue;
+                        }
+
+                        due.Add(product);
                     }
 
+                    if (waiting)
+                        holding++;
+
+                    if (due.Count == 0)
+                        continue;
+
                     using (_gate.Delete())
-                        Blocks.DeleteMergedHour(hour, keep, Watermarks(products.Keys));
+                        Blocks.DeleteMergedHour(hour, keep, Watermarks(due));
 
                     deleted++;
                 }

@@ -242,6 +242,8 @@ namespace HSMServer.Core.TableSensors
         /// <summary>Counts a batch that could not be read.</summary>
         public void BatchFailed() => BatchesFailed++;
 
+        public void CountKeptUnreadableBlocks(int count) => BlocksFailed += count;
+
         /// <summary>
         /// True when the read can stop before a source whose rows start at <paramref name="nextMinTime"/>: the collector holds
         /// the limit, has dropped rows past it, and its latest row kept is before that time, so nothing of that source (or of
