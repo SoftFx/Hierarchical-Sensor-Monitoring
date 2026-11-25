@@ -616,6 +616,7 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var read in reads)
             {
+                // Defensive against another ITableBatchStore: the LevelDB store already skips a record out of the range.
                 if (read.LastTime < fromTicks || read.FirstTime >= toTicks)
                     continue;
 
