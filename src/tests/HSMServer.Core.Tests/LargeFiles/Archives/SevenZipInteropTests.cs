@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using HSMServer.Core.LargeFiles.Archives;
@@ -70,10 +71,41 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
             return (process.ExitCode, output.Result + error.Result);
         }
+
+        /// <summary>Runs 7-Zip and returns its standard output as bytes (for "x -so").</summary>
+        public static (int ExitCode, byte[] Output) RunToBytes(params string[] arguments)
+        {
+            var start = new ProcessStartInfo(Path)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+            };
+            foreach (var argument in arguments)
+                start.ArgumentList.Add(argument);
+
+            using var process = Process.Start(start)!;
+            process.StandardInput.Close(); // a prompt for a password must not hang the test
+            var buffer = new MemoryStream();
+            var output = process.StandardOutput.BaseStream.CopyToAsync(buffer);
+            var error = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(60_000))
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException("7-Zip did not finish in 60 seconds");
+            }
+
+            output.Wait();
+            _ = error.Result;
+
+            return (process.ExitCode, buffer.ToArray());
+        }
     }
 
 
-    // #1885: an archive the builder wrote opens in a third-party archiver with the password and only with it.
+    // #1885: a secure archive the builder wrote opens in a third-party archiver with the password and only with it; one
+    // that is not secure opens without a password.
     public sealed class SevenZipInteropTests : IDisposable
     {
         private const string Password = "Seven-Zip-Interop-Pass-123";
@@ -104,6 +136,31 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
             var wrong = SevenZip.Run("t", "-pwrong", archive);
             Assert.NotEqual(0, wrong.ExitCode);
+        }
+
+        [SevenZipFact]
+        public async Task NotSecureArchiveOfTheBuilder_PassesSevenZipTestWithoutAPassword_AndExtractsTheSentBytes()
+        {
+            var content = TestContent.Compressible(2 * 1024 * 1024 + 7);
+            var file = _h.Store.AddVerified(_h.Product, content, name: "trace.log", extension: "log", secure: false);
+            await _h.Run();
+
+            var archive = _h.Store.ArchivePath(_h.Store.TryGetFile(file.FileId));
+
+            var test = SevenZip.Run("t", archive);
+            Assert.True(test.ExitCode == 0, test.Output);
+            Assert.Contains("Everything is Ok", test.Output);
+
+            var listing = SevenZip.Run("l", "-slt", archive);
+            Assert.True(listing.ExitCode == 0, listing.Output);
+            Assert.Contains("Path = trace.log", listing.Output);
+            Assert.Contains("Encrypted = -", listing.Output);
+            Assert.Contains("Zip64", listing.Output);
+            Assert.DoesNotContain("AES", listing.Output);
+
+            var extracted = SevenZip.RunToBytes("x", "-so", archive);
+            Assert.Equal(0, extracted.ExitCode);
+            Assert.Equal(SHA256.HashData(content), SHA256.HashData(extracted.Output));
         }
 
         [SevenZipFact]
