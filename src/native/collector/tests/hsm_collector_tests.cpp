@@ -3683,6 +3683,76 @@ namespace
 #endif
         }
 
+        // Table sensors (#1846, tests/conformance/collector/table_sensor_contract.hsmtest) come to the native
+        // collector with step 6 of epic #1842. Until then the fixture is not registered in CMakeLists.txt, and the
+        // verbs fail by name instead of as unknown ones, so the port backlog stays visible:
+        // CONFORMANCE-UNSUPPORTED: create_collector_without_table_transport (#1848)
+        // CONFORMANCE-UNSUPPORTED: create_table_sensor (#1848)
+        // CONFORMANCE-UNSUPPORTED: create_table_sensor_at_product (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_create_table_sensor_rejected (#1848)
+        // CONFORMANCE-UNSUPPORTED: add_table_row (#1848)
+        // CONFORMANCE-UNSUPPORTED: add_table_rows (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_tick (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_refuse_registration (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_fail_registrations (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_down (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_up (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_frame_limit (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_answer_next (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_refuse_table_next (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_add_results (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_path (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_state (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_rows_accepted (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_rows_dropped (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_registration_count (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_registration_size (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_registration (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_blocks (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_block_attempts (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_block_tables (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_blocks_within (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_sequences (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_sequences_increasing (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_rows (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_row (#1848)
+        static const char* const kTableVerbs[] = {
+            "create_collector_without_table_transport",
+            "create_table_sensor",
+            "create_table_sensor_at_product",
+            "expect_create_table_sensor_rejected",
+            "add_table_row",
+            "add_table_rows",
+            "table_tick",
+            "table_server_refuse_registration",
+            "table_server_fail_registrations",
+            "table_server_down",
+            "table_server_up",
+            "table_server_frame_limit",
+            "table_server_answer_next",
+            "table_server_refuse_table_next",
+            "expect_table_add_results",
+            "expect_table_path",
+            "expect_table_state",
+            "expect_table_rows_accepted",
+            "expect_table_rows_dropped",
+            "expect_table_registration_count",
+            "expect_table_registration_size",
+            "expect_table_registration",
+            "expect_table_blocks",
+            "expect_table_block_attempts",
+            "expect_table_block_tables",
+            "expect_table_blocks_within",
+            "expect_table_sequences",
+            "expect_table_sequences_increasing",
+            "expect_table_rows",
+            "expect_table_row",
+        };
+
+        for (const char* verb : kTableVerbs)
+            if (action == verb)
+                throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1848)");
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 

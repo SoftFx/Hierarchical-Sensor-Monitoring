@@ -411,6 +411,12 @@ collector does not compute a bar StdDev by owner decision); only the native-only
 fixture `collector/native/bar_stddev_contract.hsmtest` uses it. (The previous one,
 `set_sensor_description`, gained its managed counterpart in #1482.)
 
+The table sensor verbs (`collector/table_sensor_contract.hsmtest`, #1846; listed in its header) are in that state
+in the native driver until the native collector has table sensors (#1848, step 6 of epic #1842): each is marked
+`CONFORMANCE-UNSUPPORTED: <verb> (#1848)` and fails by name, and the fixture is not registered in the native
+`CMakeLists.txt` until then. The managed driver runs it like every shared fixture; its table side is a scripted
+table channel of the recording sender, and the table tick runs only through `table_tick`.
+
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced
 in CI by [`scripts/conformance-unsupported-triage.ps1`](../../scripts/conformance-unsupported-triage.ps1)
