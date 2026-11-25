@@ -12,7 +12,7 @@ endif()
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.15.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.15.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -219,6 +219,11 @@ if(HSM_COLLECTOR_TABLES)
     target_sources(hsm_collector_core PRIVATE
         src/tables/hsm_table_block_writer.cpp
     )
+    # The table connection of the collector session (#1848 part 4): blocks reach a server only with
+    # the session transport, so only a build that has it delivers them.
+    if(HSM_COLLECTOR_HTTP)
+        target_sources(hsm_collector_core PRIVATE src/tables/hsm_session_table_channel.cpp)
+    endif()
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_TABLES=1)
     target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
 endif()
