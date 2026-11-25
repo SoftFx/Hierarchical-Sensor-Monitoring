@@ -10,7 +10,12 @@
     <ProjectReference Include="..\..\api\HSMTableBlocks\HSMTableBlocks.csproj" />
     <PackageReference Include="HtmlSanitizer" Version="9.0.886" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="6.0.5" />
+    <!-- MIT; the zip writer of large file archives (ADR-0022 point 13): AES-256 (WinZip AES) with Zip64. Pinned exactly:
+         only LargeFiles/Archives/SharpZipArchiveWriter.cs uses it. -->
+    <PackageReference Include="SharpZipLib" Version="[1.4.2]" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <!-- MIT; decodes the zstd pieces of a large file's part. The version HSMTableBlocks and the sealed history use. -->
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
   </ItemGroup>
 
   <ItemGroup>
