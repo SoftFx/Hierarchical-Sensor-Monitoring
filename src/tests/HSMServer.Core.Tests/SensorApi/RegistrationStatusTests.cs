@@ -116,9 +116,10 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         // A table sensor (#1844) refuses a registration of another explicit type, and a
-        // collector of today cannot name the table type at all (the DTO enum has no member
-        // for it yet, #1845). Both are refusals a repeat cannot cure: a per-path error in a
-        // 200 on /commands and a 406 on /addOrUpdate, never a 500 that a collector repeats.
+        // registration of the table type (11, #1845) without its columns is refused too. Both
+        // are refusals a repeat cannot cure: a per-path error in a 200 on /commands and a 406
+        // on /addOrUpdate, never a 500 that a collector repeats. The table registrations that
+        // carry columns: TableRegistrationWireTests.
         [Fact]
         public async Task Registration_RefusedByATableSensor_IsARefusal_NotAFault()
         {
@@ -138,7 +139,7 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(HttpStatusCode.OK, commands.Status);
             var errors = JsonNode.Parse(commands.Body).AsObject();
             Assert.Contains("is a table sensor", (string)errors["table/ticks"]);
-            Assert.StartsWith(CannotConvert, (string)errors["table/new"]);
+            Assert.Contains("a table registration needs a schema", (string)errors["table/new"]);
 
             var single = await PostAsync(host, "addOrUpdate", Registration("table/ticks"), _key);
 
@@ -308,7 +309,7 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             Assert.True(_valuesCache.TryGetKey(Guid.Parse(_key), out var key, out _));
 
-            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry());
+            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry(), HSMTableBlocks.TableBlockLimits.Default);
             var caller = new PublicApiRequestInfo { Product = null, Key = key, CollectorName = ClientName, RemoteIP = "127.0.0.1" };
             var registration = new AddOrUpdateSensorRequest { Path = "service/fault/registration", SensorType = SensorType.IntSensor };
 

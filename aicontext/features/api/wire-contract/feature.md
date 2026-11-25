@@ -1,6 +1,6 @@
 # Feature: Sensor API Wire Contract
 
-> Owner: shared | Last reviewed: 2026-11-10 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-24 | Canonical: yes
 > Scope: API - the frozen wire contract between collectors (any language) and HSMServer: enums, DTOs, JSON conventions, endpoints
 
 ---
@@ -11,7 +11,9 @@ Everything in this file is **byte-for-byte compatibility-critical**: the .NET co
 
 ## Enums (numeric values are the contract)
 
-`SensorType` (`SensorType.cs`): BooleanSensor=0, IntSensor=1, DoubleSensor=2, StringSensor=3, IntegerBarSensor=4, DoubleBarSensor=5, FileSensor=6, TimeSpanSensor=7, VersionSensor=8, RateSensor=9, EnumSensor=10.
+`SensorType` (`SensorType.cs`): BooleanSensor=0, IntSensor=1, DoubleSensor=2, StringSensor=3, IntegerBarSensor=4, DoubleBarSensor=5, FileSensor=6, TimeSpanSensor=7, VersionSensor=8, RateSensor=9, EnumSensor=10, TableSensor=11 (#1845: registration only; a table sensor takes no values, see "Table sensor registration" below).
+
+`TableColumnType` (`SensorRequests/AddOrUpdateSensor/TableColumnRequest.cs`, #1845): Time=1, Int64=2, Double=3, the numbers of the table block format.
 
 `SensorStatus` (`SensorStatus.cs`): OffTime=0, Ok=1 (default), Warning=2, Error=3.
 
@@ -98,9 +100,29 @@ differ by exactly that one member (pinned by `WireFormatGoldenLockTests` ↔ `Na
 
 ## Registration / command DTOs
 
-`AddOrUpdateSensorRequest` (`SensorRequests/AddOrUpdateSensor/`): `path`, `sensorType?`, `description`, `keepHistory?`/`selfDestroy?`/TTLs (ticks), `statistics?`, `isSingletonSensor?`, `aggregateData?`, `enableGrafana?`, `originalUnit?`, `displayUnit?`, `isForceUpdate`, `enumOptions` (`EnumOption { key:int, value:string, description:string, color:int(ARGB) }`), `alerts` / `ttlAlerts` (`AlertUpdateRequest { conditions[{combination, operation, property, target{type,value}}], status, template, icon, isDisabled, confirmationPeriod?, scheduledNotificationTime?, scheduledRepeatMode?, scheduledInstantSend? }`), `defaultAlertsOptions`, `previousPaths` (`string[]?`, #1724 — full product-relative paths the sensor was registered under before; the server moves the sensor found there to `path`, merging into one already there, see `features/server/sensor-move/feature.md`). Obsolete compat properties: `TTL`, `TtlAlert`, `DefaultChats`.
+`AddOrUpdateSensorRequest` (`SensorRequests/AddOrUpdateSensor/`): `path`, `sensorType?`, `description`, `keepHistory?`/`selfDestroy?`/TTLs (ticks), `statistics?`, `isSingletonSensor?`, `aggregateData?`, `enableGrafana?`, `originalUnit?`, `displayUnit?`, `isForceUpdate`, `enumOptions` (`EnumOption { key:int, value:string, description:string, color:int(ARGB) }`), `alerts` / `ttlAlerts` (`AlertUpdateRequest { conditions[{combination, operation, property, target{type,value}}], status, template, icon, isDisabled, confirmationPeriod?, scheduledNotificationTime?, scheduledRepeatMode?, scheduledInstantSend? }`), `defaultAlertsOptions`, `previousPaths` (`string[]?`, #1724 — full product-relative paths the sensor was registered under before; the server moves the sensor found there to `path`, merging into one already there, see `features/server/sensor-move/feature.md`), `tableColumns` (#1845, `List<TableColumnRequest>?`, the schema of a table sensor; see "Table sensor registration" below). Obsolete compat properties: `TTL`, `TtlAlert`, `DefaultChats`.
 
 `previousPaths` is the one member **omitted when unused** instead of serialized as `null`: both collectors leave it out of the wire when the list is null/empty (managed: `JsonRequestConverter` drops a null `PreviousPaths`; native: `BuildPreviousPathsMember` renders nothing), so a registration without previous paths is byte-identical to the pre-#1724 wire. When present it sits right after `EnumOptions` (the DTO declaration order). An older server ignores the member (System.Text.Json skips unknown properties), so a new collector against an old server simply registers the new path.
+
+### Table sensor registration (#1845)
+
+A table sensor (ADR-0021, `aicontext/features/server/table-sensors/feature.md`) is registered like any sensor, on `commands` (HTTP or the session's `commands` op) or `addOrUpdate`, with `SensorType` 11 and its schema in `TableColumns` (`List<TableColumnRequest>`, `TableColumnRequest { Name: string, Type: TableColumnType }`): the columns in order, the first of which is the time. The schema id is never sent: both sides compute it from the columns (`aicontext/features/api/table-block/feature.md`, "Table schema").
+
+```
+{"Type":0,"Alerts":null,"TtlAlerts":null,"TtlAlert":null,"SensorType":11,"Description":null,"DefaultChats":null,"KeepHistory":null,"SelfDestroy":null,"TTLs":null,"TTL":null,"Statistics":null,"IsSingletonSensor":null,"AggregateData":null,"EnableGrafana":null,"OriginalUnit":null,"DisplayUnit":null,"DefaultAlertsOptions":0,"IsForceUpdate":false,"EnumOptions":null,"TableColumns":[{"Name":"time","Type":1},{"Name":"bid","Type":3},{"Name":"volume","Type":2}],"Key":null,"Path":"quotes/EURUSD"}
+```
+
+- **`TableColumns` is omitted when unused**, like `previousPaths`: the managed collector's `JsonRequestConverter` drops a null member, so every registration without it is byte-identical to the wire before #1845 (pinned by the unchanged goldens of `WireFormatGoldenLockTests`; the table golden is `Registration_of_a_table_sensor_carries_its_columns_after_previous_paths`). When present it sits right after `PreviousPaths` (the DTO declaration order). The native collector writes the same bytes once it registers tables (#1848).
+- **`KeepHistory`** is the table sensor's retention, as for any sensor (owner decision of 2026-11-24): stored with the sensor; it is applied in whole weeks by #1850. The other settings a table sensor cannot take (alerts, TTL alerts, aggregation) are refused (table-sensors feature, "Registration rules").
+- **Refusals** (answered as every refusal of a registration: an error under the path in a `200` on `commands` and in the session's ack, `406` with the text on `addOrUpdate`; never a fault), each text starting `The table sensor registration is refused: `:
+  - `TableColumns` on a registration that is not of type 11 (also one without a type): `only a registration of a table sensor (SensorType 11) carries table columns`;
+  - a schema that breaks the rules: `its table schema is invalid: <the rule>`, e.g. no column, a first column that is not the time, a column type that is not 1, 2 or 3 (`column 1 has the unknown type 7`), a `null` column, a name that is empty, too long or used twice, more columns than `TableSensors.MaxColumnsPerTable` (64 by default);
+  - **a path not in normalized form**: a block names its tables by the registered path byte for byte, and the server stores a path normalized (no leading separator, no empty segments, no spaces around segments), so a table sensor is registered only under that form: `a table sensor is registered under its normalized path "a/b", and blocks name it so; this registration names "/a/b"`. A collector sends the normalized path, in registrations and in blocks.
+  - **a path longer in UTF-8 than `TableSensors.MaxTableIdLength`** (1,024 bytes by default): a block names its table by that path and the block format refuses a longer identifier, so no row could ever reach it: `blocks name a table sensor by its path in UTF-8, at most 1024 bytes, this one has 1025`. Bytes, not characters.
+  - A registration refused for any of these reasons **moves nothing**: in a `commands` batch or a session batch the move pre-pass (`PreviousPaths`, #1724) knows them too.
+  - type 11 without `TableColumns`, another schema on a path that holds a table sensor, a path held by a sensor of another kind: the cache's refusals (table-sensors feature).
+- **Against an older server** (verified by running `TableRegistrationWireTests` before the server change): type 11 is a value its converter does not know, so the registration is refused under its path, `The registration cannot be converted: it carries a value this server does not know …` in a `200` (`406` on `addOrUpdate`), and the rest of the package is applied; `TableColumns` is an unknown member and is ignored. A server before #1749 answers a `commands` batch with such a registration `400` as a whole, which a collector takes as final for the whole package: **a collector sends its table registrations in a `commands` request of their own**, never together with the registrations of other sensors.
+- An older collector never sends type 11 or `TableColumns`; nothing changes for it.
 
 History DTOs (`HistoryRequests/`): `HistoryRequest { path, from, to?, count?, options }`, `FileHistoryRequest { +fileName="temp", extension="csv", isZipArchive }` — used by server tooling; the collector itself does not query history.
 

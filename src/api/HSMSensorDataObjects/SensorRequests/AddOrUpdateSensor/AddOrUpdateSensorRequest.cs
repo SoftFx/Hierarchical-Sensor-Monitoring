@@ -143,5 +143,13 @@ namespace HSMSensorDataObjects.SensorRequests
         /// wire then, so a registration without it is byte-identical to older collectors'.
         /// </summary>
         public List<string> PreviousPaths { get; set; }
+
+        /// <summary>
+        /// The schema of a table sensor (#1845, ADR-0021 point 2): its columns in order, the first of which is the
+        /// time. Only a registration with <see cref="SensorType"/> <c>TableSensor</c> carries it; the server refuses
+        /// it on any other. Null when unused: the collectors omit the member from the wire then, so every other
+        /// registration is byte-identical to older collectors'. A server that does not know the member ignores it.
+        /// </summary>
+        public List<TableColumnRequest> TableColumns { get; set; }
     }
 }

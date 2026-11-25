@@ -386,6 +386,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
                 HSMSensorDataObjects.SensorType.RateSensor => SensorType.Rate,
                 HSMSensorDataObjects.SensorType.EnumSensor => SensorType.Enum,
+                HSMSensorDataObjects.SensorType.TableSensor => SensorType.Table,
                 _ => throw new NotImplementedException(),
             };
 
