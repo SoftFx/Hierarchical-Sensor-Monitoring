@@ -18,6 +18,7 @@ using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.FileSensors;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -62,15 +63,18 @@ namespace HSMServer.Controllers
         private readonly IAlertScheduleProvider _alertScheduleProvider;
         private readonly PolicyAdministrationService _policies;
         private readonly SensorMoveAdministrationService _mover;
+        private readonly FileSensorPageService _files;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, IChatsManager chatsManager,
                               IDatabaseCore database, IAlertScheduleProvider provider,
                               PolicyAdministrationService policies,
-                              SensorMoveAdministrationService mover) : base(userManager)
+                              SensorMoveAdministrationService mover,
+                              FileSensorPageService files) : base(userManager)
         {
             _mover = mover;
+            _files = files;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
@@ -612,19 +616,21 @@ namespace HSMServer.Controllers
 
         #region File
 
+        // The file actions answer an unknown sensor and a sensor of a product the user may not see the same way
+        // (TryGetSensor). The work is in FileSensorPageService; a large file value (#1886) is never served from here.
+
         [HttpGet]
         public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var path = GetSensorPath(encodedId);
-
-            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
-
-            // A large value (#1883) has no content here: its file is in the large file store and is given out by its own
-            // download (#1885), never as an empty file.
-            if (value is LargeFileValue)
+            if (!TryGetSensor(encodedId, out var sensor))
                 return NotFound();
 
-            var fileName = $"{path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
+            var value = await _files.GetFileAsync(sensor.Id, dateTime);
+
+            if (value is null || FileSensorPageService.IsLarge(value))
+                return NotFound();
+
+            var fileName = $"{sensor.Path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
 
             return File(value.Value ?? Array.Empty<byte>(), fileName.GetContentType(), fileName);
         }
@@ -632,59 +638,63 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var path = GetSensorPath(encodedId);
-
-            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
-
-            if (value?.Value is null)
-                return _emptyResult;
-
-            if (value is LargeFileValue)
+            if (!TryGetSensor(encodedId, out var sensor))
                 return NotFound();
 
+            var value = await _files.GetFileAsync(sensor.Id, dateTime);
+
+            if (value is null || FileSensorPageService.IsLarge(value))
+                return NotFound();
+
+            if (value.Value is null)
+                return _emptyResult;
+
             var fileContentsStream = new MemoryStream(value.Value);
-            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
+            var fileName = $"{sensor.Path.Replace('/', '_')}.{value.Extension}";
 
             return File(fileContentsStream, fileName.GetContentType(), fileName);
         }
 
+        // The description of the last value, never its bytes (#1886).
         [HttpGet]
-        public ActionResult<FileValue> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
+        public ActionResult<FileInfoDto> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
         {
-            var value = GetFileSensorValue(encodedId);
+            if (!TryGetSensor(encodedId, out var sensor))
+                return NotFound();
 
-            return value is null ? _emptyResult : value;
+            var info = _files.GetInfo(sensor.Id);
+
+            return info is null ? _emptyResult : info;
         }
 
+        // The first page of the list of file values under the last one.
         [HttpGet]
-        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
+        public Task<IActionResult> GetRecentFilesView([FromQuery] string fileId) => GetFilesPage(fileId, null);
+
+        // A page of the list: the values older than olderThan (ticks of a value's time), newest first.
+        [HttpGet]
+        public async Task<IActionResult> GetFilesPage([FromQuery] string fileId, [FromQuery] long? olderThan)
         {
-            return GetFileTable(await GetFileHistory(fileId));
+            if (!TryGetSensor(fileId, out var sensor) || sensor.Type is not SensorType.File)
+                return NotFound();
+
+            return PartialView("_FileAccordions", await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan));
         }
 
-        private PartialViewResult GetFileTable(HistoryTableViewModel viewModel) =>
-            PartialView("_FileAccordions", viewModel);
-
-        private FileValue GetFileSensorValue(string encodedId) =>
-            _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
-
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
-            (ticks == default
-                ? GetFileSensorValue(encodedId)
-                : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
-            .DecompressContent();
-
-        private async Task<HistoryTableViewModel> GetFileHistory(string encodedId)
+        // Folds into the shared helper of the web UI access-check work when it reaches this branch: the sensor exists and
+        // the user may see its product, or the action answers as for an unknown id.
+        private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor)
         {
-            var request = new GetSensorHistoryRequest()
-            {
-                EncodedId = encodedId,
-                Count = -20,
-            };
+            sensor = null;
 
-            await StoredUser.History.Reload(_treeValuesCache, request);
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var found))
+                return false;
 
-            return StoredUser.History.Table;
+            if (found.RootProduct is not { } product || !CurrentUser.IsProductAvailable(product.Id))
+                return false;
+
+            sensor = found;
+            return true;
         }
 
         #endregion
@@ -1148,13 +1158,6 @@ namespace HSMServer.Controllers
             _database.ExportValuesDatabase(name, _treeValuesCache.GetSensors().ToDictionary(x => x.Id, x => x.FullPath));
 
             return Json(JsonSerializer.Serialize(new { Status = "Ok" }));
-        }
-
-        private string GetSensorPath(string encodedId)
-        {
-            _treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor);
-
-            return sensor?.Path;
         }
 
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions)

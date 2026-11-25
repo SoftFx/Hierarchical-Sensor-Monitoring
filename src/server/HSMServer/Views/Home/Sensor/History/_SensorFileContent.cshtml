@@ -131,3 +131,51 @@
     </div>
     @await Html.PartialAsync("Sensor/History/_SensorJournalTabContent", Model)
 </div>
+
+<script>
+    // The list of file values (#1886): the handlers read the data-* attributes of a row; the only value written into this
+    // script is the sensor's encoded id, made by the server.
+    (function () {
+        const encodedId = '@sensorId';
+        const container = $('#recentValues_' + encodedId);
+        const filesPageAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetFilesPage), "Home")';
+
+        function rowOf(element) {
+            return $(element).closest('.file-row')[0];
+        }
+
+        container.off('.fileRows');
+
+        container.on('click.fileRows', '.file-row-download', function () {
+            const row = rowOf(this);
+            window.location.href = getFileAction + '?Selected=' + encodeURIComponent(encodedId) + '&dateTime=' + encodeURIComponent(row.dataset.time);
+        });
+
+        container.on('click.fileRows', '.file-row-view', function () {
+            const row = rowOf(this);
+            openFileInBrowser(encodedId, row.dataset.extension, viewFileAction, row.dataset.time);
+        });
+
+        container.on('click.fileRows', '.file-row-toggle', function () {
+            const row = rowOf(this);
+
+            if (row.dataset.preview !== 'true' || $('#preview-content_' + row.id)[0].innerHTML !== '')
+                return;
+
+            previewFile(viewFileAction, row.id, row.dataset.extension, row.dataset.time, encodedId);
+        });
+
+        container.on('click.fileRows', '.file-page-older', function () {
+            const more = $(this).closest('.file-page-more');
+
+            $.ajax({
+                type: 'GET',
+                url: filesPageAction + '?fileId=' + encodeURIComponent(encodedId) + '&olderThan=' + encodeURIComponent(this.dataset.older),
+                cache: false,
+                success: function (response) {
+                    more.replaceWith(response);
+                }
+            });
+        });
+    })();
+</script>

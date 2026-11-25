@@ -72,7 +72,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _scheduleProviderMock.Object,
                 CreatePolicyWriter(),
                 new HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService(
-                    _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object));
+                    _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object),
+                new HSMServer.Model.FileSensors.FileSensorPageService(_cacheMock.Object));
 
 
         // #1588 review round 4: a cache-rejected list must propagate out of

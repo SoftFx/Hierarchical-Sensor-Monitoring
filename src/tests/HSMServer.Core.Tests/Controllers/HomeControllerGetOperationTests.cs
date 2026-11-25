@@ -68,7 +68,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _scheduleProviderMock.Object,
                 CreatePolicyWriter(),
                 new HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService(
-                    _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object));
+                    _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object),
+                new HSMServer.Model.FileSensors.FileSensorPageService(_cacheMock.Object));
 
 
         // #1249: Any-template TTL rows route type=AlertKey; BuildAlertCondition must return a

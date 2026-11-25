@@ -189,6 +189,9 @@ namespace HSMServer.ServiceExtensions
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
 
+            // The file values of a File sensor for its page (#1886); stateless over the cache.
+            services.AddSingleton<HSMServer.Model.FileSensors.FileSensorPageService>();
+
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its
             // readers; every stateful collaborator it touches (the journal,

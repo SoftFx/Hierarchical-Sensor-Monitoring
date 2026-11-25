@@ -1997,6 +1997,62 @@
             bundled default; it is only evaluated when the server terminates TLS.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.FileSensors.FileInfoDto">
+            <summary>
+            What the sensor page reads about the last value of a File sensor (#1886): its description, never its bytes. The
+            same answer for an ordinary file value and a large one.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileInfoDto.Name">
+            <summary>The name the value is shown under (<see cref="M:HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(HSMCommon.Model.FileValue)"/>).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileInfoDto.IsLarge">
+            <summary>True for a large file value: no preview, its own download.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileValueRowViewModel">
+            <summary>One file value in the list of a File sensor's page.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.TimeTicks">
+            <summary>The time of the value: the key of its row, and what a download or a preview asks for.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.RowId">
+            <summary>An element id made of the time only (digits), never of anything a client sent.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.IsPreviewEnabled">
+            <summary>A text preview of an ordinary csv or txt file small enough; never for a large value.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileValuesPageViewModel">
+            <summary>A page of the file values of one File sensor, newest first.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.OlderThanTicks">
+            <summary>The time to ask the next (older) page before; null when there is none.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileSensorPageService">
+            <summary>
+            The file values of a File sensor for its page (#1886): the description of the last value, one value by its time, and
+            the list of values page by page. Reads the sensor's history directly, not through the user's History tab state, so
+            the two never share a table. The caller has checked that the user may see the sensor's product.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize">
+            <summary>Values per page of the list.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.IsPreviewEnabled(HSMCommon.Model.FileValue)">
+            <summary>A text preview for an ordinary csv or txt file small enough to show; never for a large value.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetFileAsync(System.Guid,System.Int64)">
+            <summary>
+            The value at <paramref name="timeTicks"/> (the key of its row), read by that time alone; the last value when it is
+            0. Null when there is none. The content is decompressed for an ordinary file value.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetPageAsync(System.Guid,System.String,System.Nullable{System.Int64})">
+            <summary>
+            A page of the sensor's file values, newest first: the newest <see cref="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize"/> without the last value
+            (the page shows it on its own above the list), or the <see cref="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize"/> values older than
+            <paramref name="olderThanTicks"/>. No limit on how far back the pages go.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
             <summary>
             Request for the node-level overlay chart (issue #1235): one node id plus the operator-chosen
