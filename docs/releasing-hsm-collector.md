@@ -58,7 +58,9 @@ Pushing the tag triggers
 
 1. downloads the tag's source tarball and computes its SHA512,
 2. verifies the tagged source really declares that version,
-3. rewrites `ports/hsm-collector/` (`REF`, `SHA512`, `version`),
+3. rewrites `ports/hsm-collector/` (`REF`, `SHA512`, `version`; the dependencies and features of the
+   overlay port's `vcpkg.json`; and the overlay portfile's `vcpkg_check_features` block, the mapping of
+   each feature to its CMake option, failing if a feature has no option there),
 4. updates `versions/` (baseline + `version` → `git-tree`), advancing the baseline only,
 5. builds and installs the updated port (`hsm-collector[http]`) to prove it resolves, and
 6. opens a PR.
@@ -84,7 +86,9 @@ vcpkg install hsm-collector[http]
 
 The port has the features `http` (libcurl transport and session) and, from 0.14.1, `tables` (table
 sensors: zstd and zlib; it brings `http` along). The publish workflow copies the overlay port, features
-included. Table sensors deliver nothing yet (#1848): the feature only builds the block writer until the
+included, and carries the overlay portfile's feature-to-option mapping into the registry portfile (until
+0.14.1 it did not: the registry portfile, last published at 0.11.1, maps `http` only, so a feature added
+to the manifest alone would install its dependencies and build nothing). Table sensors deliver nothing yet (#1848): the feature only builds the block writer until the
 table pipeline and connection land, so there is no reason to publish a registry version for it alone.
 
 ---
