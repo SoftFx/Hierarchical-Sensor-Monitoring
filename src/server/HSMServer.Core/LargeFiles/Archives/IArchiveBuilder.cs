@@ -10,7 +10,7 @@ namespace HSMServer.Core.LargeFiles.Archives
         /// <summary>Nothing pending: packed under the current password, or not a file the builder knows.</summary>
         None = 0,
 
-        /// <summary>The product has no dump password: the file is kept verified and cannot be downloaded.</summary>
+        /// <summary>A secure file whose product has no dump password: kept verified, cannot be downloaded. Never a file that is not secure.</summary>
         WaitingForPassword,
 
         /// <summary>Queued for its first build or its re-encryption.</summary>
@@ -32,7 +32,10 @@ namespace HSMServer.Core.LargeFiles.Archives
     /// <summary>Counters since the process started, for the self-monitoring sensors.</summary>
     public sealed class ArchiveBuildStatistics
     {
+        /// <summary>First packs of both kinds: <see cref="BuiltSecure"/> plus <see cref="BuiltNotSecure"/>.</summary>
         public long Built;
+        public long BuiltSecure;
+        public long BuiltNotSecure;
         public long Reencrypted;
         public long Failed;
         public long WaitedForRoom;
@@ -41,8 +44,9 @@ namespace HSMServer.Core.LargeFiles.Archives
 
 
     /// <summary>
-    /// Builds the archive of every verified file and re-encrypts the archives of a product whose password changed, one at a
-    /// time for the whole server (ADR-0022 point 13). The cleanup of password versions runs in the same worker.
+    /// Builds the archive of every verified file (a secure one under the product's dump password, one that is not secure
+    /// without encryption) and re-encrypts the secure archives of a product whose password changed, one at a time for the
+    /// whole server (ADR-0022 point 13). The cleanup of password versions runs in the same worker.
     /// </summary>
     public interface IArchiveBuilder
     {

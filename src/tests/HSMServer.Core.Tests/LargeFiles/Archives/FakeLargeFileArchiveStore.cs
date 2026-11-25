@@ -45,6 +45,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
         public int BeginCalls { get; private set; }
 
+        public int GetFilesCalls { get; private set; }
+
 
         public event Action<LargeArchiveFile> FileVerified;
 
@@ -57,7 +59,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
 
-        public LargeArchiveFile AddVerified(Guid productId, byte[] content, string name = "dump.dmp", string extension = "dmp", bool raiseEvent = true)
+        public LargeArchiveFile AddVerified(Guid productId, byte[] content, string name = "dump.dmp", string extension = "dmp", bool raiseEvent = true,
+                                            bool secure = true)
         {
             var fileId = Guid.NewGuid();
             var partPath = PartPath(fileId);
@@ -79,6 +82,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
                 PartLength = new FileInfo(partPath).Length,
                 ContentSha256 = SHA256.HashData(content),
                 State = LargeArchiveFileState.Verified,
+                IsSecure = secure,
             };
 
             lock (_lock)
@@ -127,7 +131,10 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         public IReadOnlyList<LargeArchiveFile> GetFiles(LargeArchiveFileState state)
         {
             lock (_lock)
+            {
+                GetFilesCalls++;
                 return _records.Values.Where(r => r.State == state).ToList();
+            }
         }
 
         public Stream OpenPart(Guid fileId) =>
@@ -197,7 +204,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
                 {
                     State = LargeArchiveFileState.Packed,
                     ArchiveId = target.ArchiveId,
-                    PasswordVersion = passwordVersion,
+                    PasswordVersion = passwordVersion == 0 ? null : passwordVersion, // 0: no version (not secure)
                     ArchiveLength = archiveLength,
                     ArchiveSha256 = archiveSha256,
                 };

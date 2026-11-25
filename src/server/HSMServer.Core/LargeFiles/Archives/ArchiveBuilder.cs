@@ -29,14 +29,22 @@ namespace HSMServer.Core.LargeFiles.Archives
             TimeSpan.FromMinutes(30),
             TimeSpan.FromMinutes(60),
         ];
+
+        /// <summary>
+        /// A pass builds from one listing of the store. A file verified or a password changed during the pass lists the
+        /// store again once the listed work is done, or after this many builds, whichever comes first.
+        /// </summary>
+        public int BuildsPerListing { get; init; } = 64;
     }
 
 
     /// <summary>
     /// The archive builder of ADR-0022 points 12-13: one build at a time for the whole server. A first pack turns a verified
-    /// part into an archive under the product's current dump password; a re-encryption rewrites an archive whose password
-    /// version is older than the current one. Every archive is read back and checked against the SHA-256 of the original
-    /// bytes before it is committed. No text this class writes (status, event, log) carries a password.
+    /// part into an archive: under the product's current dump password for a secure file, without encryption and at once
+    /// for a file that is not secure. A re-encryption rewrites a secure archive whose password version is older than the
+    /// current one; an archive that is not secure is never rewritten and carries no version. Every archive is read back and
+    /// checked against the SHA-256 of the original bytes before it is committed. No text this class writes (status, event,
+    /// log) carries a password.
     /// </summary>
     public sealed class ArchiveBuilder : IArchiveBuilder, IDisposable
     {
@@ -62,8 +70,14 @@ namespace HSMServer.Core.LargeFiles.Archives
         // reported once per process and never retried by the builder itself.
         private readonly ConcurrentDictionary<(Guid FileId, int Version), byte> _unusable = new();
 
+        // Set by a verified file or a password change: the running pass lists the store again (see RunDue).
+        private int _changed;
+
 
         public ArchiveBuildStatistics Statistics { get; } = new();
+
+        /// <summary>The files whose status is kept in memory: only those with work pending or a failure reported.</summary>
+        internal int TrackedCount => _files.Count;
 
         public event Action<Guid, bool, string> BuildFinished;
 
@@ -80,6 +94,9 @@ namespace HSMServer.Core.LargeFiles.Archives
 
             if (_options.DeflateLevel is < 0 or > 9)
                 throw new ArgumentOutOfRangeException(nameof(options), "The deflate level must be 0..9.");
+
+            if (_options.BuildsPerListing <= 0)
+                throw new ArgumentOutOfRangeException(nameof(options), "The builds per listing must be positive.");
 
             _store.FileVerified += OnFileVerified;
             _passwords.PasswordChanged += OnPasswordChanged;
@@ -113,35 +130,56 @@ namespace HSMServer.Core.LargeFiles.Archives
         {
             // A file is not built twice for the same state in one pass, whatever the store answers.
             var started = new HashSet<WorkKey>();
+            Queue<WorkItem> due = null;
+            var builtSinceListing = 0;
 
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var item = NextDue(started);
-                if (item is null)
+                // One listing of the store per pass, not one per build. A file verified (or a password changed) while the
+                // pass runs lists the store again once the listed work is done, or after BuildsPerListing builds, so it is
+                // built in the same pass. Nothing is missed after a restart either: the events are only a hint.
+                if (due is null || (Volatile.Read(ref _changed) != 0 && builtSinceListing > 0 &&
+                                    (due.Count == 0 || builtSinceListing >= _options.BuildsPerListing)))
+                {
+                    Interlocked.Exchange(ref _changed, 0);
+                    due = ListDue(started);
+                    builtSinceListing = 0;
+                }
+
+                if (!due.TryDequeue(out var item))
                     break;
 
                 started.Add(item.Key);
                 Build(item, ct);
+                builtSinceListing++;
             }
 
             RetireUnusedPasswordVersions();
             RemoveExpiredPasswordVersions();
         }
 
-        // The files are listed again before every build, so a file verified (or a password changed) while the pass runs is
-        // built in the same pass, and nothing is missed after a restart: the events are only a hint for the status.
-        private WorkItem NextDue(HashSet<WorkKey> started)
+        // The work of one listing, in the store's order: the first pack of a verified file (a secure one when its product
+        // has a password, one that is not secure at once) and the re-encryption of a secure archive under an older version.
+        // An archive that is not secure is never re-encrypted and carries no version, so it is not looked at.
+        private Queue<WorkItem> ListDue(HashSet<WorkKey> started)
         {
             var now = _utcNow();
             var due = new List<WorkItem>();
             var pending = new HashSet<Guid>();
+            var unusable = new HashSet<(Guid, int)>();
 
             foreach (var file in _store.GetFiles(LargeArchiveFileState.Verified))
             {
                 _products.TryAdd(file.ProductId, 0);
                 pending.Add(file.FileId);
+
+                if (!file.IsSecure)
+                {
+                    due.Add(new WorkItem(file, BuildKind.FirstPack, 0));
+                    continue;
+                }
 
                 var current = _passwords.GetCurrent(file.ProductId);
                 if (current is null)
@@ -152,18 +190,22 @@ namespace HSMServer.Core.LargeFiles.Archives
 
             foreach (var file in _store.GetFiles(LargeArchiveFileState.Packed))
             {
+                if (!file.IsSecure)
+                    continue;
+
                 _products.TryAdd(file.ProductId, 0);
 
                 var current = _passwords.GetCurrent(file.ProductId);
 
-                if (file.PasswordVersion is int carried && UnusableVersionError(file.ProductId, carried, current) is { } error)
+                if (CarriedVersion(file) is int carried && UnusableVersionError(file.ProductId, carried, current) is { } error)
                 {
                     pending.Add(file.FileId);
+                    unusable.Add((file.FileId, carried));
                     ReportUnusable(file.FileId, file.ProductId, carried, error);
                     continue;
                 }
 
-                if (current is null || file.PasswordVersion >= current.Version)
+                if (current is null || CarriedVersion(file) >= current.Version)
                     continue;
 
                 pending.Add(file.FileId);
@@ -171,6 +213,13 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
 
             ForgetFinished(pending);
+
+            // A (file, version) pair that is no longer listed as unusable is forgotten, so the set stays as small as the store.
+            foreach (var pair in _unusable.Keys)
+                if (!unusable.Contains(pair))
+                    _unusable.TryRemove(pair, out _);
+
+            var queue = new Queue<WorkItem>(due.Count);
 
             foreach (var item in due)
             {
@@ -182,10 +231,10 @@ namespace HSMServer.Core.LargeFiles.Archives
                     continue;
 
                 if (!started.Contains(item.Key))
-                    return item;
+                    queue.Enqueue(item);
             }
 
-            return null;
+            return queue;
         }
 
         private void ForgetFinished(HashSet<Guid> pending)
@@ -226,17 +275,27 @@ namespace HSMServer.Core.LargeFiles.Archives
 
                 productId = record.ProductId;
 
-                // The password (and its version) is taken once: a change during the build is a re-encryption of the next pass.
-                var password = _passwords.GetCurrent(productId);
-                if (password is null)
+                // A secure file takes the password (and its version) once: a change during the build is a re-encryption of
+                // the next pass. A file that is not secure takes none and is never re-encrypted.
+                DumpPasswordVersion password = null;
+                if (record.IsSecure)
                 {
-                    WaitForPassword(fileId, productId);
-                    return;
-                }
+                    password = _passwords.GetCurrent(productId);
+                    if (password is null)
+                    {
+                        WaitForPassword(fileId, productId);
+                        return;
+                    }
 
-                if (item.Kind == BuildKind.Reencryption && record.PasswordVersion >= password.Version)
+                    if (item.Kind == BuildKind.Reencryption && CarriedVersion(record) >= password.Version)
+                    {
+                        Forget(fileId, "the archive is already under the current password");
+                        return;
+                    }
+                }
+                else if (item.Kind == BuildKind.Reencryption)
                 {
-                    Forget(fileId, "the archive is already under the current password");
+                    Forget(fileId, "an archive that is not secure is never re-encrypted");
                     return;
                 }
 
@@ -252,7 +311,7 @@ namespace HSMServer.Core.LargeFiles.Archives
                 }
                 else
                 {
-                    if (record.PasswordVersion is not int sourceVersion)
+                    if (CarriedVersion(record) is not int sourceVersion)
                         throw new BuildException("the packed record carries no dump password version");
 
                     source = _passwords.GetVersion(productId, sourceVersion);
@@ -266,7 +325,9 @@ namespace HSMServer.Core.LargeFiles.Archives
                     inFlight.Add((productId, sourceVersion));
                 }
 
-                inFlight.Add((productId, password.Version));
+                if (password is not null)
+                    inFlight.Add((productId, password.Version));
+
                 foreach (var version in inFlight)
                     _inFlight.TryAdd(version, 0);
 
@@ -299,16 +360,19 @@ namespace HSMServer.Core.LargeFiles.Archives
                     return;
                 }
 
-                var (archiveLength, archiveSha256) = WriteArchive(record, source, password, target.TempPath, ct);
-                ReadBack(record, password, target.TempPath, ct);
+                // A file that is not secure: no password, and the store keeps no version for it (0).
+                var targetVersion = password?.Version ?? 0;
 
-                var committed = _store.CommitArchive(target, password.Version, archiveLength, archiveSha256);
+                var (archiveLength, archiveSha256) = WriteArchive(record, source, password?.Password, target.TempPath, ct);
+                ReadBack(record, password?.Password, target.TempPath, ct);
+
+                var committed = _store.CommitArchive(target, targetVersion, archiveLength, archiveSha256);
                 target = null; // the store has dealt with the temporary file in every outcome
 
                 switch (committed)
                 {
                     case ArchiveCommitOutcome.Committed:
-                        Succeed(fileId, productId, item.Kind, password.Version, archiveLength);
+                        Succeed(fileId, productId, item.Kind, record.IsSecure, targetVersion, archiveLength);
                         break;
                     case ArchiveCommitOutcome.Superseded:
                         Requeue(fileId, productId, "another build committed first");
@@ -340,7 +404,8 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
         }
 
-        private (long Length, byte[] Sha256) WriteArchive(LargeArchiveFile record, DumpPasswordVersion source, DumpPasswordVersion password,
+        // password: null for a file that is not secure, whose entry is not encrypted.
+        private (long Length, byte[] Sha256) WriteArchive(LargeArchiveFile record, DumpPasswordVersion source, string password,
                                                          string tempPath, CancellationToken ct)
         {
             var entryName = ArchiveEntryNames.Sanitize(record.Name, record.Extension);
@@ -371,11 +436,11 @@ namespace HSMServer.Core.LargeFiles.Archives
             return (output.BytesWritten, output.GetHash());
         }
 
-        private void WriteEntry(Stream output, string entryName, LargeArchiveFile record, Stream content, DumpPasswordVersion password, CancellationToken ct)
+        private void WriteEntry(Stream output, string entryName, LargeArchiveFile record, Stream content, string password, CancellationToken ct)
         {
             try
             {
-                _writer.Write(output, entryName, record.SourceModifiedUtc, record.Size, content, password.Password, _options.DeflateLevel, ct);
+                _writer.Write(output, entryName, record.SourceModifiedUtc, record.Size, content, password, _options.DeflateLevel, ct);
             }
             catch (Exception ex) when (ex is not (BuildException or ArchiveFormatException or OperationCanceledException))
             {
@@ -384,12 +449,13 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
         }
 
-        // Opens the archive just written with the password it was written under and checks the decompressed content against
-        // the SHA-256 and the size of the original bytes: a broken archive never replaces the part or the old archive.
-        private void ReadBack(LargeArchiveFile record, DumpPasswordVersion password, string tempPath, CancellationToken ct)
+        // Opens the archive just written with the password it was written under (none for a file that is not secure) and
+        // checks the decompressed content against the SHA-256 and the size of the original bytes: a broken archive never
+        // replaces the part or the old archive.
+        private void ReadBack(LargeArchiveFile record, string password, string tempPath, CancellationToken ct)
         {
             using var archive = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize);
-            using var entry = OpenEntry(archive, password.Password, "the new archive");
+            using var entry = OpenEntry(archive, password, "the new archive");
             using var content = new CheckedReadStream(entry.Content, "reading back the new archive", messageIsSafe: false, record.Size);
             using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
@@ -425,20 +491,29 @@ namespace HSMServer.Core.LargeFiles.Archives
         }
 
 
-        private void Succeed(Guid fileId, Guid productId, BuildKind kind, int version, long archiveLength)
+        // A version a re-encryption replaced is retired at the end of the pass, from one listing of the store.
+        private void Succeed(Guid fileId, Guid productId, BuildKind kind, bool secure, int version, long archiveLength)
         {
             _files.TryRemove(fileId, out _);
 
             if (kind == BuildKind.FirstPack)
+            {
                 Interlocked.Increment(ref Statistics.Built);
+
+                if (secure)
+                    Interlocked.Increment(ref Statistics.BuiltSecure);
+                else
+                    Interlocked.Increment(ref Statistics.BuiltNotSecure);
+            }
             else
                 Interlocked.Increment(ref Statistics.Reencrypted);
 
+            var how = secure ? $"under dump password version {version}" : "without encryption (not secure)";
+
             _logger.Info($"Large file archives: file {fileId} of product {productId} " +
-                         $"{(kind == BuildKind.FirstPack ? "packed" : "re-encrypted")} under dump password version {version} ({archiveLength} bytes)");
+                         $"{(kind == BuildKind.FirstPack ? "packed" : "re-encrypted")} {how} ({archiveLength} bytes)");
 
             RaiseBuildFinished(fileId, true, null);
-            RetireUnusedPasswordVersions();
         }
 
         private void Fail(Guid fileId, Guid productId, string error)
@@ -518,7 +593,10 @@ namespace HSMServer.Core.LargeFiles.Archives
         {
             SetStatus(fileId, productId, Status(ArchiveBuildState.Queued, GetStatus(fileId).Attempts, null, null));
 
-            _logger.Info($"Large file archives: file {fileId} is looked at again on the next pass: {reason}");
+            // The record changed under the build: the running pass lists the store again to see its new state.
+            Interlocked.Exchange(ref _changed, 1);
+
+            _logger.Info($"Large file archives: file {fileId} is looked at again: {reason}");
         }
 
         private void Forget(Guid fileId, string reason)
@@ -550,12 +628,13 @@ namespace HSMServer.Core.LargeFiles.Archives
                 foreach (var productId in _passwords.GetProductIds())
                     _products.TryAdd(productId, 0);
 
+                // Only a secure archive carries a version: one that is not secure keeps no replaced password alive.
                 var carried = new HashSet<(Guid, int)>();
                 foreach (var file in _store.GetFiles(LargeArchiveFileState.Packed))
                 {
                     _products.TryAdd(file.ProductId, 0);
 
-                    if (file.PasswordVersion is int version)
+                    if (CarriedVersion(file) is int version)
                         carried.Add((file.ProductId, version));
                 }
 
@@ -609,9 +688,11 @@ namespace HSMServer.Core.LargeFiles.Archives
                 if (file is null)
                     return;
 
+                Interlocked.Exchange(ref _changed, 1);
                 _products.TryAdd(file.ProductId, 0);
 
-                var state = _passwords.HasPassword(file.ProductId) ? ArchiveBuildState.Queued : ArchiveBuildState.WaitingForPassword;
+                // A file that is not secure never waits for a password.
+                var state = !file.IsSecure || _passwords.HasPassword(file.ProductId) ? ArchiveBuildState.Queued : ArchiveBuildState.WaitingForPassword;
                 _files.TryAdd(file.FileId, new Tracked(file.ProductId, Status(state, 0, null, null)));
             }
             catch (Exception ex)
@@ -622,6 +703,7 @@ namespace HSMServer.Core.LargeFiles.Archives
 
         private void OnPasswordChanged(Guid productId, int version)
         {
+            Interlocked.Exchange(ref _changed, 1);
             _products.TryAdd(productId, 0);
 
             foreach (var (fileId, tracked) in _files)
@@ -641,6 +723,10 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
         }
 
+
+        // The version a secure archive opens with; null for an archive that is not secure, and for 0 ("no version").
+        private static int? CarriedVersion(LargeArchiveFile file) =>
+            file.IsSecure && file.PasswordVersion is int version && version > 0 ? version : null;
 
         private bool IsStillDue(LargeArchiveFile record, BuildKind kind) =>
             record is not null && record.State == (kind == BuildKind.FirstPack ? LargeArchiveFileState.Verified : LargeArchiveFileState.Packed);

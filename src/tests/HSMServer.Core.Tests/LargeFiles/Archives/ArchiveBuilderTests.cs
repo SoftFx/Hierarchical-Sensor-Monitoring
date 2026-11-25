@@ -588,6 +588,140 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
         [Fact]
+        public async Task NotSecure_IsPackedAtOnceWithoutAPassword_AndOpensOnlyWithoutOne()
+        {
+            var content = TestContent.Compressible(700_000);
+            var file = _h.Store.AddVerified(_h.Product, content, secure: false);
+
+            // The product has no password: a file that is not secure never waits for one.
+            Assert.Equal(ArchiveBuildState.Queued, _h.Builder.GetStatus(file.FileId).State);
+
+            await _h.Run();
+
+            var record = _h.Store.TryGetFile(file.FileId);
+            Assert.Equal(LargeArchiveFileState.Packed, record.State);
+            Assert.False(record.IsSecure);
+            Assert.Null(record.PasswordVersion);
+            Assert.Equal((file.FileId, 0, ArchiveCommitOutcome.Committed), _h.Store.Commits.Single());
+            Assert.False(File.Exists(_h.Store.PartPath(file.FileId)));
+
+            Assert.Equal(content, _h.ReadArchive(file.FileId, null));
+            Assert.Throws<ArchiveFormatException>(() => _h.ReadArchive(file.FileId, Password1));
+
+            Assert.Equal(ArchiveBuildState.None, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Equal(1, _h.Builder.Statistics.Built);
+            Assert.Equal(1, _h.Builder.Statistics.BuiltNotSecure);
+            Assert.Equal(0, _h.Builder.Statistics.BuiltSecure);
+            Assert.Equal((file.FileId, true, (string)null), _h.Finished.Single());
+            Assert.Contains(_h.LogLines, line => line.Contains("without encryption"));
+        }
+
+        [Fact]
+        public async Task NotSecure_OfAProductWithAPassword_IsUnencrypted_AndAPasswordChangeNeverRewritesIt()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var open = _h.Store.AddVerified(_h.Product, TestContent.Compressible(200_000, seed: 1), secure: false);
+            var secret = _h.Store.AddVerified(_h.Product, TestContent.Compressible(200_000, seed: 2));
+
+            await _h.Run();
+
+            var packedOpen = _h.Store.TryGetFile(open.FileId);
+            Assert.Null(packedOpen.PasswordVersion);
+            Assert.Equal(1, _h.Store.TryGetFile(secret.FileId).PasswordVersion);
+            Assert.Equal(1, _h.Builder.Statistics.BuiltSecure);
+            Assert.Equal(1, _h.Builder.Statistics.BuiltNotSecure);
+
+            _h.Passwords.Set(_h.Product, Password2);
+            await _h.Run();
+
+            // The secure archive is re-encrypted; the one that is not secure stays the same file. Version 1 is retired once
+            // the secure archive left it: the archive that is not secure carries no version.
+            Assert.Equal(packedOpen, _h.Store.TryGetFile(open.FileId));
+            Assert.Equal(1, _h.Builder.Statistics.Reencrypted);
+            Assert.Equal(2, _h.Store.TryGetFile(secret.FileId).PasswordVersion);
+            Assert.Equal(1, _h.Passwords.Retired.Single().Version);
+            Assert.Equal(TestContent.Compressible(200_000, seed: 1), _h.ReadArchive(open.FileId, null));
+            Assert.Equal(ArchiveBuildState.None, _h.Builder.GetStatus(open.FileId).State);
+        }
+
+        [Fact]
+        public async Task NotSecure_IsIgnoredByTheVersionRetirement_AndByTheVersionNotKeptReport()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            _h.Passwords.Set(_h.Product, Password2);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(20_000), secure: false);
+            await _h.Run();
+            _h.Finished.Clear();
+
+            // A record of a file that is not secure that names a version anyway (a store that keeps one) carries nothing:
+            // version 1 is retired and no "version not kept" failure is reported for it.
+            _h.Store.Update(file.FileId, r => r with { PasswordVersion = 1 });
+            _h.Passwords.Lose(_h.Product, 1);
+            await _h.Run();
+            _h.Passwords.Set(_h.Product, "Third-Dump-Password-00003");
+            await _h.Run();
+
+            Assert.Empty(_h.Finished);
+            Assert.Equal(ArchiveBuildState.None, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Equal(0, _h.Builder.Statistics.Failed);
+            Assert.Equal(0, _h.Builder.Statistics.Reencrypted);
+            Assert.Contains(_h.Passwords.Retired, r => r.Version == 2);
+        }
+
+        [Fact]
+        public async Task ManyTinyNotSecureFiles_ArePackedInOnePass_FromOneListing()
+        {
+            const int count = 2_000;
+            var files = Enumerable.Range(0, count)
+                .Select(i => _h.Store.AddVerified(_h.Product, TestContent.Random(64 + i % 32, seed: i), name: $"f{i}.txt", extension: "txt", secure: false))
+                .ToList();
+
+            await _h.Run();
+
+            Assert.All(files, f => Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(f.FileId).State));
+            Assert.Equal(count, _h.Builder.Statistics.BuiltNotSecure);
+            Assert.Equal(count, _h.Writer.Writes);
+
+            // Two listings (verified, packed) to start the pass and one listing of the packed files to retire versions:
+            // never one per build.
+            Assert.True(_h.Store.GetFilesCalls <= 5, $"{_h.Store.GetFilesCalls} listings of the store in one pass");
+            Assert.Equal(0, _h.Builder.TrackedCount);
+        }
+
+        [Fact]
+        public async Task AFileVerifiedDuringAPass_IsBuiltInTheSamePass()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var first = _h.Store.AddVerified(_h.Product, TestContent.Compressible(20_000, seed: 1));
+            LargeArchiveFile late = null;
+            _h.Writer.BeforeWrite = _ =>
+            {
+                _h.Writer.BeforeWrite = null;
+                late = _h.Store.AddVerified(_h.Product, TestContent.Compressible(20_000, seed: 2), secure: false);
+            };
+
+            await _h.Run();
+
+            Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(first.FileId).State);
+            Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(late.FileId).State);
+        }
+
+        [Fact]
+        public async Task TheStatusOfAFileTheStoreNoLongerKnows_IsDropped()
+        {
+            var waiting = _h.Store.AddVerified(_h.Product, TestContent.Compressible(10_000));
+            await _h.Run();
+            Assert.Equal(ArchiveBuildState.WaitingForPassword, _h.Builder.GetStatus(waiting.FileId).State);
+            Assert.Equal(1, _h.Builder.TrackedCount);
+
+            _h.Store.Remove(waiting.FileId);
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.None, _h.Builder.GetStatus(waiting.FileId).State);
+            Assert.Equal(0, _h.Builder.TrackedCount);
+        }
+
+        [Fact]
         public async Task Password_NeverAppearsInStatusesEventsOrLogs()
         {
             const string secret = "Recognisable-SECRET-Pa55word-7731";

@@ -59,13 +59,14 @@ namespace HSMServer.ServiceExtensions
         }
 
 
-        // The highest dump password version a packed archive of the product carries; 0 when it has none.
+        // The highest dump password version a packed secure archive of the product carries; 0 when it has none. An archive
+        // that is not secure carries no version.
         private static int HighestCarriedVersion(ILargeFileArchiveStore store, Guid productId)
         {
             var highest = 0;
 
             foreach (var file in store.GetFiles(LargeArchiveFileState.Packed))
-                if (file.ProductId == productId && file.PasswordVersion is int version && version > highest)
+                if (file.ProductId == productId && file.IsSecure && file.PasswordVersion is int version && version > highest)
                     highest = version;
 
             return highest;

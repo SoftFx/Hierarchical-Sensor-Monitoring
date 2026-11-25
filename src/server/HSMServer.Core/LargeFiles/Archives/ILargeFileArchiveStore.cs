@@ -43,8 +43,19 @@ namespace HSMServer.Core.LargeFiles.Archives
 
         public LargeArchiveFileState State { get; init; }
 
+        /// <summary>
+        /// The mark of the store's record, set by the application at the send and never changed: true (secure) packs the
+        /// file as an AES-256 zip under the product's dump password; false (not secure) packs the same zip without
+        /// encryption and without a password. A record without the mark is secure, so the default is true.
+        /// </summary>
+        public bool IsSecure { get; init; } = true;
+
         public Guid? ArchiveId { get; init; }
 
+        /// <summary>
+        /// The dump password version a packed secure archive opens with. Null or 0 means "no version": always so for a file
+        /// that is not secure (committed with 0), and a packed secure record without one is not served.
+        /// </summary>
         public int? PasswordVersion { get; init; }
 
         public long? ArchiveLength { get; init; }
@@ -126,7 +137,8 @@ namespace HSMServer.Core.LargeFiles.Archives
         /// <summary>
         /// Syncs the temporary file, renames it into the archives durably, writes the record as packed, then removes the part
         /// (first pack) or the replaced archive (re-encryption). Superseded or Removed delete the temporary file and change
-        /// nothing. Only I/O faults throw.
+        /// nothing. Only I/O faults throw. <paramref name="passwordVersion"/> is 0 for a file that is not secure: the store
+        /// keeps no password version for it (a version of 0 or null is "no version" everywhere).
         /// </summary>
         ArchiveCommitOutcome CommitArchive(LargeArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveSha256);
 
