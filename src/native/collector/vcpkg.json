@@ -1,7 +1,7 @@
 {
   "name": "hsm-collector-native",
   "version-string": "0.1.0",
-  "description": "Native HSM DataCollector core — HTTP transport dependency (#1096).",
+  "description": "Native HSM DataCollector core — HTTP transport (#1096) and table block (#1848) dependencies.",
   "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d",
   "dependencies": [
     {
@@ -9,6 +9,8 @@
       "default-features": false,
       "features": ["ssl", "websockets"]
     },
-    "nlohmann-json"
+    "nlohmann-json",
+    "zstd",
+    "zlib"
   ]
 }
