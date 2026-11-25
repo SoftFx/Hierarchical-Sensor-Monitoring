@@ -85,7 +85,12 @@ namespace HSMDataCollector.Tests.Transport
         public void DropTableConnections()
         {
             foreach (var table in _tableOpen.Values.ToArray())
+            {
                 try { table.Socket.Abort(); } catch (Exception) { }
+
+                // As for a session: the TCP connection too, which the managed HttpListener keeps open otherwise.
+                DropConnection(table.Context);
+            }
         }
 
 
@@ -174,7 +179,7 @@ namespace HSMDataCollector.Tests.Transport
 
             var upgraded = await context.AcceptWebSocketAsync(TablesSubprotocol).ConfigureAwait(false);
             var index = Interlocked.Increment(ref _tableConnections);
-            var table = new TableSocket(upgraded.WebSocket, index, sessionId);
+            var table = new TableSocket(upgraded.WebSocket, index, sessionId, context);
 
             _tableOpen[index] = table;
 
@@ -509,14 +514,17 @@ namespace HSMDataCollector.Tests.Transport
         {
             private readonly SemaphoreSlim _send = new SemaphoreSlim(1, 1);
 
-            internal TableSocket(WebSocket socket, int index, string sessionId)
+            internal TableSocket(WebSocket socket, int index, string sessionId, HttpListenerContext context)
             {
                 Socket = socket;
                 Index = index;
                 SessionId = sessionId;
+                Context = context;
             }
 
             internal WebSocket Socket { get; }
+
+            internal HttpListenerContext Context { get; }
 
             internal int Index { get; }
 
