@@ -1,11 +1,11 @@
 #include "hsm_session_transport.hpp"
 
+#include "hsm_reconnect_backoff.hpp"
 #include "hsm_ws_connection.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <random>
 
 namespace hsm::http
 {
@@ -26,8 +26,6 @@ namespace hsm::http
         // One frame must be written within this, or the session is given up.
         constexpr int64_t kSendTimeoutMs = 10000;
 
-        constexpr int64_t kMinBackoffMs = 1000;
-        constexpr int64_t kMaxBackoffMs = 60000;
         // A session that lasted this long was a working one: the next reconnect starts the
         // backoff again. One that ends sooner (the server takes the upgrade and then closes on
         // the first frame) keeps backing off, or it would be reopened every second for ever.
@@ -66,6 +64,21 @@ namespace hsm::http
         {
             const auto found = object.find(name);
             return found != object.end() && found->is_string() ? found->get<std::string>() : std::string{};
+        }
+
+        // The hello's sessionId as the server writes it (a Guid in its "N" form): exactly 32 hex
+        // digits. Anything else is treated as absent: it goes into an HTTP header of the next
+        // upgrade, so it must not carry what the header check would refuse.
+        bool IsSessionId(const std::string& text)
+        {
+            if (text.size() != 32)
+                return false;
+            for (const char c : text)
+            {
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+            return true;
         }
 
         std::string TwoDigits(int64_t value)
@@ -256,6 +269,18 @@ namespace hsm::http
         return up_ && max_frame_bytes_ > kEnvelopeRoom ? max_frame_bytes_ - kEnvelopeRoom : 0;
     }
 
+    SessionIdentity SessionTransport::CurrentSession() const
+    {
+        SessionIdentity identity;
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (up_)
+        {
+            identity.generation = generation_;
+            identity.session_id = session_id_;
+        }
+        return identity;
+    }
+
     SessionResult SessionTransport::Request(const char* op, const std::string& body, int64_t timeout_ms)
     {
         SessionResult failed;
@@ -326,11 +351,9 @@ namespace hsm::http
 
     bool SessionTransport::WaitBeforeRetry(int attempt)
     {
-        // Exponential with jitter: between half of the step and the whole step, so a fleet that
-        // lost its server together does not come back together.
-        const int64_t step = (std::min)(kMaxBackoffMs, kMinBackoffMs << (std::min)(attempt, 10));
-        thread_local std::mt19937_64 random{ std::random_device{}() };
-        const int64_t delay = std::uniform_int_distribution<int64_t>(step / 2, step)(random);
+        // Exponential with jitter (hsm_reconnect_backoff.hpp), the formula every reconnecting
+        // connection of the collector shares.
+        const int64_t delay = ReconnectBackoffDelayMs(attempt);
 
         std::unique_lock<std::mutex> lock(mutex_);
         return !cv_.wait_for(lock, std::chrono::milliseconds(delay), [this] { return stop_; });
@@ -356,6 +379,10 @@ namespace hsm::http
         }
 
         const auto& body = hello["body"];
+        // Optional: a server before #1845 sends none, and the session works the same without it.
+        std::string session_id = StringField(body, "sessionId");
+        if (!IsSessionId(session_id))
+            session_id.clear();
         const int64_t frame_bytes = IntegerField(body, "maxFrameBytes");
         const int64_t heartbeat_seconds = IntegerField(body, "heartbeatSeconds");
         if (frame_bytes < kMinFrameBytes || heartbeat_seconds < kMinHeartbeatSeconds || heartbeat_seconds > kMaxHeartbeatSeconds)
@@ -368,6 +395,7 @@ namespace hsm::http
         std::lock_guard<std::mutex> guard(mutex_);
         max_frame_bytes_ = static_cast<size_t>((std::min<int64_t>)(frame_bytes, static_cast<int64_t>(WebSocketConnection::kMaxMessageBytes)));
         heartbeat_ms_ = heartbeat_seconds * 1000;
+        session_id_ = std::move(session_id);
         return true;
     }
 
@@ -528,7 +556,7 @@ namespace hsm::http
             }
 
             std::unique_lock<std::mutex> lock(mutex_);
-            if (cv_.wait_for(lock, std::chrono::milliseconds(kMaxBackoffMs), [this] { return stop_; }))
+            if (cv_.wait_for(lock, std::chrono::milliseconds(kMaxReconnectBackoffMs), [this] { return stop_; }))
                 break;
         }
 
@@ -616,6 +644,7 @@ namespace hsm::http
                     if (!stopped)
                     {
                         up_ = true;
+                        ++generation_;
                         down_reason_.clear();
                         // A request that gave up on the previous session after that session had
                         // already ended must not end this one.
