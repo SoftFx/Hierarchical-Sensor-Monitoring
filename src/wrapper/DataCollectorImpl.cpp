@@ -13,6 +13,13 @@ namespace hsm_wrapper
 			options.server_address = address;
 			options.port = port;
 			options.module = module;
+#if defined(HSMWRAPPER_TRANSPORT_TESTS)
+			// Only in the test build of the DLL (WrapperTransportTests; never packed or shipped): the
+			// scripted servers of those tests are plaintext loopback servers, and the tests wait for
+			// values that should leave within milliseconds rather than the 15 s default package period.
+			options.allow_plaintext_transport = true;
+			options.package_collect_period_ms = 20;
+#endif
 			return options;
 		}
 
@@ -36,6 +43,35 @@ namespace hsm_wrapper
 	DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::string& address, int port, const std::string& module)
 		: collector_(MakeOptions(product_key, address, port, module))
 	{
+		// The collector session is the transport unless the host calls UseHttpTransport (ADR-0019,
+		// amended 2026-11-25). It is chosen here rather than in Start so that everything created
+		// before Start already sees it: a table sensor made through Native() before Start would
+		// otherwise be Unavailable until Start. A build without the network transport cannot choose
+		// it; that is left for Start to report, as it always was.
+		try
+		{
+			collector_.UseSessionTransport();
+			transport_chosen_.store(true);
+		}
+		catch (const hsm::collector::Error&)
+		{
+		}
+	}
+
+	void DataCollectorImpl::EnsureTransport()
+	{
+		if (!transport_chosen_.load())
+			collector_.UseSessionTransport();
+	}
+
+	void DataCollectorImpl::UseHttpTransport()
+	{
+		// The native call refuses a collector that is not stopped too, but its message speaks of the
+		// build; this one says what went wrong. The native check still guards a Start racing this call.
+		if (collector_.Status() != hsm::collector::CollectorStatus::Stopped)
+			throw hsm::collector::Error("UseHttpTransport must be called before Start (or after Stop); the transport was not changed.");
+		collector_.UseHttpTransport();
+		transport_chosen_.store(true);
 	}
 
 	void DataCollectorImpl::Initialize(const std::string& /*config_path*/, bool /*write_debug*/)
@@ -49,7 +85,7 @@ namespace hsm_wrapper
 #ifdef _WIN32
 		collector_.InstallWindowsMetricSources();
 #endif
-		collector_.UseHttpTransport();
+		EnsureTransport();
 		collector_.Start();
 	}
 
@@ -58,7 +94,7 @@ namespace hsm_wrapper
 #ifdef _WIN32
 		collector_.InstallWindowsMetricSources();
 #endif
-		collector_.UseHttpTransport();
+		EnsureTransport();
 		start_future_ = collector_.StartAsync();
 	}
 

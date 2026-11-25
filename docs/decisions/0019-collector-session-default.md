@@ -1,7 +1,7 @@
 # ADR-0019: The collector session is the collectors' default transport
 
 **Status:** Accepted
-**Date:** 2026-11-13
+**Date:** 2026-11-13 (amended 2026-11-25, #1848 part 5: point 5, the C++ wrapper)
 **Supersedes:** ADR-0017, point 7 ("The session is off by default")
 
 ---
@@ -18,7 +18,7 @@ On 2026-11-13 the owner decided to make it the default now, with the 3.43.0 serv
 2. **`http` stays selectable** and the HTTP Sensor API stays on the server (ADR-0017 point 4). The no-fallback rule stands: a collector on a session does not switch to HTTP by itself.
 3. **The flip is a breaking change** and ships as one: a major version of the managed collector (4.0.0), a minor version of the agent (0.6.0), and a notice in the release notes.
 4. **The managed collector's default is HTTP on a host where no session can exist** (owner decision, 2026-11-13): .NET Framework with `AllowUntrustedServerCertificate = true` (ClientWebSocket has no per-connection certificate callback there) or an OS without a WebSocket client (Windows 7). The collector picks this once, when it is created, and says why at every Start. It is the choice of a default, not a fallback: a collector whose caller set `Session` stays on a session and reports why it cannot run, and a collector on a session never switches to HTTP.
-5. The legacy C++ wrapper ABI (`src/wrapper`, the aggregator) has no transport setting and stays on HTTP.
+5. ~~The legacy C++ wrapper ABI (`src/wrapper`, the aggregator) has no transport setting and stays on HTTP.~~ *(Amended 2026-11-25, #1848 part 5: table sensors need the session, and the owner's application reaches them only through the wrapper; the owner decided that every sensor travels over the session wherever it exists and HTTP is only for a server too old to have sessions.)* **The legacy C++ wrapper's default is the session too**, from wrapper 2.0.0: `DataCollectorProxy` chooses the session when it is constructed, and one new method, `DataCollectorProxy::UseHttpTransport()`, called before `Start`, puts that collector on HTTP for a server without sessions. There is no fallback in either direction, as in point 2. The ABI only grows (one exported non-virtual method), so a host relinks with no source change; table sensors come through `proxy.Native().CreateTableSensor`, with no table type in the wrapper's own ABI.
 
 ## Consequences
 
@@ -28,6 +28,7 @@ On 2026-11-13 the owner decided to make it the default now, with the 3.43.0 serv
 - The managed collector on .NET Framework cannot open a session with `AllowUntrustedServerCertificate = true` nor on an OS without a WebSocket client (Windows 7); with the default it sends over HTTP there (point 4) and says why at every Start.
 - The native session needs libcurl 8.14.0 or newer with WebSocket (vcpkg builds and Debian 13 have it; Ubuntu 24.04 and the Conan build do not, and say so at Start).
 - An agent updated by its server bundle comes from a 3.43.0+ server, so it always meets a server with sessions. The configs that the server's bundle writes carry no `transport` key and so take the default.
+- **Rollout of wrapper 2.0.0 (point 5, amended):** a server without sessions (before 3.43.0, or with `CollectorSessions.MaxSessions` at zero) must be updated before a host built on the new wrapper talks to it, or that host must call `DataCollectorProxy::UseHttpTransport()` before `Start`. Otherwise it sends nothing: its values wait in the queue while the upgrade is refused and the collector logs why. The wrapper bundle now ships a libcurl with WebSocket (8.14.0 or newer, from the pinned vcpkg baseline) and `zstd.dll` next to the DLL.
 - A collector with a custom `DataSender` is unaffected; Start notes an ignored setting only when `Session` was set explicitly.
 
 ## Alternatives Considered

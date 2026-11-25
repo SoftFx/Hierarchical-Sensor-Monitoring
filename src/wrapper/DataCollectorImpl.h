@@ -15,6 +15,7 @@
 
 #include "hsm_collector/hsm_collector.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -39,6 +40,10 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+
+		// For a server too old to have collector sessions: this collector sends over HTTP instead.
+		// Before Start (or after Stop); throws hsm::collector::Error on a starting/running collector.
+		void UseHttpTransport();
 
 		// The underlying native collector — lets a consumer create new sensors directly against
 		// hsm::collector while existing sensors still go through the wrapper (same collector, same
@@ -134,7 +139,14 @@ namespace hsm_wrapper
 		}
 
 	private:
+		// Applies the transport choice if none is in place yet (see transport_chosen_).
+		void EnsureTransport();
+
 		hsm::collector::Collector collector_;
+		// True once collector_ has a transport: the session, chosen by the constructor, or HTTP,
+		// chosen by UseHttpTransport. False only in a build without the network transport
+		// (HSM_COLLECTOR_HTTP=OFF), where Start then fails exactly as it did before.
+		std::atomic<bool> transport_chosen_{ false };
 		// Hold the async lifecycle futures so the caller isn't blocked: a discarded std::future from
 		// StartAsync/StopAsync blocks in its destructor until the task completes, which would make the
 		// call effectively synchronous (managed StartAsync/StopAsync are fire-and-forget). Expected

@@ -10,8 +10,9 @@ There are two ways to leave the CLR behind:
 1. **Relink the native wrapper DLL (drop-in, zero source change).** `src/wrapper/` is no longer
    C++/CLI — its implementation has been reimplemented over the native `hsm::collector` API while the
    public headers (`include/DataCollector.h`, `hsm_wrapper::DataCollectorProxy`, the sensor/options/
-   alert DSL) are **unchanged**. The artifact is a pure-native `HSMCppWrapper.dll` (built by
-   `src/wrapper/CMakeLists.txt`, statically bundling the collector core; libcurl HTTP transport).
+   alert DSL) are **unchanged** (wrapper 2.0.0 added one method, `UseHttpTransport()`, and removed
+   nothing). The artifact is a pure-native `HSMCppWrapper.dll` (built by `src/wrapper/CMakeLists.txt`,
+   statically bundling the collector core; libcurl transport, the collector session by default).
    Consumers (e.g. tt-aggregator2) **relink against the new DLL and recompile nothing of their own** —
    no CLR is loaded. The behavioral table below is exactly what that native backend does (e.g. function
    sensors are int-only, time-in-GC is gone), so it doubles as the "what changed under the hood" list.
@@ -87,18 +88,38 @@ GitLab). The bundle mirrors the aggregator's vendored layout so it unzips straig
 ```
 HSMCppWrapper-<ver>/
   include/HSMCppWrapper/   public wrapper ABI headers (unchanged)
-  include/hsm_collector/   native headers (only for DataCollectorProxy::Native())
-  dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + zlib(d)1.dll
+  include/hsm_collector/   native headers (only for DataCollectorProxy::Native(); tables.hpp for table sensors)
+  dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + z(d).dll + zstd.dll
   lib/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.lib
   MANIFEST.md              source commit + the drop-in swap recipe
 ```
 
-The swap is: copy `include/`/`dll/`/`lib/` over the vendored dirs, add the libcurl/zlib runtime DLLs
-next to the wrapper, and **delete the managed leftovers** (`HSMDataCollector.dll`,
-`HSMSensorDataObjects.dll`). The exact recipe rides in `MANIFEST.md` inside each bundle. The headers
-are byte-identical to what is already vendored and the exported ABI matches (relink proven by
-`dumpbin /LINKERMEMBER`: 545 exports per config — 543 wrapper + 2 `Native()` C-ABI re-exports), so the
-link resolves with no source edits.
+The swap is: copy `include/`/`dll/`/`lib/` over the vendored dirs, add the libcurl/zlib/zstd runtime
+DLLs next to the wrapper (`zstd.dll` is new in 2.0.0, for table sensors), and **delete the managed
+leftovers** (`HSMDataCollector.dll`, `HSMSensorDataObjects.dll`). The exact recipe rides in
+`MANIFEST.md` inside each bundle. The exported ABI only grows: `dumpbin /EXPORTS` of 2.0.0 lists every
+earlier export unchanged, plus `DataCollectorProxy::UseHttpTransport` (and its private twin on
+`DataCollectorImplWrapper`) and the table functions of the re-exported C ABI, so the link resolves with
+no source edits.
+
+### Transport: the collector session by default (wrapper 2.0.0)
+
+From wrapper 2.0.0 the proxy talks to the server over the **collector session**: one WebSocket to
+`/api/sensors/session` carries registrations, values and files (ADR-0019, point 5 as amended on
+2026-11-25). Until 2.0.0 the wrapper forced HTTP.
+
+- **Rollout: update the server first.** The session needs **HSMServer 3.43.0 or later** with sessions
+  on (`CollectorSessions.MaxSessions` above zero). Against an older server a host on the default sends
+  nothing: its values wait in the queue while the upgrade is refused, and the collector logs why. A host
+  that must keep talking to such a server calls `proxy.UseHttpTransport()` before `Start`.
+- **No fallback.** A proxy on the session never switches to HTTP by itself, and one on HTTP never tries
+  the session (it sends no upgrade request).
+- **`UseHttpTransport()`** is the one new method. Call it before `Start` (or after `Stop`; the next
+  `Start` then uses HTTP). On a starting or running collector it throws `hsm::collector::Error` and the
+  transport stays as it is, as the native `Collector::UseHttpTransport` does. There is no call back to the
+  session on the proxy.
+- **A proxy behind a proxy:** whatever sits between host and server must pass WebSocket upgrades (the
+  shipped Caddy does).
 
 The bundle is produced by the [`hsm-wrapper-release`](../.github/workflows/hsm-wrapper-release.yml)
 workflow (push a `wrapper-v*` tag → build both configs + smoke + publish the Release; or run it via
@@ -169,9 +190,26 @@ Key points:
   `hsm_collector` headers and links **only** `HSMCppWrapper` — the inline `hsm::collector` calls
   resolve against the DLL's exports. The consumer does **not** link `hsm_collector_core`.
 - **Lifecycle stays with the wrapper.** Keep driving `Start`/`StartAsync`/`Stop` through the proxy;
-  it installs the Windows metric sources + HTTP transport on that collector. Native sensors created
+  it installs the Windows metric sources on that collector, and the transport is the one the proxy
+  chose (the session, or HTTP after `proxy.UseHttpTransport()`). Do not call `UseSessionTransport`/
+  `UseHttpTransport` on `Native()` yourself: choose through the proxy. Native sensors created
   before or after Start register correctly (the native collector accepts sensor creation while
   running).
+- **Table sensors (wrapper 2.0.0).** The wrapper's own ABI has no table type; a host makes table
+  sensors through `Native()`:
+
+  ```cpp
+  #include <hsm_collector/tables.hpp>
+
+  hsm::collector::TableSensorOptions options;
+  options.columns = { hsm::collector::TableColumn::Double("bid"), hsm::collector::TableColumn::Double("ask") };
+  auto quotes = proxy.Native().CreateTableSensor("quotes/EURUSD", options);
+  quotes.AddRow(std::chrono::system_clock::now(), { 1.0841, 1.0843 });
+  ```
+
+  They need the session: on the default transport they register and deliver over the session's table
+  connection; after `proxy.UseHttpTransport()` they are `Unavailable` (the reason names the session) and
+  their rows are dropped and counted. Behaviour: `aicontext/features/collector/table-sensors/feature.md`.
 - **Endgame.** When the last wrapper sensor/lifecycle call is gone, the consumer already holds a real
   `hsm::collector::Collector` (just reached via `proxy.Native()`); swapping the proxy for a directly
   owned collector and dropping the wrapper is then a mechanical change, not a rewrite.
