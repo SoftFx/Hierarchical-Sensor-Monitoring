@@ -183,6 +183,38 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        // Nothing of the table connection exists before the first table sensor: no object, no loop, no task.
+        [Fact]
+        public async Task The_table_connection_is_made_with_the_first_table_sensor()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sender = (SessionDataSender)options.DataSender;
+
+                    await collector.Start();
+                    await sender.WaitForConnectionAsync(CancellationToken.None);
+
+                    Assert.Null(sender.TablesIfMade);
+
+                    // Created while the collector runs: the connection is made, started and used.
+                    var table = collector.CreateTableSensor("quotes/late", Quotes());
+
+                    Assert.NotNull(sender.TablesIfMade);
+
+                    await RegisterAsync(collector, table);
+
+                    Assert.True(table.AddRow(T0, 1.0, 2.0));
+                    await collector.TickTablesAsync();
+
+                    Assert.Single(server.StoredTableRowsOf("quotes/late"));
+                }
+            }
+        }
+
         // Every status an ack can carry, and whether a repeat can cure it.
         [Theory]
         [InlineData("stored-unknown-sensor", 1, false, TableSensorState.Pending)]
@@ -240,17 +272,29 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        // The wait for an ack ends when the test says so (AckDeadlineForTests), not when a clock does: the first block's
+        // wait is ended once the server has stored it without answering, and no later wait ever ends.
         [Fact]
         public async Task A_block_without_an_ack_goes_again_with_its_sequence_and_the_repeat_is_a_duplicate()
         {
-            using (var rig = new Rig(tune: o => o.RequestTimeout = TimeSpan.FromSeconds(1)))
+            using (var rig = new Rig())
             {
                 await rig.StartAsync();
+
+                var noAckInTime = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var waits = 0;
+
+                rig.Link.AckDeadlineForTests = () => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
 
                 // Stored, and the ack is lost.
                 rig.Server.AnswerTableNext(TableAnswer.StoreSilently());
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+
+                var tick = Task.Run(() => rig.Collector.TickTablesAsync());
+
+                await UntilAsync(() => rig.Server.TableFrames.Count == 1, "the block was not sent");
+                noAckInTime.SetResult(true);
+                await tick;
 
                 var frames = rig.Server.TableFrames;
                 Assert.Equal(2, frames.Count);
@@ -388,6 +432,66 @@ namespace HSMDataCollector.Tests.Transport
                 Assert.Equal(rig.Server.SessionIds[1], rig.Server.TableUpgradeHeaders[1]["X-Hsm-Session"]);
                 Assert.Single(rig.Server.StoredTableRowsOf("quotes/A"));
                 Assert.Equal(0, rig.Table.RowsDropped);
+            }
+        }
+
+        // 1000 from the server while the session lives (the server replaced the connection, or ended a session the
+        // collector still holds): a new table connection of the same session carries the block.
+        [Fact]
+        public async Task A_close_1000_from_the_server_is_followed_by_a_new_table_connection_with_the_same_block()
+        {
+            using (var rig = new Rig())
+            {
+                await rig.StartAsync();
+
+                rig.Server.AnswerTableNext(TableAnswer.CloseWith(1000, "its session ended"));
+                Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
+                await rig.Collector.TickTablesAsync();
+
+                var frames = rig.Server.TableFrames;
+                Assert.Equal(2, frames.Count);
+                Assert.Equal(frames[0].Sequence, frames[1].Sequence);
+                Assert.Equal(frames[0].Producer, frames[1].Producer);
+                Assert.Equal(new[] { 1, 2 }, frames.Select(f => f.Connection));
+                Assert.Equal(1, rig.Server.Sessions);
+                Assert.Equal(rig.Server.SessionIds[0], rig.Server.TableUpgradeHeaders[1]["X-Hsm-Session"]);
+                Assert.Single(rig.Server.StoredTableRowsOf("quotes/A"));
+                Assert.Equal(0, rig.Table.RowsDropped);
+            }
+        }
+
+        [Fact]
+        public async Task Blocks_keep_to_the_block_limits_of_the_table_hello()
+        {
+            using (var rig = new Rig(s => s.TableMaxRows = 100))
+            {
+                await rig.StartAsync();
+                await UntilAsync(() => rig.Link.IsUp, "the table connection did not come up");
+
+                Assert.Equal(100, rig.Link.BlockLimits.MaxRows);
+
+                for (var row = 0; row < 250; row++)
+                    Assert.True(rig.Table.AddRow(T0.AddTicks(row), row, row));
+
+                await rig.Collector.TickTablesAsync();
+
+                Assert.Equal(new[] { 100, 100, 50 }, rig.Server.TableFrames.Select(f => f.Decoded.Tables[0].RowCount));
+                Assert.Equal(new long[] { 0, 1, 2 }, rig.Server.TableFrames.Select(f => f.Sequence));
+                Assert.Equal(250, rig.Server.StoredTableRowsOf("quotes/A").Count);
+            }
+        }
+
+        // A table connection with nothing to send pings like the session does, so the server does not drop it as silent.
+        [Fact]
+        public async Task An_idle_table_connection_sends_the_heartbeat()
+        {
+            using (var rig = new Rig(s => s.HeartbeatSeconds = 1))
+            {
+                await rig.StartAsync();
+                await UntilAsync(() => rig.Server.TablePings >= 2, "the idle table connection sent no ping");
+
+                Assert.Equal(1, rig.Server.TableConnections);
+                Assert.True(rig.Link.IsUp);
             }
         }
 
@@ -541,6 +645,62 @@ namespace HSMDataCollector.Tests.Transport
                 Assert.Equal(0, frames[1].Sequence);
                 Assert.Equal(2, frames[1].Connection);
                 Assert.Equal(2, rig.Server.StoredTableRowsOf("quotes/A").Count);
+            }
+        }
+
+        // Dispose and Stop from every state: never started, started with no session, up, with a block in flight, and
+        // again after each other. Nothing throws and nothing hangs.
+        [Fact]
+        public async Task Dispose_and_stop_never_throw_whatever_the_state()
+        {
+            using (var server = new ScriptedSessionServer())
+            {
+                var options = OptionsFor(server);
+
+                using (var collector = new DataCollector(options))
+                {
+                    var sender = (SessionDataSender)options.DataSender;
+
+                    // Never started.
+                    var idle = new TableConnection(sender.Connection, null, null, options.SessionTimings, options.RequestTimeout);
+
+                    await idle.StopAsync(TimeSpan.FromSeconds(1));
+                    idle.Dispose();
+                    idle.Dispose();
+                    Assert.Equal(TableBlockOutcome.NotDelivered, (await idle.PutAsync(Guid.NewGuid(), 0, new byte[8], CancellationToken.None)).Outcome);
+
+                    // Started with no session to wait for, and nothing wanted.
+                    var waiting = new TableConnection(sender.Connection, null, null, options.SessionTimings, options.RequestTimeout);
+
+                    waiting.Start();
+                    waiting.Start();
+                    await waiting.StopAsync(TimeSpan.FromSeconds(1));
+                    await waiting.StopAsync(TimeSpan.FromSeconds(1));
+                    waiting.Dispose();
+                }
+            }
+
+            // With a block in flight: the dispose ends the put, which answers and does not throw into the tick.
+            using (var rig = new Rig())
+            {
+                await rig.StartAsync();
+
+                rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
+                Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
+
+                var tick = Task.Run(() => rig.Collector.TickTablesAsync());
+                await UntilAsync(() => rig.Server.TableFrames.Count == 1, "the block was not sent");
+
+                rig.Link.Dispose();
+                rig.Link.Dispose();
+                await rig.Link.StopAsync(TimeSpan.FromSeconds(1));
+
+                Assert.True(await Task.WhenAny(tick, Task.Delay(Patience)) == tick, "the tick did not end after the dispose");
+                await tick;
+
+                Assert.False(rig.Link.IsUp);
+                Assert.Equal(1, rig.Collector.TablePipeline.BacklogBlocks);
+                Assert.Equal(0, rig.Table.RowsDropped);
             }
         }
 

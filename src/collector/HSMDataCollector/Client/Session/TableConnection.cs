@@ -60,6 +60,9 @@ namespace HSMDataCollector.Client.Session
         private readonly TimeSpan _requestTimeout;
         private readonly object _lifecycle = new object();
         private readonly object _reportLock = new object();
+
+        // Guards the pair (_link, _upSignal): a waiter that sees no link always finds a signal that is not set yet.
+        private readonly object _linkGate = new object();
         private readonly SemaphoreSlim _putLock = new SemaphoreSlim(1, 1);
 
         private sealed class Run
@@ -111,6 +114,12 @@ namespace HSMDataCollector.Client.Session
 
         /// <summary>For tests: completes when the link that is open now ends; null while none is open.</summary>
         internal Task EndOfCurrentLink => _link?.Ended;
+
+        /// <summary>
+        /// For tests: the wait for the ack of a block ends when the task this returns completes, in place of the request
+        /// timeout, so a test decides when "no ack in time" happens and no clock does.
+        /// </summary>
+        internal Func<Task> AckDeadlineForTests { get; set; }
 
         private static TaskCompletionSource<bool> NewSignal() => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -212,9 +221,10 @@ namespace HSMDataCollector.Client.Session
             }
 
             try { run?.Cancellation.Cancel(); }
-            catch (ObjectDisposedException) { }
+            catch (Exception) { }
 
-            _link?.Abort("the collector is disposed");
+            try { _link?.Abort("the collector is disposed"); }
+            catch (Exception) { }
         }
 
 
@@ -226,7 +236,7 @@ namespace HSMDataCollector.Client.Session
             var attempt = 0;
             string refusedSession = null;
 
-            while (!token.IsCancellationRequested)
+            while (!token.IsCancellationRequested && !run.Stopping)
             {
                 try
                 {
@@ -254,6 +264,10 @@ namespace HSMDataCollector.Client.Session
                         await WaitAsync(sessionEnded, token).ConfigureAwait(false);
                         continue;
                     }
+
+                    // A stop that has begun opens nothing more: its close of the last connection must stay the last.
+                    if (run.Stopping)
+                        break;
 
                     var opened = await OpenAsync(sessionId, token).ConfigureAwait(false);
 
@@ -610,14 +624,18 @@ namespace HSMDataCollector.Client.Session
 
         private async Task<LinkEnd> ServeAsync(Link link, Task sessionEnded, CancellationToken token)
         {
-            _link = link;
             Interlocked.Increment(ref _opened);
             _downReason = null;
 
             lock (_reportLock)
                 _lastReport = null;
 
-            _upSignal.TrySetResult(true);
+            lock (_linkGate)
+            {
+                _link = link;
+                _upSignal.TrySetResult(true);
+            }
+
             _logger?.Info($"The table connection is up: frame limit {link.MaxFrameBytes} bytes, heartbeat {link.Heartbeat.TotalSeconds:0} s.");
 
             string why;
@@ -662,17 +680,22 @@ namespace HSMDataCollector.Client.Session
             return new LinkEnd(why, link.ServerClose, link.ProtocolError, sessionWentAway);
         }
 
+        // Called by the loop when a link ends, and by a put that found its link over (lost ack, failed write) before
+        // the loop got to it: the put must not send its block again on the connection it has just given up.
         private void MarkDown(Link link)
         {
-            if (!ReferenceEquals(_link, link))
-                return;
+            lock (_linkGate)
+            {
+                if (!ReferenceEquals(_link, link))
+                    return;
 
-            // The next waiter waits for the next connection; the signal is renewed before the link is cleared, so a
-            // put that sees no link never finds the old, completed signal.
-            if (_upSignal.Task.IsCompleted)
-                _upSignal = NewSignal();
+                // The next waiter waits for the next connection; the signal is renewed before the link is cleared, so
+                // a put that sees no link never finds the old, completed signal.
+                if (_upSignal.Task.IsCompleted)
+                    _upSignal = NewSignal();
 
-            _link = null;
+                _link = null;
+            }
         }
 
         // Text acks, pings and pongs only. A binary frame, a text that is no frame of the protocol, an ack for a request
@@ -843,8 +866,12 @@ namespace HSMDataCollector.Client.Session
         {
             var link = _link;
 
-            if (link != null)
+            if (link != null && !link.Ended.IsCompleted)
                 return link;
+
+            // Over, and the loop has not cleared it yet: the next connection is the one to wait for.
+            if (link != null)
+                MarkDown(link);
 
             var run = _current;
 
@@ -853,7 +880,9 @@ namespace HSMDataCollector.Client.Session
 
             await WaitAsync(_upSignal.Task, token, _timings.TableConnectionWait).ConfigureAwait(false);
 
-            return _link;
+            link = _link;
+
+            return link != null && !link.Ended.IsCompleted ? link : null;
         }
 
         // One block on one connection. Null when the connection was lost before an answer: the caller sends the same
@@ -900,12 +929,14 @@ namespace HSMDataCollector.Client.Session
 
             using (var wait = CancellationTokenSource.CreateLinkedTokenSource(token))
             {
-                var deadline = Task.Delay(_requestTimeout, wait.Token);
+                var deadline = AckDeadlineForTests?.Invoke() ?? Task.Delay(_requestTimeout, wait.Token);
                 var first = await Task.WhenAny(waiter, link.Ended, deadline).ConfigureAwait(false);
 
                 wait.Cancel();
 
-                if (first == waiter)
+                // An answer that is there is taken, whatever else ended at the same moment (the link, the wait, the
+                // caller's token): a block the server answered is never sent again for nothing.
+                if (first == waiter || waiter.Status == TaskStatus.RanToCompletion)
                     return Answer(await waiter.ConfigureAwait(false), link);
             }
 
