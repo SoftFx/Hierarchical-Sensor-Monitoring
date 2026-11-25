@@ -143,8 +143,11 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
 
-        /// <summary>Raised after a root product took a new name, on the product's queue.</summary>
-        public event Action<ProductModel> RootProductRenamedEvent;
+        /// <summary>
+        /// Raised after a root product took a new name, on the product's queue, with the
+        /// sensors of the product as the rename saw them.
+        /// </summary>
+        public event Action<ProductModel, IReadOnlyList<BaseSensorModel>> RootProductRenamedEvent;
 
         public event Action<string, int, int> RequestProcessed;
 
@@ -421,17 +424,24 @@ namespace HSMServer.Core.Cache
                 throw new InvalidOperationException(refusal);
 
             var oldName = product.DisplayName;
-            var requestedName = product.IsRoot && !string.IsNullOrEmpty(update.Name) && oldName != update.Name ? update.Name : null;
+
+            // Whether the product takes the name is the model's decision: the
+            // change-ownership rule of a node property (ProductModel.Update)
+            // keeps a name a higher-priority initiator set. Re-keying the
+            // by-name index ahead of that decision listed a product under a
+            // name it did not get, lost it under the name it kept and left the
+            // declined name reserved. A rename the rule declines therefore
+            // reserves nothing; the rest of the update is applied.
+            var requestedName = product.IsRoot && !string.IsNullOrEmpty(update.Name) && oldName != update.Name && product.AcceptsRename(update.Initiator)
+                ? update.Name
+                : null;
 
             // The requested name is reserved before anything changes, so a name
-            // another root holds refuses the whole update. The old name is given
-            // up only after the model answered: whether the product takes the
-            // name is the model's decision (the change-ownership rule of a node
-            // property, ProductModel.Update), and re-keying ahead of it listed a
-            // product under a name it did not get, lost it under the name it
-            // kept and left the declined name reserved. Until then both names
-            // find the product, so a lookup by its current name never misses
-            // (alert delivery looks the root up by name, SendAlertMessage).
+            // another root holds refuses the whole update. The old name is
+            // released only after the model has the new one, and the index is
+            // settled by the name the model ended up with, not by the forecast
+            // above: at every instant the index holds the product under its
+            // current name.
             if (requestedName is not null)
             {
                 lock (_productsByNameLock)
@@ -459,10 +469,17 @@ namespace HSMServer.Core.Cache
 
             _database.UpdateProduct(product.ToEntity());
 
-            NotifyAboutProductChange(product);
-
-            if (requestedName is not null && product.DisplayName == requestedName)
-                CompleteRootRename(product, oldName);
+            try
+            {
+                NotifyAboutProductChange(product);
+            }
+            finally
+            {
+                // Required work, not a notification: a subscriber that throws
+                // above must not leave the sensors on the old name's templates.
+                if (requestedName is not null && product.DisplayName == requestedName)
+                    CompleteRootRename(product, oldName);
+            }
         }
 
         // A root's name is the first segment of the full path of every sensor
@@ -504,13 +521,18 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"Root product renamed: Id = {root.Id}, '{oldName}' -> '{root.DisplayName}', Sensors = {sensors.Count}");
 
-            try
+            // One subscriber (a dashboard) that fails does not cost the others
+            // their turn. They get the sensors captured above, not the live tree.
+            foreach (var subscriber in RootProductRenamedEvent?.GetInvocationList() ?? [])
             {
-                RootProductRenamedEvent?.Invoke(root);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, $"A subscriber failed on the rename of product {root.Id}");
+                try
+                {
+                    ((Action<ProductModel, IReadOnlyList<BaseSensorModel>>)subscriber).Invoke(root, sensors);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, $"A subscriber failed on the rename of product {root.Id}");
+                }
             }
         }
 

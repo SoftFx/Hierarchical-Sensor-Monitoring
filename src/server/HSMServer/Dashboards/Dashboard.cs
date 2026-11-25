@@ -137,13 +137,10 @@ namespace HSMServer.Dashboards
 
         // A root rename changes the full path of every sensor of the product:
         // the same rule as a move, for all of them at once.
-        private void RootProductRenamedHandler(ProductModel product)
+        private void RootProductRenamedHandler(ProductModel product, IReadOnlyList<BaseSensorModel> sensors)
         {
-            List<BaseSensorModel> sensors = null;
-
             foreach (var (_, panel) in Panels)
-                if (panel.HasActiveSubscription)
-                    panel.AddMovedSensors(sensors ??= [.. product.GetAllSensors()]);
+                panel.AddMovedSensors(sensors);
         }
 
 

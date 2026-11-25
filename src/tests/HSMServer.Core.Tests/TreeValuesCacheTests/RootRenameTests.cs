@@ -5,6 +5,7 @@ using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
@@ -79,11 +80,32 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var existing = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/existing");
                 var deeper = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/deeper/s");
 
+                // An alert of the sensor's own, next to the template ones.
+                var own = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+                {
+                    Id = existing.Id,
+                    Initiator = InitiatorInfo.AsUser("tester"),
+                    TTLPolicies =
+                    [
+                        new PolicyUpdate
+                        {
+                            TTL = TimeSpan.FromMinutes(45).Ticks,
+                            Destination = new PolicyDestinationUpdate(),
+                            Initiator = InitiatorInfo.AsUser("tester"),
+                            ConfirmationPeriod = 0,
+                            Conditions = [],
+                        },
+                    ],
+                });
+                Assert.True(own.IsOk, own.Error);
+
                 Assert.True(HasTemplate(existing, oldNameTemplate), "test premise: the old name's template is attached");
+                Assert.True(HasTemplate(existing, anyNameTemplate), "test premise: the template of both names is attached");
                 Assert.False(HasTemplate(existing, newNameTemplate));
                 Assert.False(HasTemplate(deeper, oldNameTemplate), "test premise: `*` does not cross a segment");
 
                 var ownTtl = TemplateFreeTtlIds(existing);
+                Assert.Single(ownTtl);
                 var anyNamePolicy = existing.Policies.TTLPolicies.Single(t => t.TemplateId == anyNameTemplate.Id).Id;
 
                 _valuesCache.ChangeSensorEvent += OnSensorChanged;
@@ -112,24 +134,72 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.False(HasTemplate(created, oldNameTemplate));
                 Assert.True(HasTemplate(created, newNameTemplate));
 
-                // And the store agrees with the memory.
+                // And the store agrees with the memory: the new name and the new name's templates.
                 await using var restarted = BuildCacheOverTheSameDatabase();
+
+                Assert.Equal(product.Id, restarted.GetProductByName(newName)?.Id);
 
                 foreach (var path in new[] { "n/existing", "n/created" })
                 {
                     Assert.True(restarted.TryGetSensorByPath(product.Id, path, out var reloaded));
+                    Assert.Equal($"{newName}/{path}", reloaded.FullPath);
                     Assert.False(HasTemplate(reloaded, oldNameTemplate), $"{path} after a restart: the old name's template");
                     Assert.True(HasTemplate(reloaded, newNameTemplate), $"{path} after a restart: the new name's template");
                     Assert.True(HasTemplate(reloaded, anyNameTemplate), $"{path} after a restart: the template of both names");
                 }
+
+                Assert.True(restarted.TryGetSensorByPath(product.Id, "n/existing", out var reloadedExisting));
+                Assert.Equal(ownTtl, TemplateFreeTtlIds(reloadedExisting));
             }
             finally
             {
                 _valuesCache.ChangeSensorEvent -= OnSensorChanged;
-
-                foreach (var template in new[] { oldNameTemplate, newNameTemplate, anyNameTemplate })
-                    await _valuesCache.RemoveAlertTemplateAsync(template.Id);
             }
+        }
+
+        // A subscriber of the tree's change events that throws does not cost the
+        // sensors their re-evaluation: it is required work, not a notification.
+        [Fact]
+        [Trait("Category", "Root rename")]
+        public async Task Rename_ReEvaluatesTheTemplates_AlsoWhenASubscriberOfTheProductChangeThrows()
+        {
+            var oldName = UniqueRoot();
+            var newName = UniqueRoot();
+            var folder = Guid.NewGuid();
+
+            var (product, key) = await AddProductAsync(oldName, folder);
+
+            var oldNameTemplate = BuildTtlTemplate(folder, $"{oldName}/n/*");
+            var newNameTemplate = BuildTtlTemplate(folder, $"{newName}/n/*");
+
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(oldNameTemplate)).Success);
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(newNameTemplate)).Success);
+
+            var sensor = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/s");
+
+            void Throw(ProductModel changed, ActionType _)
+            {
+                if (changed.Id == product.Id)
+                    throw new InvalidOperationException("a subscriber failed");
+            }
+
+            _valuesCache.ChangeProductEvent += Throw;
+
+            try
+            {
+                var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = newName, Initiator = InitiatorInfo.AsUser("tester") }, default);
+
+                // The subscriber's failure is the request's failure, as before.
+                Assert.False(result.IsOk);
+            }
+            finally
+            {
+                _valuesCache.ChangeProductEvent -= Throw;
+            }
+
+            Assert.Equal(newName, product.DisplayName);
+            Assert.False(HasTemplate(sensor, oldNameTemplate));
+            Assert.True(HasTemplate(sensor, newNameTemplate));
         }
 
         // The change-ownership rule of a node property: a name a user set is not
@@ -146,12 +216,32 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = await _valuesCache.AddProductAsync(created, Guid.Empty);
 
+            // A first description is not journaled; a changed one is, which is what the look below needs.
+            Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Description = "first" }, default)).IsOk);
+
             var byUser = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = userName, Initiator = InitiatorInfo.AsUser("tester") }, default);
             Assert.True(byUser.IsOk, byUser.Error);
             Assert.Equal(userName, product.DisplayName);
 
+            // What the index says while the update is being applied: the journal
+            // record of a changed property is written from inside ProductModel.Update.
+            var inFlight = new System.Collections.Concurrent.ConcurrentBag<(bool ByKeptName, bool ByDeclinedName)>();
+            void Look(JournalRecordModel record)
+            {
+                if (record.Key.Id == product.Id)
+                    inFlight.Add((_valuesCache.GetProductByName(userName) is not null, _valuesCache.GetProductByName(declined) is not null));
+            }
+
+            _journalService.NewRecordEvent += Look;
+
             // The default initiator of an update is System, below User.
             var bySystem = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = declined, Description = "applied" }, default);
+
+            _journalService.NewRecordEvent -= Look;
+
+            // The description changed, so the update was seen in flight; the name it was declined never showed.
+            Assert.NotEmpty(inFlight);
+            Assert.All(inFlight, seen => Assert.True(seen.ByKeptName));
 
             Assert.True(bySystem.IsOk, bySystem.Error);
             Assert.Equal(userName, product.DisplayName);
@@ -160,6 +250,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Same(product, _valuesCache.GetProductByName(userName));
             Assert.Null(_valuesCache.GetProductByName(declined));
             Assert.Single(_valuesCache.GetProducts(), p => p.Id == product.Id);
+            Assert.DoesNotContain(inFlight, seen => seen.ByDeclinedName);
 
             // The declined name is free for another product.
             var other = await _valuesCache.AddProductAsync(declined, Guid.Empty);
@@ -171,10 +262,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(other.Id, restarted.GetProductByName(declined)?.Id);
         }
 
-        // A forced update passes the ownership rule, and the index follows it.
+        // A forced update passes the ownership rule, and the index follows it. While
+        // the rename is applied the product is found by its current name at every
+        // instant, and is listed once although two names find it.
         [Fact]
         [Trait("Category", "Root rename")]
-        public async Task Rename_ByAForcedInitiator_AfterAUsersRename_IsApplied()
+        public async Task Rename_ByAForcedInitiator_AfterAUsersRename_IsApplied_AndTheProductIsNeverMissing()
         {
             var userName = UniqueRoot();
             var forcedName = UniqueRoot();
@@ -182,11 +275,51 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var product = await _valuesCache.AddProductAsync(UniqueRoot(), Guid.Empty);
 
             Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = userName, Initiator = InitiatorInfo.AsUser("tester") }, default)).IsOk);
+
+            // The journal record of the changed name is written from inside
+            // ProductModel.Update, before the model takes the name.
+            var inFlight = new System.Collections.Concurrent.ConcurrentBag<(string Name, bool ByCurrentName, int Listed)>();
+            void Look(JournalRecordModel record)
+            {
+                if (record.Key.Id == product.Id && record.PropertyName == nameof(ProductModel.DisplayName))
+                    inFlight.Add((product.DisplayName, _valuesCache.GetProductByName(product.DisplayName) == product, _valuesCache.GetProducts().Count(p => p.Id == product.Id)));
+            }
+
+            _journalService.NewRecordEvent += Look;
+
             Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = forcedName, Initiator = InitiatorInfo.AsSystemForce("test") }, default)).IsOk);
+
+            _journalService.NewRecordEvent -= Look;
+
+            var seen = Assert.Single(inFlight);
+            Assert.Equal(userName, seen.Name);
+            Assert.True(seen.ByCurrentName, "found by the name it still has");
+            Assert.Equal(1, seen.Listed);
 
             Assert.Equal(forcedName, product.DisplayName);
             Assert.Same(product, _valuesCache.GetProductByName(forcedName));
             Assert.Null(_valuesCache.GetProductByName(userName));
+            Assert.Single(_valuesCache.GetProducts(), p => p.Id == product.Id);
+        }
+
+        // A name another root holds refuses the whole update, and both products stay where they were.
+        [Fact]
+        [Trait("Category", "Root rename")]
+        public async Task Rename_ToANameAnotherRootHolds_IsRefused_AndNothingIsApplied()
+        {
+            var name = UniqueRoot();
+            var taken = UniqueRoot();
+
+            var product = await _valuesCache.AddProductAsync(name, Guid.Empty);
+            var other = await _valuesCache.AddProductAsync(taken, Guid.Empty);
+
+            var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = taken, Description = "not applied", Initiator = InitiatorInfo.AsUser("tester") }, default);
+
+            Assert.False(result.IsOk);
+            Assert.Equal(name, product.DisplayName);
+            Assert.NotEqual("not applied", product.Description);
+            Assert.Same(product, _valuesCache.GetProductByName(name));
+            Assert.Same(other, _valuesCache.GetProductByName(taken));
         }
 
         // The server's own collector finds its product by this name at every start
@@ -267,17 +400,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Single(oldNamePanel.Sources);
             Assert.Empty(newNamePanel.Sources);
 
+            // The dashboard is stored when it raises this event (DashboardManager).
+            var stored = 0;
+            dashboard.UpdatedEvent += () => Interlocked.Increment(ref stored);
+
             var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = newName, Initiator = InitiatorInfo.AsUser("tester") }, default);
             Assert.True(result.IsOk, result.Error);
 
+            Assert.Equal(1, Volatile.Read(ref stored));
             Assert.Equal(covered.Id, Assert.Single(newNamePanel.Sources).Value.Sensor.Id);
             Assert.Equal(covered.Id, Assert.Single(oldNamePanel.Sources).Value.Sensor.Id);
             Assert.DoesNotContain(panels.SelectMany(p => p.Sources.Values), s => s.Sensor.Id == notCovered.Id);
 
-            // A second rename to the same panel's name adds nothing twice.
+            // A second rename to the same panel's name adds nothing twice, and stores nothing.
             Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = oldName, Initiator = InitiatorInfo.AsUser("tester") }, default)).IsOk);
             Assert.Single(oldNamePanel.Sources);
             Assert.Single(newNamePanel.Sources);
+            Assert.Equal(1, Volatile.Read(ref stored));
         }
 
 
