@@ -128,6 +128,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         /// <summary>Called by an open before it loads the index. Test seam: what the open is under, what a reader sees meanwhile.</summary>
         internal Action OnOpen { get; set; }
 
+        /// <summary>Called by a read (GetBlocks) right before it takes the store's lock because the store is not open. Test seam.</summary>
+        internal Action BeforeReadLock { get; set; }
+
         /// <summary>Marks the store failed, as a failed write does. Test seam for a reopen.</summary>
         internal void FailForTest(Exception ex)
         {
@@ -349,8 +352,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // Lock-free while the databases are open, also after a failed write (the databases stay open until the reopen).
         // Closed (never opened, a reopen that failed, disposed), it goes through EnsureOpen like a put: inside the backoff
         // after a failure it throws the fault, past it the read reopens the store itself (a server that only reads would
-        // otherwise never recover), and a disposed store throws. A store never opened and without a folder answers no
-        // blocks and creates nothing. It never answers the in-memory index of databases that are closed: their blocks
+        // otherwise never recover; that reopen creates nothing), and a disposed store throws. A store never opened and
+        // without a folder answers no blocks and creates nothing; one never opened whose folder exists is opened as a put
+        // would open it (the databases may be created in the folder). It never answers the in-memory index of databases that are closed: their blocks
         // would all read as missing. Nor the empty initial index during the first open of the process: Open assigns
         // _blocks at its start and swaps the index in at its end, and _opened is set after that, so until then a read waits
         // on _lock for the open. (During a reopen the index in memory is the whole previous one.)
@@ -358,6 +362,8 @@ namespace HSMDatabase.LevelDB.TableBlocks
         {
             if (!_opened || Volatile.Read(ref _disposed) || Volatile.Read(ref _blocks) is null)
             {
+                BeforeReadLock?.Invoke();
+
                 lock (_lock)
                 {
                     if ((!_opened || _disposed || _blocks is null) && !EnsureOpen(create: false))
@@ -418,7 +424,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (failure is null)
                 return new TableBlockStoreException($"The table block store {_folder} is not open.");
 
-            return new TableBlockStoreException($"The table block store {_folder} is closed after a failure and reopens at its next use: {failure?.Message}", failure);
+            return new TableBlockStoreException($"The table block store {_folder} is closed after a failure and reopens at its next use: {failure.Message}", failure);
         }
 
         // Every block that cannot be read is counted; the log gets an Error line at most once a minute, with the count of
@@ -604,9 +610,11 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 return true;
 
             // A store that has failed stays failed until an open succeeds: inside the backoff it answers the fault; past it,
-            // the caller tries the open. A read (create false) never creates: a folder that is missing or cannot be reached
-            // fails that open as a fault, the backoff starts again, and nothing in memory is dropped (a store cannot tell a
-            // removed folder from an unreachable one). Only a put or a registration (create true) creates a fresh store.
+            // the caller tries the open. That reopen, when a read (create false) tries it, creates nothing: a folder that is
+            // missing or cannot be reached fails it as a fault, the backoff starts again, and nothing in memory is dropped (a
+            // store cannot tell a removed folder from an unreachable one). Only a put or a registration (create true)
+            // creates a fresh store after a failure. A store that never failed is opened by a read as by a put when its
+            // folder exists (the databases may be created in it), and answers no blocks without one.
             var mayCreate = create || _failure is null;
 
             if (_failure is not null)
@@ -661,8 +669,8 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
             var blocksOptions = Options();
             blocksOptions.CreateIfMissing = mayCreate;
-            _blocks = new DB(Path.Combine(_folder, BlocksName), blocksOptions);
-            _index = new DB(Path.Combine(_folder, IndexName), Options());
+            _blocks = OpenDatabase(BlocksName, blocksOptions);
+            _index = OpenDatabase(IndexName, Options());
 
             var maps = new IndexMaps();
 
@@ -700,7 +708,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             {
                 _index.Dispose();
                 DB.Destroy(Path.Combine(_folder, IndexName));
-                _index = new DB(Path.Combine(_folder, IndexName), Options());
+                _index = OpenDatabase(IndexName, Options());
 
                 maps = new IndexMaps();
                 lastIndexKey = null;
@@ -752,6 +760,63 @@ namespace HSMDatabase.LevelDB.TableBlocks
             _logger.Info($"Table block store {_folder} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: {maps.Count} blocks, next sequence {_nextReserve}" +
                          (rebuild ? $", index rebuilt from {indexed} blocks" : indexed > 0 ? $", {indexed} blocks indexed again after the last index entry" : string.Empty));
         }
+
+        // Opens one database of the store, retrying a transient failure to replace its CURRENT file. Every open writes a new
+        // MANIFEST and points CURRENT at it through a temporary "<n>.dbtmp" file; on Windows LevelDB moves it over CURRENT
+        // with MoveFileA, then ReplaceFileA, which fails (ERROR_UNABLE_TO_REMOVE_REPLACED and the like) while another process,
+        // such as a virus scanner or the search indexer, has CURRENT open without delete sharing, typically just after it
+        // was written. Only that step is retried: an IO error whose file is a .dbtmp, recognised by the wrapper's message
+        // ("IO error: <path>.dbtmp: <Windows message>"), whatever the Windows message says (it is localized). Any other
+        // error, a missing database or corruption included, fails at once as before. The pauses grow (OpenRetryPauses,
+        // 220 ms in all per database) and run under the store's lock; past them the open fails as the fault it was.
+        private DB OpenDatabase(string name, Options options)
+        {
+            var path = Path.Combine(_folder, name);
+            string firstError = null;
+
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    var db = DatabaseOpener(path, options);
+
+                    if (attempt > 0)
+                        _logger.Warn($"Table block store {_folder}: {name} opened after {attempt} retries of a transient file error: {firstError}");
+
+                    return db;
+                }
+                catch (Exception ex) when (attempt < OpenRetryPauses.Length && IsTransientReplaceError(ex))
+                {
+                    firstError ??= ex.Message;
+                    Interlocked.Increment(ref _openRetries);
+                    RetryPause(OpenRetryPauses[attempt]);
+                }
+                catch (Exception ex) when (attempt > 0)
+                {
+                    _logger.Warn($"Table block store {_folder}: {name} could not be opened after {attempt} retries of a transient file error ({firstError}); last error: {ex.Message}");
+                    throw;
+                }
+            }
+        }
+
+        internal static readonly TimeSpan[] OpenRetryPauses =
+            [TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(120)];
+
+        private static readonly System.Text.RegularExpressions.Regex TransientReplaceError =
+            new(@"^IO error: .*\.dbtmp: ", System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        internal static bool IsTransientReplaceError(Exception ex) => ex is not TableBlockStoreException && ex.Message is { } message && TransientReplaceError.IsMatch(message);
+
+        private long _openRetries;
+
+        /// <summary>Retries of a database open after a transient file error, since this store was created. For tests.</summary>
+        internal long OpenRetries => Interlocked.Read(ref _openRetries);
+
+        /// <summary>Opens a LevelDB database. Test seam for an open that fails.</summary>
+        internal Func<string, Options, DB> DatabaseOpener { get; set; } = (path, options) => new DB(path, options);
+
+        /// <summary>The pause between two attempts to open a database. Test seam (no sleeping in tests).</summary>
+        internal Action<TimeSpan> RetryPause { get; set; } = Thread.Sleep;
 
         private Options Options() => new()
         {
