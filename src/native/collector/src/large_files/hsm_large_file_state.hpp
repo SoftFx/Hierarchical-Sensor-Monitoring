@@ -94,6 +94,7 @@ namespace hsm::collector::large_files
         FileKey key;        // the facts it was begun with
         std::int64_t piece_bytes = 0;
         std::string upload; // the server's upload id
+        bool secure = true; // part of the upload's key
         int discards = 0;
         int checksum_mismatches = 0;
         int protocol_closes = 0;

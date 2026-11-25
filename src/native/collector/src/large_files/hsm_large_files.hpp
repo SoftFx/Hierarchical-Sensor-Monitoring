@@ -47,6 +47,8 @@ namespace hsm::collector::large_files
         /// Bytes sent per second; 0: no limit.
         std::int64_t max_bytes_per_second = 10000000;
         bool new_file_alert = true;
+        /// Kept under the product's dump password on the server.
+        bool secure = true;
     };
 
     /// What handles and the uploader share: the wake-up and the cut of the upload in progress.
@@ -110,6 +112,28 @@ namespace hsm::collector::large_files
         std::string Reason() const;
     };
 
+    /// An ordinary file send routed to the file connection (ADR-0022 point 20): the content of
+    /// hsm_sensor_add_file and its kin larger than a quarter of the session's frame limit, from memory,
+    /// never secure, nothing on a disk. Not sent: a dropped value, counted where a dropped value is.
+    struct RoutedFile
+    {
+        std::uint64_t id = 0;
+        std::string sensor; // the full registered path
+        std::string name;   // name.extension
+        std::string content;
+        /// The value's status (the wire's number) and comment; HSM_SENSOR_STATUS_OK and empty are not sent.
+        int status = HSM_SENSOR_STATUS_OK;
+        std::string comment;
+        /// The value's time, 100 ns ticks since 1970 (begin's `modified`).
+        std::int64_t time_ticks = 0;
+        /// `send:<guid>`, made once per send.
+        std::string source;
+        /// True once the sensor's ordinary registration was acknowledged on the session.
+        std::function<bool()> registered;
+        /// Today's path (a `list` frame), when the file connection turns out to be missing.
+        std::function<void()> back_to_queue;
+    };
+
 #if defined(HSM_COLLECTOR_LARGE_FILES)
     /// What one run of the uploader needs from its collector (between Start and Stop).
     struct RunContext
@@ -120,6 +144,8 @@ namespace hsm::collector::large_files
         std::function<void(bool error, const std::string& message)> report;
         /// One file not sent, for the Queue overflow sensor.
         std::function<void()> count_lost_file;
+        /// One routed send not sent: a dropped value (the collector's overflow counter).
+        std::function<void()> count_dropped_value;
         /// The session that is up now.
         std::function<hsm::http::SessionIdentity()> session;
         /// A `commands` request on the session (the registration of a File sensor).
@@ -142,6 +168,11 @@ namespace hsm::collector::large_files
         /// Adds a watch; false, with `error`, for an equal live watch.
         bool AddWatch(const std::shared_ptr<WatchState>& watch, std::string& error);
         void AddFile(const std::shared_ptr<FileState>& file);
+        /// Queues a routed send; false when it cannot be routed now (not running, no route): the caller
+        /// takes today's path.
+        bool Route(std::shared_ptr<RoutedFile> file);
+        /// False when the file connection was refused (404 or 400) on the session of `generation`.
+        bool RouteAvailable(std::uint64_t generation) const noexcept;
         /// A new state shared with the handles of this collector.
         const std::shared_ptr<LargeFileShared>& Shared() const noexcept { return shared_; }
         std::uint64_t NextId() noexcept { return ++next_id_; }

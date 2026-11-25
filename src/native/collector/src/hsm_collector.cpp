@@ -40,6 +40,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -2593,6 +2594,23 @@ namespace
     namespace tables = hsm::collector::tables;
     namespace large_files = hsm::collector::large_files;
 
+    // A new random id as 32 lower-case hex digits: the `source` of a routed file send (#1887, ADR-0022
+    // point 20), so two sends with one name and size are never one file.
+    std::string NewGuidText()
+    {
+        static const char digits[] = "0123456789abcdef";
+        std::random_device device;
+        std::string text;
+        text.reserve(32);
+        for (int word = 0; word < 4; ++word)
+        {
+            const std::uint32_t value = device();
+            for (int nibble = 7; nibble >= 0; --nibble)
+                text.push_back(digits[(value >> (nibble * 4)) & 0xF]);
+        }
+        return text;
+    }
+
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>, private tables::TablePipelineHost
     {
     public:
@@ -5068,8 +5086,9 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "settle_ms must be 0 (the default) or at least 1000.");
             if (options.max_bytes_per_second < 0 && options.max_bytes_per_second != HSM_LARGE_FILE_NO_SPEED_LIMIT)
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "max_bytes_per_second must be 0 (the default), positive or HSM_LARGE_FILE_NO_SPEED_LIMIT.");
-            if ((options.keep_source != 0 && options.keep_source != 1) || (options.no_new_file_alert != 0 && options.no_new_file_alert != 1))
-                return SetError(HSM_RESULT_INVALID_ARGUMENT, "keep_source and no_new_file_alert must be 0 or 1.");
+            if ((options.keep_source != 0 && options.keep_source != 1) || (options.no_new_file_alert != 0 && options.no_new_file_alert != 1) ||
+                (options.not_secure != 0 && options.not_secure != 1))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "keep_source, no_new_file_alert and not_secure must be 0 or 1.");
             if (options.sensor_location != 0 && options.sensor_location != 1)
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "sensor_location must be 0 (Module) or 1 (Product).");
             if (options.keep_history_ms < 0 || options.ttl_ms < 0 || options.self_destroy_ms < 0)
@@ -5084,6 +5103,7 @@ namespace
             resolved.keep_source = options.keep_source == 1;
             resolved.max_bytes_per_second = options.max_bytes_per_second == 0 ? 10000000 : (options.max_bytes_per_second < 0 ? 0 : options.max_bytes_per_second);
             resolved.new_file_alert = options.no_new_file_alert == 0;
+            resolved.secure = options.not_secure == 0;
 
             // The File sensor's registration: the one hsm_collector_create_file_sensor sends, with the
             // options of a large-file sensor and the flag that asks the server for the alert "new data
@@ -5223,6 +5243,7 @@ namespace
                         LogMessage(HSM_LOG_LEVEL_INFO, message);
                 };
                 context.count_lost_file = [this] { TryReportDroppedTableRows(1); };
+                context.count_dropped_value = [this] { queue_overflow_count_.fetch_add(1, std::memory_order_relaxed); };
                 hsm::http::SessionTransport* session = session_transport_.get();
                 context.session = [session] { return session != nullptr ? session->CurrentSession() : hsm::http::SessionIdentity{}; };
                 const int64_t timeout = request_timeout_ms_ > 0 ? request_timeout_ms_ : 30000;
@@ -5235,6 +5256,68 @@ namespace
             {
                 LogError("Large files could not be started for this run; they wait for the next start.");
             }
+#endif
+        }
+
+        // ADR-0022 point 20: an ordinary file send on a session whose content is larger than a quarter of
+        // the session's frame limit goes to the large file uploader when the file connection is there. True
+        // when it was taken; false: today's path (a `list` frame).
+        bool TryRouteFile(const std::string& path, const std::string& content, const std::string& name, const std::string& extension, hsm_sensor_status_t status,
+                          const std::string& comment)
+        {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+            try
+            {
+                if (!use_session_ || !session_transport_ || !CanAcceptData())
+                    return false;
+                hsm::http::SessionTransport* session = session_transport_.get();
+                const size_t body = session->MaxBodyBytes();
+                // Before the first hello the server's default frame limit (4 MiB) is assumed.
+                const size_t frame = body > 0 ? body + hsm::http::SessionTransport::kEnvelopeRoom : static_cast<size_t>(4 * 1024 * 1024);
+                if (content.size() <= frame / 4)
+                    return false;
+                auto* files = LargeFilesFor(true);
+                if (!files->RouteAvailable(session->CurrentSession().generation))
+                    return false;
+
+                std::weak_ptr<NativeSensor> sensor;
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    const auto found = sensors_.find(path);
+                    if (found != sensors_.end())
+                        sensor = found->second;
+                }
+                auto routed = std::make_shared<large_files::RoutedFile>();
+                routed->sensor = path;
+                routed->name = extension.empty() ? name : name + "." + extension;
+                routed->content = content;
+                routed->status = static_cast<int>(status);
+                routed->comment = comment;
+                routed->time_ticks = UnixTimeMilliseconds() * 10000;
+                routed->source = "send:" + NewGuidText();
+                routed->registered = [sensor] {
+                    const auto alive = sensor.lock();
+                    return alive && !alive->RegistrationPostPending();
+                };
+                // Back to today's path when the file connection turns out to be missing: the value as
+                // it would have been queued (a value that does not fit a frame is then dropped and
+                // counted, as before).
+                const std::string json = OutgoingFileJson(path, content, name, extension, status, comment);
+                routed->back_to_queue = [this, json] { EnqueueFileIfRunning(json); };
+                return files->Route(std::move(routed));
+            }
+            catch (...)
+            {
+                return false;
+            }
+#else
+            (void)path;
+            (void)content;
+            (void)name;
+            (void)extension;
+            (void)status;
+            (void)comment;
+            return false;
 #endif
         }
 
@@ -7472,7 +7555,11 @@ namespace
 
         // Instant gating: dropped unless the collector is running (values before Start are
         // lost). File payloads dispatch promptly — not gated by the package collect period. On a
-        // session a file value travels in a `list` frame like every other value (#1660 step 2b).
+        // session a file value travels in a `list` frame like every other value (#1660 step 2b),
+        // unless it is larger than a quarter of the session's frame limit and the file connection
+        // is there: then it is a large file value (ADR-0022 point 20, #1887).
+        if (collector->TryRouteFile(path_, content, name, extension, status, normalized_comment))
+            return HSM_RESULT_OK;
         collector->EnqueueFileIfRunning(collector->OutgoingFileJson(path_, content, name, extension, status, normalized_comment));
         return HSM_RESULT_OK;
     }

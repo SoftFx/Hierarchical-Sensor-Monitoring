@@ -362,6 +362,11 @@ namespace hsm::collector::large_files
             if (!facts.source.empty())
                 body["source"] = facts.source;
             body["pieceBytes"] = piece_bytes;
+            body["secure"] = facts.secure;
+            if (facts.status >= 0)
+                body["status"] = facts.status;
+            if (!facts.comment.empty())
+                body["comment"] = facts.comment;
             hsm::http::AckedLinkAck ack;
             const auto result = link_->Request("begin", body.dump(), SendTimeoutMs(), options_.request_timeout_ms, ack);
             return FromPut("begin", result, ack);

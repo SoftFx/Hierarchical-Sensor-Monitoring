@@ -717,6 +717,93 @@ namespace
         hsm_large_file_release(file);
     }
 
+    // ADR-0022 point 20: an ordinary file send above a quarter of the session's frame limit travels on the
+    // file connection as a large value that is not secure; below it, a `list` frame as before.
+    void NativeLargeFileOrdinarySendAboveTheThresholdIsRouted()
+    {
+        Rig rig;
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "report", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.Start();
+        const std::string source = rig.folder.File("routed.bin");
+        const std::string big = Content(1536 * 1024, 31); // above 4 MiB / 4
+        WriteFile(source, big);
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        Check(hsm_sensor_add_file_from_path(sensor, source.c_str(), HSM_SENSOR_STATUS_WARNING, "big one") == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return rig.script->StoredFiles().size() == 1; }), "routed to the file connection" + rig.log.All());
+        const auto begins = rig.script->Begins();
+        Check(begins.size() == 1 && begins[0].path == "host/module/reports" && begins[0].name == "routed.bin" && begins[0].size == static_cast<std::int64_t>(big.size()),
+              "begin names the sensor and the file");
+        Check(begins[0].raw.find("\"secure\":false") != std::string::npos, "a routed send is never secure: " + begins[0].raw);
+        Check(begins[0].source.rfind("send:", 0) == 0 && begins[0].source.size() == 37, "source is send:<guid>: " + begins[0].source);
+        Check(begins[0].raw.find("\"comment\":\"big one\"") != std::string::npos && begins[0].raw.find("\"status\":") != std::string::npos,
+              "status and comment travel in begin: " + begins[0].raw);
+        Check(rig.script->StoredFiles().begin()->second == big, "the bytes");
+        Check(Exists(source), "nothing is deleted for a routed send");
+        Check(rig.Registrations("\"DefaultAlertsOptions\":4") == 0, "no large-file registration for a routed send");
+
+        // At or below the threshold: a `list` frame, as before.
+        const std::string small = rig.folder.File("small.bin");
+        WriteFile(small, Content(1000, 32));
+        Check(hsm_sensor_add_file_from_path(sensor, small.c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "small send");
+        Check(WaitFor([&] {
+                  for (const auto& text : rig.server->Received())
+                      if (text.find("\"op\":\"list\"") != std::string::npos && text.find("\"Type\":6") != std::string::npos)
+                          return true;
+                  return false;
+              }),
+              "a small file goes in a list frame");
+        Check(rig.script->Begins().size() == 1, "and not on the file connection");
+        hsm_sensor_release(sensor);
+    }
+
+    // Without file connections on the server: today's path (a list frame when it fits).
+    void NativeLargeFileRouteMissingTakesTodaysPath()
+    {
+        Rig rig;
+        rig.server->RefuseSideUpgradesWith(404);
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "report", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        const std::string source = rig.folder.File("ones.bin");
+        WriteFile(source, std::string(1536 * 1024, '\x01')); // "1," per byte: fits a 4 MiB list frame
+        Check(hsm_sensor_add_file_from_path(sensor, source.c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] {
+                  rig.Advance(1000);
+                  for (const auto& text : rig.server->Received())
+                      if (text.find("\"op\":\"list\"") != std::string::npos && text.find("\"Type\":6") != std::string::npos)
+                          return true;
+                  return false;
+              }),
+              "the file went back to a list frame" + rig.log.All());
+        Check(rig.server->SideRefusedUpgrades() >= 1 && rig.script->Begins().empty(), "the file connection was refused, nothing begun");
+        hsm_sensor_release(sensor);
+    }
+
+    // `secure` travels in every begin: true by default, false when the options say so.
+    void NativeLargeFileSecureTravelsInBegin()
+    {
+        Rig rig;
+        WriteFile(rig.folder.File("a.dmp"), Content(100, 1));
+        WriteFile(rig.folder.File("b.dmp"), Content(100, 2));
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* first = nullptr;
+        hsm_large_file_t* second = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", rig.folder.File("a.dmp").c_str(), &options, &first) == HSM_RESULT_OK, "send a");
+        options.not_secure = 1;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", rig.folder.File("b.dmp").c_str(), &options, &second) == HSM_RESULT_OK, "send b");
+        Check(WaitFor([&] { return Settled(first) && Settled(second); }), "settled");
+        const auto begins = rig.script->Begins();
+        Check(begins.size() == 2 && begins[0].raw.find("\"secure\":true") != std::string::npos && begins[1].raw.find("\"secure\":false") != std::string::npos,
+              "secure by default, not when the options say so");
+        options.not_secure = 2;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", "x", &options, nullptr) == HSM_RESULT_INVALID_ARGUMENT, "not_secure is 0 or 1");
+        hsm_large_file_release(first);
+        hsm_large_file_release(second);
+    }
+
     void NativeLargeFileEmptyFileIsStored()
     {
         Rig rig;
@@ -900,6 +987,9 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_corrupt_state_is_set_aside", [](const std::string&) { NativeLargeFileCorruptStateIsSetAside(); } },
         { "native_large_file_checksum_mismatch_sends_the_piece_again", [](const std::string&) { NativeLargeFileChecksumMismatchSendsThePieceAgain(); } },
         { "native_large_file_unanswered_piece_is_sent_again", [](const std::string&) { NativeLargeFileUnansweredPieceIsSentAgain(); } },
+        { "native_large_file_ordinary_send_above_the_threshold_is_routed", [](const std::string&) { NativeLargeFileOrdinarySendAboveTheThresholdIsRouted(); } },
+        { "native_large_file_route_missing_takes_todays_path", [](const std::string&) { NativeLargeFileRouteMissingTakesTodaysPath(); } },
+        { "native_large_file_secure_travels_in_begin", [](const std::string&) { NativeLargeFileSecureTravelsInBegin(); } },
         { "native_large_file_cpp_wrapper", [](const std::string&) { NativeLargeFileCppWrapper(); } },
         { "native_large_file_empty_file_is_stored", [](const std::string&) { NativeLargeFileEmptyFileIsStored(); } },
         { "native_large_file_http_transport_is_unavailable", [](const std::string&) { NativeLargeFileHttpTransportIsUnavailable(); } },

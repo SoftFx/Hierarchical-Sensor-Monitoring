@@ -1355,6 +1355,7 @@ typedef struct hsm_large_file_options_t
     int64_t keep_history_ms;      /* 0 => the server's default */
     int64_t ttl_ms;               /* 0 => none */
     int64_t self_destroy_ms;      /* 0 => none */
+    int32_t not_secure;           /* 0 => secure: the server keeps the file in a zip under the product's dump password; 1 => a zip without a password */
 } hsm_large_file_options_t;
 
 /* struct_size set and every other field 0 (every default). */

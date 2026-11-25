@@ -305,6 +305,10 @@ namespace hsm::collector::large_files
         facts_.path = text("path");
         facts_.sensor = text("sensor");
         facts_.upload = text("upload");
+        {
+            const auto secure = json.find("secure");
+            facts_.secure = secure == json.end() || !secure->is_boolean() || secure->get<bool>();
+        }
         facts_.piece_bytes = number("pieceBytes");
         facts_.discards = static_cast<int>(number("discards"));
         facts_.checksum_mismatches = static_cast<int>(number("checksumMismatches"));
@@ -320,6 +324,7 @@ namespace hsm::collector::large_files
         json["path"] = facts_.path;
         json["sensor"] = facts_.sensor;
         json["upload"] = facts_.upload;
+        json["secure"] = facts_.secure;
         json["pieceBytes"] = facts_.piece_bytes;
         json["discards"] = facts_.discards;
         json["checksumMismatches"] = facts_.checksum_mismatches;

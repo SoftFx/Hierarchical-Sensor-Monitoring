@@ -35,6 +35,8 @@ namespace hsm::collector
         std::chrono::milliseconds keep_history{ 0 };
         std::chrono::milliseconds ttl{ 0 };
         std::chrono::milliseconds self_destroy{ 0 };
+        /// Kept on the server in a zip under the product's dump password; false: a zip without a password.
+        bool secure = true;
     };
 
     enum class LargeFileWatchState
@@ -70,6 +72,7 @@ namespace hsm::collector
             native.keep_history_ms = static_cast<int64_t>(options.keep_history.count());
             native.ttl_ms = static_cast<int64_t>(options.ttl.count());
             native.self_destroy_ms = static_cast<int64_t>(options.self_destroy.count());
+            native.not_secure = options.secure ? 0 : 1;
             return native;
         }
 

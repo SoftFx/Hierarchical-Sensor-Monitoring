@@ -51,6 +51,11 @@ namespace hsm::collector::large_files
         std::int64_t modified_ticks = 0;
         /// The opaque identity of the source file; empty: not sent.
         std::string source;
+        /// Sent in every begin: a secure file is kept under the product's dump password.
+        bool secure = true;
+        /// A routed send's value status (the wire's SensorStatus number) and comment; -1 and empty: not sent.
+        int status = -1;
+        std::string comment;
     };
 
     /// How the uploader reads one answer.

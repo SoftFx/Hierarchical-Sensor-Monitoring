@@ -122,6 +122,7 @@ namespace hsm::collector::large_files
             std::string state_folder; // <data>/large-files
             FileKey key;
             bool has_key = false;
+            std::shared_ptr<RoutedFile> routed;
         };
 
         enum class Result
@@ -199,6 +200,19 @@ namespace hsm::collector::large_files
         std::vector<std::uint8_t> frame_;
         std::unique_ptr<tables::ZstdCompressor> zstd_;
         std::int64_t next_send_at_ = 0;
+        bool key_refused_ = false;
+        // Guarded by shared_.mutex: routed sends in the order sent.
+        std::deque<std::shared_ptr<RoutedFile>> routed_;
+        // The session generation whose file connection was refused (no route); 0: none.
+        std::atomic<std::uint64_t> route_absent_generation_{ 0 };
+        const ResolvedOptions routed_options_ = RoutedOptions();
+
+        static ResolvedOptions RoutedOptions()
+        {
+            ResolvedOptions options;
+            options.secure = false;
+            return options;
+        }
         bool stale_checked_ = false;
 
         Impl(LargeFiles& owner, LargeFileShared& shared)
@@ -416,6 +430,7 @@ namespace hsm::collector::large_files
             if (opened.status == 404 || opened.status == 400)
             {
                 absent_generation_ = session.generation;
+                route_absent_generation_.store(session.generation);
                 absent_until_ = Now() + kFeatureAbsentRetryMs;
                 Say("absent", true, "Large files cannot be sent: the server has no file connections (the upgrade was answered " + std::to_string(opened.status) + "); files wait and the server is asked again with the next session and every 30 minutes.");
                 outcome = Outcome{ Result::Later, "the server has no large files", Now() + 1000 };
@@ -644,7 +659,7 @@ namespace hsm::collector::large_files
                 have_record = locked == LockedStateFile::Result::Ok;
             }
             bool own_record = state != nullptr && state->FindDelivered(key) != nullptr;
-            if (exists && !(record.Facts().key == key && record.Facts().sensor == item.sensor))
+            if (exists && !(record.Facts().key == key && record.Facts().sensor == item.sensor && record.Facts().secure == item.options->secure))
             {
                 // The record of another file under this path: that upload is discarded first.
                 const Outcome discarded = DiscardRecorded(item, record);
@@ -660,6 +675,7 @@ namespace hsm::collector::large_files
                 record.Facts().path = item.path;
                 record.Facts().sensor = item.sensor;
                 record.Facts().key = key;
+                record.Facts().secure = item.options->secure;
             }
 
             Outcome result = Upload(item, source, start, hello, record, have_record);
@@ -702,7 +718,13 @@ namespace hsm::collector::large_files
             const auto& end = connection_->LastEnd();
             const int code = end.server_close != 0 ? end.server_close : (end.protocol_error ? end.close_code : 0);
             if (code == 1008)
+            {
+                // The key may no longer send: nothing more is uploaded before the next Start (watches wait,
+                // handed-over files stay queued); the file in hand is a final refusal.
+                key_refused_ = true;
+                Say("key-refused", true, "The server closed the file connection with 1008: the access key may no longer send; no large file is uploaded before the next start.");
                 return Outcome{ Result::Final, "the server closed the file connection with 1008: the access key may no longer send", 0 };
+            }
             if (code == 1002 || code == 1007 || code == 1009)
             {
                 ++record.Facts().protocol_closes;
@@ -719,6 +741,7 @@ namespace hsm::collector::large_files
         Outcome Upload(Item& item, SourceFile& source, const SourceFacts& start, const FileHello& hello, UploadRecord& record, bool have_record)
         {
             FileFacts facts{ item.sensor, item.name, start.size, start.modified_ticks, start.identity };
+            facts.secure = item.options->secure;
             std::int64_t piece_bytes = record.Facts().piece_bytes > 0 && record.Facts().piece_bytes <= hello.piece_bytes ? record.Facts().piece_bytes : hello.piece_bytes;
             int in_a_row = 0;
             SetCut(item.owner);
@@ -880,9 +903,24 @@ namespace hsm::collector::large_files
 
         // One piece: read, hash, compress, the speed limit, send. Later with not_before -1: go on (next was
         // moved); `restart`: begin again.
+        // True when a routed send is ready: it goes ahead of a large-file API file (after its piece in flight).
+        bool RoutedReady()
+        {
+            std::lock_guard<std::mutex> guard(shared_.mutex);
+            for (const auto& routed : routed_)
+            {
+                const auto not_before = file_not_before_.find(routed->id);
+                if ((not_before == file_not_before_.end() || not_before->second <= Now()) && routed->registered && routed->registered())
+                    return true;
+            }
+            return false;
+        }
+
         Outcome SendPiece(Item& item, SourceFile& source, const SourceFacts& start, UploadRecord& record, bool have_record, std::int64_t piece_bytes,
                           std::int64_t pieces, std::int64_t& next, int& in_a_row, bool& restart)
         {
+            if (RoutedReady())
+                return Outcome{ Result::Later, std::string(), Now() };
             const std::int64_t offset = next * piece_bytes;
             const std::size_t length = static_cast<std::size_t>((std::min)(piece_bytes, start.size - offset));
             std::string error;
@@ -1025,8 +1063,9 @@ namespace hsm::collector::large_files
         // Discards the upload a record names: on this connection, or after a begin with the facts it was begun with.
         Outcome DiscardRecorded(Item& item, UploadRecord& record)
         {
-            const FileFacts original{ record.Facts().sensor, record.Facts().key.name, record.Facts().key.size, record.Facts().key.modified_ticks,
-                                      record.Facts().key.identity };
+            FileFacts original{ record.Facts().sensor, record.Facts().key.name, record.Facts().key.size, record.Facts().key.modified_ticks,
+                                record.Facts().key.identity };
+            original.secure = record.Facts().secure;
             for (int round = 0; round < 8; ++round)
             {
                 if (Stopping(&item))
@@ -1147,6 +1186,321 @@ namespace hsm::collector::large_files
                 item.file->Settle(HSM_LARGE_FILE_STORED, std::string());
             }
             Report(false, "Large file " + item.path + " is stored on " + item.sensor + (deleted ? "; the source was deleted." : "."));
+        }
+
+        // ---- A routed send (ADR-0022 point 20) ----
+
+        void DropRouted(const std::shared_ptr<RoutedFile>& routed, const std::string& why)
+        {
+            {
+                std::lock_guard<std::mutex> guard(shared_.mutex);
+                routed_.erase(std::remove(routed_.begin(), routed_.end(), routed), routed_.end());
+                file_not_before_.erase(routed->id);
+            }
+            try
+            {
+                if (context_.count_dropped_value)
+                    context_.count_dropped_value();
+            }
+            catch (...)
+            {
+            }
+            Report(true, "A file value of " + routed->sensor + " (" + routed->name + ", " + std::to_string(routed->content.size()) +
+                             " bytes) was dropped: " + why + ".");
+        }
+
+        void Settled(const std::shared_ptr<RoutedFile>& routed)
+        {
+            std::lock_guard<std::mutex> guard(shared_.mutex);
+            routed_.erase(std::remove(routed_.begin(), routed_.end(), routed), routed_.end());
+            file_not_before_.erase(routed->id);
+        }
+
+        void RoutedLater(const std::shared_ptr<RoutedFile>& routed, std::int64_t not_before)
+        {
+            std::lock_guard<std::mutex> guard(shared_.mutex);
+            file_not_before_[routed->id] = not_before;
+        }
+
+        // The file connection is missing on this session: every routed send waiting takes today's path.
+        void RoutesBackToQueue()
+        {
+            std::deque<std::shared_ptr<RoutedFile>> back;
+            {
+                std::lock_guard<std::mutex> guard(shared_.mutex);
+                back.swap(routed_);
+                for (const auto& routed : back)
+                    file_not_before_.erase(routed->id);
+            }
+            for (const auto& routed : back)
+            {
+                try
+                {
+                    if (routed->back_to_queue)
+                        routed->back_to_queue();
+                }
+                catch (...)
+                {
+                }
+            }
+        }
+
+        void ProcessRouted(Item& item)
+        {
+            const auto routed = item.routed;
+            if (!context_.unavailable_reason.empty())
+            {
+                RoutesBackToQueue();
+                return;
+            }
+            if (!routed->registered || !routed->registered())
+            {
+                RoutedLater(routed, Now() + 1000);
+                return;
+            }
+            Outcome outcome;
+            if (!EnsureConnection(item, outcome))
+            {
+                hsm::http::SessionIdentity session;
+                try
+                {
+                    session = context_.session ? context_.session() : hsm::http::SessionIdentity{};
+                }
+                catch (...)
+                {
+                }
+                if (session.generation != 0 && route_absent_generation_.load() == session.generation)
+                    RoutesBackToQueue();
+                else if (outcome.result != Result::Cut)
+                    RoutedLater(routed, outcome.not_before_ms > Now() ? outcome.not_before_ms : Now() + 1000);
+                return;
+            }
+            const FileHello hello = connection_->Hello();
+            const auto size = static_cast<std::int64_t>(routed->content.size());
+            if (size > hello.max_file_bytes)
+            {
+                DropRouted(routed, "it is larger than the server takes (" + std::to_string(hello.max_file_bytes) + " bytes)");
+                return;
+            }
+
+            FileFacts facts{ routed->sensor, routed->name, size, routed->time_ticks, routed->source };
+            facts.secure = false;
+            facts.status = routed->status == HSM_SENSOR_STATUS_OK ? -1 : routed->status;
+            facts.comment = routed->comment;
+            SetCut(item.owner);
+            struct Clear
+            {
+                Impl* self;
+                ~Clear() { self->SetCut(0); }
+            } clear{ this };
+
+            int discards = 0, mismatches = 0, in_a_row = 0, closes = 0;
+            const std::int64_t piece_bytes = hello.piece_bytes;
+            for (;;)
+            {
+                if (stop_.load())
+                    return; // dropped by the stop
+                FileAnswer begun = connection_->Begin(facts, piece_bytes);
+                if (begun.kind == FileAnswerKind::Stored)
+                {
+                    Settled(routed);
+                    Report(false, "A file value of " + routed->sensor + " (" + routed->name + ") is stored as a large value.");
+                    return;
+                }
+                if (begun.kind == FileAnswerKind::Checking || begun.kind == FileAnswerKind::RetryLater)
+                {
+                    RoutedLater(routed, Now() + (begun.retry_after_ms > 0 ? begun.retry_after_ms : kDefaultRetryMs));
+                    return;
+                }
+                if (begun.kind == FileAnswerKind::Final)
+                {
+                    DropRouted(routed, "the server refused it at begin: " + Status(begun));
+                    return;
+                }
+                if (begun.kind != FileAnswerKind::Next)
+                {
+                    if (stop_.load())
+                        return;
+                    if (begun.kind == FileAnswerKind::Lost || begun.kind == FileAnswerKind::NotOpen || begun.kind == FileAnswerKind::Cancelled)
+                        ResetConnection();
+                    RoutedLater(routed, Now() + Backoff());
+                    return;
+                }
+                std::vector<Sha256Digest> digests(static_cast<std::size_t>(begun.pieces));
+                std::vector<bool> have(static_cast<std::size_t>(begun.pieces), false);
+                std::int64_t next = begun.next;
+                const std::int64_t piece = begun.piece_bytes;
+                bool restart = false;
+                while (!restart)
+                {
+                    while (next < begun.pieces && !restart)
+                    {
+                        if (stop_.load())
+                            return;
+                        const std::int64_t offset = next * piece;
+                        const std::size_t length = static_cast<std::size_t>((std::min)(piece, size - offset));
+                        Sha256Digest digest{};
+                        if (!Sha256Of(routed->content.data() + offset, length, digest))
+                        {
+                            RoutedLater(routed, Now() + Backoff());
+                            return;
+                        }
+                        frame_.assign(kPieceHeaderBytes, 0);
+                        if (!zstd_)
+                            zstd_ = std::make_unique<tables::ZstdCompressor>(3);
+                        const char* zstd_error = nullptr;
+                        if (!zstd_->CompressFrame(routed->content.data() + offset, length, frame_, zstd_error))
+                        {
+                            RoutedLater(routed, Now() + Backoff());
+                            return;
+                        }
+                        const std::int64_t limit = item.options->max_bytes_per_second;
+                        if (limit > 0)
+                        {
+                            const std::int64_t now = Now();
+                            if (next_send_at_ > now && !Wait(next_send_at_ - now, "the speed limit", nullptr))
+                                return;
+                            const std::int64_t began = (std::max)(Now(), next_send_at_);
+                            next_send_at_ = began + static_cast<std::int64_t>((static_cast<double>(frame_.size()) * 1000.0) / static_cast<double>(limit));
+                        }
+                        const FileAnswer answer = connection_->Piece(begun.upload, next, static_cast<std::uint32_t>(length), digest, frame_);
+                        switch (answer.kind)
+                        {
+                        case FileAnswerKind::Next:
+                            if (answer.status == 200 && answer.next > next)
+                            {
+                                digests[static_cast<std::size_t>(next)] = digest;
+                                have[static_cast<std::size_t>(next)] = true;
+                            }
+                            in_a_row = 0;
+                            next = (std::min)(answer.next, begun.pieces);
+                            break;
+                        case FileAnswerKind::ChecksumMismatch:
+                            if (++mismatches >= kMaxChecksumMismatches)
+                            {
+                                DropRouted(routed, "the server found " + std::to_string(kMaxChecksumMismatches) + " pieces with a wrong checksum");
+                                return;
+                            }
+                            if (++in_a_row >= kChecksumMismatchesInARow)
+                            {
+                                in_a_row = 0;
+                                ResetConnection();
+                                RoutedLater(routed, Now());
+                                return;
+                            }
+                            break;
+                        case FileAnswerKind::RetryLater:
+                            if (!Wait(answer.retry_after_ms > 0 ? answer.retry_after_ms : kDefaultRetryMs, "a piece: the server could not write it", nullptr))
+                                return;
+                            break;
+                        case FileAnswerKind::NotHeld:
+                            restart = true;
+                            break;
+                        case FileAnswerKind::Discarded:
+                            if (++discards >= kMaxDiscards)
+                            {
+                                DropRouted(routed, "the server discarded the upload " + std::to_string(kMaxDiscards) + " times");
+                                return;
+                            }
+                            restart = true;
+                            break;
+                        case FileAnswerKind::Lost:
+                        case FileAnswerKind::NotOpen:
+                        case FileAnswerKind::Cancelled: {
+                            if (stop_.load())
+                                return;
+                            const auto& end = connection_->LastEnd();
+                            const int code = end.server_close != 0 ? end.server_close : (end.protocol_error ? end.close_code : 0);
+                            if (code == 1008)
+                            {
+                                key_refused_ = true;
+                                DropRouted(routed, "the access key may no longer send (1008)");
+                                return;
+                            }
+                            if ((code == 1002 || code == 1007 || code == 1009) && ++closes >= kMaxProtocolCloses)
+                            {
+                                DropRouted(routed, "the file connection was closed with " + std::to_string(code) + " " + std::to_string(kMaxProtocolCloses) + " times");
+                                return;
+                            }
+                            ResetConnection();
+                            RoutedLater(routed, Now() + Backoff());
+                            return;
+                        }
+                        default:
+                            RoutedLater(routed, Now() + Backoff());
+                            return;
+                        }
+                    }
+                    if (restart)
+                        break;
+                    // Digests of pieces the server had before (a continue): computed from memory.
+                    Sha256 whole;
+                    for (std::int64_t i = 0; i < begun.pieces; ++i)
+                    {
+                        if (!have[static_cast<std::size_t>(i)])
+                        {
+                            const std::int64_t offset = i * piece;
+                            const std::size_t length = static_cast<std::size_t>((std::min)(piece, size - offset));
+                            Sha256Of(routed->content.data() + offset, length, digests[static_cast<std::size_t>(i)]);
+                            have[static_cast<std::size_t>(i)] = true;
+                        }
+                        whole.Update(digests[static_cast<std::size_t>(i)].data(), 32);
+                    }
+                    Sha256Digest hash{};
+                    if (!whole.Final(hash))
+                    {
+                        RoutedLater(routed, Now() + Backoff());
+                        return;
+                    }
+                    for (;;)
+                    {
+                        const FileAnswer ended = connection_->End(begun.upload, ToHex(hash.data(), hash.size()));
+                        if (ended.kind == FileAnswerKind::Checking)
+                        {
+                            if (!Wait(ended.retry_after_ms > 0 ? ended.retry_after_ms : kDefaultRetryMs, "end: the server checks the file", nullptr))
+                                return;
+                            continue;
+                        }
+                        if (ended.kind == FileAnswerKind::Stored)
+                        {
+                            Settled(routed);
+                            Report(false, "A file value of " + routed->sensor + " (" + routed->name + ") is stored as a large value.");
+                            return;
+                        }
+                        if (ended.kind == FileAnswerKind::Missing)
+                        {
+                            next = ended.next;
+                            break;
+                        }
+                        if (ended.kind == FileAnswerKind::Discarded)
+                        {
+                            if (++discards >= kMaxDiscards)
+                            {
+                                DropRouted(routed, "the server discarded the upload " + std::to_string(kMaxDiscards) + " times");
+                                return;
+                            }
+                            restart = true;
+                            break;
+                        }
+                        if (ended.kind == FileAnswerKind::Final)
+                        {
+                            DropRouted(routed, "the server refused it at end: " + Status(ended));
+                            return;
+                        }
+                        if (ended.kind == FileAnswerKind::NotHeld)
+                        {
+                            restart = true;
+                            break;
+                        }
+                        if (stop_.load())
+                            return;
+                        if (ended.kind == FileAnswerKind::Lost || ended.kind == FileAnswerKind::NotOpen || ended.kind == FileAnswerKind::Cancelled)
+                            ResetConnection();
+                        RoutedLater(routed, Now() + (ended.retry_after_ms > 0 ? ended.retry_after_ms : Backoff()));
+                        return;
+                    }
+                }
+            }
         }
 
         // ---- The loop ----
@@ -1296,6 +1650,28 @@ namespace hsm::collector::large_files
         // The next item: handed-over files first, then the oldest settled file of every watch.
         bool Pick(Item& item, std::int64_t& wake_at)
         {
+            if (key_refused_)
+            {
+                wake_at = Now() + 60000;
+                return false;
+            }
+            {
+                std::lock_guard<std::mutex> guard(shared_.mutex);
+                for (const auto& routed : routed_)
+                {
+                    const auto not_before = file_not_before_.find(routed->id);
+                    if (not_before != file_not_before_.end() && not_before->second > Now())
+                        continue;
+                    item = Item{};
+                    item.owner = routed->id;
+                    item.routed = routed;
+                    item.path = routed->name;
+                    item.name = routed->name;
+                    item.options = &routed_options_;
+                    item.sensor = routed->sensor;
+                    return true;
+                }
+            }
             const std::int64_t now = Now();
             wake_at = now + 60000;
             {
@@ -1493,7 +1869,7 @@ namespace hsm::collector::large_files
                 {
                     observation->unchanged_since = now;
                     if (++observation->busy == kHeldOpenReportAfter)
-                        Report(true, "Large file " + item.path + " is held open by another process (" + outcome.reason + "); it is taken when nobody holds it.");
+                        NotSent(item, "held-open", "Large file " + item.path + " is held open by another program (" + outcome.reason + "); it is taken when nobody holds it.");
                 }
                 if (item.file)
                 {
@@ -1625,6 +2001,11 @@ namespace hsm::collector::large_files
                 Wait((std::max<std::int64_t>)(1, (std::min<std::int64_t>)(wake_at - now, 1000)), "nothing to upload", nullptr, /*idle=*/true);
                 return;
             }
+            if (item.routed)
+            {
+                ProcessRouted(item);
+                return;
+            }
             Outcome outcome;
             try
             {
@@ -1730,6 +2111,38 @@ namespace hsm::collector::large_files
         shared_->Wake();
     }
 
+    bool LargeFiles::Route(std::shared_ptr<RoutedFile> file)
+    {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        bool make_thread = false;
+        {
+            std::lock_guard<std::mutex> guard(shared_->mutex);
+            if (!impl_->running_ || !impl_->UnavailableReason().empty())
+                return false;
+            file->id = NextId();
+            impl_->routed_.push_back(std::move(file));
+            make_thread = !impl_->thread_.joinable();
+        }
+        if (make_thread)
+            MakeThread();
+        shared_->Wake();
+        return true;
+#else
+        (void)file;
+        return false;
+#endif
+    }
+
+    bool LargeFiles::RouteAvailable(std::uint64_t generation) const noexcept
+    {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        return generation == 0 || impl_->route_absent_generation_.load() != generation;
+#else
+        (void)generation;
+        return false;
+#endif
+    }
+
     std::shared_ptr<FileState> LargeFiles::FindPendingFile(const std::string& path, const std::string& sensor)
     {
         std::lock_guard<std::mutex> guard(shared_->mutex);
@@ -1815,6 +2228,7 @@ namespace hsm::collector::large_files
             impl_->counted_.clear();
             impl_->file_not_before_.clear();
             impl_->stale_checked_ = false;
+            impl_->key_refused_ = false;
             impl_->connection_generation_ = 0;
             impl_->absent_until_ = 0;
             const std::string& reason = impl_->context_.unavailable_reason;
@@ -1894,6 +2308,26 @@ namespace hsm::collector::large_files
             impl_->thread_token_.store(0);
             impl_->thread_id_.store(std::thread::id{});
             ReleaseThreadToken(token);
+        }
+        // Routed sends are values: what a stop cut or did not reach is dropped, said and counted, as
+        // the value queue drops what it could not send at a stop.
+        std::deque<std::shared_ptr<RoutedFile>> dropped;
+        {
+            std::lock_guard<std::mutex> guard(shared_->mutex);
+            dropped.swap(impl_->routed_);
+        }
+        for (const auto& routed : dropped)
+        {
+            try
+            {
+                if (impl_->context_.count_dropped_value)
+                    impl_->context_.count_dropped_value();
+                impl_->Report(true, "A file value of " + routed->sensor + " (" + routed->name + ", " + std::to_string(routed->content.size()) +
+                                        " bytes) was dropped: the collector stopped before it was sent on the file connection.");
+            }
+            catch (...)
+            {
+            }
         }
 #endif
     }
