@@ -8027,6 +8027,57 @@ namespace
         Require(Eventually([&] { return !server.CloseCodes().empty(); }) && server.CloseCodes().front() == 1000, "the close frame must reach the server");
     }
 
+    // A send's timeout bounds the whole frame, even against a peer that reads: a deadline that has
+    // passed at the call writes nothing ("send timed out" with no call into libcurl; a timeout of 0
+    // is such a deadline), and a deadline that passes between two pieces stops the frame there and
+    // releases the connection, though the socket would take the next piece. The deadline is made to
+    // pass by the test clock (SetClockForTests) at the second call into libcurl, not by waiting. A
+    // wait that polled once more past its deadline would send the whole frame and fail this.
+    void NativeWsSendStopsAtItsDeadline()
+    {
+        if (!WsAvailable("native_ws_send_stops_at_its_deadline"))
+            return;
+
+        const std::string payload = PatternBytes(1024 * 1024);
+        hsm::test::WebSocketTestServer server(SilentServerOptions());
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            SendTrace trace;
+            trace.Install(connection);
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+            std::string error;
+            Require(!connection.SendBinary(payload.data(), payload.size(), 0, error), "a send with a timeout of 0 must not succeed");
+            Contains(error, "send timed out");
+            Require(trace.Count() == 0, "a send whose deadline has passed must not call into libcurl");
+            Require(!connection.IsOpen(), "a send that timed out releases the connection");
+        }
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            SendTrace trace;
+            std::atomic<int> calls{ 0 };
+            std::atomic<bool> passed{ false };
+            connection.SetSendTraceForTests([&](size_t bytes, bool after_wait) {
+                {
+                    std::lock_guard<std::mutex> guard(trace.mutex);
+                    trace.calls.push_back({ bytes, after_wait });
+                }
+                if (++calls == 2)
+                    passed.store(true); // the deadline passes while the second piece is handed over
+            });
+            connection.SetClockForTests([&passed] {
+                return passed.load() ? std::chrono::steady_clock::time_point::max() : std::chrono::steady_clock::now();
+            });
+            Require(Eventually([&] { return !server.Connected(); }), "the server must be free for the next connection");
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+            std::string error;
+            Require(!connection.SendBinary(payload.data(), payload.size(), 600000, error), "a frame whose deadline passed between two pieces must not be sent whole");
+            Contains(error, "send timed out");
+            Require(trace.Count() == 2, ("the frame must stop after the piece in flight when the deadline passed, it made " + std::to_string(trace.Count()) + " calls").c_str());
+            Require(!connection.IsOpen(), "a send that timed out releases the connection");
+            Require(server.BinaryReceived().empty(), "no part of the frame may count as a message");
+        }
+    }
+
     // The receive cap is the connection's own: the session keeps 8 MiB, a connection that expects
     // only small answers asks for less, and the cap is enforced from the frame header at that
     // value. What a connection receives stays text only, whatever its cap.
@@ -11576,6 +11627,7 @@ namespace
             { "native_ws_every_write_waits_for_the_socket", [](const std::string&) { NativeWsEveryWriteWaitsForTheSocket(); } },
             { "native_ws_send_to_a_peer_that_stops_reading", [](const std::string&) { NativeWsSendToAPeerThatStopsReading(); } },
             { "native_ws_close_writes_nothing_to_a_full_socket", [](const std::string&) { NativeWsCloseWritesNothingToAFullSocket(); } },
+            { "native_ws_send_stops_at_its_deadline", [](const std::string&) { NativeWsSendStopsAtItsDeadline(); } },
             { "native_ws_receive_cap_is_set_per_connection", [](const std::string&) { NativeWsReceiveCapIsSetPerConnection(); } },
             { "native_ws_second_connection_opens_beside_the_session", [](const std::string&) { NativeWsSecondConnectionOpensBesideTheSession(); } },
             { "native_ws_second_connection_refusal_reports_its_status", [](const std::string&) { NativeWsSecondConnectionRefusalReportsItsStatus(); } },

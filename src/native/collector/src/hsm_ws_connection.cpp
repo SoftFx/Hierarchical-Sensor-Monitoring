@@ -261,10 +261,11 @@ namespace hsm::http
 
     // Waits until the connection's socket is readable/writable, the deadline passes or Cancel() is
     // called. Waits in slices so a cancel is noticed without a wake-up primitive (see the header).
-    // The socket is polled at least once, so a deadline that has passed makes it a zero-timeout
-    // check rather than an immediate Timeout. `honour_cancel` false: a cancel does not end the wait
+    // A deadline that has passed is a Timeout, before any poll: so a send whose deadline passes between
+    // two pieces stops there. `poll_once` (WritableNow only): the socket is polled once even when the
+    // deadline has passed, a zero-timeout check. `honour_cancel` false: a cancel does not end the wait
     // (the close frame of a cancelled connection is still written when the socket takes it).
-    WebSocketConnection::Wait WebSocketConnection::WaitForSocket(bool for_read, Deadline deadline, bool honour_cancel)
+    WebSocketConnection::Wait WebSocketConnection::WaitForSocket(bool for_read, Deadline deadline, bool honour_cancel, bool poll_once)
     {
         if (!for_read)
             writable_seen_ = false;
@@ -277,10 +278,14 @@ namespace hsm::http
             if (honour_cancel && cancelled_.load())
                 return Wait::Cancelled;
 
-            const int64_t left = RemainingMs(deadline);
-            if (left <= 0 && !first)
+            // Compared exactly, not in whole milliseconds: a deadline less than a millisecond away has
+            // not passed, and its slice is one millisecond.
+            const auto now = Now();
+            const bool passed = now >= deadline;
+            if (passed && !(first && poll_once))
                 return Wait::Timeout;
-            const int slice = static_cast<int>(std::min<int64_t>(left, kWaitSliceMs));
+            const int64_t left = passed ? 0 : std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+            const int slice = passed ? 0 : static_cast<int>(std::max<int64_t>(1, std::min<int64_t>(left, kWaitSliceMs)));
             if (!for_read && writable_for_tests_ && !writable_for_tests_())
             {
                 // The test's stand-in for full buffers: the slice passes as a poll that found
@@ -331,7 +336,12 @@ namespace hsm::http
 
     bool WebSocketConnection::WritableNow()
     {
-        return WaitForSocket(/*for_read=*/false, std::chrono::steady_clock::now(), /*honour_cancel=*/false) == Wait::Ready;
+        return WaitForSocket(/*for_read=*/false, Now(), /*honour_cancel=*/false, /*poll_once=*/true) == Wait::Ready;
+    }
+
+    WebSocketConnection::Deadline WebSocketConnection::Now() const
+    {
+        return clock_for_tests_ ? clock_for_tests_() : std::chrono::steady_clock::now();
     }
 
     int WebSocketConnection::WsSend(const char* data, size_t size, size_t* sent, int64_t fragsize, unsigned int flags)

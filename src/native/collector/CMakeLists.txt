@@ -525,7 +525,8 @@ if(HSM_COLLECTOR_HTTP)
     foreach(name
             native_ws_every_write_waits_for_the_socket
             native_ws_send_to_a_peer_that_stops_reading
-            native_ws_close_writes_nothing_to_a_full_socket)
+            native_ws_close_writes_nothing_to_a_full_socket
+            native_ws_send_stops_at_its_deadline)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
         set_tests_properties(${name} PROPERTIES TIMEOUT 300)
     endforeach()

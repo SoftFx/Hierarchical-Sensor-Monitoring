@@ -132,7 +132,9 @@ namespace hsm::http
 
         // Sends one text message as one frame. False on failure, timeout ("send timed out") or
         // cancellation ("cancelled"); the connection is released then (a frame may be
-        // half-written).
+        // half-written). `timeout_ms` bounds the whole frame: once it has passed no more of the
+        // frame is handed to libcurl, even when the socket would take it; a timeout of 0 (or less)
+        // fails at once with "send timed out" and writes nothing.
         //
         // What bounds a send, on every TLS backend: before EACH call into libcurl this class waits
         // for the socket to be writable, with the caller's deadline and the cancel flag, and each
@@ -223,6 +225,10 @@ namespace hsm::http
         // peer's buffer for as long as the peer's window allows.
         void SetWritableForTests(std::function<bool()> writable) { writable_for_tests_ = std::move(writable); }
 
+        // For tests, set before Open: the clock the waits compare a deadline with (deadlines are still
+        // taken from steady_clock), so a test can make a deadline pass at a chosen moment.
+        void SetClockForTests(std::function<std::chrono::steady_clock::time_point()> clock) { clock_for_tests_ = std::move(clock); }
+
     private:
         enum class Wait
         {
@@ -238,7 +244,9 @@ namespace hsm::http
 
         // Polls at least once, even when the deadline has passed: with a past deadline it is a
         // zero-timeout check.
-        Wait WaitForSocket(bool for_read, Deadline deadline, bool honour_cancel = true);
+        Wait WaitForSocket(bool for_read, Deadline deadline, bool honour_cancel = true, bool poll_once = false);
+        // The clock the waits compare deadlines with: steady_clock, or the tests' (SetClockForTests).
+        Deadline Now() const;
         // One zero-timeout check that the socket takes a write now; a cancel does not count.
         bool WritableNow();
         // One curl_ws_send (a CURLcode as an int), traced for the tests.
@@ -271,5 +279,6 @@ namespace hsm::http
         bool writable_seen_ = false;
         std::function<void(size_t, bool)> send_trace_for_tests_;
         std::function<bool()> writable_for_tests_;
+        std::function<std::chrono::steady_clock::time_point()> clock_for_tests_;
     };
 } // namespace hsm::http
