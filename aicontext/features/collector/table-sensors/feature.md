@@ -500,6 +500,20 @@ Unix nanoseconds, kept to 100 ns (rounded down). Settings: `hsm_table_options_t`
 `tables`); without it every table sensor is `Unavailable` ("built with HSM_COLLECTOR_TABLES=OFF"). Delivery needs the
 session transport too, so `HSM_COLLECTOR_HTTP` as well. The agent and the probe build with tables OFF.
 
+**Through the legacy C++ wrapper (#1848 part 5, wrapper 2.0.0).** `HSMCppWrapper.dll` (`src/wrapper`) is built with
+`HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES` and a pinned libcurl with WebSocket (`src/wrapper/vcpkg.json`, the
+same baseline as the native collector's manifest), and its `DataCollectorProxy` chooses the session when it is
+constructed (ADR-0019, point 5 as amended on 2026-11-25), so a table sensor made through
+`proxy.Native().CreateTableSensor(...)` before or after `Start` registers and delivers like any other native one, on a
+server that has the table connection (the first release with it is later than 3.44.0; on an earlier server with
+sessions the values flow and table sensors deliver nothing); the wrapper's own ABI has no table type. Before `Start`
+the only observable of the default transport is such a table sensor's state (Pending, not Unavailable). After `proxy.UseHttpTransport()` (the one method 2.0.0 adds, for a server
+without sessions) every table sensor is `Unavailable` with the reason "table sensors need the collector session
+transport (hsm_collector_use_session_transport)" and its rows are dropped and counted. Pinned through the exported
+API by `src/wrapper/WrapperConsole/WrapperTransportTests.cpp` (`wrapper_table_sensor_delivers_on_the_default_transport`,
+`wrapper_table_sensor_is_unavailable_on_http`) against `tests/ws_test_server.hpp`. The bundle ships `zstd.dll` beside
+`libcurl.dll` and `z.dll`.
+
 **What works since 0.15.1 (#1848 part 4).** A collector on the session (`hsm_collector_use_session_transport`) built
 with both options delivers its table sensors: the registrations as a `commands` request of their own on the session
 (the wire of the managed golden `Registration_of_a_table_sensor_carries_its_columns_after_previous_paths`), the
