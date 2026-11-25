@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.TableBatches;
+using HSMDatabase.LevelDB.Sealed;
 using LevelDB;
 using NLog;
 
@@ -32,6 +33,12 @@ namespace HSMDatabase.LevelDB.TableBatches
     {
         public const string FolderName = "BatchesV1";
         public const string HoursName = "Hours";
+
+        /// <summary>
+        /// The product's record of week databases retention dropped, one name (<c>&lt;yyyyMMdd&gt;_P&lt;weeks&gt;</c>) per
+        /// line, written durably before a folder is deleted. Outside <c>Hours</c>, so it survives the loss of <c>Hours</c>.
+        /// </summary>
+        public const string DroppedName = "Dropped";
 
         internal const byte TagIndex = 0x00;
         internal const byte TagBatch = 0x01;
@@ -64,6 +71,10 @@ namespace HSMDatabase.LevelDB.TableBatches
         private readonly Dictionary<(Guid Product, long Week, int Period), Handle> _handles = [];
         private readonly LinkedList<Handle> _lru = new();
 
+        // Week databases Acquire treats as absent (a read finds nothing, a write is a fault): while a drop closes and deletes
+        // them, and after a failed delete until the next open of the product deletes the folder left. Under _cacheLock.
+        private readonly HashSet<(Guid Product, long Week, int Period)> _dropping = [];
+
         private int _maxOpen = DefaultMaxOpenDatabases;
         private bool _disposed;
 
@@ -82,8 +93,17 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// <summary>The clock of commit times. Test seam.</summary>
         internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
-        /// <summary>Called at the points a test stands a crash at: "part-written", "before-commit", "committed".</summary>
+        /// <summary>
+        /// Called at the points a test stands a crash or a pause at: "part-written", "before-commit", "committed" (the hour
+        /// write); "flush" (before a week's memtable is written out); "read-holding" (a read holds a database and its iterator);
+        /// "drop-waiting" (a drop waits for the leases of the week, under the cache lock), "drop-deleting" (before the folder
+        /// is deleted); "dispose-waiting" (a dispose waits for leases, under the cache lock), "dispose-product" (before a
+        /// dispose takes a product's lock).
+        /// </summary>
         internal Action<string> Checkpoint { get; set; }
+
+        /// <summary>Deletes a dropped week's folder. Test seam for a delete that fails.</summary>
+        internal Action<string> DeleteFolder { get; set; } = path => Directory.Delete(path, recursive: true);
 
         public string Folder => _root;
 
@@ -128,8 +148,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             ArgumentNullException.ThrowIfNull(commit);
             ArgumentNullException.ThrowIfNull(parts);
 
-            if (parts.Select(p => p.PeriodWeeks).Distinct().Count() != parts.Count || parts.Any(p => p.PeriodWeeks < 0))
-                throw new ArgumentException("One part per period class, a period of 0 (forever) or more weeks.", nameof(parts));
+            if (parts.Select(p => p.PeriodWeeks).Distinct().Count() != parts.Count || parts.Any(p => p.PeriodWeeks < 0 || p.PeriodWeeks > ushort.MaxValue))
+                throw new ArgumentException($"One part per period class, a period of 0 (forever) to {ushort.MaxValue} weeks.", nameof(parts));
 
             long hour = commit.HourTicks;
             long week = StorageWeek.GetStartTicks(hour);
@@ -141,10 +161,11 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             lock (product.Lock)
             {
+                if (product.HoursDb is null)
+                    throw new TableBatchStoreException("The table batch store is closed.");
+
                 if (product.Hours.ContainsKey(hour))
                     return;
-
-                PinWeek(product, week);
 
                 var ordered = parts.OrderBy(p => p.PeriodWeeks).ToList();
                 var classes = ordered.Select(p => new TableBatchClassRange(p.PeriodWeeks,
@@ -152,10 +173,14 @@ namespace HSMDatabase.LevelDB.TableBatches
                     p.Batches.Count, p.Batches.Sum(b => (long)b.RowCount))).ToList();
                 // The commit time: the deletion delay of the hour's blocks runs from it, also across a restart.
                 long commitTicks = Clock().Ticks;
-                var record = EncodeCommit(commit, classes, commitTicks);
+                byte[] record;
 
                 try
                 {
+                    RefuseDropped(product, ordered.Select(p => new TableBatchWeek(week, p.PeriodWeeks)));
+                    PinWeek(product, week);
+                    record = EncodeCommit(commit, classes, commitTicks);
+
                     foreach (var part in ordered)
                     {
                         var key = (productId, week, part.PeriodWeeks);
@@ -207,11 +232,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 product.Hours[hour] = new TableBatchHour(hour, classes, commit.FirstBlockSequence, commit.LastBlockSequence, commit.BlocksMerged, commit.UnreadableBlocks.ToArray(), commitTicks);
                 product.Snapshot = null;
 
-                if (hour >= product.WatermarkHour)
-                {
-                    product.WatermarkHour = hour;
-                    product.Watermarks = new Dictionary<Guid, long>(commit.Watermarks);
-                }
+                RaiseWatermarks(product, commit.Watermarks);
 
                 Statistics.Add(ref Statistics.HoursCommitted);
                 Checkpoint?.Invoke("committed");
@@ -229,6 +250,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             lock (product.Lock)
             {
+                RefuseDropped(product, [week]);
                 var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: true, pin: false);
 
                 try
@@ -269,20 +291,24 @@ namespace HSMDatabase.LevelDB.TableBatches
                     handle.Leases++;
             }
 
-            foreach (var handle in closed)
+            try
             {
-                try
-                {
+                foreach (var handle in closed)
                     Flush(handle);
-                }
-                finally
+            }
+            finally
+            {
+                // Every lease taken is released, also after a failed flush: a drop or a dispose waits for them.
+                lock (_cacheLock)
                 {
-                    lock (_cacheLock)
+                    foreach (var handle in closed)
                     {
                         handle.Pinned = false;
                         handle.Leases--;
-                        EvictOverBound();
                     }
+
+                    EvictOverBound();
+                    Monitor.PulseAll(_cacheLock);
                 }
             }
 
@@ -294,6 +320,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             if (!handle.Dirty)
                 return;
 
+            Checkpoint?.Invoke("flush");
             handle.Db.CompactRange(FlushKey, FlushKey);
             handle.Dirty = false;
             Statistics.Add(ref Statistics.WeeksFlushed);
@@ -392,6 +419,8 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                     using (var iterator = handle.Db.CreateIterator())
                     {
+                        Checkpoint?.Invoke("read-holding");
+
                         foreach (var hour in selected)
                         {
                             var prefix = IndexPrefix(hour, sensorId);
@@ -478,46 +507,150 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             lock (product.Lock)
             {
+                if (product.HoursDb is null)
+                    throw new TableBatchStoreException("The table batch store is closed.");
+
                 var key = (productId, week.WeekStartTicks, week.PeriodWeeks);
-
-                lock (_cacheLock)
-                {
-                    if (_handles.TryGetValue(key, out var handle))
-                    {
-                        while (handle.Leases > 0)
-                            Monitor.Wait(_cacheLock);
-
-                        Close(handle);
-                    }
-                }
-
                 var path = WeekPath(productId, week.WeekStartTicks, week.PeriodWeeks);
-                if (Directory.Exists(path))
-                    Directory.Delete(path, recursive: true);
 
-                product.Weeks.Remove(week);
+                if (!product.Weeks.Contains(week) && !Directory.Exists(path))
+                    return;
 
-                // Hours of the week left without any database are removed from the hours database.
-                var weekEnd = week.WeekStartTicks + 7 * TimeSpan.TicksPerDay;
-                using var batch = new WriteBatch();
-                var removed = new List<long>();
-
-                foreach (var hour in product.Hours.Values.Where(h => h.HourTicks >= week.WeekStartTicks && h.HourTicks < weekEnd))
-                    if (Visible(product, hour).Classes.Count == 0)
+                bool leftover = false;
+                try
+                {
+                    lock (_cacheLock)
                     {
-                        batch.Delete(CommitKey(hour.HourTicks));
-                        removed.Add(hour.HourTicks);
+                        // From here on Acquire treats the week as absent: no read opens it again, the leases held only end.
+                        _dropping.Add(key);
+
+                        // A reader's Release may close the handle itself (over the bound), so it is looked up after every wait.
+                        while (_handles.TryGetValue(key, out var handle))
+                        {
+                            if (handle.Leases == 0)
+                            {
+                                Close(handle);
+                                break;
+                            }
+
+                            Checkpoint?.Invoke("drop-waiting");
+                            Monitor.Wait(_cacheLock);
+                        }
                     }
 
-                if (removed.Count > 0)
-                    product.HoursDb.Write(batch, _syncWrite);
+                    // Durable before the folder goes: a rebuild of Hours tells a dropped class from a part never written by it.
+                    try
+                    {
+                        RecordDropped(product, week);
+                    }
+                    catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
+                    {
+                        Statistics.Add(ref Statistics.WriteFailures);
+                        throw new TableBatchStoreException($"The drop of the table batch database {path} could not be recorded: {ex.Message}", ex);
+                    }
 
-                foreach (var hour in removed)
-                    product.Hours.Remove(hour);
+                    Exception failure = null;
+                    try
+                    {
+                        Checkpoint?.Invoke("drop-deleting");
+                        if (Directory.Exists(path))
+                            DeleteFolder(path);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        if (Directory.Exists(path))
+                        {
+                            failure = ex;
+                            leftover = true;
+                        }
+                    }
 
-                product.Snapshot = null;
-                Statistics.Add(ref Statistics.WeeksDropped);
+                    // Dropped by the record, whether the folder went or not: a folder left is deleted at the next open.
+                    product.Weeks.Remove(week);
+
+                    // Hours of the week left without any database are removed from the hours database.
+                    var weekEnd = week.WeekStartTicks + 7 * TimeSpan.TicksPerDay;
+                    using var batch = new WriteBatch();
+                    var removed = new List<long>();
+
+                    foreach (var hour in product.Hours.Values.Where(h => h.HourTicks >= week.WeekStartTicks && h.HourTicks < weekEnd))
+                        if (Visible(product, hour).Classes.Count == 0)
+                        {
+                            batch.Delete(CommitKey(hour.HourTicks));
+                            removed.Add(hour.HourTicks);
+                        }
+
+                    if (removed.Count > 0)
+                        product.HoursDb.Write(batch, _syncWrite);
+
+                    foreach (var hour in removed)
+                        product.Hours.Remove(hour);
+
+                    product.Snapshot = null;
+
+                    if (failure is not null)
+                    {
+                        Statistics.Add(ref Statistics.WriteFailures);
+                        _logger.Error($"The folder of the dropped table batch database {path} could not be deleted ({failure.Message}); it is deleted at the next open of the product");
+                        throw new TableBatchStoreException($"The folder of the dropped table batch database {path} could not be deleted: {failure.Message}", failure);
+                    }
+
+                    Statistics.Add(ref Statistics.WeeksDropped);
+                }
+                finally
+                {
+                    // A folder left by a failed delete stays absent to Acquire until the next open of the product deletes it.
+                    if (!leftover)
+                        lock (_cacheLock)
+                            _dropping.Remove(key);
+                }
             }
+        }
+
+        // Under the product's lock. Rewrites the product's record of dropped week databases with the given one added. An
+        // entry is kept while a database of its week is left (a mark there may name its class) or its own folder is still on
+        // disk; the others go, so the record holds at most the dropped classes of the weeks still on disk.
+        private void RecordDropped(ProductState product, TableBatchWeek week)
+        {
+            var entries = product.Dropped.Append(week).Distinct()
+                .Where(e => e == week || product.Weeks.Any(w => w.WeekStartTicks == e.WeekStartTicks) ||
+                            Directory.Exists(WeekPath(product.Id, e.WeekStartTicks, e.PeriodWeeks)))
+                .OrderBy(e => e.WeekStartTicks).ThenBy(e => e.PeriodWeeks).ToList();
+
+            var text = string.Concat(entries.Select(e => WeekName(e.WeekStartTicks, e.PeriodWeeks) + "\n"));
+            DurableFile.WriteAtomic(Path.Combine(ProductPath(product.Id), DroppedName), text, strict: true);
+
+            product.Dropped = [.. entries];
+        }
+
+        private HashSet<TableBatchWeek> ReadDropped(Guid productId, string folder)
+        {
+            var path = Path.Combine(folder, DroppedName);
+            var dropped = new HashSet<TableBatchWeek>();
+
+            if (!File.Exists(path))
+                return dropped;
+
+            foreach (var line in File.ReadAllLines(path))
+                if (TryParseWeek(line, out var week))
+                    dropped.Add(week);
+                else if (line.Length > 0)
+                    _logger.Error($"The record of dropped table batch databases of product {productId} has a line that is not a week database: '{line}'; skipped");
+
+            return dropped;
+        }
+
+        // Under the product's lock. A write into a week database retention dropped is refused: its period has passed, and a
+        // database created again would hold hours the record says lost their class.
+        private void RefuseDropped(ProductState product, IEnumerable<TableBatchWeek> weeks)
+        {
+            foreach (var week in weeks)
+                if (product.Dropped.Contains(week))
+                {
+                    Statistics.Add(ref Statistics.WriteFailures);
+                    throw new TableBatchStoreException($"The table batch database {WeekName(week.WeekStartTicks, week.PeriodWeeks)} of product {product.Id} " +
+                                                       "was dropped by retention: nothing is written into it.");
+                }
         }
 
         // The hour with only the classes whose week database exists.
@@ -567,11 +700,30 @@ namespace HSMDatabase.LevelDB.TableBatches
             var started = DateTime.UtcNow;
             Directory.CreateDirectory(folder);
 
-            var product = new ProductState(productId);
+            var product = new ProductState(productId) { Dropped = ReadDropped(productId, folder) };
 
             foreach (var dir in Directory.GetDirectories(folder))
                 if (TryParseWeek(Path.GetFileName(dir), out var week))
-                    product.Weeks.Add(week);
+                {
+                    if (!product.Dropped.Contains(week))
+                    {
+                        product.Weeks.Add(week);
+                        continue;
+                    }
+
+                    // Dropped, but a crash or a failed delete left its folder: deleted now; if it fails again, still absent.
+                    try
+                    {
+                        DeleteFolder(dir);
+                        _logger.Info($"The folder of the dropped table batch database {dir} was deleted at the open of product {productId}");
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _logger.Error($"The folder of the dropped table batch database {dir} could not be deleted ({ex.Message}); it is left until the next open");
+                        lock (_cacheLock)
+                            _dropping.Add((productId, week.WeekStartTicks, week.PeriodWeeks));
+                    }
+                }
 
             var hoursPath = Path.Combine(folder, HoursName);
             var existed = Directory.Exists(hoursPath);
@@ -617,16 +769,32 @@ namespace HSMDatabase.LevelDB.TableBatches
                 var (hour, watermarks) = DecodeCommit(BinaryPrimitives.ReadInt64BigEndian(key), iterator.Value());
                 product.Hours[hour.HourTicks] = hour;
 
-                if (hour.HourTicks >= product.WatermarkHour)
-                {
-                    product.WatermarkHour = hour.HourTicks;
-                    product.Watermarks = watermarks;
-                }
+                RaiseWatermarks(product, watermarks);
             }
         }
 
+        // The watermark of a producer is the highest over every commit of the product, whatever the order the hours were
+        // committed in: an hour merged after a later one may name a producer the later one does not. A new map each time,
+        // since GetWatermarks hands the current one out.
+        private static void RaiseWatermarks(ProductState product, IReadOnlyDictionary<Guid, long> watermarks)
+        {
+            Dictionary<Guid, long> raised = null;
+
+            foreach (var (producer, sequence) in watermarks)
+                if (!product.Watermarks.TryGetValue(producer, out var current) || sequence > current)
+                {
+                    raised ??= new Dictionary<Guid, long>(product.Watermarks);
+                    raised[producer] = sequence;
+                }
+
+            if (raised is not null)
+                product.Watermarks = raised;
+        }
+
         // The hours database is missing or was damaged: every hour whose mark is in every week database its commit names
-        // was committed (the parts are written before the commit, and each part holds the same record as its mark).
+        // was committed (the parts are written before the commit, and each part holds the same record as its mark). A class
+        // the record of dropped databases names for the hour's week counts as found: retention dropped it after the commit
+        // (a write into a dropped database is refused, so its absence is never a part that was not written).
         private void Rebuild(ProductState product)
         {
             var marks = new Dictionary<long, (byte[] Record, HashSet<int> Found)>();
@@ -667,7 +835,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             foreach (var (hour, (record, found)) in marks.OrderBy(m => m.Key))
             {
                 var (decoded, _) = DecodeCommit(hour, record);
-                if (!decoded.Classes.All(c => found.Contains(c.PeriodWeeks)))
+                var week = StorageWeek.GetStartTicks(hour);
+                if (!decoded.Classes.All(c => found.Contains(c.PeriodWeeks) || product.Dropped.Contains(new TableBatchWeek(week, c.PeriodWeeks))))
                     continue;
 
                 var rebuiltRecord = (byte[])record.Clone();
@@ -694,6 +863,15 @@ namespace HSMDatabase.LevelDB.TableBatches
             {
                 if (_disposed)
                     throw new TableBatchStoreException("The table batch store is closed.");
+
+                if (_dropping.Contains(key))
+                {
+                    if (!create)
+                        return null;
+
+                    Statistics.Add(ref Statistics.WriteFailures);
+                    throw new TableBatchStoreException($"The table batch database {WeekPath(key.Product, key.Week, key.Period)} is being dropped.");
+                }
 
                 if (_handles.TryGetValue(key, out var handle))
                 {
@@ -805,26 +983,55 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
+        /// <summary>
+        /// Refuses every operation that starts from here on, then closes each week database once the reads and writes that
+        /// hold it let it go, and each product's hours database under the product's lock (after a write in flight). Closing a
+        /// database under a live iterator or a running write would free it under native code. Nothing is bounded by a timer:
+        /// an operation in flight ends.
+        /// </summary>
         public void Dispose()
         {
+            List<ProductState> products;
+
             lock (_productsLock)
             {
                 if (_disposed)
                     return;
 
                 lock (_cacheLock)
-                {
                     _disposed = true;
 
-                    foreach (var handle in _handles.Values.ToList())
-                        Close(handle);
-                }
-
-                foreach (var product in _products.Values)
-                    product.HoursDb?.Dispose();
-
-                _products.Clear();
+                products = [.. _products.Values];
             }
+
+            lock (_cacheLock)
+            {
+                while (_handles.Count > 0)
+                {
+                    foreach (var handle in _handles.Values.Where(h => h.Leases == 0).ToList())
+                        Close(handle);
+
+                    if (_handles.Count > 0)
+                    {
+                        Checkpoint?.Invoke("dispose-waiting");
+                        Monitor.Wait(_cacheLock);
+                    }
+                }
+            }
+
+            foreach (var product in products)
+            {
+                Checkpoint?.Invoke("dispose-product");
+
+                lock (product.Lock)
+                {
+                    product.HoursDb?.Dispose();
+                    product.HoursDb = null;
+                }
+            }
+
+            lock (_productsLock)
+                _products.Clear();
         }
 
 
@@ -1036,9 +1243,9 @@ namespace HSMDatabase.LevelDB.TableBatches
             public readonly object Lock = new();
             public readonly SortedDictionary<long, TableBatchHour> Hours = [];
             public readonly HashSet<TableBatchWeek> Weeks = [];
+            public HashSet<TableBatchWeek> Dropped = [];
             public DB HoursDb;
             public long PinnedWeek = long.MinValue;
-            public long WatermarkHour = long.MinValue;
             public IReadOnlyDictionary<Guid, long> Watermarks = new Dictionary<Guid, long>();
             public IReadOnlyList<TableBatchHour> Snapshot;
         }

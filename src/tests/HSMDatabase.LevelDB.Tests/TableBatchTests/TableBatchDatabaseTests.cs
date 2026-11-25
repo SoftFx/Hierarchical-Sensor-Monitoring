@@ -182,9 +182,34 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal([Week0, Week0 + Hour], hours.Select(h => h.HourTicks));
             Assert.Equal([42L, 43], hours[1].UnreadableBlocks);
 
-            // The newest commit holds the product's watermarks: the producer missing from it is not carried over by the store.
-            Assert.Equal(new Dictionary<Guid, long> { [_producer] = 9 }, reopened.GetWatermarks(_product));
+            // The highest per producer over every commit: a producer the newest commit does not name keeps its watermark.
+            Assert.Equal(new Dictionary<Guid, long> { [_producer] = 9, [other] = 7 }, reopened.GetWatermarks(_product));
             Assert.Equal([_product], reopened.GetProducts());
+        }
+
+        [Fact]
+        public void A_producer_of_an_hour_committed_after_a_later_one_keeps_its_watermark_also_after_a_reopen_and_a_rebuild()
+        {
+            var store = Open();
+            var late = Guid.NewGuid();
+
+            // The later hour commits first; the earlier one, merged afterwards, is the only one that names producer X.
+            store.WriteHour(_product, Commit(Week0 + Hour, sequence: 9), [Part(4, (_sensorA, 0, 1))]);
+            store.WriteHour(_product, Commit(Week0, sequence: 5) with { Watermarks = new Dictionary<Guid, long> { [_producer] = 5, [late] = 3 } },
+                [Part(4, (_sensorA, 0, 1))]);
+
+            var expected = new Dictionary<Guid, long> { [_producer] = 9, [late] = 3 };
+            Assert.Equal(expected, store.GetWatermarks(_product));
+            store.Dispose();
+
+            var reopened = Open();
+            Assert.Equal(expected, reopened.GetWatermarks(_product));
+            reopened.Dispose();
+
+            DamageHours();
+            var rebuilt = Open();
+            Assert.Equal(expected, rebuilt.GetWatermarks(_product));
+            Assert.Equal(2, rebuilt.Statistics.HoursRebuilt);
         }
 
         [Fact]
@@ -332,6 +357,258 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
+        public void A_rebuild_after_a_class_was_dropped_restores_the_hour_with_the_classes_left()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, sequence: 1), TwoParts());
+            store.DropWeek(_product, new TableBatchWeek(Week0, 1));
+            store.Dispose();
+
+            // The mark in the P4 database still names P1, whose database retention dropped.
+            DamageHours();
+
+            var reopened = Open();
+            var hour = Assert.Single(reopened.GetHours(_product));
+            Assert.Equal([4], hour.Classes.Select(c => c.PeriodWeeks));
+            Assert.True(reopened.IsHourMerged(_product, Week0));
+            Assert.Single(reopened.ReadSensor(_product, _sensorB, 4, [Week0]));
+            Assert.Equal(1, reopened.Statistics.HoursRebuilt);
+        }
+
+        [Fact]
+        public void A_rebuild_still_refuses_an_hour_whose_part_was_never_written_when_other_classes_were_dropped()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, sequence: 1), TwoParts());
+
+            // The hour of the next week stops after its P1 part: its P4 database was never created.
+            store.Checkpoint = p => { if (p == "part-written") throw new CheckpointException(p); };
+            Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0 + Week, sequence: 2), TwoParts()));
+            store.Checkpoint = null;
+
+            store.DropWeek(_product, new TableBatchWeek(Week0, 1));
+            store.Dispose();
+            DamageHours();
+
+            var reopened = Open();
+            Assert.Equal([Week0], reopened.GetHours(_product).Select(h => h.HourTicks));
+            Assert.False(reopened.IsHourMerged(_product, Week0 + Week));
+            Assert.Equal(1L, reopened.GetWatermarks(_product)[_producer]);
+        }
+
+        [Fact]
+        public void A_drop_that_waits_for_a_read_does_not_close_again_the_database_the_read_evicted()
+        {
+            var store = Open();
+            store.MaxOpenDatabases = 1;
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
+            store.WriteHour(_product, Commit(Week0 + Week), [Part(4, (_sensorA, 0, 1))]);
+            Assert.Equal(1, store.OpenDatabases); // the newest week, pinned
+
+            using var holding = new ManualResetEventSlim();
+            using var dropWaiting = new ManualResetEventSlim();
+            var gate = new ManualResetEventSlim(); // not disposed: a thread of a failed test may still wait on it
+            store.Checkpoint = p =>
+            {
+                if (p == "read-holding")
+                {
+                    holding.Set();
+                    gate.Wait();
+                }
+                else if (p == "drop-waiting")
+                    dropWaiting.Set();
+            };
+
+            // The read opens week 0 above the bound and holds it; its release closes it (the bound), while the drop waits.
+            var read = StartLong(() => store.ReadSensor(_product, _sensorA, 4, [Week0]));
+            Assert.True(holding.Wait(Bound), "the read holds week 0");
+            var drop = StartLong(() => store.DropWeek(_product, new TableBatchWeek(Week0, 4)));
+            Assert.True(dropWaiting.Wait(Bound), "the drop waits for the read");
+            gate.Set();
+
+            Assert.True(read.Wait(Bound));
+            Assert.Single(read.Result);
+            Assert.True(drop.Wait(Bound));
+            store.Checkpoint = null;
+
+            Assert.False(Directory.Exists(store.WeekPath(_product, Week0, 4)));
+            Assert.Equal([new TableBatchWeek(Week0 + Week, 4)], store.GetWeeks(_product));
+            Assert.Equal(1, store.OpenDatabases);
+            Assert.Equal(store.Statistics.DatabasesOpened - 1, store.Statistics.DatabasesClosed);
+        }
+
+        [Fact]
+        public void A_read_during_a_drop_finds_nothing_and_does_not_open_the_week_again()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), TwoParts());
+            var path = store.WeekPath(_product, Week0, 1);
+
+            IReadOnlyList<TableBatchRead> during = null;
+            int openDuring = -1;
+            store.Checkpoint = p =>
+            {
+                if (p == "drop-deleting")
+                {
+                    during = store.ReadSensor(_product, _sensorA, 1, [Week0]);
+                    openDuring = store.OpenDatabases;
+                }
+            };
+
+            store.DropWeek(_product, new TableBatchWeek(Week0, 1));
+            store.Checkpoint = null;
+
+            Assert.Empty(during);
+            Assert.Equal(1, openDuring); // the P4 database only
+            Assert.False(Directory.Exists(path));
+            Assert.Empty(store.ReadSensor(_product, _sensorA, 1, [Week0]));
+            Assert.False(Directory.Exists(path));
+        }
+
+        [Fact]
+        public void A_drop_whose_delete_fails_is_a_store_fault_and_the_week_stays_dropped_until_its_folder_goes()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), TwoParts());
+            var path = store.WeekPath(_product, Week0, 1);
+
+            // Half deleted, then the delete fails.
+            store.DeleteFolder = p =>
+            {
+                File.Delete(Path.Combine(p, "CURRENT"));
+                throw new IOException("delete failure injected by the test");
+            };
+
+            Assert.Throws<TableBatchStoreException>(() => store.DropWeek(_product, new TableBatchWeek(Week0, 1)));
+
+            // Dropped in the lists, the folder left on disk; a read finds nothing there, a write into it is a fault.
+            Assert.True(Directory.Exists(path));
+            Assert.Equal([new TableBatchWeek(Week0, 4)], store.GetWeeks(_product));
+            Assert.Equal([4], store.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+            Assert.Empty(store.ReadSensor(_product, _sensorA, 1, [Week0]));
+            Assert.Equal(1, store.OpenDatabases);
+            Assert.Throws<TableBatchStoreException>(() => store.WriteHour(_product, Commit(Week0 + Hour), [Part(1, (_sensorA, 0, 1))]));
+            Assert.False(store.IsHourMerged(_product, Week0 + Hour));
+            store.Dispose();
+
+            // The next open of the product deletes the folder.
+            var reopened = Open();
+            Assert.Equal([new TableBatchWeek(Week0, 4)], reopened.GetWeeks(_product));
+            Assert.False(Directory.Exists(path));
+            Assert.Equal([4], reopened.GetHours(_product).Single().Classes.Select(c => c.PeriodWeeks));
+        }
+
+        // === Dispose ===
+
+        [Fact]
+        public void A_dispose_waits_for_a_read_that_holds_a_database_and_refuses_what_starts_after_it()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 2))]);
+
+            using var holding = new ManualResetEventSlim();
+            using var disposeWaiting = new ManualResetEventSlim();
+            var gate = new ManualResetEventSlim(); // not disposed: a thread of a failed test may still wait on it
+            store.Checkpoint = p =>
+            {
+                if (p == "read-holding")
+                {
+                    holding.Set();
+                    gate.Wait();
+                }
+                else if (p == "dispose-waiting")
+                    disposeWaiting.Set();
+            };
+
+            var read = StartLong(() => store.ReadSensor(_product, _sensorA, 4, [Week0]));
+            Assert.True(holding.Wait(Bound), "the read holds the week");
+            var dispose = StartLong(store.Dispose);
+            Assert.True(disposeWaiting.Wait(Bound), "the dispose waits for the read");
+
+            Assert.False(dispose.IsCompleted);
+            Assert.Throws<TableBatchStoreException>(() => store.GetHours(_product));
+            Assert.Throws<TableBatchStoreException>(() => store.ReadSensor(_product, _sensorA, 4, [Week0]));
+
+            gate.Set();
+            Assert.True(read.Wait(Bound));
+            Assert.Equal(2, read.Result.Count);
+            Assert.True(dispose.Wait(Bound));
+            Assert.Equal(0, store.OpenDatabases);
+        }
+
+        [Fact]
+        public void A_dispose_waits_for_a_write_in_flight_and_the_write_commits()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0, sequence: 1), [Part(4, (_sensorA, 0, 1))]);
+
+            using var writing = new ManualResetEventSlim();
+            using var disposeWaiting = new ManualResetEventSlim();
+            var gate = new ManualResetEventSlim(); // not disposed: a thread of a failed test may still wait on it
+            store.Checkpoint = p =>
+            {
+                if (p == "before-commit")
+                {
+                    writing.Set();
+                    gate.Wait();
+                }
+                else if (p == "dispose-product")
+                    disposeWaiting.Set();
+            };
+
+            var write = StartLong(() => store.WriteHour(_product, Commit(Week0 + Hour, sequence: 2), [Part(4, (_sensorA, 0, 1))]));
+            Assert.True(writing.Wait(Bound), "the write is in flight");
+            var dispose = StartLong(store.Dispose);
+            Assert.True(disposeWaiting.Wait(Bound), "the dispose waits for the product's lock");
+
+            Assert.False(dispose.IsCompleted);
+            Assert.Throws<TableBatchStoreException>(() => store.WriteHour(_product, Commit(Week0 + 2 * Hour, sequence: 3), [Part(4, (_sensorA, 0, 1))]));
+
+            gate.Set();
+            Assert.True(write.Wait(Bound));
+            Assert.True(dispose.Wait(Bound));
+
+            var reopened = Open();
+            Assert.True(reopened.IsHourMerged(_product, Week0 + Hour));
+            Assert.False(reopened.IsHourMerged(_product, Week0 + 2 * Hour));
+            Assert.Equal(2L, reopened.GetWatermarks(_product)[_producer]);
+        }
+
+        // === Faults of the hour write ===
+
+        [Fact]
+        public void A_period_beyond_the_record_is_an_argument_error_and_not_a_store_fault()
+        {
+            var store = Open();
+
+            Assert.Throws<ArgumentException>(() => store.WriteHour(_product, Commit(Week0), [Part(ushort.MaxValue + 1, (_sensorA, 0, 1))]));
+            Assert.Equal(0, store.Statistics.WriteFailures);
+            Assert.False(store.IsHourMerged(_product, Week0));
+        }
+
+        [Fact]
+        public void A_failed_flush_of_the_previous_week_is_a_counted_store_fault_and_the_week_is_flushed_at_its_close()
+        {
+            // Two databases in the previous week: the first flush fails, the second is not reached; both leases are let go.
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), TwoParts());
+
+            store.Checkpoint = p => { if (p == "flush") throw new IOException("flush failure injected by the test"); };
+            Assert.Throws<TableBatchStoreException>(() => store.WriteHour(_product, Commit(Week0 + Week), [Part(4, (_sensorA, 0, 1))]));
+            Assert.Equal(1, store.Statistics.WriteFailures);
+            Assert.False(store.IsHourMerged(_product, Week0 + Week));
+
+            store.Checkpoint = null;
+            store.WriteHour(_product, Commit(Week0 + Week), [Part(4, (_sensorA, 0, 1))]);
+            Assert.True(store.IsHourMerged(_product, Week0 + Week));
+
+            // The failed week was unpinned; it is flushed when it is closed.
+            Assert.True(StartLong(store.Dispose).Wait(Bound), "the dispose waits for no lease left behind");
+            Assert.Equal(3, store.Statistics.WeeksFlushed);
+            Assert.All(Directory.GetFiles(store.WeekPath(_product, Week0, 4), "*.log"), f => Assert.Equal(0, new FileInfo(f).Length));
+        }
+
+        [Fact]
         public void Two_products_do_not_see_each_other()
         {
             var store = Open();
@@ -428,6 +705,21 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
                 store.Clock = clock;
             _stores.Add(store);
             return store;
+        }
+
+        // Bounds a wait that only matters when a test fails (a thread that never reaches its point).
+        private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
+
+        private static Task<T> StartLong<T>(Func<T> action) => Task.Factory.StartNew(action, TaskCreationOptions.LongRunning);
+
+        private static Task StartLong(Action action) => Task.Factory.StartNew(action, TaskCreationOptions.LongRunning);
+
+        // A record in the hours database that is not one: the next open puts it aside and rebuilds it from the marks.
+        private void DamageHours()
+        {
+            var hoursPath = Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.HoursName);
+            using var db = new DB(hoursPath, new Options());
+            db.Put([0, 0, 0, 0, 0, 0, 0, 1], [9, 9, 9], new WriteOptions());
         }
 
         private TableBatchHourCommit Commit(long hour, long sequence = 1) => new()

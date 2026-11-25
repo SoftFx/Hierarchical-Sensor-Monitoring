@@ -173,7 +173,7 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>The newest committed hour of a product, or null when it has none. Opens the product's hours database once.</summary>
         long? GetNewestHour(Guid productId);
 
-        /// <summary>The product's producer watermarks of its newest merged hour (cumulative), from memory.</summary>
+        /// <summary>The product's producer watermarks, from memory: per producer the highest over every merged hour of the product, whatever order the hours were committed in.</summary>
         IReadOnlyDictionary<Guid, long> GetWatermarks(Guid productId);
 
         /// <summary>The products with a folder in the store, opened or not.</summary>
@@ -190,8 +190,11 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours);
 
         /// <summary>
-        /// Drops a week database: closes it (waiting for the reads that hold it) and deletes its folder. Its hours lose that
-        /// class; an hour left with none is removed from the hours database.
+        /// Drops a week database: closes it (waiting for the reads that hold it; reads that start meanwhile find nothing
+        /// there), records the drop durably in the product's record of dropped databases and deletes its folder. Its hours
+        /// lose that class; an hour left with none is removed from the hours database. A write into a dropped week database
+        /// is refused. A delete that fails throws <see cref="TableBatchStoreException"/> with the week already dropped; the
+        /// folder left is deleted at the next open of the product.
         /// </summary>
         void DropWeek(Guid productId, TableBatchWeek week);
     }
