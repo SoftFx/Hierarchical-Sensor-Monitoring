@@ -201,8 +201,9 @@ namespace hsm::http
         }
     }
 
-    WebSocketConnection::WebSocketConnection(bool verify_peer)
+    WebSocketConnection::WebSocketConnection(bool verify_peer, size_t max_message_bytes)
         : verify_peer_(verify_peer)
+        , max_message_bytes_(max_message_bytes)
     {
         EnsureCurlGlobal();
     }
@@ -527,6 +528,27 @@ namespace hsm::http
 
     bool WebSocketConnection::SendText(const std::string& text, int64_t timeout_ms, std::string& error)
     {
+        return SendDataMessage(text.data(), text.size(), CURLWS_TEXT, timeout_ms, error);
+    }
+
+    bool WebSocketConnection::SendBinary(const char* data, size_t size, int64_t timeout_ms, std::string& error)
+    {
+        if (data == nullptr && size != 0)
+        {
+            try
+            {
+                error = "no data to send";
+            }
+            catch (...)
+            {
+            }
+            return false;
+        }
+        return SendDataMessage(size == 0 ? "" : data, size, CURLWS_BINARY, timeout_ms, error);
+    }
+
+    bool WebSocketConnection::SendDataMessage(const char* data, size_t size, unsigned int flags, int64_t timeout_ms, std::string& error)
+    {
         try
         {
             if (curl_ == nullptr)
@@ -534,7 +556,7 @@ namespace hsm::http
                 error = "not connected";
                 return false;
             }
-            if (SendFrame(text.data(), text.size(), CURLWS_TEXT, DeadlineIn(timeout_ms), error))
+            if (SendFrame(data, size, flags, DeadlineIn(timeout_ms), error))
                 return true;
             // The frame may be half-written: the connection cannot carry another one.
             Release();
@@ -676,7 +698,7 @@ namespace hsm::http
                 // bytesleft is the rest of this frame, known from its header: an oversized frame is
                 // refused on its first chunk, before the payload is read.
                 const uint64_t pending = meta->bytesleft > 0 ? static_cast<uint64_t>(meta->bytesleft) : 0;
-                if (static_cast<uint64_t>(message_.size()) + received + pending > kMaxMessageBytes)
+                if (static_cast<uint64_t>(message_.size()) + received + pending > max_message_bytes_)
                 {
                     error = "message exceeds the size limit";
                     Release();
@@ -778,10 +800,12 @@ namespace hsm::http
         return false;
     }
 
-    WebSocketConnection::WebSocketConnection(bool verify_peer)
+    WebSocketConnection::WebSocketConnection(bool verify_peer, size_t max_message_bytes)
         : verify_peer_(verify_peer)
+        , max_message_bytes_(max_message_bytes)
     {
         (void)verify_peer_;
+        (void)max_message_bytes_;
     }
 
     WebSocketConnection::~WebSocketConnection() = default;
@@ -799,6 +823,12 @@ namespace hsm::http
     }
 
     bool WebSocketConnection::SendText(const std::string&, int64_t, std::string& error)
+    {
+        Assign(error, "not connected");
+        return false;
+    }
+
+    bool WebSocketConnection::SendBinary(const char*, size_t, int64_t, std::string& error)
     {
         Assign(error, "not connected");
         return false;
