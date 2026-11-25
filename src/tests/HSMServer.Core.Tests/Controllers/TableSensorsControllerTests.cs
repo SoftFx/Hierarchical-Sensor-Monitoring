@@ -411,6 +411,35 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task A_store_that_changed_under_every_plan_of_the_first_page_is_a_503_to_try_again()
+        {
+            var table = await SeedAsync(3);
+            var blocks = new StubBlocks(_service) { OnRead = (_, _) => throw new TableReadChangedException("changed") };
+
+            var (status, text, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal((503, TablePageService.StoreChangedResult.Text), (status, text));
+            Assert.Equal("1", context.Response.Headers.RetryAfter.ToString());
+            Assert.False(Aborted(context));
+            Assert.Equal(1, _gate.FreeTurns);
+        }
+
+        [Fact]
+        public async Task A_store_that_changed_under_every_plan_of_a_later_page_aborts_the_connection()
+        {
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5 };
+            var table = await SeedAsync(12);
+            var blocks = new StubBlocks(_service) { OnRead = (rows, call) => call == 2 ? throw new TableReadChangedException("changed") : rows };
+
+            var (status, csv, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal(200, status);
+            Assert.True(Aborted(context));
+            Assert.Equal(6, csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
+            Assert.Equal(1, _gate.FreeTurns);
+        }
+
+        [Fact]
         public void The_file_name_is_the_history_exports_with_unsafe_characters_replaced()
         {
             var name = TablePageService.FileName("prod/quotes/EUR:USD*", Hour0, Hour0.AddHours(1));

@@ -299,6 +299,12 @@ namespace HSMServer.TablePages
                 _logger.Debug($"A download of table sensor {table.Id} is answered 503: {ex.Message}");
                 return StoreFault();
             }
+            catch (TableReadChangedException ex)
+            {
+                // The merge committed hours under each plan of the read: the same request soon is answered.
+                _logger.Info(ex.Message);
+                return new StoreChangedResult();
+            }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 return new EmptyResult();
@@ -403,7 +409,8 @@ namespace HSMServer.TablePages
         };
 
 
-        // 503 with Retry-After of a second: the store changed under every plan of a chart (TableReadChangedException).
+        // 503 with Retry-After of a second: the store changed under every plan of a chart or of the first page of a download
+        // (TableReadChangedException).
         internal sealed class StoreChangedResult : IActionResult
         {
             public const string Text = "The table store changed during the read (hours were merged meanwhile); try again.";
@@ -505,6 +512,10 @@ namespace HSMServer.TablePages
             catch (TableBlockStoreException ex)
             {
                 Abort(http, $"the block store cannot be read now: {ex.Message}", written);
+            }
+            catch (TableReadChangedException ex)
+            {
+                Abort(http, $"the table store changed under every plan of the read: {ex.Message}", written);
             }
         }
 
