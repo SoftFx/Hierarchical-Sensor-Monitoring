@@ -611,6 +611,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var (product, key) = await AddProductAsync(oldName, Guid.NewGuid());
             var covered = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/covered");
+            var coveredToo = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/covered2");
             var notCovered = await CreateIntSensorAsync(_valuesCache, product.Id, key, "other/s");
 
             using var dashboard = new Dashboard(new DashboardEntity
@@ -642,16 +643,24 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = newName, Initiator = InitiatorInfo.AsUser("tester") }, default);
             Assert.True(result.IsOk, result.Error);
 
+            // Both sensors on the new name's panel, stored once for the two of them.
             Assert.Equal(1, Volatile.Read(ref stored));
-            Assert.Equal(covered.Id, Assert.Single(newNamePanel.Sources).Value.Sensor.Id);
+            Assert.Equal(new[] { covered.Id, coveredToo.Id }.OrderBy(id => id), newNamePanel.Sources.Values.Select(s => s.Sensor.Id).OrderBy(id => id));
             Assert.Equal(covered.Id, Assert.Single(oldNamePanel.Sources).Value.Sensor.Id);
             Assert.DoesNotContain(panels.SelectMany(p => p.Sources.Values), s => s.Sensor.Id == notCovered.Id);
 
-            // A second rename to the same panel's name adds nothing twice, and stores nothing.
+            // Back to the old name: its panel takes the one sensor it did not have, the
+            // other panel keeps its sources, and nothing is added twice.
             Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = oldName, Initiator = InitiatorInfo.AsUser("tester") }, default)).IsOk);
-            Assert.Single(oldNamePanel.Sources);
-            Assert.Single(newNamePanel.Sources);
-            Assert.Equal(1, Volatile.Read(ref stored));
+            Assert.Equal(new[] { covered.Id, coveredToo.Id }.OrderBy(id => id), oldNamePanel.Sources.Values.Select(s => s.Sensor.Id).OrderBy(id => id));
+            Assert.Equal(2, newNamePanel.Sources.Count);
+            Assert.Equal(2, Volatile.Read(ref stored));
+
+            // And once more to the new name: every sensor is on its panel already, nothing is stored.
+            Assert.True((await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, Name = newName, Initiator = InitiatorInfo.AsUser("tester") }, default)).IsOk);
+            Assert.Equal(2, oldNamePanel.Sources.Count);
+            Assert.Equal(2, newNamePanel.Sources.Count);
+            Assert.Equal(2, Volatile.Read(ref stored));
         }
 
 

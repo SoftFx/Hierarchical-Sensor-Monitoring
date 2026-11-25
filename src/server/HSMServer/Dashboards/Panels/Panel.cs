@@ -186,12 +186,19 @@ namespace HSMServer.Dashboards
             var onPanel = Sources.Select(s => s.Value.Sensor?.Id).ToHashSet();
             var added = false;
 
-            foreach (var sensor in sensors)
-                if (!onPanel.Contains(sensor.Id))
-                    added |= AddSubscribedSources(sensor);
-
-            if (added)
-                Sources.Call();
+            // A candidate that throws (a subscription edited at this very
+            // moment) ends the batch; what was added before it is still stored.
+            try
+            {
+                foreach (var sensor in sensors)
+                    if (!onPanel.Contains(sensor.Id))
+                        added |= AddSubscribedSources(sensor);
+            }
+            finally
+            {
+                if (added)
+                    Sources.Call();
+            }
         }
 
         // One source per subscription that covers the sensor. The panel is not
