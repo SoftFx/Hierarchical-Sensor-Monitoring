@@ -177,6 +177,16 @@ namespace HSMServer.Core.Tests.Controllers
             }, Manages),
         };
 
+        // The rows whose action writes to the cache when it is served: being served means the write happened.
+        private static readonly string[] WritingActions =
+        [
+            "SetMutedStateToSensorFromModal", "RemoveMutedStateToSensor", "ClearHistoryNode", "EnableGrafana", "DisableGrafana",
+            "UpdateSensorDisplayUnit", "UpdateSensorTableSettings", "UpdateSensorStatus",
+            "RemoveNode(sensor)", "RemoveNode(node)", "EditAlerts(sensor)", "EditAlerts(node)",
+        ];
+
+        private static bool Writes(string action) => WritingActions.Any(action.StartsWith);
+
         public static TheoryData<string> Actions => Names(_ => true);
 
         /// <summary>The actions that only show what they address: any role on the product serves them.</summary>
@@ -255,6 +265,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotEqual(unknown, served);
             Assert.DoesNotContain("throws:", served.Answer);
+            Assert.Equal(Writes(action), served.Writes > 0);
         }
 
         [Theory]
@@ -269,6 +280,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotEqual(unknown, served);
             Assert.DoesNotContain("throws:", served.Answer);
+            Assert.Equal(Writes(action), served.Writes > 0);
         }
 
 
