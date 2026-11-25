@@ -7,7 +7,7 @@ namespace HSMDatabase.AccessManager.TableBatches
     /// the Monday-aligned week of their merge hour are kept for the class's whole weeks after the week has ended, so a row
     /// may outlive its period by up to a week. Retention drops a week database from that moment (part 4), and the merge
     /// leaves such rows out instead of writing them into a week that retention would drop or has dropped (a catch-up after
-    /// a long downtime). Period class 0 is kept for ever.
+    /// a long downtime). Period class 0 is kept for ever. The rule of a sensor's rows is the three-term one below.
     /// </summary>
     public static class TableBatchRetention
     {
@@ -25,21 +25,29 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// or deletes rows: the merge leaving out rows that have expired, the deletion of expired blocks, the retention
         /// guard and the drop of a week database.
         /// <para>
-        /// WHERE the rows are stored follows the class that holds the hour (<see cref="TablePlacement.ClassOf"/>); WHETHER
-        /// they have expired follows the period the sensor has now (<see cref="TablePlacement.Target"/>). Until the move
-        /// has brought the rows to the databases of their target class, both are asked and a row is kept while either
-        /// keeps it: expired only when the class holding the hour has passed for the hour's week and the target class has
-        /// passed for it too. So a period that was lengthened protects the rows merged, and still to be merged, under the
-        /// shorter one; a period that was shortened deletes nothing early (the week database of the longer class goes
-        /// with its own period, or with the move).
+        /// Three terms, and a row is kept while any of them keeps it: expired only when all three have passed for the
+        /// hour's week.
+        /// <list type="number">
+        /// <item>The class that holds the hour (<see cref="TablePlacement.ClassOf"/>): WHERE the rows are stored. Until the
+        /// move has brought rows to their target class, a shortened period deletes nothing before this class has passed.</item>
+        /// <item>The stored target (<see cref="TablePlacement.Target"/>): the period recorded by the last change written.</item>
+        /// <item>The class of the sensor's history setting as read at the decision (<paramref name="settingWeeks"/>,
+        /// <c>TablePeriodClass.Of</c>, the function the reconciliation of placements compares with the target). So the
+        /// decision does not depend on a placement write having succeeded, or on the reconciliation having seen a change
+        /// made since: a period lengthened a moment ago protects the rows at once. Null for a sensor that is no longer in
+        /// the tree (it has no setting): the stored target alone decides then.</item>
+        /// </list>
+        /// A shortening never frees anything early: the stored class and the setting's must both have passed, and the
+        /// longer one has not. A stale or unwritable placement never causes a deletion the setting now forbids.
         /// </para>
         /// </summary>
-        public static bool IsExpired(TablePlacement placement, long hourTicks, DateTime utcNow)
+        public static bool IsExpired(TablePlacement placement, long hourTicks, DateTime utcNow, int? settingWeeks)
         {
             ArgumentNullException.ThrowIfNull(placement);
 
             long week = StorageWeek.GetStartTicks(hourTicks);
-            return IsExpired(week, placement.ClassOf(hourTicks), utcNow) && IsExpired(week, placement.Target, utcNow);
+            return IsExpired(week, placement.ClassOf(hourTicks), utcNow) && IsExpired(week, placement.Target, utcNow) &&
+                   (settingWeeks is not int setting || IsExpired(week, setting, utcNow));
         }
     }
 }

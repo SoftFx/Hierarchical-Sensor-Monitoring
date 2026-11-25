@@ -52,6 +52,20 @@ namespace HSMServer.Core.TableSensors
         }
 
         /// <summary>
+        /// The terms of the rule of expiry for a table sensor, for retention: its placement as stored (or, with none stored,
+        /// the one it would get now, which has no segment) and the class of its history setting as read now. Writes
+        /// nothing, so a placement write that fails never stops a decision; a change not yet written is covered by the
+        /// setting's term (<see cref="TableBatchRetention.IsExpired(TablePlacement, long, DateTime, int?)"/>).
+        /// </summary>
+        private (TablePlacement Placement, int? Setting) StoredPlacement(Guid product, TableSensorModel sensor, DateTime utcNow)
+        {
+            int setting = TablePeriodClass.Of(sensor, utcNow);
+            var placement = Batches.GetPlacement(product, sensor.Id) ?? new TablePlacement(setting, utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour);
+
+            return (placement, setting);
+        }
+
+        /// <summary>
         /// The merge hour a change of period takes effect from: an hour no part of which can be on disk, and none of whose
         /// blocks can have been merged under the old class. The latest of:
         /// <list type="bullet">
@@ -103,7 +117,7 @@ namespace HSMServer.Core.TableSensors
             return first;
         }
 
-        // The products a pass leaves alone because their placements are not known to be up to their sensors' periods: the
+        // The products a pass does not merge because their placements are not known to be up to their sensors' periods: the
         // ones named, or every product when the batch store could not even list them.
         private sealed class Unreconciled
         {
@@ -119,12 +133,14 @@ namespace HSMServer.Core.TableSensors
         // folder or a product (which moves many sensors at once and raises no event per sensor) is recorded within a pass,
         // whether or not the sensor has new rows. A product of the batch store that is not in the tree is left alone.
         //
-        // Fail closed: a product for which this did not complete (the synced write of a placement failed, its placements
-        // could not be read) is answered as not reconciled, and the pass does nothing that decides by its placements: no
-        // merge (its discard of expired rows), no deletion of expired blocks of an hour it has blocks in, no drop of its
-        // week databases. Otherwise a period lengthened since the last pass (P1 to for ever, say) whose write failed once
-        // would leave the old placement in force for a retention that drops the only database with those rows. Counted
-        // (ProductsNotReconciled, Faults) and logged; the next pass tries again.
+        // Fail closed only where a placement says WHERE to write: a product for which this did not complete (the synced
+        // write of a placement failed, its placements could not be read) is answered as not reconciled, and its hours are
+        // not merged in this pass. Retention and the deletion of expired blocks still run for it: every expiry decision
+        // reads the sensor's setting as it is at the decision as its third term (TableBatchRetention.IsExpired), so a
+        // placement on record that a lengthened period has made stale cannot cause a drop the setting forbids. Otherwise a
+        // product whose placement write keeps failing on a full disk would free no disk at all, and the write would keep
+        // failing. Counted (ProductsNotReconciled, Faults) and logged once per product and hour of the pass's clock (as
+        // retention runs once an hour), not once a pass; the report of every pass names it; the next pass tries again.
         private Unreconciled Reconcile(DateTime utcNow, ref string fault)
         {
             var unreconciled = new Unreconciled();
@@ -138,10 +154,13 @@ namespace HSMServer.Core.TableSensors
             {
                 fault = ex.Message;
                 unreconciled.All = true;
-                Stats.Add(ref Stats.Faults);
-                Stats.Add(ref Stats.ProductsNotReconciled);
-                _logger.Error(ex, "Table placements: the products of the batch store could not be listed, so no placement was brought up to its sensor's period; " +
-                                  $"nothing is merged, dropped or judged for expiry in this pass, and the next pass tries again: {ex.Message}");
+                if (FirstInHour(Guid.Empty, utcNow))
+                {
+                    Stats.Add(ref Stats.Faults);
+                    Stats.Add(ref Stats.ProductsNotReconciled);
+                    _logger.Error(ex, "Table placements: the products of the batch store could not be listed, so no placement was brought up to its sensor's period; " +
+                                      $"nothing is merged in this pass, and the next pass tries again (logged once an hour): {ex.Message}");
+                }
                 return unreconciled;
             }
 
@@ -159,14 +178,32 @@ namespace HSMServer.Core.TableSensors
                 {
                     fault = ex.Message;
                     unreconciled.Products.Add(product);
-                    Stats.Add(ref Stats.Faults);
-                    Stats.Add(ref Stats.ProductsNotReconciled);
-                    _logger.Error(ex, $"Table placements of product {product} were not brought up to the sensors' periods; nothing of it is merged, dropped or " +
-                                      $"judged for expiry in this pass, and the next pass tries again: {ex.Message}");
+                    if (FirstInHour(product, utcNow))
+                    {
+                        Stats.Add(ref Stats.Faults);
+                        Stats.Add(ref Stats.ProductsNotReconciled);
+                        _logger.Error(ex, $"Table placements of product {product} were not brought up to the sensors' periods; its hours are not merged in this pass " +
+                                          $"(retention runs, by the sensors' settings as they are), and the next pass tries again (logged once an hour): {ex.Message}");
+                    }
                 }
             }
 
             return unreconciled;
+        }
+
+        // The hour of the pass's clock in which each product's failed reconciliation was last counted and logged (Guid.Empty:
+        // the products could not be listed).
+        private readonly Dictionary<Guid, long> _notReconciledHour = [];
+
+        // Whether this is the first failed reconciliation of the product in this hour of the pass's clock (and notes it).
+        private bool FirstInHour(Guid product, DateTime utcNow)
+        {
+            long hour = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
+            if (_notReconciledHour.TryGetValue(product, out var last) && last == hour)
+                return false;
+
+            _notReconciledHour[product] = hour;
+            return true;
         }
 
         // The table sensors of a product's tree.

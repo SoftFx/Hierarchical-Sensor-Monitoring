@@ -24,9 +24,11 @@ namespace HSMServer.Core.TableSensors
     /// </list>
     /// The clock is the pass's; a fault is logged, counted and tried again an hour later.
     /// <para>
-    /// Every decision here that deletes rows asks the one rule of expiry, <see cref="TableBatchRetention.IsExpired(TablePlacement, long, DateTime)"/>:
-    /// rows are stored in the class that holds their hour and expire by the period the sensor has now, and until the move
-    /// (part 4, the next step) has brought them to their class a row is kept while either keeps it.
+    /// Every decision here that deletes rows asks the one rule of expiry,
+    /// <see cref="TableBatchRetention.IsExpired(TablePlacement, long, DateTime, int?)"/>, with three terms: the class that
+    /// holds the hour, the stored target, and the class of the sensor's setting as read at the decision. A row is kept while
+    /// any of them keeps it, so the decisions do not depend on a placement write having succeeded: retention runs for a
+    /// product whose placements could not be reconciled in the pass, and writes no placement itself.
     /// </para>
     /// </summary>
     public sealed partial class TableMergeJob
@@ -40,10 +42,9 @@ namespace HSMServer.Core.TableSensors
 
 
         // Retention, once per hour of the clock. Never throws: a fault is logged, counted, reported, and tried again next hour.
-        // A product whose placements were not reconciled in this pass gets none of it (fail closed, see Reconcile): no drop of
-        // its week databases, no deletion of expired blocks of an hour it has blocks in, no forgetting of its hours. It waits
-        // for the retention of the next hour.
-        private (int Weeks, int Hours) RunRetention(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault)
+        // It runs for every product, reconciled in this pass or not: it decides by the stored placements AND the sensors'
+        // settings as they are now, and it writes no placement.
+        private (int Weeks, int Hours) RunRetention(DateTime utcNow, CancellationToken token, ref string fault)
         {
             long hour = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
             if (hour == _retentionHour || token.IsCancellationRequested)
@@ -54,20 +55,11 @@ namespace HSMServer.Core.TableSensors
             // Expired blocks, then week databases, then the records of hours left with neither: an hour's record stays in
             // Hours while its blocks do (a dropped week does not remove it, #1850 part 4b), so the merge never takes an hour
             // whose blocks are still held as not merged; it is forgotten once no database of its week and none of its blocks is left.
-            if (unreconciled.All)
-            {
-                _logger.Warn("Table retention: skipped in this hour, the placements of no product were brought up to their sensors' periods");
-                return (0, 0);
-            }
-
-            foreach (var product in unreconciled.Products)
-                _logger.Warn($"Table retention: product {product} is skipped in this hour, its placements were not brought up to its sensors' periods");
-
-            int hours = DeleteExpiredBlocks(utcNow, token, unreconciled, ref fault);
-            int weeks = token.IsCancellationRequested ? 0 : DropExpiredWeeks(utcNow, token, unreconciled, ref fault);
+            int hours = DeleteExpiredBlocks(utcNow, token, ref fault);
+            int weeks = token.IsCancellationRequested ? 0 : DropExpiredWeeks(utcNow, token, ref fault);
 
             if (!token.IsCancellationRequested)
-                ForgetHoursWithNothingLeft(unreconciled, ref fault);
+                ForgetHoursWithNothingLeft(ref fault);
 
             return (weeks, hours);
         }
@@ -75,15 +67,15 @@ namespace HSMServer.Core.TableSensors
 
         // === Week databases ===
 
-        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault)
+        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, ref string fault)
         {
             int dropped = 0, held = 0;
-            int result = DropExpiredWeeks(utcNow, token, unreconciled, ref fault, ref dropped, ref held);
+            int result = DropExpiredWeeks(utcNow, token, ref fault, ref dropped, ref held);
             Stats.Set(ref Stats.MoveWeeksPending, held);
             return result;
         }
 
-        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault, ref int dropped, ref int held)
+        private int DropExpiredWeeks(DateTime utcNow, CancellationToken token, ref string fault, ref int dropped, ref int held)
         {
             IReadOnlyList<Guid> products;
 
@@ -99,9 +91,6 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var product in products)
             {
-                if (unreconciled.Contains(product))
-                    continue;
-
                 IReadOnlyList<TableBatchWeek> weeks;
                 try
                 {
@@ -113,10 +102,15 @@ namespace HSMServer.Core.TableSensors
                     continue;
                 }
 
-                IReadOnlyDictionary<Guid, TablePlacement> placements;
+                List<(TablePlacement Placement, int? Setting)> placements;
                 try
                 {
-                    placements = Batches.GetPlacements(product);
+                    // Each stored placement with the class of its sensor's setting as read now; a sensor no longer in the
+                    // tree has no setting, and its stored placement alone decides.
+                    var settings = TableSensorsOf(product).ToDictionary(s => s.Id, s => TablePeriodClass.Of(s, utcNow));
+                    placements = Batches.GetPlacements(product)
+                                        .Select(p => (p.Value, settings.TryGetValue(p.Key, out var setting) ? setting : (int?)null))
+                                        .ToList();
                 }
                 catch (Exception ex)
                 {
@@ -166,26 +160,60 @@ namespace HSMServer.Core.TableSensors
         }
 
         // The retention guard (#1850 part 4b): a week database whose class has passed is kept while it may hold rows that have
-        // not expired by the one rule (TableBatchRetention.IsExpired of a placement and an hour): rows of a sensor whose
-        // period changed since they were merged (a segment of its placement in that class, over hours of that week) and
-        // whose period now has not passed for the week. Those rows are owed to the class they belong to now, and the move
-        // brings them there. Rows whose new period has passed too go with the database. Every hour of a segment within one
-        // week has the same answer (the week, the class holding the hour and the target are the same), so one is asked.
-        private static bool HoldsUnexpiredRows(IReadOnlyDictionary<Guid, TablePlacement> placements, TableBatchWeek week, DateTime utcNow)
+        // not expired by the one rule (TableBatchRetention.IsExpired of a placement, an hour and the sensor's setting now):
+        // rows of a sensor whose placement puts hours of that week in that class (a segment, or its target outside its
+        // segments from its first hour on) and whose stored target or setting now has not passed for the week. Rows of a
+        // sensor whose period changed since they were merged are owed to the class they belong to now, and the move brings
+        // them there; rows of a sensor whose change is not written yet (the write failed, or it came after the
+        // reconciliation of this pass) are held by its setting alone. Rows whose every term has passed go with the
+        // database. Every hour of the week in that class has the same answer (the week, the class holding the hour, the
+        // target and the setting are the same), so one is asked.
+        private static bool HoldsUnexpiredRows(List<(TablePlacement Placement, int? Setting)> placements, TableBatchWeek week, DateTime utcNow)
         {
             long weekEnd = week.WeekStartTicks + 7 * TimeSpan.TicksPerDay;
 
-            foreach (var placement in placements.Values)
-                foreach (var segment in placement.Segments)
-                    if (segment.PeriodWeeks == week.PeriodWeeks && segment.FirstHour < weekEnd && segment.EndHour > week.WeekStartTicks &&
-                        !TableBatchRetention.IsExpired(placement, Math.Max(segment.FirstHour, week.WeekStartTicks), utcNow))
-                        return true;
+            foreach (var (placement, setting) in placements)
+                if (FirstHourInClass(placement, week.PeriodWeeks, week.WeekStartTicks, weekEnd) is long hour &&
+                    !TableBatchRetention.IsExpired(placement, hour, utcNow, setting))
+                    return true;
 
             return false;
         }
 
+        // The first merge hour of [from, to), not before the placement's first hour, whose rows the placement puts in class
+        // periodWeeks; null when it puts none there.
+        private static long? FirstHourInClass(TablePlacement placement, int periodWeeks, long from, long to)
+        {
+            long start = Math.Max(from, placement.FirstHour);
+            if (start >= to)
+                return null;
+
+            long? first = null;
+            long covered = start;
+
+            foreach (var segment in placement.Segments)
+            {
+                if (segment.EndHour <= start || segment.FirstHour >= to)
+                    continue;
+
+                // The hours before this segment are in the target.
+                if (placement.Target == periodWeeks && segment.FirstHour > covered)
+                    return covered;
+
+                if (segment.PeriodWeeks == periodWeeks)
+                    first ??= Math.Max(segment.FirstHour, start);
+
+                covered = Math.Max(covered, segment.EndHour);
+            }
+
+            if (placement.Target == periodWeeks && covered < to)
+                first = first is long f ? Math.Min(f, covered) : covered;
+
+            return first;
+        }
+
         // The records of committed hours no database of whose week is left and of which the block store holds no block.
-        private void ForgetHoursWithNothingLeft(Unreconciled unreconciled, ref string fault)
+        private void ForgetHoursWithNothingLeft(ref string fault)
         {
             IReadOnlyList<Guid> products;
             try
@@ -200,9 +228,6 @@ namespace HSMServer.Core.TableSensors
 
             foreach (var product in products)
             {
-                if (unreconciled.Contains(product))
-                    continue;
-
                 try
                 {
                     var hours = Batches.GetHoursWithoutDatabases(product);
@@ -225,7 +250,7 @@ namespace HSMServer.Core.TableSensors
 
         // === Blocks never merged ===
 
-        private int DeleteExpiredBlocks(DateTime utcNow, CancellationToken token, Unreconciled unreconciled, ref string fault)
+        private int DeleteExpiredBlocks(DateTime utcNow, CancellationToken token, ref string fault)
         {
             SortedDictionary<long, Dictionary<Guid, List<TableBlockIndexEntry>>> byHour;
 
@@ -251,10 +276,6 @@ namespace HSMServer.Core.TableSensors
                 // hours ascend: every later one is younger.
                 if (!TableBatchRetention.IsExpired(week, 1, utcNow) || token.IsCancellationRequested)
                     break;
-
-                // An hour is deleted whole: with blocks of a product that was not reconciled in it, nothing of it is judged.
-                if (products.Keys.Any(unreconciled.Contains))
-                    continue;
 
                 try
                 {
@@ -318,24 +339,26 @@ namespace HSMServer.Core.TableSensors
         }
 
         // Whether a block's rows have expired for every table sensor with rows in it, by the one rule
-        // (TableBatchRetention.IsExpired of the sensor's placement and the hour): the class that holds the hour for the sensor
-        // has passed for the hour's week, and so has the period the sensor has now; never for a sensor kept for ever. The
-        // sensors are those of the block's directory (a table without a sensor, or of a block below its sensor's first
-        // sequence, is never served and counts as the shortest class); a block whose directory cannot be read (or one its
-        // product's commit lists as unreadable) is judged by every table sensor of its product.
+        // (TableBatchRetention.IsExpired of the sensor's stored placement, the hour and the sensor's setting as read now): the
+        // class that holds the hour for the sensor, its stored target and its setting have all passed for the hour's week;
+        // never for a sensor kept for ever by any of them. The sensors are those of the block's directory (a table without a
+        // sensor, or of a block below its sensor's first sequence, is never served and counts as the shortest class); a block
+        // whose directory cannot be read (or one its product's commit lists as unreadable) is judged by every table sensor of
+        // its product. Nothing is written: a placement write that fails does not stop this decision.
         private bool IsBlockExpired(Guid product, TableBlockIndexEntry entry, bool unreadable, long hour, DateTime utcNow)
         {
             var placements = unreadable ? null : BlockPlacements(product, entry, hour, utcNow);
             placements ??= ProductPlacements(product, hour, utcNow);
 
-            return placements.All(p => TableBatchRetention.IsExpired(p, hour, utcNow));
+            return placements.All(p => TableBatchRetention.IsExpired(p.Placement, hour, utcNow, p.Setting));
         }
 
-        // The placement that stands for rows no sensor serves: the shortest class, with nothing before the hour.
-        private static TablePlacement Unserved(long hour) => new(1, hour);
+        // The terms that stand for rows no sensor serves: the shortest class, with nothing before the hour, and no setting.
+        private static (TablePlacement, int?) Unserved(long hour) => (new TablePlacement(1, hour), null);
 
-        // The placements of the sensors with rows in a block, by its directory; null when the block or its directory cannot be read.
-        private List<TablePlacement> BlockPlacements(Guid product, TableBlockIndexEntry entry, long hour, DateTime utcNow)
+        // The placements (and settings) of the sensors with rows in a block, by its directory; null when the block or its
+        // directory cannot be read.
+        private List<(TablePlacement Placement, int? Setting)> BlockPlacements(Guid product, TableBlockIndexEntry entry, long hour, DateTime utcNow)
         {
             // A read error is a fault (thrown): the hour is tried again next hour, never judged without the block.
             var record = Blocks.ReadBlock(entry, readErrorIsFault: true);
@@ -352,25 +375,27 @@ namespace HSMServer.Core.TableSensors
                 return null;
             }
 
-            var placements = new List<TablePlacement>();
-            var resolved = new Dictionary<string, (TableSensorModel, TablePlacement)>();
+            var placements = new List<(TablePlacement, int?)>();
 
             for (int i = 0; i < directory.Entries.Count; i++)
             {
                 if (record.Envelope.IsRefused(i))
                     continue;
 
-                var (sensor, placement) = Resolve(product, Path(directory.Entries[i].TableId), resolved, utcNow, createFrom: null);
-                placements.Add(sensor is not null && entry.Sequence >= sensor.FirstSequence ? placement : Unserved(hour));
+                var path = Path(directory.Entries[i].TableId);
+                placements.Add(path is not null && _cache.TryGetSensorByPath(product, path, out var found) && found is TableSensorModel sensor &&
+                               entry.Sequence >= sensor.FirstSequence
+                    ? StoredPlacement(product, sensor, utcNow)
+                    : Unserved(hour));
             }
 
             return placements;
         }
 
-        // The placements of every table sensor of a product (its whole tree); the shortest class when it has none.
-        private List<TablePlacement> ProductPlacements(Guid product, long hour, DateTime utcNow)
+        // The placements (and settings) of every table sensor of a product (its whole tree); the shortest class when it has none.
+        private List<(TablePlacement Placement, int? Setting)> ProductPlacements(Guid product, long hour, DateTime utcNow)
         {
-            var placements = TableSensorsOf(product).Select(table => PlaceSensor(product, table, utcNow, createFrom: null)).ToList();
+            var placements = TableSensorsOf(product).Select(table => StoredPlacement(product, table, utcNow)).ToList();
             return placements.Count == 0 ? [Unserved(hour)] : placements;
         }
 

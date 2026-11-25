@@ -123,7 +123,11 @@ namespace HSMServer.Core.TableSensors
         }
 
 
-        /// <summary>Called at the points a test stands a crash at: "encoded" (a product's batches built and verified, nothing written), "watermarks-raised".</summary>
+        /// <summary>
+        /// Called at the points a test stands a crash or an event at: "reconciled" (the placements brought up to the
+        /// sensors' periods, nothing merged yet), "encoded" (a product's batches built and verified, nothing written),
+        /// "watermarks-raised".
+        /// </summary>
         internal Action<string> Checkpoint { get; set; }
 
         /// <summary>Called with every decoded batch before it is compared with its rows. Test seam for a verification mismatch.</summary>
@@ -170,10 +174,13 @@ namespace HSMServer.Core.TableSensors
                 deleted = DeleteDue(utcNow, token, ref fault);
 
                 // Periods changed since the last pass (on a sensor, a folder, a product) are recorded before anything is merged.
-                // A product whose placements could not be brought up to date is left out of the rest of the pass, fail
-                // closed: its placement on record may be the one of a period that was lengthened since, and a merge or
-                // retention deciding by it would discard rows the period now protects.
+                // A product whose placements could not be brought up to date is not merged in this pass, fail closed: the
+                // merge needs a placement to know WHERE an hour's rows go, and one written after a change must be on disk
+                // before any hour from its cut-off on. Whether rows have expired does not depend on it: every expiry
+                // decision also reads the sensor's setting as it is then (TableBatchRetention.IsExpired), so retention and
+                // the deletion of expired blocks run for such a product.
                 var unreconciled = Reconcile(utcNow, ref fault);
+                Checkpoint?.Invoke("reconciled");
 
                 // Products whose merge faulted in this pass: their later hours wait for the next pass, so a product's hours
                 // are committed in order; the other products go on. A product not reconciled starts as one of them.
@@ -197,7 +204,7 @@ namespace HSMServer.Core.TableSensors
                 Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
 
                 // After the merge, so that a catch-up merges what it can before retention judges what is left.
-                var (weeks, expired) = RunRetention(utcNow, token, unreconciled, ref fault);
+                var (weeks, expired) = RunRetention(utcNow, token, ref fault);
 
                 return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
                     WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count };
@@ -456,7 +463,7 @@ namespace HSMServer.Core.TableSensors
                         // The sensor's rows of this hour have expired (a catch-up after a long downtime), or the week database
                         // they would go into was dropped: they are left out and counted.
                         if (!leftOut.TryGetValue(sensor.Id, out var skip))
-                            leftOut[sensor.Id] = skip = IsLeftOut(product, placement, hour, weekStart, utcNow);
+                            leftOut[sensor.Id] = skip = IsLeftOut(product, sensor, placement, hour, weekStart, utcNow);
 
                         if (skip)
                         {
@@ -644,21 +651,22 @@ namespace HSMServer.Core.TableSensors
         }
 
         // Whether the merge leaves out a sensor's rows of an hour.
-        // - They have expired, by the one rule (TableBatchRetention.IsExpired of the placement): the class that holds the hour
-        //   has passed for its week and so has the period the sensor has now. A sensor whose period was lengthened before
-        //   its week expired keeps the rows of an hour that waited for its merge past the old period: they are written into
-        //   the class that holds the hour, whose week database the retention guard keeps.
+        // - They have expired, by the one rule (TableBatchRetention.IsExpired of the placement and the sensor's setting as
+        //   read now): the class that holds the hour, the stored target and the setting have all passed for its week. A
+        //   sensor whose period was lengthened before its week expired keeps the rows of an hour that waited for its merge
+        //   past the old period: they are written into the class that holds the hour, whose week database the retention
+        //   guard keeps.
         // - Or the week database they would go into was dropped by retention (its record): the rows merged there went
         //   when the period the sensor had then passed, a change of period after that does not bring them back, and a
         //   write into a dropped database is refused (it would hold the product's hour, and every later one, back for ever).
-        private bool IsLeftOut(Guid product, TablePlacement placement, long hour, long weekStart, DateTime utcNow) =>
-            TableBatchRetention.IsExpired(placement, hour, utcNow) ||
+        private bool IsLeftOut(Guid product, TableSensorModel sensor, TablePlacement placement, long hour, long weekStart, DateTime utcNow) =>
+            TableBatchRetention.IsExpired(placement, hour, utcNow, TablePeriodClass.Of(sensor, utcNow)) ||
             Batches.IsWeekDropped(product, new TableBatchWeek(weekStart, placement.ClassOf(hour)));
 
-        // The table sensor on a path and its placement (#1850 part 4b): the merge writes the rows of an hour into the class
-        // the placement gives it (ClassOf) and every read looks there; whether rows have expired is asked of the placement
-        // too (TableBatchRetention.IsExpired). The merge creates the placement of a sensor that has none (createFrom: the
-        // first hour of such a placement); retention creates none (null).
+        // The table sensor on a path and its placement (#1850 part 4b), for the merge: it writes the rows of an hour into the
+        // class the placement gives it (ClassOf) and every read looks there; whether rows have expired is asked of the
+        // placement and the sensor's setting (TableBatchRetention.IsExpired). The merge creates the placement of a sensor that
+        // has none (createFrom: the first hour of such a placement). Retention writes no placement (StoredPlacement).
         private (TableSensorModel Sensor, TablePlacement Placement) Resolve(Guid product, string path,
             Dictionary<string, (TableSensorModel, TablePlacement)> resolved, DateTime utcNow, long? createFrom)
         {
