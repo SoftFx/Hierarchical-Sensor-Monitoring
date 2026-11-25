@@ -2,6 +2,14 @@
 # install/example defaults below and is only auto-set from 3.21.
 cmake_minimum_required(VERSION 3.21)
 
+# Table sensors (#1848): declared before project() so that, in a vcpkg manifest build, turning it on
+# also turns on the manifest feature "tables" (zstd, zlib) that vcpkg installs at project(). A build
+# with tables OFF resolves neither. See the option's block below for what it builds.
+option(HSM_COLLECTOR_TABLES "Build table sensor support (needs zstd and zlib)" OFF)
+if(HSM_COLLECTOR_TABLES AND NOT "tables" IN_LIST VCPKG_MANIFEST_FEATURES)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tables")
+endif()
+
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
 project(HsmCollectorNative VERSION 0.14.1 LANGUAGES CXX)
@@ -181,7 +189,7 @@ endif()
 # own layout is written in src/tables/). Both are private to the static core, which still propagates
 # them to a consumer's link (as $<LINK_ONLY:>), so hsm_collectorConfig re-finds them. Delivery of the
 # blocks will need the session transport (HSM_COLLECTOR_HTTP); the writer itself does not.
-option(HSM_COLLECTOR_TABLES "Build table sensor support (needs zstd and zlib)" OFF)
+# (The option itself is declared above project().)
 set(HSM_COLLECTOR_ZSTD_PKGCONFIG OFF)
 if(HSM_COLLECTOR_TABLES)
     # vcpkg and zstd's own CMake build ship a package config; a distribution package may ship only

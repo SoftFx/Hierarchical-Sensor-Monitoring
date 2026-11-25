@@ -221,6 +221,7 @@ jobs:
           -DHSM_COLLECTOR_WERROR=ON
           -DHSM_COLLECTOR_HTTP=ON
           -DHSM_COLLECTOR_TABLES=ON
+          -DVCPKG_MANIFEST_FEATURES=tables
           -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
