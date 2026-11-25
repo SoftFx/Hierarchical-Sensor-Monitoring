@@ -24,8 +24,11 @@ namespace HSMDataCollector.Tables
         /// <summary>The collector's deduplicated error channel (log and <c>Collector errors</c>).</summary>
         void AddError(string message);
 
-        /// <summary>Lost rows, counted in the <c>Queue overflow</c> sensor under the queue "Table rows".</summary>
-        void ReportDroppedRows(long rows);
+        /// <summary>
+        /// Hands lost rows to the <c>Queue overflow</c> sensor under the queue "Table rows". False when no such sensor
+        /// takes values now (none registered, or it has published its last bar of the run): the rows stay in the ledger.
+        /// </summary>
+        bool TryReportDroppedRows(long rows);
     }
 
 
@@ -34,9 +37,15 @@ namespace HSMDataCollector.Tables
     /// every tick into blocks (one block per tick unless the limits split it), keeps the blocks in a bounded backlog and
     /// delivers them one at a time, in sequence order, through the sender's <see cref="ITableBlockChannel"/>.
     /// <para>
+    /// It exists only once the first table sensor is created: a collector without table sensors has none of it.
+    /// Everything a run owns is in its <see cref="TableRun"/>; a run that ended refuses everything, so nothing of it
+    /// reaches the next one.
+    /// </para>
+    /// <para>
     /// Threads: rows are added by the application on any thread; the tick runs on the collector's scheduler and only
     /// packs; delivery runs in a loop of its own, so a slow server never delays packing. Nothing here throws into the
-    /// host: every loop catches and reports.
+    /// host, and nothing is reported while a gate or a lock of the pipeline is held: reports are queued and written
+    /// by <see cref="FlushReports"/> once the gates are released.
     /// </para>
     /// </summary>
     internal sealed class TablePipeline : IDisposable
@@ -45,17 +54,12 @@ namespace HSMDataCollector.Tables
         internal const string DroppedRowsQueueName = "Table rows";
 
         private static readonly TimeSpan MaxRetryAfter = TimeSpan.FromMinutes(5);
-        private static readonly int ReasonCount = Enum.GetValues(typeof(TableDropReason)).Length;
 
         private readonly ConcurrentDictionary<string, TableSensor> _sensors = new ConcurrentDictionary<string, TableSensor>(StringComparer.Ordinal);
+        private readonly ConcurrentQueue<Report> _reports = new ConcurrentQueue<Report>();
         private readonly object _createLock = new object();
-        private readonly object _backlogLock = new object();
-        private readonly LinkedList<PendingBlock> _backlog = new LinkedList<PendingBlock>();
-        private readonly SemaphoreSlim _packGate = new SemaphoreSlim(1, 1);
-        private readonly SemaphoreSlim _deliveryGate = new SemaphoreSlim(1, 1);
-        private readonly SemaphoreSlim _deliverySignal = new SemaphoreSlim(0, int.MaxValue);
-        private readonly long[] _unreportedDrops = new long[ReasonCount];
         private readonly object _runLock = new object();
+        private readonly object _writerLock = new object();
 
         private readonly ITableBlockChannel _channel;
         private readonly string _unavailableReason;
@@ -66,31 +70,24 @@ namespace HSMDataCollector.Tables
         private readonly long _maxBufferBytes;
         private readonly long _maxBacklogBytes;
         private readonly bool _manualTick;
+        private readonly Func<TableBlockWriter> _compressorFactory;
 
+        // The compressor, made with the first table sensor; null while it could not be made.
         private TableBlockWriter _writer;
-        private long _bufferedBytes;
-        private long _backlogBytes;
-        private long _droppedTotal;
-        private PendingBlock _inFlight;
-        private long _retryNotBeforeTicks;
 
-        // One run per Start.
-        private CancellationTokenSource _run;
-        private ScheduledTask _tick;
-        private Task _deliveryLoop;
-        private Guid _producer;
-        private long _nextSequence;
+        // The run going now (null between runs), and the last one that went: its ledger holds the losses until the stop
+        // line of the collector's stop is written.
+        private TableRun _run;
+        private TableRun _lastRun;
+        private long _runCount;
         private int _disposed;
 
 
         internal TablePipeline(CollectorOptions options, ITableBlockChannel channel, string unavailableReason,
                                ITableDiagnostics diagnostics, ICollectorScheduler scheduler, ICollectorLogger logger)
         {
-            _channel = unavailableReason == null ? channel : null;
             _unavailableReason = unavailableReason ?? (channel == null ? "table sensors need the collector session transport" : channel.TablesUnavailableReason);
-
-            if (_unavailableReason != null)
-                _channel = null;
+            _channel = _unavailableReason == null ? channel : null;
 
             _diagnostics = diagnostics;
             _scheduler = scheduler;
@@ -99,6 +96,7 @@ namespace HSMDataCollector.Tables
             _maxBufferBytes = options.MaxTableBufferBytes;
             _maxBacklogBytes = options.MaxTableBacklogBytes;
             _manualTick = options.ManualTableTick;
+            _compressorFactory = options.TableCompressorFactory;
         }
 
 
@@ -107,23 +105,123 @@ namespace HSMDataCollector.Tables
 
         internal IReadOnlyCollection<TableSensor> Sensors => _sensors.Values.ToList();
 
-        internal long BufferedBytes => Interlocked.Read(ref _bufferedBytes);
+        internal bool CanAcceptData => _diagnostics.CanAcceptData;
 
-        internal long BacklogBytes => Interlocked.Read(ref _backlogBytes);
+        // The run the counters below describe: the one going now, else the last one.
+        private TableRun ObservedRun
+        {
+            get
+            {
+                lock (_runLock)
+                    return _run ?? _lastRun;
+            }
+        }
 
-        internal long DroppedRows => Interlocked.Read(ref _droppedTotal);
+        /// <summary>The run going now; null between runs.</summary>
+        internal TableRun CurrentRun
+        {
+            get
+            {
+                lock (_runLock)
+                    return _run;
+            }
+        }
+
+        /// <summary>For tests: the number of runs started.</summary>
+        internal long RunCount => Interlocked.Read(ref _runCount);
+
+        /// <summary>True once the compressor exists.</summary>
+        internal bool HasCompressor
+        {
+            get
+            {
+                lock (_writerLock)
+                    return _writer != null;
+            }
+        }
+
+        internal long BufferedBytes => ObservedRun?.BufferedBytes ?? 0;
+
+        internal long BacklogBytes => Interlocked.Read(ref ObservedRunOrEmpty.BacklogBytes);
 
         internal int BacklogBlocks
         {
             get
             {
-                lock (_backlogLock)
-                    return _backlog.Count;
+                var run = ObservedRun;
+
+                if (run == null)
+                    return 0;
+
+                lock (run.BacklogLock)
+                    return run.Backlog.Count;
             }
         }
 
-        /// <summary>The producer id of the current run; a new one at every Start.</summary>
-        internal Guid Producer => _producer;
+        /// <summary>Every row the sensors of this pipeline counted as lost.</summary>
+        internal long DroppedRows => _sensors.Values.Sum(s => s.RowsDropped);
+
+        /// <summary>The producer id of the current (or last) run; a new one at every Start.</summary>
+        internal Guid Producer => ObservedRun?.Producer ?? Guid.Empty;
+
+        private static readonly TableRun NoRun = new TableRun(0, 0);
+
+        private TableRun ObservedRunOrEmpty => ObservedRun ?? NoRun;
+
+
+        // ---- Reports, written outside every gate ---------------------------------------------------------------------
+
+        private readonly struct Report
+        {
+            internal Report(string error, string logLine, Exception fault)
+            {
+                Error = error;
+                LogLine = logLine;
+                Fault = fault;
+            }
+
+            internal string Error { get; }
+
+            internal string LogLine { get; }
+
+            internal Exception Fault { get; }
+        }
+
+        // Queued, never written here: the caller may hold a gate.
+        private void Note(string error) => _reports.Enqueue(new Report(error, null, null));
+
+        private void NoteLog(string line) => _reports.Enqueue(new Report(null, line, null));
+
+        private void NoteFault(string what, Exception ex) => _reports.Enqueue(new Report($"{what} failed: {ex.Message}", null, ex));
+
+        /// <summary>
+        /// Writes the queued reports. Called where no gate or lock of the pipeline is held: a host logger that calls back
+        /// into the collector (even <c>Dispose</c>) cannot deadlock on the pipeline.
+        /// </summary>
+        internal void FlushReports()
+        {
+            while (_reports.TryDequeue(out var report))
+            {
+                try
+                {
+                    if (report.Error != null)
+                        _diagnostics.AddError(report.Error);
+
+                    if (report.LogLine != null)
+                        _logger?.Error(report.LogLine);
+
+                    if (report.Fault != null)
+                        _logger?.Error(report.Fault);
+                }
+                catch (Exception)
+                {
+                    // Reporting must not throw into a loop.
+                }
+            }
+        }
+
+        /// <summary>For tests: whether reports wait to be written.</summary>
+        internal bool HasQueuedReports => !_reports.IsEmpty;
 
 
         // ---- Creation -------------------------------------------------------------------------------------------
@@ -157,25 +255,54 @@ namespace HSMDataCollector.Tables
                 }
 
                 var sensor = new TableSensor(this, normalized, options.Columns, schema, options.Description, options.KeepHistory);
+                var unavailable = _unavailableReason ?? (canRegister ? null : "the collector is stopping or disposed");
 
-                if (_unavailableReason != null)
+                // The compressor is made with the first sensor that can use it: a collector without table sensors
+                // never pays for it. When it cannot be made, the sensor says why and its rows are dropped and counted.
+                if (unavailable == null)
+                    unavailable = EnsureCompressor();
+
+                if (unavailable != null)
                 {
-                    sensor.TryMove(TableSensorState.Pending, TableSensorState.Unavailable, _unavailableReason);
-                    _diagnostics.AddError($"The table sensor {normalized} cannot send its rows: {_unavailableReason}. Its rows are dropped and counted.");
+                    sensor.TryMove(TableSensorState.Pending, TableSensorState.Unavailable, unavailable);
+                    Note($"The table sensor {normalized} cannot send its rows: {unavailable}. Its rows are dropped and counted.");
                 }
-                else if (!canRegister)
+
+                lock (_runLock)
                 {
-                    const string stopping = "the collector is stopping or disposed";
-                    sensor.TryMove(TableSensorState.Pending, TableSensorState.Unavailable, stopping);
-                    _diagnostics.AddError($"The table sensor {normalized} was created while {stopping}; its rows are dropped and counted.");
+                    _sensors[normalized] = sensor;
+
+                    // A sensor created while a run goes belongs to it at once.
+                    if (_run != null && sensor.State == TableSensorState.Pending)
+                    {
+                        sensor.Attach(_run);
+
+                        if (!_manualTick)
+                            KickRegistration(_run);
+                    }
                 }
-
-                _sensors[normalized] = sensor;
-
-                if (sensor.State == TableSensorState.Pending && IsRunning && !_manualTick)
-                    KickRegistration();
 
                 return sensor;
+            }
+        }
+
+        // Null when the compressor exists; otherwise why it cannot be made.
+        private string EnsureCompressor()
+        {
+            lock (_writerLock)
+            {
+                if (_writer != null)
+                    return null;
+
+                try
+                {
+                    _writer = _compressorFactory != null ? _compressorFactory() : new TableBlockWriter();
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    return $"the table block compressor cannot be created ({ex.GetType().Name}: {ex.Message})";
+                }
             }
         }
 
@@ -212,90 +339,64 @@ namespace HSMDataCollector.Tables
         }
 
 
-        // ---- Rows and the buffer bound ---------------------------------------------------------------------------
-
-        internal TableDropReason WhyRowsAreRefused(TableSensor sensor)
-        {
-            switch (sensor.State)
-            {
-                case TableSensorState.Refused: return TableDropReason.SensorRefused;
-                case TableSensorState.Unavailable: return TableDropReason.SensorUnavailable;
-            }
-
-            // Rows are taken from Start until the stop's final tick takes them, not while the collector is still
-            // Stopping after it: such a row would be in no report, or go out in the next run (#1846 review, item 2).
-            if (Volatile.Read(ref _acceptingRows) == 0)
-                return TableDropReason.NotRunning;
-
-            return _diagnostics.CanAcceptData ? TableDropReason.None : TableDropReason.NotRunning;
-        }
-
-        // 1 from Start until the stop or the rollback closes the run for rows.
-        private int _acceptingRows;
-
-        /// <summary>
-        /// Takes <paramref name="bytes"/> of the collector-wide bound, or nothing. A compare-and-swap that never
-        /// overshoots: a request that cannot fit is refused before it touches the counter, so it never makes a
-        /// concurrent request that fits look like one that does not (#1846 review, item 10).
-        /// </summary>
-        internal bool TryReserveBuffer(long bytes)
-        {
-            if (bytes > _maxBufferBytes)
-            {
-                OnReservationForTests?.Invoke();
-                return false;
-            }
-
-            while (true)
-            {
-                var current = Interlocked.Read(ref _bufferedBytes);
-
-                if (current + bytes > _maxBufferBytes)
-                {
-                    OnReservationForTests?.Invoke();
-                    return false;
-                }
-
-                if (Interlocked.CompareExchange(ref _bufferedBytes, current + bytes, current) == current)
-                {
-                    OnReservationForTests?.Invoke();
-                    return true;
-                }
-            }
-        }
+        // ---- Losses -----------------------------------------------------------------------------------------------
 
         /// <summary>For tests: runs once a reservation has decided, whatever it decided.</summary>
         internal Action OnReservationForTests { get; set; }
 
-        internal void ReleaseBuffer(long bytes) => Interlocked.Add(ref _bufferedBytes, -bytes);
-
-        internal void CountDropped(long rows, TableDropReason reason)
+        /// <summary>
+        /// Reports what the ledger of <paramref name="run"/> gathered since the last report: one deduplicated line per
+        /// reason, and the rows to the <c>Queue overflow</c> sensor while it takes them (they stay in the ledger when it
+        /// does not). Called at every tick and at the end of a stop, under no gate.
+        /// </summary>
+        private void ReportLosses(TableRun run)
         {
-            Interlocked.Add(ref _droppedTotal, rows);
-            Interlocked.Add(ref _unreportedDrops[(int)reason], rows);
+            if (run == null)
+                return;
+
+            foreach (var reason in run.Ledger.TakeReasons())
+                Note(DescribeDrop(reason));
+
+            var rows = run.Ledger.TakeUnreported();
+
+            if (rows > 0)
+            {
+                bool taken;
+
+                try
+                {
+                    taken = _diagnostics.TryReportDroppedRows(rows);
+                }
+                catch (Exception)
+                {
+                    taken = false;
+                }
+
+                if (!taken)
+                    run.Ledger.GiveBack(rows);
+            }
+
+            FlushReports();
         }
 
         /// <summary>
-        /// Reports the rows lost since the last report, one deduplicated line per reason and the count to the
-        /// <c>Queue overflow</c> sensor. Run at every tick and at stop, so a hot path of dropped rows costs a counter only.
+        /// The one stop line of the tables, written at the very end of a collector stop (after the value drain, after the
+        /// sensors stopped, after the table drain): the rows the last run lost that are in no published bar of the
+        /// <c>Queue overflow</c> sensor. It closes that run's ledger: a row refused after it is counted on its sensor only.
         /// </summary>
-        internal void ReportDrops()
+        internal void ReportStopLine()
         {
-            long total = 0;
+            var run = ObservedRun;
 
-            for (var reason = 1; reason < ReasonCount; reason++)
-            {
-                var rows = Interlocked.Exchange(ref _unreportedDrops[reason], 0);
+            if (run == null || ReferenceEquals(run, CurrentRun))
+                return;
 
-                if (rows <= 0)
-                    continue;
+            var rows = run.Ledger.Finish();
 
-                total += rows;
-                _diagnostics.AddError(DescribeDrop((TableDropReason)reason));
-            }
+            FlushReports();
 
-            if (total > 0)
-                _diagnostics.ReportDroppedRows(total);
+            if (rows > 0)
+                _logger?.Error($"Collector stop: {rows} table row(s) were lost during this run and are not in the Queue overflow sensor (not registered, or reported after it published its last bar).");
         }
 
         private string DescribeDrop(TableDropReason reason)
@@ -311,6 +412,7 @@ namespace HSMDataCollector.Tables
                 case TableDropReason.NotDeliveredAtStop: return "Table rows were dropped: they were not delivered when the collector stopped.";
                 case TableDropReason.RowTooLarge: return "Table rows were dropped: a row did not fit a frame of the table connection.";
                 case TableDropReason.PackingFailed: return "Table rows were dropped: packing them into a block failed.";
+                case TableDropReason.BufferGrowthFailed: return "Table rows were dropped: the table row buffer could not grow (out of memory).";
                 default: return $"Table rows were dropped ({reason}).";
             }
         }
@@ -318,74 +420,64 @@ namespace HSMDataCollector.Tables
 
         // ---- Lifecycle --------------------------------------------------------------------------------------------
 
-        private bool IsRunning
-        {
-            get
-            {
-                lock (_runLock)
-                    return _run != null;
-            }
-        }
-
-        /// <summary>Starts a run: a new producer, every sensor registered again, the tick and the delivery loop.</summary>
+        /// <summary>
+        /// Starts a run: a new producer, every sensor registered again, the tick and the delivery loop. Does nothing when a
+        /// run goes already or no sensor can send. Never throws.
+        /// </summary>
         internal void Start()
         {
-            lock (_runLock)
+            try
             {
-                if (_run != null || Volatile.Read(ref _disposed) == 1)
-                    return;
-
-                _producer = Guid.NewGuid();
-                _nextSequence = 0;
-                Interlocked.Exchange(ref _retryNotBeforeTicks, 0);
-                Interlocked.Increment(ref _runGeneration);
-                Volatile.Write(ref _acceptingRows, 1);
-
-                foreach (var sensor in _sensors.Values)
-                    sensor.TryMove(TableSensorState.Registered, TableSensorState.Pending);
-
-                if (_writer == null)
-                    _writer = new TableBlockWriter();
-
-                _run = new CancellationTokenSource();
-
-                if (_manualTick)
-                    return;
-
-                _tick = _scheduler.Schedule((Func<Task>)TickAsync, _tickPeriod, _tickPeriod, ex => ReportFault("The table tick", ex));
-
-                if (_channel != null)
+                lock (_runLock)
                 {
-                    var token = _run.Token;
-                    _deliveryLoop = Task.Run(() => DeliveryLoopAsync(token));
-                }
+                    if (_run != null || Volatile.Read(ref _disposed) == 1 || !HasCompressor)
+                        return;
 
-                KickRegistration();
+                    var run = new TableRun(Interlocked.Increment(ref _runCount), _maxBufferBytes, () => OnReservationForTests);
+
+                    foreach (var sensor in _sensors.Values)
+                        sensor.Attach(run);
+
+                    _run = run;
+                    _lastRun = run;
+
+                    if (_manualTick)
+                        return;
+
+                    run.Tick = _scheduler.Schedule((Func<Task>)(() => TickAsync(run)), _tickPeriod, _tickPeriod, ex => { NoteFault("The table tick", ex); FlushReports(); });
+
+                    if (_channel != null)
+                        run.DeliveryLoop = Task.Run(() => DeliveryLoopAsync(run));
+
+                    KickRegistration(run);
+                }
+            }
+            catch (Exception ex)
+            {
+                NoteFault("Starting the table sensors", ex);
             }
         }
 
         /// <summary>
         /// The stop drain of the tables: the rows still buffered are packed and every block is offered to the server
-        /// until <paramref name="drainBudget"/> runs out or a block is not delivered. What is left is dropped, counted
-        /// and reported. Bounded by the budget; does not throw.
+        /// until <paramref name="drainBudget"/> runs out or a block is not delivered. What is left is dropped and counted
+        /// in the run's ledger. Bounded by the budget; does not throw.
         /// </summary>
         internal async Task FlushAsync(CancellationToken drainBudget)
         {
-            if (!await EndRunAsync().ConfigureAwait(false))
+            var run = await EndRunAsync().ConfigureAwait(false);
+
+            if (run == null)
                 return;
 
             try
             {
-                // The final tick: what it takes is the last of this run. Rows added after it are refused and
-                // counted until the next Start (#1846 review, item 2); a writer that reserved before is checked
-                // again under its sensor's lock, and what lands after the pack is discarded and counted below.
-                Volatile.Write(ref _acceptingRows, 0);
-
-                // Observes the budget between passes: what is not packed in time is dropped and counted (item 4).
-                await PackAsync(drainBudget, TableDropReason.NotDeliveredAtStop).ConfigureAwait(false);
+                // The final pack: what it takes is the last of this run. Rows added after the drain began were refused
+                // and counted; it observes the budget between passes, and what is not packed in time is counted.
+                await PackAsync(run, drainBudget, TableDropReason.NotDeliveredAtStop, final: true).ConfigureAwait(false);
 
                 if (_channel != null && !drainBudget.IsCancellationRequested)
-                    await DeliverAsync(drainBudget, atStop: true).ConfigureAwait(false);
+                    await DeliverAsync(run, drainBudget, atStop: true).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -393,101 +485,92 @@ namespace HSMDataCollector.Tables
             }
             catch (Exception ex)
             {
-                ReportFault("The table stop drain", ex);
+                NoteFault("The table stop drain", ex);
             }
 
-            DropEverything(TableDropReason.NotDeliveredAtStop, report: true);
+            await CloseRunAsync(run).ConfigureAwait(false);
         }
 
         /// <summary>A stop that does not drain (the rollback of a failed start): everything held is dropped and counted.</summary>
         internal async Task StopWithoutFlushAsync()
         {
-            Volatile.Write(ref _acceptingRows, 0);
+            var run = await EndRunAsync().ConfigureAwait(false);
 
-            if (!await EndRunAsync().ConfigureAwait(false))
-                return;
-
-            DropEverything(TableDropReason.NotDeliveredAtStop, report: true);
+            if (run != null)
+                await CloseRunAsync(run).ConfigureAwait(false);
         }
 
-        // Ends the run: the tick, the delivery loop and the registrations in flight. False when no run was going.
-        private async Task<bool> EndRunAsync()
+        // Takes the run going now out of the pipeline and ends its tick, its loop and its registrations; the run refuses
+        // rows from now on. Null when no run was going.
+        private async Task<TableRun> EndRunAsync()
         {
-            CancellationTokenSource run;
-            ScheduledTask tick;
-            Task loop;
+            TableRun run;
 
             lock (_runLock)
             {
                 run = _run;
-                tick = _tick;
-                loop = _deliveryLoop;
-
                 _run = null;
-                _tick = null;
-                _deliveryLoop = null;
             }
 
             if (run == null)
-                return false;
+                return null;
 
-            try { run.Cancel(); }
+            run.BeginDrain();
+
+            try { run.Cancellation.Cancel(); }
             catch (ObjectDisposedException) { }
 
             try
             {
-                if (tick != null)
-                    await tick.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
+                if (run.Tick != null)
+                    await run.Tick.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                ReportFault("Stopping the table tick", ex);
+                NoteFault("Stopping the table tick", ex);
             }
 
-            if (loop != null)
-                await Task.WhenAny(loop, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+            if (run.DeliveryLoop != null)
+                await Task.WhenAny(run.DeliveryLoop, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
 
-            // A tick of this run that is packing (a scheduled one, or one a test drives) finishes before the stop goes
-            // on: it observes the cancelled run between passes, so this is short, and a block it packs can never be
-            // enqueued after the stop cleared the backlog, to go out under the next run's producer (item 5).
             OnStopWaitsForPackForTests?.Invoke();
 
-            await _packGate.WaitAsync().ConfigureAwait(false);
-            _packGate.Release();
-
-            run.Dispose();
-            return true;
+            return run;
         }
 
-        private void DropEverything(TableDropReason reason, bool report)
+        // Ends the run for good: after a pack of it that is under way, nothing of it is packed or enqueued again; what it
+        // still holds is dropped and counted in its ledger, and the losses are reported (outside every gate).
+        private async Task CloseRunAsync(TableRun run)
         {
-            long rows = 0;
-            var blocks = 0;
+            await run.PackGate.WaitAsync().ConfigureAwait(false);
 
-            lock (_backlogLock)
+            try
             {
-                foreach (var block in _backlog)
-                {
-                    rows += block.Rows;
-                    blocks++;
-                    block.DropRows(reason);
-                }
+                run.Close();
+            }
+            finally
+            {
+                run.PackGate.Release();
+            }
 
-                _backlog.Clear();
-                _inFlight = null;
-                Interlocked.Exchange(ref _backlogBytes, 0);
+            DropEverything(run);
+            ReportLosses(run);
+        }
+
+        private void DropEverything(TableRun run)
+        {
+            lock (run.BacklogLock)
+            {
+                foreach (var block in run.Backlog)
+                    block.DropRows(TableDropReason.NotDeliveredAtStop);
+
+                run.Backlog.Clear();
+                run.InFlight = null;
+                Interlocked.Exchange(ref run.BacklogBytes, 0);
             }
 
             foreach (var sensor in _sensors.Values)
-                rows += sensor.DiscardRows(reason);
-
-            if (report)
-            {
-                if (rows > 0)
-                    _logger?.Error($"Collector stop: {rows} table row(s){(blocks > 0 ? $" ({blocks} block(s) among them)" : string.Empty)} were not delivered and are dropped.");
-
-                ReportDrops();
-            }
+                sensor.DiscardRows(run, TableDropReason.NotDeliveredAtStop);
         }
 
         public void Dispose()
@@ -495,58 +578,60 @@ namespace HSMDataCollector.Tables
             if (Interlocked.Exchange(ref _disposed, 1) == 1)
                 return;
 
-            try { EndRunAsync().ConfigureAwait(false).GetAwaiter().GetResult(); }
+            try { StopWithoutFlushAsync().ConfigureAwait(false).GetAwaiter().GetResult(); }
             catch (Exception) { }
 
-            DropEverything(TableDropReason.NotDeliveredAtStop, report: false);
+            // A dispose writes no stop line: the collector's stop wrote it, or there was no stop.
+            ObservedRun?.Ledger.Finish();
 
-            _writer?.Dispose();
+            lock (_writerLock)
+            {
+                _writer?.Dispose();
+                _writer = null;
+            }
+
+            FlushReports();
         }
 
 
         // ---- Registration ------------------------------------------------------------------------------------------
 
-        private void KickRegistration()
+        private void KickRegistration(TableRun run)
         {
             var channel = _channel;
-            CancellationToken token;
-            long run;
 
-            lock (_runLock)
-            {
-                if (channel == null || _run == null)
-                    return;
+            if (channel == null || run.IsClosed)
+                return;
 
-                token = _run.Token;
-                run = Interlocked.Read(ref _runGeneration);
-            }
+            var token = run.Token;
 
             Observe(Task.Run(async () =>
             {
                 await channel.WaitUntilReadyAsync(token).ConfigureAwait(false);
-                await RegisterPendingAsync(token, run).ConfigureAwait(false);
+                await RegisterPendingAsync(run).ConfigureAwait(false);
             }));
         }
-
-        // The number of the current run, rising at every Start: an answer of an earlier run changes nothing.
-        private long _runGeneration;
 
         /// <summary>For tests: runs after a registration request is answered, before the answer is applied.</summary>
         internal Func<Task> OnRegistrationAnsweredForTests { get; set; }
 
+        /// <summary>For tests: runs before the answer is applied to each sensor of a registration request.</summary>
+        internal Func<TableSensor, Task> OnRegistrationApplyForTests { get; set; }
+
         /// <summary>
-        /// Registers every Pending sensor not already in a request, in one request of table registrations. Accepted
-        /// sensors are Registered, refused ones Refused for good; the rest stay Pending and go again on the next tick.
+        /// Registers every Pending sensor of <paramref name="run"/> not already in a request, in one request of table
+        /// registrations. Accepted sensors are Registered, refused ones Refused for good; the rest stay Pending and go
+        /// again on the next tick. An answer applies only to sensors that still belong to that run.
         /// </summary>
-        internal async Task RegisterPendingAsync(CancellationToken token, long run)
+        internal async Task RegisterPendingAsync(TableRun run)
         {
             var channel = _channel;
 
-            if (channel == null)
+            if (channel == null || run.IsClosed)
                 return;
 
             // In path order, so the frames of a large request are cut the same way every time.
-            var batch = _sensors.Values.Where(s => s.State == TableSensorState.Pending && s.TryBeginRegistration(run))
+            var batch = _sensors.Values.Where(s => ReferenceEquals(s.Run, run) && s.State == TableSensorState.Pending && run.Registering.TryAdd(s, 0))
                                        .OrderBy(s => s.Path, StringComparer.Ordinal)
                                        .ToList();
 
@@ -559,7 +644,7 @@ namespace HSMDataCollector.Tables
 
                 try
                 {
-                    result = await channel.RegisterTablesAsync(batch.Select(s => s.BuildRegistration()).ToList(), token).ConfigureAwait(false);
+                    result = await channel.RegisterTablesAsync(batch.Select(s => s.BuildRegistration()).ToList(), run.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -575,40 +660,44 @@ namespace HSMDataCollector.Tables
                 if (answered != null)
                     await answered().ConfigureAwait(false);
 
-                // An answer to a request of an earlier run: the run that is going now registers its sensors itself
-                // (#1846 review, item 9).
-                if (run != Interlocked.Read(ref _runGeneration))
-                    return;
-
                 var unsettled = 0;
 
                 foreach (var sensor in batch)
                 {
+                    var applying = OnRegistrationApplyForTests;
+
+                    if (applying != null)
+                        await applying(sensor).ConfigureAwait(false);
+
+                    // Each move checks, under the sensor's lock, that the sensor still belongs to this run: an answer
+                    // that comes after the run ended changes nothing of the next run.
                     if (result.Accepted.Contains(sensor.Path))
                     {
-                        sensor.TryMove(TableSensorState.Pending, TableSensorState.Registered);
+                        sensor.TryMove(run, TableSensorState.Pending, TableSensorState.Registered);
                     }
                     else if (result.Refused.TryGetValue(sensor.Path, out var reason))
                     {
-                        if (sensor.TryMove(TableSensorState.Pending, TableSensorState.Refused, reason))
+                        if (sensor.TryMove(run, TableSensorState.Pending, TableSensorState.Refused, reason))
                         {
-                            _diagnostics.AddError($"The server refused the table sensor {sensor.Path}: {reason}. It is not registered again; its rows are dropped and counted. Another shape or another place needs another sensor path.");
-                            sensor.DiscardRows(TableDropReason.SensorRefused);
+                            Note($"The server refused the table sensor {sensor.Path}: {reason}. It is not registered again; its rows are dropped and counted. Another shape or another place needs another sensor path.");
+                            sensor.DiscardRows(run, TableDropReason.SensorRefused);
                         }
                     }
-                    else
+                    else if (ReferenceEquals(sensor.Run, run))
                     {
                         unsettled++;
                     }
                 }
 
                 if (unsettled > 0)
-                    _diagnostics.AddError($"Table sensor registrations were not delivered ({result.UnsettledReason ?? "no answer for them"}); they are sent again on the next tick and their rows are kept.");
+                    Note($"Table sensor registrations were not delivered ({result.UnsettledReason ?? "no answer for them"}); they are sent again on the next tick and their rows are kept.");
             }
             finally
             {
                 foreach (var sensor in batch)
-                    sensor.EndRegistration(run);
+                    run.Registering.TryRemove(sensor, out _);
+
+                FlushReports();
             }
         }
 
@@ -616,44 +705,59 @@ namespace HSMDataCollector.Tables
         // ---- The tick and packing ----------------------------------------------------------------------------------
 
         /// <summary>
-        /// One tick: reports lost rows, registers the sensors that wait for it, packs the rows of every registered sensor
-        /// into blocks and hands them to delivery. With <see cref="CollectorOptions.ManualTableTick"/> (tests) the
-        /// registration and the delivery are awaited here, so the tick is deterministic.
+        /// One tick of the run going now. With <see cref="CollectorOptions.ManualTableTick"/> (tests) the registration
+        /// and the delivery are awaited here, so the tick is deterministic.
         /// </summary>
-        internal async Task TickAsync()
+        internal Task TickAsync()
         {
-            CancellationToken token;
-            long run;
+            var run = CurrentRun;
+            return run == null ? Task.CompletedTask : TickAsync(run);
+        }
 
-            lock (_runLock)
-            {
-                if (_run == null)
-                    return;
+        /// <summary>
+        /// One tick of <paramref name="run"/>: reports its losses, registers the sensors that wait for it, packs the rows
+        /// of every registered sensor of the run into blocks and hands them to delivery. A tick of a run that ended does
+        /// nothing.
+        /// </summary>
+        internal async Task TickAsync(TableRun run)
+        {
+            if (!run.AcceptsRows)
+                return;
 
-                token = _run.Token;
-                run = Interlocked.Read(ref _runGeneration);
-            }
+            var token = run.Token;
 
             try
             {
-                ReportDrops();
+                ReportLosses(run);
 
-                var registration = RegisterPendingAsync(token, run);
+                var registration = RegisterPendingAsync(run);
 
                 if (_manualTick)
                     await registration.ConfigureAwait(false);
                 else
                     Observe(registration);
 
-                await PackAsync(token, TableDropReason.NotDeliveredAtStop).ConfigureAwait(false);
+                var beforePack = OnTickBeforePackForTests;
+
+                if (beforePack != null)
+                    await beforePack().ConfigureAwait(false);
+
+                await PackAsync(run, token, TableDropReason.NotDeliveredAtStop, final: false).ConfigureAwait(false);
 
                 if (_manualTick)
-                    await DeliverAsync(token, atStop: false).ConfigureAwait(false);
+                    await DeliverAsync(run, token, atStop: false).ConfigureAwait(false);
                 else
-                    _deliverySignal.Release();
+                    run.DeliverySignal.Release();
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+            }
+            catch (ObjectDisposedException) when (run.IsClosed)
+            {
+            }
+            finally
+            {
+                FlushReports();
             }
         }
 
@@ -676,31 +780,44 @@ namespace HSMDataCollector.Tables
             internal int Count { get; }
         }
 
-        /// <summary>
-        /// Takes the rows of every registered sensor and packs them into blocks at the end of the backlog. Observes
-        /// <paramref name="token"/> before every compression pass: the rows not packed when it fires are dropped under
-        /// <paramref name="cancelledReason"/> and counted (#1846 review, items 4 and 5).
-        /// </summary>
-        internal async Task PackAsync(CancellationToken token, TableDropReason cancelledReason)
+        /// <summary>For tests: a pack of the run going now.</summary>
+        internal Task PackAsync(CancellationToken token, TableDropReason cancelledReason)
         {
-            await _packGate.WaitAsync().ConfigureAwait(false);
+            var run = CurrentRun;
+            return run == null ? Task.CompletedTask : PackAsync(run, token, cancelledReason, final: false);
+        }
+
+        /// <summary>
+        /// Takes the rows of every registered sensor of <paramref name="run"/> and packs them into blocks at the end of
+        /// its backlog. A tick's pack (<paramref name="final"/> false) does nothing once the run's drain began; the stop's
+        /// final pack does nothing once the run is closed. Observes <paramref name="token"/> before every compression
+        /// pass: the rows not packed when it fires are dropped under <paramref name="cancelledReason"/> and counted.
+        /// Reports nothing while it holds the gate.
+        /// </summary>
+        internal async Task PackAsync(TableRun run, CancellationToken token, TableDropReason cancelledReason, bool final)
+        {
+            await run.PackGate.WaitAsync().ConfigureAwait(false);
 
             var taken = new List<KeyValuePair<TableSensor, TableRowBuffer>>();
+            long abandoned = 0;
 
             try
             {
+                if (run.IsClosed || (!final && !run.AcceptsRows))
+                    return;
+
                 foreach (var sensor in _sensors.Values)
                 {
                     if (sensor.State != TableSensorState.Registered)
                         continue;
 
-                    var rows = sensor.TakeRows();
+                    var rows = sensor.TakeRows(run);
 
                     if (rows != null)
                         taken.Add(new KeyValuePair<TableSensor, TableRowBuffer>(sensor, rows));
                 }
 
-                if (taken.Count == 0 || _writer == null)
+                if (taken.Count == 0)
                     return;
 
                 var limits = _channel?.BlockLimits ?? TableBlockLimits.Default;
@@ -710,33 +827,33 @@ namespace HSMDataCollector.Tables
                 foreach (var entry in taken)
                     Cut(entry.Key, entry.Value, limits, pieces);
 
-                var abandoned = 0L;
-
                 foreach (var group in Group(pieces, limits))
-                    abandoned += EncodeAndQueue(group, maxBlock, token, cancelledReason);
-
-                if (abandoned > 0)
-                    _logger?.Error($"Packing table rows was cut short ({abandoned} row(s) not packed in time); they are dropped and counted.");
+                    abandoned += EncodeAndQueue(run, group, maxBlock, token, cancelledReason);
             }
             catch (Exception ex)
             {
-                // Packing has no reason to fail; if it does, the rows it took are lost and said so (below).
-                ReportFault("Packing table rows", ex);
+                // Packing has no reason to fail; if it does, the rows it took are lost and said so.
+                NoteFault("Packing table rows", ex);
 
                 foreach (var entry in taken)
                     if (entry.Value.Count > 0)
-                        entry.Key.Drop(entry.Value.Count, TableDropReason.PackingFailed);
+                        entry.Key.Drop(entry.Value.Count, TableDropReason.PackingFailed, run);
             }
             finally
             {
                 foreach (var entry in taken)
                 {
-                    ReleaseBuffer((long)entry.Value.Count * entry.Key.RowBytes);
+                    run.Release((long)entry.Value.Count * entry.Key.RowBytes);
                     entry.Key.ReturnRows(entry.Value);
                 }
 
-                _packGate.Release();
+                run.PackGate.Release();
             }
+
+            if (abandoned > 0)
+                NoteLog($"Packing table rows was cut short ({abandoned} row(s) not packed in time); they are dropped and counted.");
+
+            FlushReports();
         }
 
         // The rows of one sensor in pieces that each fit the block limits on their own.
@@ -788,7 +905,7 @@ namespace HSMDataCollector.Tables
 
         // One block per group; a block larger than a frame allows is split, by tables first and then by rows.
         // Returns the rows left unpacked because the token fired (dropped and counted here).
-        private long EncodeAndQueue(List<Piece> group, int maxBlock, CancellationToken token, TableDropReason cancelledReason)
+        private long EncodeAndQueue(TableRun run, List<Piece> group, int maxBlock, CancellationToken token, TableDropReason cancelledReason)
         {
             if (token.IsCancellationRequested)
             {
@@ -796,7 +913,7 @@ namespace HSMDataCollector.Tables
 
                 foreach (var cut in group)
                 {
-                    cut.Sensor.Drop(cut.Count, cancelledReason);
+                    cut.Sensor.Drop(cut.Count, cancelledReason, run);
                     rows += cut.Count;
                 }
 
@@ -809,15 +926,15 @@ namespace HSMDataCollector.Tables
 
             if (block.Length <= maxBlock)
             {
-                Enqueue(block, group);
+                Enqueue(run, block, group);
                 return 0;
             }
 
             if (group.Count > 1)
             {
                 var half = group.Count / 2;
-                return EncodeAndQueue(group.GetRange(0, half), maxBlock, token, cancelledReason)
-                     + EncodeAndQueue(group.GetRange(half, group.Count - half), maxBlock, token, cancelledReason);
+                return EncodeAndQueue(run, group.GetRange(0, half), maxBlock, token, cancelledReason)
+                     + EncodeAndQueue(run, group.GetRange(half, group.Count - half), maxBlock, token, cancelledReason);
             }
 
             var piece = group[0];
@@ -825,57 +942,63 @@ namespace HSMDataCollector.Tables
             if (piece.Count > 1)
             {
                 var first = piece.Count / 2;
-                return EncodeAndQueue(new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, token, cancelledReason)
-                     + EncodeAndQueue(new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, token, cancelledReason);
+                return EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start, first) }, maxBlock, token, cancelledReason)
+                     + EncodeAndQueue(run, new List<Piece> { new Piece(piece.Sensor, piece.Buffer, piece.Start + first, piece.Count - first) }, maxBlock, token, cancelledReason);
             }
 
-            piece.Sensor.Drop(1, TableDropReason.RowTooLarge);
-            _diagnostics.AddError($"A row of the table sensor {piece.Sensor.Path} does not fit a frame of the table connection ({maxBlock} bytes) and is dropped.");
+            piece.Sensor.Drop(1, TableDropReason.RowTooLarge, run);
+            Note($"A row of the table sensor {piece.Sensor.Path} does not fit a frame of the table connection ({maxBlock} bytes) and is dropped.");
             return 0;
         }
 
-        /// <summary>For tests: runs when a stop is about to wait for a pack of its run to finish.</summary>
+        /// <summary>For tests: runs when a stop has ended a run's tick and loop and is about to wait for a pack of it.</summary>
         internal Action OnStopWaitsForPackForTests { get; set; }
 
         /// <summary>For tests: runs after a block got its answer and before the answer is applied.</summary>
         internal Action OnAckForTests { get; set; }
+
+        /// <summary>For tests: runs in a tick after the registration and before the pack.</summary>
+        internal Func<Task> OnTickBeforePackForTests { get; set; }
 
         /// <summary>For tests: runs before every compression pass of a pack.</summary>
         internal Action OnPackPassForTests { get; set; }
 
         private byte[] Encode(List<Piece> group)
         {
-            var writer = _writer;
-
-            writer.Reset();
-
-            try
+            lock (_writerLock)
             {
-                foreach (var piece in group)
-                {
-                    var sensor = piece.Sensor;
-                    var rows = piece.Buffer;
+                var writer = _writer ?? throw new ObjectDisposedException(nameof(TableBlockWriter));
 
-                    writer.BeginTable(sensor.PathBytes, sensor.Schema.Id, piece.Count);
-                    writer.AddTimeColumn(rows.Times.Slice(piece.Start, piece.Count));
-
-                    for (var column = 0; column < rows.ColumnCount; column++)
-                    {
-                        var values = rows.Values(column).Slice(piece.Start, piece.Count);
-                        var nulls = NullMap(rows, column, piece.Start, piece.Count);
-
-                        if (sensor.ColumnType(column) == HSMTableBlocks.TableColumnType.Int64)
-                            writer.AddInt64Column(values, nulls);
-                        else
-                            writer.AddDoubleColumn(MemoryMarshal.Cast<long, double>(values), nulls);
-                    }
-                }
-
-                return writer.ToArray();
-            }
-            finally
-            {
                 writer.Reset();
+
+                try
+                {
+                    foreach (var piece in group)
+                    {
+                        var sensor = piece.Sensor;
+                        var rows = piece.Buffer;
+
+                        writer.BeginTable(sensor.PathBytes, sensor.Schema.Id, piece.Count);
+                        writer.AddTimeColumn(rows.Times.Slice(piece.Start, piece.Count));
+
+                        for (var column = 0; column < rows.ColumnCount; column++)
+                        {
+                            var values = rows.Values(column).Slice(piece.Start, piece.Count);
+                            var nulls = NullMap(rows, column, piece.Start, piece.Count);
+
+                            if (sensor.ColumnType(column) == HSMTableBlocks.TableColumnType.Int64)
+                                writer.AddInt64Column(values, nulls);
+                            else
+                                writer.AddDoubleColumn(MemoryMarshal.Cast<long, double>(values), nulls);
+                        }
+                    }
+
+                    return writer.ToArray();
+                }
+                finally
+                {
+                    writer.Reset();
+                }
             }
         }
 
@@ -890,7 +1013,8 @@ namespace HSMDataCollector.Tables
             return map;
         }
 
-        private void Enqueue(byte[] bytes, List<Piece> group)
+        // Under the run's pack gate, so the sequence is the run's own and rises in the order of the blocks.
+        private void Enqueue(TableRun run, byte[] bytes, List<Piece> group)
         {
             var tables = new PendingTable[group.Count];
             var rows = 0;
@@ -901,22 +1025,24 @@ namespace HSMDataCollector.Tables
                 rows += group[i].Count;
             }
 
-            lock (_backlogLock)
+            var block = new PendingBlock(run, run.NextSequence++, bytes, tables, rows);
+
+            lock (run.BacklogLock)
             {
-                _backlog.AddLast(new PendingBlock(_nextSequence++, bytes, tables, rows));
-                Interlocked.Add(ref _backlogBytes, bytes.Length);
+                run.Backlog.AddLast(block);
+                Interlocked.Add(ref run.BacklogBytes, bytes.Length);
 
                 // The oldest blocks go first, never the one being sent.
-                var node = _backlog.First;
+                var node = run.Backlog.First;
 
-                while (Interlocked.Read(ref _backlogBytes) > _maxBacklogBytes && node != null)
+                while (Interlocked.Read(ref run.BacklogBytes) > _maxBacklogBytes && node != null)
                 {
                     var next = node.Next;
 
-                    if (!ReferenceEquals(node.Value, _inFlight))
+                    if (!ReferenceEquals(node.Value, run.InFlight))
                     {
-                        _backlog.Remove(node);
-                        Interlocked.Add(ref _backlogBytes, -node.Value.Bytes.Length);
+                        run.Backlog.Remove(node);
+                        Interlocked.Add(ref run.BacklogBytes, -node.Value.Bytes.Length);
                         node.Value.DropRows(TableDropReason.BacklogFull);
                     }
 
@@ -928,39 +1054,47 @@ namespace HSMDataCollector.Tables
 
         // ---- Delivery ----------------------------------------------------------------------------------------------
 
-        private async Task DeliveryLoopAsync(CancellationToken token)
+        private async Task DeliveryLoopAsync(TableRun run)
         {
+            var token = run.Token;
+
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    await _deliverySignal.WaitAsync(token).ConfigureAwait(false);
-                    await DeliverAsync(token, atStop: false).ConfigureAwait(false);
+                    await run.DeliverySignal.WaitAsync(token).ConfigureAwait(false);
+                    await DeliverAsync(run, token, atStop: false).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     return;
                 }
+                catch (ObjectDisposedException) when (run.IsClosed)
+                {
+                    return;
+                }
                 catch (Exception ex)
                 {
-                    ReportFault("The table delivery loop", ex);
+                    NoteFault("The table delivery loop", ex);
+                    FlushReports();
                 }
             }
         }
 
         /// <summary>
-        /// Sends the backlog from its head, one block at a time, each after the answer to the one before (stop and
-        /// wait), until it is empty or a block is not delivered. A block not delivered stays at the head and goes again
-        /// later with the same producer and sequence.
+        /// Sends the backlog of <paramref name="run"/> from its head, one block at a time, each after the answer to the one
+        /// before (stop and wait), until it is empty or a block is not delivered. A block not delivered stays at the head
+        /// and goes again later with the same producer and sequence. An answer that came back is applied whatever the
+        /// token says: a block the server stored is never counted as lost.
         /// </summary>
-        internal async Task DeliverAsync(CancellationToken token, bool atStop)
+        internal async Task DeliverAsync(TableRun run, CancellationToken token, bool atStop)
         {
             var channel = _channel;
 
             if (channel == null)
                 return;
 
-            await _deliveryGate.WaitAsync(token).ConfigureAwait(false);
+            await run.DeliveryGate.WaitAsync(token).ConfigureAwait(false);
 
             try
             {
@@ -968,15 +1102,15 @@ namespace HSMDataCollector.Tables
                 {
                     token.ThrowIfCancellationRequested();
 
-                    if (!atStop && DateTime.UtcNow.Ticks < Interlocked.Read(ref _retryNotBeforeTicks))
+                    if (!atStop && DateTime.UtcNow.Ticks < Interlocked.Read(ref run.RetryNotBeforeTicks))
                         return;
 
                     PendingBlock head;
 
-                    lock (_backlogLock)
+                    lock (run.BacklogLock)
                     {
-                        head = _backlog.First?.Value;
-                        _inFlight = head;
+                        head = run.IsClosed ? null : run.Backlog.First?.Value;
+                        run.InFlight = head;
                     }
 
                     if (head == null)
@@ -986,67 +1120,67 @@ namespace HSMDataCollector.Tables
 
                     try
                     {
-                        ack = await channel.PutBlockAsync(_producer, head.Sequence, head.Bytes, token).ConfigureAwait(false);
+                        ack = await channel.PutBlockAsync(run.Producer, head.Sequence, head.Bytes, token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (token.IsCancellationRequested)
                     {
+                        // No answer: the block stays where it is, no longer in flight.
+                        lock (run.BacklogLock)
+                            if (ReferenceEquals(run.InFlight, head))
+                                run.InFlight = null;
+
                         throw;
                     }
                     catch (Exception ex)
                     {
                         ack = TableBlockAck.NotDelivered(ex.Message);
                     }
-                    finally
-                    {
-                        // A cancelled put leaves the block where it is, no longer in flight.
-                        if (token.IsCancellationRequested)
-                            lock (_backlogLock)
-                                _inFlight = null;
-                    }
 
                     OnAckForTests?.Invoke();
 
                     if (ack.Outcome == TableBlockOutcome.NotDelivered)
                     {
-                        lock (_backlogLock)
-                            _inFlight = null;
+                        lock (run.BacklogLock)
+                            if (ReferenceEquals(run.InFlight, head))
+                                run.InFlight = null;
 
                         if (ack.RetryAfter.HasValue)
                         {
                             var wait = ack.RetryAfter.Value < MaxRetryAfter ? ack.RetryAfter.Value : MaxRetryAfter;
-                            Interlocked.Exchange(ref _retryNotBeforeTicks, DateTime.UtcNow.Add(wait).Ticks);
+                            Interlocked.Exchange(ref run.RetryNotBeforeTicks, DateTime.UtcNow.Add(wait).Ticks);
                         }
 
-                        _diagnostics.AddError($"Table blocks are not delivered: {ack.Error}. They are kept and sent again.");
+                        Note($"Table blocks are not delivered: {ack.Error}. They are kept and sent again.");
                         return;
                     }
 
-                    Settle(head, ack);
+                    Settle(run, head, ack);
                 }
             }
             finally
             {
-                _deliveryGate.Release();
+                run.DeliveryGate.Release();
+                FlushReports();
             }
         }
 
         // A block with a final answer leaves the backlog; its refused tables are counted and acted on.
         // The block stays in flight, and so out of reach of the backlog bound, until this step removes it: the removal,
-        // the end of in-flight and the accounting are one step under the backlog's lock (#1846 review, item 6). A
-        // block the bound took anyway (only a stop's DropEverything does) was counted there and is not counted again.
-        private void Settle(PendingBlock block, TableBlockAck ack)
+        // the end of in-flight and the accounting are one step under the backlog's lock. A block the stop dropped
+        // already was counted there and is not counted again.
+        private void Settle(TableRun run, PendingBlock block, TableBlockAck ack)
         {
             bool removed;
 
-            lock (_backlogLock)
+            lock (run.BacklogLock)
             {
-                removed = _backlog.Remove(block);
+                removed = run.Backlog.Remove(block);
 
                 if (removed)
-                    Interlocked.Add(ref _backlogBytes, -block.Bytes.Length);
+                    Interlocked.Add(ref run.BacklogBytes, -block.Bytes.Length);
 
-                if (ReferenceEquals(_inFlight, block))
-                    _inFlight = null;
+                if (ReferenceEquals(run.InFlight, block))
+                    run.InFlight = null;
             }
 
             if (!removed)
@@ -1056,28 +1190,28 @@ namespace HSMDataCollector.Tables
             {
                 case TableBlockOutcome.Stored:
                 case TableBlockOutcome.Duplicate:
-                    ApplyRefusals(block, ack, countRows: true);
+                    ApplyRefusals(run, block, ack, countRows: true);
                     break;
 
                 case TableBlockOutcome.AllRefused:
-                    ApplyRefusals(block, ack, countRows: false);
+                    ApplyRefusals(run, block, ack, countRows: false);
                     block.DropRows(TableDropReason.RefusedByServer);
                     break;
 
                 case TableBlockOutcome.Invalid:
                     block.DropRows(TableDropReason.RefusedByServer);
-                    _diagnostics.AddError($"The server refused a table block as invalid ({ack.Error}); its {block.Rows} row(s) are lost and it is not sent again.");
+                    Note($"The server refused a table block as invalid ({ack.Error}); its {block.Rows} row(s) are lost and it is not sent again.");
                     break;
             }
         }
 
-        private void ApplyRefusals(PendingBlock block, TableBlockAck ack, bool countRows)
+        private void ApplyRefusals(TableRun run, PendingBlock block, TableBlockAck ack, bool countRows)
         {
             foreach (var refusal in ack.Refused)
             {
                 if (refusal.Index < 0 || refusal.Index >= block.Tables.Length)
                 {
-                    _logger?.Error($"The server refused table {refusal.Index} ({refusal.Table}) of a block of {block.Tables.Length} table(s): {refusal.Reason}.");
+                    NoteLog($"The server refused table {refusal.Index} ({refusal.Table}) of a block of {block.Tables.Length} table(s): {refusal.Reason}.");
                     continue;
                 }
 
@@ -1085,109 +1219,59 @@ namespace HSMDataCollector.Tables
                 var sensor = table.Sensor;
 
                 if (countRows)
-                    sensor.Drop(table.Rows, TableDropReason.RefusedByServer);
+                    sensor.Drop(table.Rows, TableDropReason.RefusedByServer, run);
 
                 switch (refusal.Reason)
                 {
                     case "UnknownSensor":
                         // An operator may have removed the sensor: it is registered again; the rows of this block are lost.
-                        if (sensor.TryMove(TableSensorState.Registered, TableSensorState.Pending))
+                        if (sensor.TryMove(run, TableSensorState.Registered, TableSensorState.Pending))
                         {
-                            _diagnostics.AddError($"The server does not know the table sensor {sensor.Path} any more; it is registered again. The rows of the refused block are lost.");
+                            Note($"The server does not know the table sensor {sensor.Path} any more; it is registered again. The rows of the refused block are lost.");
 
                             if (!_manualTick)
-                                KickRegistration();
+                                KickRegistration(run);
                         }
                         break;
 
                     case "SensorBlocked":
                     case "SensorCreatedAfterBlock":
-                        _diagnostics.AddError($"The server refused the rows of the table sensor {sensor.Path} in a block: {refusal.Reason}.");
+                        Note($"The server refused the rows of the table sensor {sensor.Path} in a block: {refusal.Reason}.");
                         break;
 
                     case "NotATableSensor":
                     case "SchemaIdMismatch":
                     case "ColumnTypesMismatch":
                     case "InvalidIdentifier":
-                        if (sensor.TryMove(TableSensorState.Registered, TableSensorState.Refused, $"the server refused its rows: {refusal.Reason}"))
+                        if (sensor.TryMove(run, TableSensorState.Registered, TableSensorState.Refused, $"the server refused its rows: {refusal.Reason}"))
                         {
-                            _diagnostics.AddError($"The server refused the rows of the table sensor {sensor.Path}: {refusal.Reason}. Its rows are dropped and counted from now on.");
-                            sensor.DiscardRows(TableDropReason.SensorRefused);
+                            Note($"The server refused the rows of the table sensor {sensor.Path}: {refusal.Reason}. Its rows are dropped and counted from now on.");
+                            sensor.DiscardRows(run, TableDropReason.SensorRefused);
                         }
                         break;
 
                     default:
-                        _diagnostics.AddError($"The server refused the rows of the table sensor {sensor.Path} for a reason this collector does not know: {refusal.Reason}.");
+                        Note($"The server refused the rows of the table sensor {sensor.Path} for a reason this collector does not know: {refusal.Reason}.");
                         break;
                 }
             }
 
             if (ack.RefusedCount > ack.Refused.Count)
-                _diagnostics.AddError($"The server refused {ack.RefusedCount} table(s) of a block and listed {ack.Refused.Count}; the rows of the others are lost too.");
+                Note($"The server refused {ack.RefusedCount} table(s) of a block and listed {ack.Refused.Count}; the rows of the others are lost too.");
         }
 
-
-        private void ReportFault(string what, Exception ex)
-        {
-            try
-            {
-                _diagnostics.AddError($"{what} failed: {ex.Message}");
-                _logger?.Error(ex);
-            }
-            catch (Exception)
-            {
-                // Reporting must not throw into a loop.
-            }
-        }
 
         private void Observe(Task task) =>
             task.ContinueWith(t =>
                 {
                     if (t.Exception != null && !(t.Exception.InnerException is OperationCanceledException))
-                        ReportFault("A table sensor registration", t.Exception.InnerException ?? t.Exception);
+                    {
+                        NoteFault("A table sensor registration", t.Exception.InnerException ?? t.Exception);
+                        FlushReports();
+                    }
                 },
                 CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
-
-
-        private readonly struct PendingTable
-        {
-            internal PendingTable(TableSensor sensor, int rows)
-            {
-                Sensor = sensor;
-                Rows = rows;
-            }
-
-            internal TableSensor Sensor { get; }
-
-            internal int Rows { get; }
-        }
-
-        /// <summary>A packed block waiting for its final answer; its tables in directory order.</summary>
-        private sealed class PendingBlock
-        {
-            internal PendingBlock(long sequence, byte[] bytes, PendingTable[] tables, int rows)
-            {
-                Sequence = sequence;
-                Bytes = bytes;
-                Tables = tables;
-                Rows = rows;
-            }
-
-            internal long Sequence { get; }
-
-            internal byte[] Bytes { get; }
-
-            internal PendingTable[] Tables { get; }
-
-            internal int Rows { get; }
-
-            internal void DropRows(TableDropReason reason)
-            {
-                foreach (var table in Tables)
-                    table.Sensor.Drop(table.Rows, reason);
-            }
-        }
     }
 }

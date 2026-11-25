@@ -34,9 +34,6 @@ namespace HSMDataCollector.Tables
         private long _rowsAccepted;
         private long _rowsDropped;
 
-        // The run whose registration request carries this sensor; 0 when none does.
-        private long _registering;
-
 
         internal TableSensor(TablePipeline pipeline, string path, IReadOnlyList<TableColumn> columns, TableSchema schema,
                              string description, TimeSpan? keepHistory)
@@ -60,8 +57,8 @@ namespace HSMDataCollector.Tables
 
             var doubleColumns = _doubleColumns = _types.Select(type => type == HSMTableBlocks.TableColumnType.Double).ToArray();
 
-            _active = new TableRowBuffer(doubleColumns);
-            _spare = new TableRowBuffer(doubleColumns);
+            _active = new TableRowBuffer(doubleColumns, () => BeforeBufferGrowthForTests);
+            _spare = new TableRowBuffer(doubleColumns, () => BeforeBufferGrowthForTests);
         }
 
 
@@ -148,25 +145,7 @@ namespace HSMDataCollector.Tables
         {
             CheckRow(cells, 0);
 
-            var ticks = ToUtcTicks(time);
-
-            if (!TryReserve(1))
-                return false;
-
-            BeforeAppendForTests?.Invoke();
-
-            lock (_lock)
-            {
-                // Checked again under the lock that a refusal and a discard take: a row reserved while the
-                // sensor was writable is not appended once it is not (#1846 review, items 2 and 3).
-                if (!CanAppend(1))
-                    return false;
-
-                _active.Append(ticks, cells);
-            }
-
-            Interlocked.Increment(ref _rowsAccepted);
-            return true;
+            return Append(ToUtcTicks(time), default, cells, 1) == 1;
         }
 
         public int AddRows(DateTime[] times, TableCell[] cells, int rowCount)
@@ -196,21 +175,7 @@ namespace HSMDataCollector.Tables
             if (rows == 0)
                 return 0;
 
-            if (!TryReserve(rows))
-                return 0;
-
-            BeforeAppendForTests?.Invoke();
-
-            lock (_lock)
-            {
-                if (!CanAppend(rows))
-                    return 0;
-
-                _active.Append(times, cells, rows);
-            }
-
-            Interlocked.Add(ref _rowsAccepted, rows);
-            return rows;
+            return Append(0, times, cells, rows);
         }
 
 
@@ -230,71 +195,140 @@ namespace HSMDataCollector.Tables
                     throw new ArgumentException($"Column '{_columns[column].Name}' of {Path} holds 64-bit integers; row {row} gives it a double.", nameof(cells));
         }
 
-        // Takes room in the collector's buffer for rows that are about to be appended; false (counted) when they are
-        // not taken.
-        private bool TryReserve(int rows)
+        // One call of AddRow or AddRows, done against the one run it read first: the reservation, the checks and the
+        // append all belong to that run, so a reservation never crosses runs. Returns the rows taken: all or none.
+        // Never throws: a buffer that cannot grow leaves the rows dropped and counted.
+        private int Append(long ticks, ReadOnlySpan<DateTime> times, ReadOnlySpan<TableCell> cells, int rows)
         {
-            var reason = _pipeline.WhyRowsAreRefused(this);
+            var run = Volatile.Read(ref _run);
+            var reason = WhyRefused(run);
 
-            if (reason == TableDropReason.None && _pipeline.TryReserveBuffer((long)rows * RowBytes))
-                return true;
+            if (reason != TableDropReason.None)
+            {
+                Drop(rows, reason, run);
+                return 0;
+            }
 
-            if (reason == TableDropReason.None)
-                reason = TableDropReason.BufferFull;
+            var bytes = (long)rows * RowBytes;
 
-            Drop(rows, reason);
-            return false;
+            if (!run.TryReserve(bytes))
+            {
+                Drop(rows, TableDropReason.BufferFull, run);
+                return 0;
+            }
+
+            BeforeAppendForTests?.Invoke();
+
+            lock (_lock)
+            {
+                // Checked again under the lock that a refusal, a discard, a take and a new run take: a row reserved
+                // while the sensor was writable is not appended once it is not, nor into a run that is not its own.
+                reason = ReferenceEquals(_run, run) ? WhyRefused(run) : TableDropReason.NotRunning;
+
+                if (reason == TableDropReason.None)
+                {
+                    try
+                    {
+                        if (times.IsEmpty)
+                            _active.Append(ticks, cells);
+                        else
+                            _active.Append(times, cells, rows);
+                    }
+                    catch (Exception)
+                    {
+                        // Out of memory while the buffer grew: the buffer is as it was before the call (it builds
+                        // every new array before it swaps them in), so the rows are dropped and counted.
+                        reason = TableDropReason.BufferGrowthFailed;
+                    }
+                }
+            }
+
+            if (reason != TableDropReason.None)
+            {
+                run.Release(bytes);
+                Drop(rows, reason, run);
+                return 0;
+            }
+
+            Interlocked.Add(ref _rowsAccepted, rows);
+            return rows;
+        }
+
+        // Why rows are not taken now into the run given, or None.
+        private TableDropReason WhyRefused(TableRun run)
+        {
+            switch (State)
+            {
+                case TableSensorState.Refused: return TableDropReason.SensorRefused;
+                case TableSensorState.Unavailable: return TableDropReason.SensorUnavailable;
+            }
+
+            if (run == null || !run.AcceptsRows || !_pipeline.CanAcceptData)
+                return TableDropReason.NotRunning;
+
+            return TableDropReason.None;
         }
 
 
         /// <summary>For tests: runs between the reservation of a row and its append under the sensor's lock.</summary>
         internal Action BeforeAppendForTests { get; set; }
 
-        // Under _lock: whether reserved rows may still be appended. When not, the reservation goes back and the rows
-        // are counted as dropped.
-        private bool CanAppend(int rows)
+        /// <summary>For tests: runs before a buffer of this sensor allocates the arrays of a growth (a test makes it throw).</summary>
+        internal Action BeforeBufferGrowthForTests { get; set; }
+
+        /// <summary>The run this sensor belongs to now; null before the first Start.</summary>
+        internal TableRun Run => Volatile.Read(ref _run);
+
+        // The current run; written under _lock only.
+        private TableRun _run;
+
+        /// <summary>
+        /// Makes <paramref name="run"/> the sensor's run: from now on its rows are that run's. A sensor that was
+        /// registered in the previous run is registered again. Rows of the previous run still buffered (none, after a
+        /// stop) are dropped and counted in that run.
+        /// </summary>
+        internal void Attach(TableRun run)
         {
-            var reason = _pipeline.WhyRowsAreRefused(this);
+            TableRun previous;
+            var leftover = 0;
 
-            if (reason == TableDropReason.None)
-                return true;
+            lock (_lock)
+            {
+                previous = _run;
+                _run = run;
 
-            _pipeline.ReleaseBuffer((long)rows * RowBytes);
-            Drop(rows, reason);
+                if (_state == (int)TableSensorState.Registered)
+                {
+                    Volatile.Write(ref _stateReason, null);
+                    Volatile.Write(ref _state, (int)TableSensorState.Pending);
+                }
 
-            return false;
+                if (_active.Count > 0)
+                {
+                    leftover = _active.Count;
+                    _active.Clear();
+                }
+            }
+
+            if (leftover > 0 && previous != null)
+            {
+                previous.Release((long)leftover * RowBytes);
+                Drop(leftover, TableDropReason.NotDeliveredAtStop, previous);
+            }
         }
 
-        internal void Drop(long rows, TableDropReason reason)
+        /// <summary>
+        /// Counts lost rows on the sensor and in the ledger of <paramref name="run"/>; with no run (rows added before the
+        /// first Start) or after the run's stop line was written, on the sensor only.
+        /// </summary>
+        internal void Drop(long rows, TableDropReason reason, TableRun run)
         {
             if (rows <= 0)
                 return;
 
             Interlocked.Add(ref _rowsDropped, rows);
-            _pipeline.CountDropped(rows, reason);
+            run?.Ledger.Add(rows, reason);
         }
-
-        /// <summary>
-        /// Marks the sensor as carried by a registration request of run <paramref name="run"/> (a positive number).
-        /// False when a request of the same run carries it already; a request of an earlier run does not hold a new
-        /// run back (#1846 review, item 9).
-        /// </summary>
-        internal bool TryBeginRegistration(long run)
-        {
-            while (true)
-            {
-                var current = Interlocked.Read(ref _registering);
-
-                if (current == run)
-                    return false;
-
-                if (Interlocked.CompareExchange(ref _registering, run, current) == current)
-                    return true;
-            }
-        }
-
-        /// <summary>Ends the mark of run <paramref name="run"/>; a mark of a later run stays.</summary>
-        internal void EndRegistration(long run) => Interlocked.CompareExchange(ref _registering, 0, run);
 
         /// <summary>Moves the state from <paramref name="from"/> to <paramref name="to"/>; false when it was not <paramref name="from"/>.</summary>
         internal bool TryMove(TableSensorState from, TableSensorState to, string reason = null)
@@ -311,26 +345,47 @@ namespace HSMDataCollector.Tables
         }
 
         /// <summary>
-        /// Takes the rows added since the last take; the caller packs them and gives the buffer back with
-        /// <see cref="ReturnRows"/>. Null when there are none.
+        /// <see cref="TryMove(TableSensorState, TableSensorState, string)"/> for an outcome of <paramref name="run"/> (a
+        /// registration answer, an answer to a block): false, and nothing changes, when the sensor belongs to another run.
         /// </summary>
-        internal TableRowBuffer TakeRows()
+        internal bool TryMove(TableRun run, TableSensorState from, TableSensorState to, string reason = null)
         {
             lock (_lock)
             {
-                if (_active.Count == 0)
+                if (!ReferenceEquals(_run, run) || _state != (int)from)
+                    return false;
+
+                Volatile.Write(ref _stateReason, reason);
+                Volatile.Write(ref _state, (int)to);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Takes the rows added since the last take in <paramref name="run"/>; the caller packs them and gives the buffer
+        /// back with <see cref="ReturnRows"/>. Null when there are none, or when the sensor belongs to another run: a tick
+        /// of an old run never takes rows of a new one.
+        /// </summary>
+        internal TableRowBuffer TakeRows(TableRun run)
+        {
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_run, run) || _active.Count == 0)
                     return null;
 
                 var taken = _active;
                 // The spare is away while a pack holds it (a discard can come from the delivery loop meanwhile).
-                _active = _spare ?? new TableRowBuffer(_doubleColumns);
+                _active = _spare ?? new TableRowBuffer(_doubleColumns, () => BeforeBufferGrowthForTests);
                 _spare = null;
 
                 return taken;
             }
         }
 
-        /// <summary>Gives a buffer taken with <see cref="TakeRows"/> back, empty, to be the next spare.</summary>
+        /// <summary>For tests: <see cref="TakeRows(TableRun)"/> in the sensor's current run.</summary>
+        internal TableRowBuffer TakeRows() => TakeRows(Run);
+
+        /// <summary>Gives a buffer taken with <see cref="TakeRows(TableRun)"/> back, empty, to be the next spare.</summary>
         internal void ReturnRows(TableRowBuffer buffer)
         {
             buffer.Clear();
@@ -341,12 +396,12 @@ namespace HSMDataCollector.Tables
         }
 
         /// <summary>
-        /// Drops every buffered row, counted under <paramref name="reason"/>, and returns how many there were. Their
-        /// room in the collector's buffer goes back.
+        /// Drops every buffered row of <paramref name="run"/>, counted under <paramref name="reason"/>, and returns how
+        /// many there were. Their room in the run's buffer bound goes back.
         /// </summary>
-        internal int DiscardRows(TableDropReason reason)
+        internal int DiscardRows(TableRun run, TableDropReason reason)
         {
-            var taken = TakeRows();
+            var taken = TakeRows(run);
 
             if (taken == null)
                 return 0;
@@ -354,10 +409,17 @@ namespace HSMDataCollector.Tables
             var rows = taken.Count;
 
             ReturnRows(taken);
-            _pipeline.ReleaseBuffer((long)rows * RowBytes);
-            Drop(rows, reason);
+            run.Release((long)rows * RowBytes);
+            Drop(rows, reason, run);
 
             return rows;
+        }
+
+        /// <summary>For tests: <see cref="DiscardRows(TableRun, TableDropReason)"/> in the current run.</summary>
+        internal int DiscardRows(TableDropReason reason)
+        {
+            var run = Run;
+            return run == null ? 0 : DiscardRows(run, reason);
         }
 
         internal AddOrUpdateSensorRequest BuildRegistration()
@@ -395,6 +457,7 @@ namespace HSMDataCollector.Tables
         NotDeliveredAtStop,
         RowTooLarge,
         PackingFailed,
+        BufferGrowthFailed,
     }
 
 

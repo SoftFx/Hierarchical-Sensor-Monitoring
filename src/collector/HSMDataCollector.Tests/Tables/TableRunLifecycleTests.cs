@@ -1,0 +1,598 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Tables;
+using Xunit;
+
+#if NET5_0_OR_GREATER
+#nullable disable
+#endif
+
+namespace HSMDataCollector.Tests.Tables
+{
+    /// <summary>
+    /// The findings of the second review of #1846 part 1: the lifecycle of the table pipeline. A run is one object
+    /// (TableRun), nothing exists before the first table sensor, and the losses of a run are in one ledger with one stop
+    /// line. One test per finding; orders of events are forced through hooks and barriers, never by waiting for time.
+    /// </summary>
+    public sealed class TableRunLifecycleTests
+    {
+        private static readonly DateTime T0 = new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc);
+        private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+        private static CollectorOptions Options(IDataSender sender, Action<CollectorOptions> tune = null)
+        {
+            var options = new CollectorOptions { AccessKey = "table-run-tests", DataSender = sender, ManualTableTick = true };
+            tune?.Invoke(options);
+            return options;
+        }
+
+        private static TableSensorOptions Quotes() => new TableSensorOptions
+        {
+            SensorLocation = SensorLocation.Product,
+            Columns = { TableColumn.Double("bid"), TableColumn.Double("ask") },
+        };
+
+        private static TaskCompletionSource<bool> Signal() => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private static async Task Within(Task task, string what)
+        {
+            Assert.True(await Task.WhenAny(task, Task.Delay(Patience)).ConfigureAwait(false) == task, what);
+            await task.ConfigureAwait(false);
+        }
+
+        private static IEnumerable<string> StopLines(CapturingLogger logger) =>
+            logger.Errors.Where(e => e.StartsWith("Collector stop", StringComparison.Ordinal) && e.Contains("table row"));
+
+
+        // Finding 1: a report written while the pipeline held its packing gate deadlocked a stop started by the host's
+        // logger. Reports are now written only after the gates are released.
+        [Fact]
+        public async Task A_logger_that_disposes_the_collector_cannot_deadlock_a_tick()
+        {
+            var sender = new FakeTableSender { MaxBlockBytes = 300 };
+            DataCollector collector = null;
+            var logger = new CapturingLogger { OnError = line => { if (line.Contains("cut short")) collector.Dispose(); } };
+
+            collector = new DataCollector(Options(sender));
+            collector.AddCustomLogger(logger);
+            await collector.Start();
+
+            var tables = Enumerable.Range(0, 6).Select(i => collector.CreateTableSensor($"t{i}", Quotes())).ToList();
+            await collector.TickTablesAsync();
+
+            var random = new Random(1);
+
+            foreach (var table in tables)
+                for (var row = 0; row < 50; row++)
+                    table.AddRow(T0.AddTicks(random.Next()), random.NextDouble(), random.NextDouble());
+
+            var pipeline = collector.TablePipeline;
+
+            // The run is cancelled during the first compression pass: the rest of the pack is abandoned and said.
+            pipeline.OnPackPassForTests = () => pipeline.CurrentRun?.Cancellation.Cancel();
+
+            await Within(Task.Run(() => collector.TickTablesAsync()), "the tick did not finish: a report under the packing gate deadlocked the stop its logger started");
+
+            Assert.Contains(logger.Errors, e => e.Contains("cut short"));
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        // Finding 2: a tick of the previous run that resumed after the next Start took the new run's rows and counted
+        // them as lost.
+        [Fact]
+        public async Task A_tick_of_an_earlier_run_never_takes_rows_of_the_next_run()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                await collector.Start();
+
+                var table = collector.CreateTableSensor("t", Quotes());
+                await collector.TickTablesAsync();
+
+                var pipeline = collector.TablePipeline;
+                var paused = Signal();
+                var resume = Signal();
+
+                pipeline.OnTickBeforePackForTests = () =>
+                {
+                    paused.TrySetResult(true);
+                    return resume.Task;
+                };
+
+                var oldTick = Task.Run(() => collector.TickTablesAsync());
+                await paused.Task;
+
+                pipeline.OnTickBeforePackForTests = null;
+
+                await collector.Stop();
+                await collector.Start();
+                await collector.TickTablesAsync(); // registered in the new run
+
+                Assert.True(table.AddRow(T0, 1.0, 2.0));
+
+                resume.SetResult(true);
+                await Within(oldTick, "the old tick did not end");
+
+                Assert.Equal(0, table.RowsDropped);
+
+                await collector.TickTablesAsync();
+
+                var block = Assert.Single(sender.Stored);
+                Assert.Single(block.RowsOf("t"));
+                Assert.Equal(pipeline.CurrentRun.Producer, block.Producer);
+            }
+        }
+
+        // Finding 3: a registration answer of an earlier run, applied after the next Start, turned the new run's
+        // Pending sensor into Refused and discarded its rows.
+        [Fact]
+        public async Task A_registration_answer_of_an_earlier_run_never_changes_the_next_run()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                await collector.Start();
+
+                sender.RefuseRegistration("t", "refused in the old run");
+                var table = collector.CreateTableSensor("t", Quotes());
+                var pipeline = collector.TablePipeline;
+                var applying = Signal();
+                var resume = Signal();
+
+                // Paused after the answer was taken and before it is applied to the sensor.
+                pipeline.OnRegistrationApplyForTests = _ =>
+                {
+                    applying.TrySetResult(true);
+                    return resume.Task;
+                };
+
+                var oldTick = Task.Run(() => collector.TickTablesAsync());
+                await applying.Task;
+
+                pipeline.OnRegistrationApplyForTests = null;
+
+                await collector.Stop();
+                await collector.Start();
+
+                sender.AcceptRegistration("t");
+                Assert.True(table.AddRow(T0, 1.0, 2.0));
+
+                resume.SetResult(true);
+                await Within(oldTick, "the old tick did not end");
+
+                Assert.Equal(TableSensorState.Pending, table.State);
+                Assert.Equal(0, table.RowsDropped);
+
+                await collector.TickTablesAsync();
+
+                Assert.Equal(TableSensorState.Registered, table.State);
+                Assert.Single(sender.RowsOf("t"));
+            }
+        }
+
+        // Finding 4: a cancellation that came with an answer cleared the in-flight mark, and the bound then evicted the
+        // stored block as lost.
+        [Fact]
+        public async Task A_stored_answer_is_applied_although_the_run_was_cancelled_meanwhile()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender, o => o.MaxTableBacklogBytes = 20_000)))
+            {
+                await collector.Start();
+
+                var small = collector.CreateTableSensor("small", Quotes());
+                var large = collector.CreateTableSensor("large", Quotes());
+                await collector.TickTablesAsync();
+
+                var pipeline = collector.TablePipeline;
+                var once = 0;
+
+                small.AddRow(T0, 1.0, 2.0);
+
+                // The server stores the block; the run is cancelled before the answer is back.
+                sender.AnswerNext(_ =>
+                {
+                    pipeline.CurrentRun.Cancellation.Cancel();
+                    return TableBlockAck.Stored();
+                });
+
+                // Between the answer and its settlement, a pack pushes the backlog over its bound.
+                pipeline.OnAckForTests = () =>
+                {
+                    if (Interlocked.Exchange(ref once, 1) == 1)
+                        return;
+
+                    var random = new Random(6);
+
+                    for (var row = 0; row < 3000; row++)
+                        large.AddRow(T0.AddTicks(random.Next()), random.NextDouble(), random.NextDouble());
+
+                    pipeline.PackAsync(CancellationToken.None, TableDropReason.NotDeliveredAtStop).GetAwaiter().GetResult();
+                };
+
+                await collector.TickTablesAsync();
+
+                Assert.Single(sender.RowsOf("small"));
+                Assert.Equal(0, small.RowsDropped);
+                Assert.Equal(3000, large.RowsDropped);
+            }
+        }
+
+        // Finding 5, first half: a host that never creates a table sensor has nothing of the feature.
+        [Fact]
+        public async Task A_host_without_table_sensors_has_no_table_pipeline()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender, o => o.ManualTableTick = false)))
+            {
+                collector.CreateIntSensor("values/int");
+
+                await collector.Start();
+                Assert.Null(collector.TablePipeline);
+
+                await collector.Stop();
+                await collector.Start();
+                await collector.Stop();
+
+                Assert.Null(collector.TablePipeline);
+            }
+        }
+
+        // Finding 5, second half: a compressor that cannot be made makes the sensor Unavailable and fails nothing else.
+        [Fact]
+        public async Task A_compressor_that_cannot_be_made_leaves_the_sensor_unavailable_and_the_start_whole()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender, o => o.TableCompressorFactory = () => throw new InvalidOperationException("no compressor here"))))
+            {
+                var before = collector.CreateTableSensor("before", Quotes());
+
+                await collector.Start();
+                Assert.Equal(CollectorStatus.Running, collector.Status);
+
+                var after = collector.CreateTableSensor("after", Quotes());
+
+                Assert.Equal(TableSensorState.Unavailable, before.State);
+                Assert.Equal(TableSensorState.Unavailable, after.State);
+                Assert.Contains("compressor", before.StateReason);
+                Assert.False(after.AddRow(T0, 1.0, 2.0));
+                Assert.Equal(1, after.RowsDropped);
+
+                await collector.Stop();
+
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+                Assert.Equal(0, collector.TablePipeline.RunCount);
+                Assert.False(collector.TablePipeline.HasCompressor);
+            }
+        }
+
+        // Finding 6: a buffer that cannot grow leaves AddRow returning false, the reservation given back and the buffer
+        // as it was; the rows before and after go out whole.
+        [Fact]
+        public async Task A_failed_growth_drops_the_rows_and_leaves_the_buffer_as_it_was()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                await collector.Start();
+
+                var table = collector.CreateTableSensor("t", Quotes());
+                var sensor = (TableSensor)table;
+                await collector.TickTablesAsync();
+
+                var fail = 1;
+                sensor.BeforeBufferGrowthForTests = () =>
+                {
+                    if (Interlocked.Exchange(ref fail, 0) == 1)
+                        throw new OutOfMemoryException("scripted");
+                };
+
+                // The first row grows the empty buffer: refused, counted, nothing reserved.
+                Assert.False(table.AddRow(T0, 1.0, 2.0));
+                Assert.Equal(1, table.RowsDropped);
+                Assert.Equal(0, collector.TablePipeline.BufferedBytes);
+
+                // A full buffer of 64 rows, then a batch with nulls that must grow it, failing once.
+                var times = Enumerable.Range(0, 64).Select(i => T0.AddTicks(i)).ToArray();
+                var cells = Enumerable.Range(0, 128).Select(i => (TableCell)(double)i).ToArray();
+                Assert.Equal(64, table.AddRows(times, cells, 64));
+
+                fail = 1;
+                var nulls = new TableCell[] { 1.0, TableCell.Null, TableCell.Null, 2.0 };
+                Assert.Equal(0, table.AddRows(new[] { T0, T0 }, nulls, 2));
+                Assert.Equal(3, table.RowsDropped);
+
+                Assert.Equal(2, table.AddRows(new[] { T0, T0 }, nulls, 2));
+                await collector.TickTablesAsync();
+
+                var rows = sender.RowsOf("t");
+                Assert.Equal(66, rows.Count);
+                Assert.Equal(126.0, rows[63].Values[0]);
+                Assert.Null(rows[64].Values[1]);
+                Assert.Null(rows[65].Values[0]);
+                Assert.Equal(0, collector.TablePipeline.BufferedBytes);
+            }
+        }
+
+        // Finding 7: the Queue overflow sensor published its last bar while the stop still waited for another sensor;
+        // a loss reported in between went into a bar nobody would see.
+        [Fact]
+        public async Task A_loss_reported_after_the_overflow_sensor_stopped_is_in_the_stop_line()
+        {
+            var sender = new FakeTableSender();
+            var logger = new CapturingLogger();
+
+            // One row of time, bid and ask takes 24 bytes: room for one.
+            using (var collector = new DataCollector(Options(sender, o => o.MaxTableBufferBytes = 24)))
+            {
+                collector.AddCustomLogger(logger);
+
+                if (DataCollector.IsWindowsOS)
+                    collector.Windows.AddQueueOverflow();
+                else
+                    collector.Unix.AddQueueOverflow();
+
+                await collector.Start();
+
+                var table = collector.CreateTableSensor("t", Quotes());
+                await collector.TickTablesAsync();
+
+                var overflow = DataCollector.IsWindowsOS
+                    ? ((DefaultSensorsCollection)collector.Windows).QueueOverflowSensor
+                    : ((DefaultSensorsCollection)collector.Unix).QueueOverflowSensor;
+
+                // As the stop does, sensor by sensor: the overflow sensor has published its last bar.
+                await overflow.StopAsync();
+
+                Assert.True(table.AddRow(T0, 1.0, 2.0));
+                Assert.False(table.AddRow(T0, 1.0, 2.0));
+
+                await collector.TickTablesAsync();
+                await collector.Stop();
+
+                Assert.Equal(new[] { "1" }, StopLines(logger).Select(CountIn));
+            }
+        }
+
+        // Finding 8: a row refused after the table drain reported its losses (the value drain still running) was in
+        // no report.
+        [Fact]
+        public async Task A_row_refused_after_the_table_drain_is_in_the_stop_line()
+        {
+            var sender = new FakeTableSender();
+            var logger = new CapturingLogger();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                collector.AddCustomLogger(logger);
+                await collector.Start();
+
+                var table = collector.CreateTableSensor("t", Quotes());
+                await collector.TickTablesAsync();
+
+                Assert.True(table.AddRow(T0, 1.0, 2.0));
+
+                // The table drain of a stop, while the collector is still Stopping for its value queues.
+                await collector.TablePipeline.FlushAsync(CancellationToken.None);
+
+                Assert.False(table.AddRow(T0, 3.0, 4.0));
+
+                await collector.Stop();
+
+                Assert.Single(sender.RowsOf("t"));
+                Assert.Equal(new[] { "1" }, StopLines(logger).Select(CountIn));
+
+                // After the stop line a refused row is counted on its sensor only.
+                Assert.False(table.AddRow(T0, 5.0, 6.0));
+                Assert.Equal(2, table.RowsDropped);
+            }
+        }
+
+        // Finding 9: a reservation of an earlier run, still held by a paused writer, made the next run's first row
+        // "buffer full", and the old writer then appended into the new run.
+        [Fact]
+        public async Task A_reservation_never_crosses_runs()
+        {
+            var sender = new FakeTableSender();
+
+            // One row of time, bid and ask takes 24 bytes: room for one.
+            using (var collector = new DataCollector(Options(sender, o => o.MaxTableBufferBytes = 24)))
+            {
+                await collector.Start();
+
+                var table = collector.CreateTableSensor("t", Quotes());
+                var sensor = (TableSensor)table;
+                await collector.TickTablesAsync();
+
+                var paused = Signal();
+                var resume = new ManualResetEventSlim();
+                var once = 0;
+
+                sensor.BeforeAppendForTests = () =>
+                {
+                    if (Interlocked.Exchange(ref once, 1) == 1)
+                        return;
+
+                    paused.TrySetResult(true);
+                    resume.Wait();
+                };
+
+                var oldWriter = Task.Run(() => table.AddRow(T0, 1.0, 2.0));
+                await paused.Task;
+
+                await collector.Stop();
+                await collector.Start();
+                await collector.TickTablesAsync();
+
+                Assert.True(table.AddRow(T0, 3.0, 4.0), "the new run's first row found the old run's reservation");
+
+                resume.Set();
+                Assert.False(await oldWriter);
+
+                await collector.TickTablesAsync();
+
+                var row = Assert.Single(sender.RowsOf("t"));
+                Assert.Equal(3.0, row.Values[0]);
+                Assert.All(sender.Stored, b => Assert.Equal(collector.TablePipeline.CurrentRun.Producer, b.Producer));
+            }
+        }
+
+        // Finding 10: one row not delivered at stop was said by two "Collector stop" lines.
+        [Fact]
+        public async Task A_row_not_delivered_at_stop_is_in_one_stop_line()
+        {
+            var sender = new FakeTableSender();
+            var logger = new CapturingLogger();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                collector.AddCustomLogger(logger);
+                await collector.Start();
+
+                var table = collector.CreateTableSensor("t", Quotes());
+                await collector.TickTablesAsync();
+
+                sender.SetDown(true);
+                Assert.True(table.AddRow(T0, 1.0, 2.0));
+                await collector.TickTablesAsync();
+                await collector.Stop();
+
+                Assert.Equal(1, table.RowsDropped);
+                Assert.Equal(new[] { "1" }, StopLines(logger).Select(CountIn));
+            }
+        }
+
+        // Start, Stop, Start, Stop with writers on every boundary: every row offered is accepted or dropped, every
+        // accepted row is delivered by a run or in a run's ledger, and no row goes out under another run's producer.
+        [Fact]
+        public async Task Rows_written_across_starts_and_stops_are_accounted_for_by_their_own_run()
+        {
+            var sender = new FakeTableSender();
+            const int Writers = 4;
+            const int RowsPerWriter = 20_000;
+            const int Runs = 3;
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                var tables = Enumerable.Range(0, Writers).Select(i => collector.CreateTableSensor($"w{i}", Quotes(TableColumn.Int64("writer"), TableColumn.Int64("n")))).ToList();
+                var runs = new List<TableRun>();
+                var accepted = new long[Writers];
+
+                var go = new ManualResetEventSlim();
+                var writers = Enumerable.Range(0, Writers).Select(w => Task.Run(() =>
+                {
+                    go.Wait();
+
+                    for (var n = 0; n < RowsPerWriter; n++)
+                        if (tables[w].AddRow(T0, w, n))
+                            accepted[w]++;
+                })).ToArray();
+
+                go.Set();
+
+                for (var run = 0; run < Runs; run++)
+                {
+                    await collector.Start();
+                    runs.Add(collector.TablePipeline.CurrentRun);
+
+                    for (var tick = 0; tick < 5; tick++)
+                        await collector.TickTablesAsync();
+
+                    await collector.Stop();
+                }
+
+                await Task.WhenAll(writers);
+
+                var producers = runs.Select(r => r.Producer).ToList();
+                var delivered = 0L;
+                var lastRun = new int[Writers];
+                var seen = new HashSet<long>();
+
+                foreach (var block in sender.Stored)
+                {
+                    var runIndex = producers.IndexOf(block.Producer);
+                    Assert.True(runIndex >= 0, "a block of an unknown producer");
+
+                    for (var w = 0; w < Writers; w++)
+                        foreach (var row in block.RowsOf(tables[w].Path))
+                        {
+                            Assert.Equal(w, (long)row.Values[0].Value);
+
+                            var n = (long)row.Values[1].Value;
+                            Assert.True(seen.Add(w * (long)RowsPerWriter + n), "a row was delivered twice");
+
+                            // A writer's rows come in order; a later run never delivers an earlier row than a run
+                            // before it did, and an earlier run never a later one.
+                            Assert.True(runIndex >= lastRun[w], $"row {n} of writer {w} went out under run {runIndex} after a row under run {lastRun[w]}");
+                            lastRun[w] = runIndex;
+                            delivered++;
+                        }
+                }
+
+                for (var w = 0; w < Writers; w++)
+                    Assert.Equal(RowsPerWriter, tables[w].RowsAccepted + tables[w].RowsDropped);
+
+                Assert.Equal(accepted.Sum(), tables.Sum(t => t.RowsAccepted));
+
+                // Accepted rows that were lost later are in the ledger of the run that accepted them.
+                var lostAfterAcceptance = runs.Sum(r => r.Ledger.TotalOf(TableDropReason.NotDeliveredAtStop) + r.Ledger.TotalOf(TableDropReason.BacklogFull)
+                                                      + r.Ledger.TotalOf(TableDropReason.RefusedByServer) + r.Ledger.TotalOf(TableDropReason.PackingFailed)
+                                                      + r.Ledger.TotalOf(TableDropReason.RowTooLarge));
+
+                Assert.Equal(accepted.Sum(), delivered + lostAfterAcceptance);
+                // Every loss a run counted is on a sensor too; the sensors count more only for rows refused while no
+                // run took them (before the first Start, and after a run's stop line).
+                Assert.True(tables.Sum(t => t.RowsDropped) >= runs.Sum(r => r.Ledger.Total));
+            }
+        }
+
+        private static TableSensorOptions Quotes(params TableColumn[] columns)
+        {
+            var options = new TableSensorOptions { SensorLocation = SensorLocation.Product };
+
+            foreach (var column in columns)
+                options.Columns.Add(column);
+
+            return options;
+        }
+
+        // The number at the start of "Collector stop: N table row(s) ...".
+        private static string CountIn(string line) => line.Substring("Collector stop: ".Length).Split(' ')[0];
+
+
+        private sealed class CapturingLogger : ICollectorLogger
+        {
+            public ConcurrentQueue<string> Errors { get; } = new ConcurrentQueue<string>();
+
+            public Action<string> OnError { get; set; }
+
+            public void Debug(string message) { }
+
+            public void Info(string message) { }
+
+            public void Error(string message)
+            {
+                Errors.Enqueue(message);
+                OnError?.Invoke(message);
+            }
+
+            public void Error(Exception ex) => Errors.Enqueue(ex.ToString());
+        }
+    }
+}

@@ -159,8 +159,10 @@ namespace HSMDataCollector.Core
             _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
             _dataProcessor.TransportReportsElsewhere = UsesTransportOfAnotherCollector;
-            _dataProcessor.Tables = new Tables.TablePipeline(options, _dataSender as Tables.ITableBlockChannel, FindWhyTablesCannotBeSent(),
-                                                             _dataProcessor, _scheduler, _logger);
+
+            // The table pipeline is made with the first table sensor (CreateTableSensor): a collector without table
+            // sensors has none of it. Why this collector cannot send tables is decided now, as it always was.
+            _tablesUnavailableReason = FindWhyTablesCannotBeSent();
 
             // The sender this collector created reports its faults through the collector's
             // deduplicated error channel (#1659 A4). A sender that came with the options keeps
@@ -214,15 +216,41 @@ namespace HSMDataCollector.Core
             return "table sensors need the collector session transport, and this collector was given a custom CollectorOptions.DataSender";
         }
 
+        private readonly string _tablesUnavailableReason;
+
         /// <inheritdoc/>
-        public ITableSensor CreateTableSensor(string path, TableSensorOptions options) =>
-            _dataProcessor.Tables.Create(path, options, _options.ComputerName, _options.Module, _lifecycle.CanRegisterSensors);
+        public ITableSensor CreateTableSensor(string path, TableSensorOptions options)
+        {
+            Tables.TablePipeline tables;
+            ITableSensor sensor;
+
+            // Under the lifecycle gate: the pipeline is made once, and a sensor created while the collector runs starts
+            // the pipeline's run, which a concurrent Start or Stop must not interleave with.
+            lock (_opLock)
+            {
+                tables = _dataProcessor.Tables;
+
+                if (tables == null)
+                    _dataProcessor.Tables = tables = new Tables.TablePipeline(_options, _dataSender as Tables.ITableBlockChannel, _tablesUnavailableReason,
+                                                                              _dataProcessor, _scheduler, _logger);
+
+                sensor = tables.Create(path, options, _options.ComputerName, _options.Module, _lifecycle.CanRegisterSensors);
+
+                if (Status.IsStartingOrRunning())
+                    tables.Start();
+            }
+
+            // What the creation has to say, said outside every lock.
+            tables.FlushReports();
+
+            return sensor;
+        }
 
         /// <summary>
         /// For tests: one table tick now. With <see cref="CollectorOptions.ManualTableTick"/> it also waits for the
         /// registration and the delivery it starts.
         /// </summary>
-        internal Task TickTablesAsync() => _dataProcessor.Tables.TickAsync();
+        internal Task TickTablesAsync() => _dataProcessor.Tables?.TickAsync() ?? Task.CompletedTask;
 
         internal Tables.TablePipeline TablePipeline => _dataProcessor.Tables;
 

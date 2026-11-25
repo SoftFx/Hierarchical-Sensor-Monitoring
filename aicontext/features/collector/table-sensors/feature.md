@@ -64,9 +64,24 @@ undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3.
   default, puts it under `ComputerName/Module`; `Product` at the root), then no empty segments and no white space around a
   segment (`TablePath.Normalize`, the server's `Split(RemoveEmptyEntries | TrimEntries)`). Registrations and blocks
   carry exactly that form.
-- **A row of the wrong shape throws `ArgumentException`**: a cell count other than the column count, a double cell in
-  an integer column (an integer cell in a double column is converted). Every other refusal returns `false` (a short count
-  for `AddRows`), counts the rows in the sensor's `RowsDropped` and reports them.
+- **A row of the wrong shape throws `ArgumentException`**, and nothing else ever throws from `AddRow` / `AddRows`: a
+  cell count other than the column count, a double cell in an integer column (an integer cell in a double column is
+  converted). Every other refusal returns `false` (a short count for `AddRows`), counts the rows in the sensor's
+  `RowsDropped` and in the loss ledger of the run. That includes a buffer that cannot grow (out of memory on a
+  constrained host): the buffer allocates every new array before it swaps any in, so a failed growth leaves it as it
+  was, gives the reservation back and drops the rows of that call.
+- **Nothing exists before the first table sensor.** The pipeline (and its zstd compressor) is made by the first
+  `CreateTableSensor`; a host that never creates one gets no compressor, no tick, no task, no allocation and no log line
+  of this feature, at Start, during the run and at Stop. A table sensor created while the collector runs starts the
+  pipeline's run at once. A compressor that cannot be made makes the sensor `Unavailable` with the reason; it never fails
+  `Start`.
+- **One object per run.** Everything a run owns is in its `TableRun`, made at `Start` and closed at the end of its stop:
+  the cancellation, the packing and delivery gates, the backlog and the block in flight, the producer id and sequence,
+  the bytes reserved by writers, the registration marks and the loss ledger. A sensor holds a reference to its current
+  run; one call of `AddRow` reads it once and reserves, checks and appends against that one run. A run that ended
+  refuses rows, packs nothing and enqueues nothing; a tick, a registration answer or a delivery of an old run can touch
+  only its own retired run (each state change of a sensor checks, under the sensor's lock, that the sensor still belongs
+  to that run). No generation numbers are compared.
 - **`AddRows` is all or nothing**: the rows of one call are taken or dropped together.
 - **The row time is the application's**: rows keep the order given, times may repeat and go backwards. A `DateTime` of
   kind Local is converted to UTC; Unspecified is taken as UTC.
@@ -121,6 +136,7 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
 | File | Purpose |
 |---|---|
 | `src/collector/HSMDataCollector/Tables/TablePipeline.cs` | Sensors, registration, tick, packing and splitting, backlog, delivery, stop, loss reports |
+| `src/collector/HSMDataCollector/Tables/TableRun.cs` | One run: its gates, backlog, producer and sequence, reservations, registration marks; the loss ledger |
 | `src/collector/HSMDataCollector/Tables/TableSensor.cs` | One sensor: schema, state, counters, the two row buffers swapped by a tick |
 | `src/collector/HSMDataCollector/Tables/TableRowBuffer.cs` | Rows column by column, null maps on first use |
 | `src/collector/HSMDataCollector/Tables/ITableBlockChannel.cs` | The internal seam to the sender: registration, put, limits; the answers (`TableBlockAck`, `TableRegistrationResult`) |
@@ -132,31 +148,38 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
 
 ## Data Flow
 
-1. **Add.** `TableSensor.AddRow` checks the shape (throws), then asks the pipeline whether rows are taken now (the
-   sensor's state, the collector's data gate, and whether the run still takes rows), reserves room in the collector-wide
+1. **Add.** `TableSensor.AddRow` checks the shape (throws), reads the sensor's run once and asks whether rows are taken
+   now (the sensor's state, the collector's data gate, whether that run still takes rows), reserves room in that run's
    buffer bound with a compare-and-swap that never overshoots (a request larger than the bound is refused before it
-   touches the counter), and appends under the sensor's own lock after checking the same conditions again there: a
-   write that a refusal or the stop's final tick overtook gives its room back and is counted as dropped. A dropped row costs two counters; the words are written by the next tick.
-2. **Tick** (`TablePipeline.TickAsync`, on the collector's `CollectorScheduler`, which skips a tick while the previous
-   one runs): reports the losses since the last tick, starts the registration of `Pending` sensors, then **packs**: each
-   `Registered` sensor's buffer is swapped for its spare under the sensor's lock (writers never wait for packing), the
+   touches the counter), and appends under the sensor's own lock after checking the same conditions again there, and
+   that the sensor still belongs to the same run: a write that a refusal, the stop's final tick or a new run overtook
+   gives its room back and is counted as dropped. A dropped row costs two counters; the words are written by the next
+   tick.
+2. **Tick** (`TablePipeline.TickAsync(run)`, on the collector's `CollectorScheduler`, which skips a tick while the previous
+   one runs; a tick of a run that ended does nothing): reports the losses since the last tick, starts the registration of
+   `Pending` sensors, then **packs**: each `Registered` sensor of the run has its buffer swapped for its spare under the
+   sensor's lock (writers never wait for packing; a sensor that belongs to another run by now gives nothing), the
    rows are cut into pieces that keep to the block limits, the pieces are grouped into blocks (a table once per block),
    each block is written with one `TableBlockWriter` (reused) and checked against the frame limit: a block too large is
    split by tables, then by rows, and packed again. Blocks get the next producer sequence and go to the end of the
    backlog; the buffer room goes back. A pack observes its token (the run's; at stop the drain budget) before every
    compression pass: the rows it has not packed when the token fires are dropped and counted. The tick then signals the
-   delivery loop.
+   delivery loop. Nothing is reported while a gate or lock of the pipeline is held: reports are queued and written once
+   the gates are released, so a host logger that calls back into the collector (even `Dispose`) cannot deadlock it.
 3. **Delivery** (`DeliverAsync`, a loop of its own): the head of the backlog is put; the next block goes only after
    the answer to the one before. A block stays in flight, out of reach of the backlog bound, until its answer is
    applied: the removal from the backlog, the end of in-flight and the accounting are one step under the backlog's lock.
+   An answer that came back is applied whatever the token says by then: a block the server stored is never counted as
+   lost.
 4. **Stop** (`FlushAsync`, inside `DataProcessor.StopWithFlushAsync`): runs on a thread of its own beside the value
    queues' drain under the same budget (one connection each, so the stop is not longer and packing never holds the value
-   drain back). It ends the tick and the loop and waits for a pack of the run that is under way (a late tick can never
-   enqueue a block after the stop cleared the backlog), then runs the final tick: from that moment rows are refused and
-   counted until the next `Start`, also while the collector is still `Stopping` for its value queues. It packs within
-   the budget, delivers until the budget is spent or a block is not delivered, and drops and counts the rest (the
-   backlog, and rows of sensors still `Pending`). A start rollback does the same without delivering. An answer to a
-   registration request of an earlier run changes nothing: every run registers its sensors itself.
+   drain back). It takes the run out of the pipeline and begins its drain: from that moment the run's rows are refused
+   and counted until the next `Start`, also while the collector is still `Stopping` for its value queues. It ends the
+   tick and the loop, runs the final pack (after a pack of the run that is under way), delivers until the budget is
+   spent or a block is not delivered, then closes the run (nothing of it is packed or enqueued again) and drops and
+   counts the rest (the backlog, and rows of sensors still `Pending`). A start rollback does the same without
+   delivering. An answer to a registration request of an earlier run changes nothing: every run registers its sensors
+   itself.
 
 ### Registration
 
@@ -190,14 +213,17 @@ reported only. More refused than listed (`refusedCount` > 100): reported |
 
 ## Loss and its reports
 
-Every lost row is counted in its sensor's `RowsDropped`, then at the next tick (or at stop) summed into the
-`Queue overflow` diagnostic sensor under the queue **"Table rows"** (when the host registered that sensor) and reported
-through `Collector errors` with one deduplicated line per reason:
+Every lost row is counted in its sensor's `RowsDropped` and in the **loss ledger of its run** (one per run, under no
+gate). At every tick and at the end of the table drain the ledger reports what it gathered: one deduplicated line per
+reason through `Collector errors`, and the rows to the `Queue overflow` diagnostic sensor under the queue
+**"Table rows"** while that sensor takes values (from its start until it has published its last bar of the run; the
+sensor refuses them after that, atomically with its last bar). Rows the sensor did not take stay in the ledger.
 
-Every loss is in exactly one of two places: a `Queue overflow` bar that is published, or the stop line
-(`Collector stop: N table row(s) were lost during this run and are not in the Queue overflow sensor ...`), which takes
-what no sensor can show: losses of a collector without that sensor, and losses reported after the sensors published
-their last bars in a stop.
+At the very end of the collector's stop (after the sensors stopped, the value drain and the table drain), **one line**
+says what the ledger still holds: `Collector stop: N table row(s) were lost during this run and are not in the Queue
+overflow sensor ...`: losses of a collector without that sensor, and losses after it published its last bar. There is no
+other stop line about table rows. That line closes the ledger: a row refused after it (the collector is stopped) is
+counted on its sensor only, and so is a row added before the first `Start`.
 
 | Reason | When |
 |---|---|
@@ -206,8 +232,9 @@ their last bars in a stop.
 | sensor refused / unavailable | a row added to such a sensor |
 | backlog full | `MaxTableBacklogBytes` passed: the oldest blocks (never the one being sent) are dropped |
 | refused by the server | refused tables of a block, `allRefused`, `400` |
-| not delivered at stop | what a stop could not deliver; also one `Error` line with the totals |
+| not delivered at stop | what a stop could not deliver |
 | row too large / packing failed | a single row larger than a frame; a fault of the packer |
+| buffer could not grow | an allocation failed while a sensor's buffer grew (out of memory) |
 
 ## Storage / Persistence
 
@@ -233,6 +260,10 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   `TableRegistrationSessionTests` (registration over the scripted session: alone in its request, refusals final, faults
   retried). `TablePipelineRaceTests`: the orders of events found in review (a discard or a refusal racing a
   write, a stop racing a tick, an answer racing the bound, a stale registration answer), forced through internal hooks.
+  `TableRunLifecycleTests`: the run as one object (a tick, a registration answer, a reservation of an earlier run never
+  reach the next; an answer is applied after a cancellation), no pipeline without table sensors, a compressor that cannot
+  be made, a failed buffer growth, the ledger and its one stop line, a logger that disposes the collector from a report,
+  and a stress test of Start/Stop/Start/Stop with writers on every boundary.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver; the native driver
   marks the table verbs `CONFORMANCE-UNSUPPORTED (#1848)` and does not run the fixture until step 6.
 

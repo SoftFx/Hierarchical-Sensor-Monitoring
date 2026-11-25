@@ -72,6 +72,9 @@ namespace HSMDataCollector.Tests.Tables
         /// <summary>The registration of <paramref name="path"/> is refused with <paramref name="reason"/>.</summary>
         public void RefuseRegistration(string path, string reason) => _refusedPaths[path] = reason;
 
+        /// <summary>The registration of <paramref name="path"/> is accepted again.</summary>
+        public void AcceptRegistration(string path) => _refusedPaths.TryRemove(path, out _);
+
         /// <summary>The next <paramref name="count"/> registration requests get no answer.</summary>
         public void FailRegistrations(int count) => Interlocked.Add(ref _failRegistrations, count);
 

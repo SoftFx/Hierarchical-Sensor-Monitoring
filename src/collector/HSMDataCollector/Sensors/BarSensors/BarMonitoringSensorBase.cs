@@ -53,6 +53,9 @@ namespace HSMDataCollector.DefaultSensors
 
         public override ValueTask<bool> InitAsync()
         {
+            lock (_lockBar)
+                _lastBarTaken = false;
+
             _collectHandle.Start(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
 
             return base.InitAsync();
@@ -69,6 +72,11 @@ namespace HSMDataCollector.DefaultSensors
             try
             {
                 await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
+
+                // From here no value of this run reaches a bar that will be published: TryWhileBarOpen says so to a
+                // caller that would otherwise lose what it adds (the table loss ledger).
+                lock (_lockBar)
+                    _lastBarTaken = true;
 
                 if (flushPartialBar)
                 {
@@ -94,6 +102,25 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
+
+        // True from the stop's last bar (or a dispose) until the next InitAsync.
+        private bool _lastBarTaken;
+
+        /// <summary>
+        /// Runs <paramref name="add"/> under the bar's lock unless the sensor has taken its last bar of the run; false
+        /// then, and <paramref name="add"/> does not run. A value added here is in a bar that will be published.
+        /// </summary>
+        internal bool TryWhileBarOpen(Action add)
+        {
+            lock (_lockBar)
+            {
+                if (_lastBarTaken)
+                    return false;
+
+                add();
+                return true;
+            }
+        }
 
         protected virtual void CollectBar() => CheckCurrentBar();
 
