@@ -199,6 +199,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(unknown.Answer, refused.Answer);
             Assert.Equal(0, refused.Writes);
+
+            // The same answer, and an answer: not the same server error twice.
+            Assert.DoesNotContain("throws:", refused.Answer);
         }
 
         [Theory]

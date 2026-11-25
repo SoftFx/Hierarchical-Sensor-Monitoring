@@ -1187,7 +1187,7 @@ namespace HSMServer.Controllers
 
             if (_tree.TryGetFolder(CurrentUser, selectedId, out var folder))
             {
-                StoredUser.SelectedNode.ConnectFolder(folder, _tree.GetVisibleProducts(CurrentUser, folder));
+                StoredUser.SelectedNode.RefreshFolderProducts(folder.Id, _tree.GetVisibleProducts(CurrentUser, folder));
                 return true;
             }
 

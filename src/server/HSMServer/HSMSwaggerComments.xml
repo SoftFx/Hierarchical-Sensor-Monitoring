@@ -4251,6 +4251,12 @@
             folder (<see cref="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)"/>).
             </param>
         </member>
+        <member name="M:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.RefreshFolderProducts(System.Guid,System.Collections.Generic.IDictionary{System.Guid,HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
+            <summary>
+            Replaces the product list of the selected folder with the products the user sees now. Does nothing
+            when another entity has been selected in the meantime: a page request never changes the selection.
+            </summary>
+        </member>
         <member name="T:HSMServer.Notifications.ChatDeliveryResult">
             <summary>
             The outcome of a chat test message (#1826): delivered, or the same error text the

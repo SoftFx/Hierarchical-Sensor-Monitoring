@@ -58,7 +58,12 @@ public class JournalController : BaseController
         if (StoredUser.Journal.ConnectedId is not { } connectedId || !_tree.IsVisible(user, connectedId))
             return Json(new DataTableResultSet(draw, 0, 0, rows));
 
-        var (recordsFromDb, filteredRecords, totalRecords) = StoredUser.Journal.GetPage(parameters, id => _tree.IsVisible(user, id));
+        // A folder's own records (its settings) follow the rule of the global Journal page: they are the
+        // folder Manager's to read, while the records of its products follow the products.
+        bool IsOwnerVisible(Guid id) =>
+            _tree.TryGetFolder(user, id, out var folder) ? user.IsFolderManager(folder.Id) : _tree.IsVisible(user, id);
+
+        var (recordsFromDb, filteredRecords, totalRecords) = StoredUser.Journal.GetPage(parameters, IsOwnerVisible);
         foreach (var recordFromDb in recordsFromDb)
         {
             var cells = new List<string>(parameters.Columns.Count);

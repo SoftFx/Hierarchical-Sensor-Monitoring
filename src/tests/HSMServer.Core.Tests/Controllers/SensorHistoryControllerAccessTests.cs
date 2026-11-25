@@ -65,6 +65,7 @@ namespace HSMServer.Core.Tests.Controllers
             var unknown = await Ask(tree, tree.Outsider, action, Guid.NewGuid());
 
             Assert.Equal(unknown, refused);
+            Assert.DoesNotContain("throws:", refused);
         }
 
         [Theory]

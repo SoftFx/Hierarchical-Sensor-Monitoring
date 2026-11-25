@@ -47,6 +47,16 @@ public class SelectedNodeViewModel
         _sensors.Reset();
     }
 
+    /// <summary>
+    /// Replaces the product list of the selected folder with the products the user sees now. Does nothing
+    /// when another entity has been selected in the meantime: a page request never changes the selection.
+    /// </summary>
+    public void RefreshFolderProducts(Guid folderId, IDictionary<Guid, ProductNodeViewModel> visibleProducts)
+    {
+        if (_selectedNode?.Id == folderId)
+            _nodes.Load(visibleProducts, "Products");
+    }
+
     public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest) => pageRequest.IsNodes ? _nodes.Reload(pageRequest) : _sensors.Reload(pageRequest);
     
 
