@@ -1,7 +1,7 @@
 # HSM collector conformance v1 — table sensors (#1846, ADR-0021 points 5-7).
 #
-# The managed collector implements them (4.1.0); the native collector gets them with step 6 (#1848): its driver
-# marks every verb below CONFORMANCE-UNSUPPORTED (#1848) and does not register this fixture until then.
+# The managed collector implements them (4.1.0), the native collector since 0.15.0 (#1848; its driver runs this
+# fixture in the tables build, HSM_COLLECTOR_TABLES).
 #
 # Rows are compared decoded, never as bytes: two zstd libraries may compress the same block to different bytes.
 # The table tick never runs on its own in a driver: table_tick runs one, and waits for the registration and the
