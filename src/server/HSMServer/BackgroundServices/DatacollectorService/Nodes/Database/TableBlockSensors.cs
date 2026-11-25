@@ -4,6 +4,7 @@ using System.Threading;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.AccessManager.TableBlocks;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
@@ -23,14 +24,17 @@ namespace HSMServer.BackgroundServices
 
         private readonly IDataCollector _collector;
         private readonly ITableBlockStore _store;
+        private readonly ITableBatchStore _batches;
         private readonly List<Counter> _counters = [];
-        private bool _created;
+        private readonly List<Counter> _batchCounters = [];
+        private bool _created, _batchesCreated;
 
 
-        public TableBlockSensors(IDataCollector collector, ITableBlockStore store)
+        public TableBlockSensors(IDataCollector collector, ITableBlockStore store, ITableBatchStore batches = null)
         {
             _collector = collector;
             _store = store;
+            _batches = batches;
         }
 
 
@@ -39,6 +43,16 @@ namespace HSMServer.BackgroundServices
 
         internal void SendInfo()
         {
+            // The batch store (#1850), once a product's batches were opened in this process.
+            if (_batches is not null && _batches.IsOpened)
+            {
+                if (!_batchesCreated)
+                    CreateBatches();
+
+                foreach (var counter in _batchCounters)
+                    counter.Post();
+            }
+
             if (_store is null || !_store.IsOpened)
                 return;
 
@@ -79,10 +93,28 @@ namespace HSMServer.BackgroundServices
             _created = true;
         }
 
-        private void Add(string name, Func<long> read, bool errorWhenGrown, string description)
+        private void CreateBatches()
+        {
+            var stats = _batches.Statistics;
+
+            Add("Batch databases open", () => _batches.OpenDatabases, false,
+                "Week databases of the batch store open now (the bound is TableSensors.MaxOpenBatchDatabases; the weeks being written and those a read holds can take it above).", _batchCounters);
+            Add("Batch week databases", () => _batches.WeekDatabases, false,
+                "Week databases of the batch store on disk, over the products opened since the server started.", _batchCounters);
+            Add("Merged hours", () => Interlocked.Read(ref stats.HoursCommitted), false,
+                "Hours of products merged into batches since the server started.", _batchCounters);
+            Add("Batch write failures", () => Interlocked.Read(ref stats.WriteFailures), true,
+                "Writes and opens of the batch store that failed since the server started; a merged hour that failed is not committed and is merged again. Error in the sample in which it grew.", _batchCounters);
+            Add("Batch read failures", () => Interlocked.Read(ref stats.ReadFailures), true,
+                "Batch records that could not be read since the server started. Error in the sample in which it grew.", _batchCounters);
+
+            _batchesCreated = true;
+        }
+
+        private void Add(string name, Func<long> read, bool errorWhenGrown, string description, List<Counter> counters = null)
         {
             var sensor = _collector.CreateIntSensor($"{NodeName}/{name}", Options(description, Unit.Count));
-            _counters.Add(new Counter(read, errorWhenGrown, (value, error) => sensor.AddValue((int)Math.Min(value, int.MaxValue), error ? SensorStatus.Error : SensorStatus.Ok)));
+            (counters ?? _counters).Add(new Counter(read, errorWhenGrown, (value, error) => sensor.AddValue((int)Math.Min(value, int.MaxValue), error ? SensorStatus.Error : SensorStatus.Ok)));
         }
 
         private void AddMb(string name, Func<long> read, string description)

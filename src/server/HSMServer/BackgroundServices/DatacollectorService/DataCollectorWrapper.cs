@@ -124,7 +124,7 @@ namespace HSMServer.BackgroundServices
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             _database = db;
             HistorySealingSensors = new HistorySealingSensors(_collector);
-            TableBlockSensors = new TableBlockSensors(_collector, db.TableBlocks);
+            TableBlockSensors = new TableBlockSensors(_collector, db.TableBlocks, db.TableBatches);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
             _openSessions = _collector.CreateIntSensor($"Clients/{ClientStatisticsSensors.TotalGroup}/{OpenSessionsSensorName}", new InstantSensorOptions
             {

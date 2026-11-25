@@ -32,6 +32,12 @@ namespace HSMServer.ServerConfiguration
 
         public const int DefaultMaxConcurrentPuts = 4;
 
+        // The most week databases of the batch store open at once (#1850): a read of a long range opens and closes them in turn.
+        public int MaxOpenBatchDatabases { get; set; } = TableBlockOptions.DefaultMaxOpenBatchDatabases;
+
+        // How long the blocks of a merged hour are kept after the hour is committed (#1850); 0 deletes them at once.
+        public int DeleteMergedBlocksAfterHours { get; set; } = TableBlockOptions.DefaultDeleteMergedBlocksAfterHours;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -44,6 +50,10 @@ namespace HSMServer.ServerConfiguration
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
             Check(MaxReadRows, int.MaxValue, nameof(MaxReadRows));
             Check(MaxConcurrentPuts, 1024, nameof(MaxConcurrentPuts));
+            Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
+
+            if (DeleteMergedBlocksAfterHours < 0 || DeleteMergedBlocksAfterHours > 8760)
+                throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(DeleteMergedBlocksAfterHours)} = {DeleteMergedBlocksAfterHours} is invalid: expected 0..8760 hours.");
 
             if (MinFreeDiskMb < 0)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(MinFreeDiskMb)} = {MinFreeDiskMb} is invalid: expected 0 (no check) or more megabytes.");
@@ -53,6 +63,8 @@ namespace HSMServer.ServerConfiguration
                 Limits = new TableBlockLimits(MaxDecompressedBytes, MaxTables, MaxRows, MaxColumnsPerTable, MaxTableIdLength),
                 MaxReadRows = MaxReadRows,
                 MinFreeDiskMb = MinFreeDiskMb,
+                MaxOpenBatchDatabases = MaxOpenBatchDatabases,
+                DeleteMergedBlocksAfterHours = DeleteMergedBlocksAfterHours,
             };
         }
 
