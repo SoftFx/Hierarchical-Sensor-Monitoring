@@ -256,6 +256,46 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(2, Rows(o).Count);
         }
 
+        [Fact]
+        public async Task A_fault_judging_one_products_expired_blocks_does_not_hold_another_products_of_the_same_hour()
+        {
+            // Two products, a sensor kept for one week in each; their blocks of hour 0 never merge (they do not verify).
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            await RegisterAsync("a", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            await RegisterAsync("o", other, keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            var failing = _server.Service.Put(other, _producer, 1, Block(("o", [(Hour0.AddMinutes(2), 2.0, 2)]))).Sequence.Value;
+
+            _server.Job.AfterDecode = (_, batch) => batch.Columns[1].DoubleValues[0] += 0.5;
+            Assert.Equal(2, Pass(Hour0.AddHours(1).AddMinutes(3)).Mismatches);
+            _server.Job.AfterDecode = null;
+
+            // Both have expired; judging the other product's block meets a read error (a fault, not damage).
+            _server.Blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == failing)
+                    throw new Exception("IO error: 000005.ldb: the disk did not answer");
+            };
+
+            var faults = _server.Batches.MergeStatistics.RetentionFaults;
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            var report = Pass(p1);
+
+            // The first product's expired blocks are deleted; the other's are kept, the fault counted.
+            Assert.Equal(1, report.ExpiredHoursDeleted);
+            Assert.NotNull(report.Fault);
+            Assert.Equal(faults + 1, _server.Batches.MergeStatistics.RetentionFaults);
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+            Assert.Single(_server.Blocks.GetBlocks(other));
+
+            // Without the fault the next retention deletes them too.
+            _server.Blocks.BeforeBlockGet = null;
+            Assert.Equal(1, Pass(p1.AddHours(1)).ExpiredHoursDeleted);
+            Assert.Empty(_server.Blocks.GetBlocks(other));
+        }
+
         // === Damage, verification, faults ===
 
         [Fact]

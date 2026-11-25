@@ -281,15 +281,24 @@ namespace HSMServer.Core.TableSensors
                 try
                 {
                     // Per product: its held blocks go when every one of them has expired. Another product's blocks of the
-                    // hour, held or not, stay (the block store deletes by sequence), so one product kept for ever or
-                    // within its delay does not hold the expired blocks of another.
+                    // hour, held or not, stay (the block store deletes by sequence), so one product kept for ever, within
+                    // its delay, or faulting (its batches cannot be read, a read error on one of its blocks) does not hold
+                    // the expired blocks of another. A fault keeps that product's blocks and is counted and logged (once
+                    // an hour: retention runs once an hour); the next retention tries again.
                     var expired = new List<(Guid Product, TableBlockIndexEntry Entry, bool Unreadable)>();
 
                     foreach (var (product, entries) in products)
                     {
-                        var held = HeldBlocks(product, entries, hour, utcNow, delay);
-                        if (held is not null && held.Count > 0 && held.All(h => IsBlockExpired(product, h.Entry, h.Unreadable, hour, utcNow)))
-                            expired.AddRange(held.Select(h => (product, h.Entry, h.Unreadable)));
+                        try
+                        {
+                            var held = HeldBlocks(product, entries, hour, utcNow, delay);
+                            if (held is not null && held.Count > 0 && held.All(h => IsBlockExpired(product, h.Entry, h.Unreadable, hour, utcNow)))
+                                expired.AddRange(held.Select(h => (product, h.Entry, h.Unreadable)));
+                        }
+                        catch (Exception ex)
+                        {
+                            RetentionFault(ref fault, ex, $"the expired blocks of product {product} in the arrival hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} were not judged");
+                        }
                     }
 
                     if (expired.Count == 0)
@@ -298,7 +307,7 @@ namespace HSMServer.Core.TableSensors
                     RetentionCheckpoint?.Invoke("expired-hour-deleting");
 
                     var going = expired.Select(h => h.Entry.Sequence).ToHashSet();
-                    var keep = products.Values.SelectMany(list => list).Select(e => e.Sequence).Where(s => !going.Contains(s)).ToList();
+                    var keep = products.Values.SelectMany(list => list).Select(e => e.Sequence).Where(s => !going.Contains(s)).ToHashSet();
                     var owners = expired.Select(h => h.Product).Distinct().ToList();
 
                     using (_gate.Delete())
