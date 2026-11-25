@@ -39,6 +39,12 @@ namespace HSMDataCollector.Tables
         /// <see cref="OperationCanceledException"/> when cancelled.
         /// </summary>
         Task<TableBlockAck> PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token);
+
+        /// <summary>
+        /// Closes the transport of the blocks at the end of a stop's table drain, within <paramref name="budget"/>; the
+        /// next Start of the collector opens it again. Does not throw.
+        /// </summary>
+        Task CloseAsync(CancellationToken budget);
     }
 
 
@@ -82,6 +88,15 @@ namespace HSMDataCollector.Tables
 
         /// <summary>A 400: the block breaks the format or the limits. Final.</summary>
         Invalid,
+
+        /// <summary>
+        /// Not sent on the connection that judged it: the block is larger than a frame of the table connection takes now,
+        /// or breaks the block limits of its hello (a server whose hello states smaller numbers than the ones the block
+        /// was packed for). The pipeline packs its rows again into smaller blocks; a block of one row cannot be made
+        /// smaller, so for it the answer is final (dropped and counted as too large). <see cref="TableBlockAck.MaybeSent"/>
+        /// says whether an earlier connection of the same put wrote its frame.
+        /// </summary>
+        TooLarge,
     }
 
 
@@ -108,14 +123,23 @@ namespace HSMDataCollector.Tables
     {
         private static readonly IReadOnlyList<TableRefusal> NoRefusals = Array.Empty<TableRefusal>();
 
-        private TableBlockAck(TableBlockOutcome outcome, IReadOnlyList<TableRefusal> refused, int refusedCount, string error, TimeSpan? retryAfter)
+        private TableBlockAck(TableBlockOutcome outcome, IReadOnlyList<TableRefusal> refused, int refusedCount, string error, TimeSpan? retryAfter,
+                              bool maybeSent = false)
         {
             Outcome = outcome;
             Refused = refused ?? NoRefusals;
             RefusedCount = Math.Max(refusedCount, Refused.Count);
             Error = error;
             RetryAfter = retryAfter;
+            MaybeSent = maybeSent;
         }
+
+        /// <summary>
+        /// For <see cref="TableBlockOutcome.TooLarge"/>: an earlier connection of the same put wrote the block's frame and
+        /// was lost before its ack, so the server may hold the block under its sequence. That sequence is then never
+        /// given to other rows.
+        /// </summary>
+        internal bool MaybeSent { get; }
 
         internal TableBlockOutcome Outcome { get; }
 
@@ -145,5 +169,8 @@ namespace HSMDataCollector.Tables
 
         internal static TableBlockAck NotDelivered(string why, TimeSpan? retryAfter = null) =>
             new TableBlockAck(TableBlockOutcome.NotDelivered, null, 0, why, retryAfter);
+
+        internal static TableBlockAck TooLarge(string why, bool maybeSent = false) =>
+            new TableBlockAck(TableBlockOutcome.TooLarge, null, 0, why, null, maybeSent);
     }
 }

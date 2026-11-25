@@ -1149,6 +1149,7 @@ namespace HSMDataCollector.Tests
                         collectPeriodMs: int.Parse(step.Arg(1)),
                         requestTimeoutMs: int.Parse(step.Arg(2)),
                         directives: state.Directives);
+                    WatchTableConnectionAtSessionClose(state, (HSMDataCollector.Client.Session.SessionDataSender)OptionsOf(state.Collector).DataSender);
                     break;
 
                 case "session_server_push_directive":
@@ -1382,6 +1383,11 @@ namespace HSMDataCollector.Tests
                     break;
 
                 default:
+                    // The table connection verbs first: on a session collector they also serve the block verbs of
+                    // the table fixture, with the scripted server in place of the recording sender.
+                    if (await ExecuteTableConnectionStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
                     if (await ExecuteTableStepAsync(state, step).ConfigureAwait(false))
                         break;
 
@@ -1422,10 +1428,23 @@ namespace HSMDataCollector.Tests
                 RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
+                // As for the recording sender's collector: the table tick never runs on its own in a driver.
+                ManualTableTick = true,
                 SessionTimings = new HSMDataCollector.Client.Session.SessionTimings
                 {
                     MinBackoff = TimeSpan.FromMilliseconds(50),
                     MaxBackoff = TimeSpan.FromMilliseconds(500),
+
+                    // The long pauses of the table connection, shortened like the backoff so the cases are quick:
+                    // how long a refused upgrade (404, 400) waits before it is asked again, and how long a block
+                    // waits for a table connection before its tick gives up. Neither decides a case: a case waits
+                    // for the state it needs (table_wait_connection_up before a tick that must send, after every
+                    // lost connection and before a tick that follows a refusal), and a put that gave up waiting
+                    // leaves its block at the head, with its sequence, for the next tick, which the case runs
+                    // once the next connection is open. The end of a block's ack wait is the script's
+                    // (ConfigureTableConnection), not this request timeout.
+                    TableRefusedRetry = TimeSpan.FromMilliseconds(200),
+                    TableConnectionWait = TimeSpan.FromMilliseconds(200),
                 },
             };
 

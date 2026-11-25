@@ -1,0 +1,235 @@
+# HSM collector conformance v1 — the table connection of the collector session (#1846 part 2, wire contract
+# "Table connection").
+#
+# The collector is on a session to the driver's SCRIPTED SESSION SERVER (create_collector_on_session, see
+# session_transport_contract.hsmtest), which also takes the table connection: the upgrade with hsm.tables.v1 and
+# X-Hsm-Session, the table hello, the probe, binary block frames, one text ack each. Without a script the server stores
+# a block, and answers a block of a producer and sequence it stored before with "duplicate", as the real server does.
+# When the session ends the server closes its table connection with 1000, as the real server does.
+#
+# The managed collector implements it (4.1.0); the native collector gets table sensors with step 6 (#1848): its driver
+# marks every new verb below CONFORMANCE-UNSUPPORTED (#1848) and does not register this fixture until then.
+#
+# No case is decided by a duration; a timeout in a verb only fails a case. A tick waits in the delivery, and a put that
+# finds no table connection waits for one only for a while (SessionTimings.TableConnectionWait, which a driver may
+# shorten) and then leaves its block at the head with its sequence. So a case waits for the state it needs:
+# table_wait_connection_up before every tick that must send, and after every connection the script ends (a close, a
+# protocol error, a dropped session, an ack that never comes) the case waits for the next connection and ticks again.
+# The second tick sends the block if the first tick's put gave up before the next connection was open, and nothing if
+# it was already sent there: the frames are the same either way. The wait for an ack ends as "no ack in time" when the
+# scripted server has decided not to answer that frame (store_without_ack, no_answer), never by the request timeout.
+#
+# The table verbs of table_sensor_contract.hsmtest work on a session collector too, with the scripted server in place of
+# the recording sender's table channel: table_server_frame_limit (the table hello's maxFrameBytes),
+# table_server_answer_next, table_server_refuse_table_next, expect_table_block_attempts (block frames received),
+# expect_table_blocks_within, expect_table_sequences, expect_table_sequences_increasing, expect_table_rows,
+# expect_table_row (rows of stored blocks, refused tables left out). The registration verbs need the recording sender.
+#
+# table_server_answer_next on a session takes, besides stored, duplicate, all_refused, invalid (400) and
+# not_delivered (503 with retryAfter 0):
+#   store_without_ack   stored, no ack: the collector's resend is answered duplicate
+#   no_answer           not stored, no ack
+#   close_1013          the connection closed with 1013 instead of an answer; not stored
+#   drop_session        the session cut without a close handshake (the server then closes the table connection with
+#                       1000 "its session ended"); not stored
+#   binary_frame        a binary frame instead of an answer (the collector closes with 1003)
+#   garbage_text        a text that is not JSON instead of an answer (the collector closes with 1007)
+#
+# New verbs:
+# table_register|path|timeout_s                    table_tick until the sensor is no longer pending (the session comes
+#                                                  up in the background); fails at the timeout
+# table_wait_connection_up|count|timeout_s         waits until the collector's table connection number `count` (1 = the
+#                                                  first it opened) is open, its hello read and its probe answered, so
+#                                                  a put sends on it at once; then checks that exactly `count` were
+#                                                  opened. Judged by the collector's own state, not by the server's
+#                                                  count of upgrades; fails at the timeout
+# table_server_refuse_upgrades|status              every table upgrade is refused with this HTTP status
+# table_server_accept_upgrades                     table upgrades are accepted again (the default)
+# expect_table_connections|count|timeout_s         table upgrades accepted so far equal count (polled; 0 checks once)
+# expect_refused_table_upgrades_at_least|count|timeout_s
+# expect_table_upgrade_names_session|upgrade|session  table upgrade number `upgrade` (0 = first, refused ones counted)
+#                                                  named in X-Hsm-Session the sessionId of session number `session`
+# expect_table_probe_before_blocks                 every table connection that carried a block had a probe first
+# expect_table_frame_connections|c0,c1,...         the table connection (1 = first accepted) of every block frame
+# expect_table_close_code|code|timeout_s           the collector closed a table connection with this code
+# expect_table_closed_before_session|timeout_s     the collector closed its table connection, with 1000, before it
+#                                                  closed its session. Judged by the collector's own state at the
+#                                                  moment its close of the session reaches the server (the table
+#                                                  connection is down by then), never by the order in which the server
+#                                                  reads the close frames of two sockets
+
+# --- the connection and one block ---
+
+blocks_go_on_the_table_connection|create_collector_on_session|100|50|10000
+blocks_go_on_the_table_connection|create_table_sensor_at_product|quotes/A|bid:double,ask:double
+blocks_go_on_the_table_connection|start
+blocks_go_on_the_table_connection|table_register|quotes/A|15
+blocks_go_on_the_table_connection|table_wait_connection_up|1|15
+blocks_go_on_the_table_connection|add_table_row|quotes/A|2000|1.5|1.6
+blocks_go_on_the_table_connection|add_table_row|quotes/A|3000|2.5|token:null
+blocks_go_on_the_table_connection|table_tick
+blocks_go_on_the_table_connection|expect_table_connections|1|0
+blocks_go_on_the_table_connection|expect_table_upgrade_names_session|0|0
+blocks_go_on_the_table_connection|expect_table_probe_before_blocks
+blocks_go_on_the_table_connection|expect_table_sequences|0
+blocks_go_on_the_table_connection|expect_table_rows|quotes/A|2
+blocks_go_on_the_table_connection|expect_table_row|quotes/A|1|3000|2.5|token:null
+
+frames_keep_to_the_limit_of_the_table_hello|create_collector_on_session|100|50|10000
+frames_keep_to_the_limit_of_the_table_hello|table_server_frame_limit|2000
+frames_keep_to_the_limit_of_the_table_hello|create_table_sensor_at_product|book|price:double,size:int64
+frames_keep_to_the_limit_of_the_table_hello|start
+frames_keep_to_the_limit_of_the_table_hello|table_register|book|15
+frames_keep_to_the_limit_of_the_table_hello|table_wait_connection_up|1|15
+frames_keep_to_the_limit_of_the_table_hello|add_table_rows|book|600|1000
+frames_keep_to_the_limit_of_the_table_hello|table_tick
+frames_keep_to_the_limit_of_the_table_hello|expect_table_blocks_within|2000
+frames_keep_to_the_limit_of_the_table_hello|expect_table_sequences_increasing
+frames_keep_to_the_limit_of_the_table_hello|expect_table_rows|book|600
+
+# --- a block the server may hold goes again with its producer and sequence ---
+
+lost_ack_resend_is_a_duplicate|create_collector_on_session|100|50|10000
+lost_ack_resend_is_a_duplicate|create_table_sensor_at_product|t|bid:double
+lost_ack_resend_is_a_duplicate|start
+lost_ack_resend_is_a_duplicate|table_register|t|15
+lost_ack_resend_is_a_duplicate|table_wait_connection_up|1|15
+lost_ack_resend_is_a_duplicate|table_server_answer_next|store_without_ack
+lost_ack_resend_is_a_duplicate|add_table_row|t|1000|1.0
+lost_ack_resend_is_a_duplicate|table_tick
+lost_ack_resend_is_a_duplicate|table_wait_connection_up|2|15
+lost_ack_resend_is_a_duplicate|table_tick
+lost_ack_resend_is_a_duplicate|expect_table_sequences|0,0
+lost_ack_resend_is_a_duplicate|expect_table_frame_connections|1,2
+lost_ack_resend_is_a_duplicate|expect_table_rows|t|1
+lost_ack_resend_is_a_duplicate|expect_table_rows_dropped|t|0
+
+close_1013_sends_the_same_frame_again|create_collector_on_session|100|50|10000
+close_1013_sends_the_same_frame_again|create_table_sensor_at_product|t|bid:double
+close_1013_sends_the_same_frame_again|start
+close_1013_sends_the_same_frame_again|table_register|t|15
+close_1013_sends_the_same_frame_again|table_wait_connection_up|1|15
+close_1013_sends_the_same_frame_again|table_server_answer_next|close_1013
+close_1013_sends_the_same_frame_again|add_table_row|t|1000|1.0
+close_1013_sends_the_same_frame_again|table_tick
+close_1013_sends_the_same_frame_again|table_wait_connection_up|2|15
+close_1013_sends_the_same_frame_again|table_tick
+close_1013_sends_the_same_frame_again|expect_table_sequences|0,0
+close_1013_sends_the_same_frame_again|expect_table_frame_connections|1,2
+close_1013_sends_the_same_frame_again|expect_table_rows|t|1
+close_1013_sends_the_same_frame_again|expect_table_rows_dropped|t|0
+
+new_session_replaces_the_table_connection|create_collector_on_session|100|50|10000
+new_session_replaces_the_table_connection|create_table_sensor_at_product|t|bid:double
+new_session_replaces_the_table_connection|start
+new_session_replaces_the_table_connection|table_register|t|15
+new_session_replaces_the_table_connection|table_wait_connection_up|1|15
+new_session_replaces_the_table_connection|table_server_answer_next|drop_session
+new_session_replaces_the_table_connection|add_table_row|t|1000|1.0
+new_session_replaces_the_table_connection|table_tick
+new_session_replaces_the_table_connection|table_wait_connection_up|2|15
+new_session_replaces_the_table_connection|table_tick
+new_session_replaces_the_table_connection|expect_table_sequences|0,0
+new_session_replaces_the_table_connection|expect_table_frame_connections|1,2
+new_session_replaces_the_table_connection|expect_table_upgrade_names_session|1|1
+new_session_replaces_the_table_connection|expect_table_rows|t|1
+
+# --- acks ---
+
+fault_is_sent_again_invalid_is_final|create_collector_on_session|100|50|10000
+fault_is_sent_again_invalid_is_final|create_table_sensor_at_product|t|bid:double
+fault_is_sent_again_invalid_is_final|start
+fault_is_sent_again_invalid_is_final|table_register|t|15
+fault_is_sent_again_invalid_is_final|table_wait_connection_up|1|15
+fault_is_sent_again_invalid_is_final|table_server_answer_next|not_delivered
+fault_is_sent_again_invalid_is_final|add_table_row|t|1000|1.0
+fault_is_sent_again_invalid_is_final|table_tick
+fault_is_sent_again_invalid_is_final|table_tick
+fault_is_sent_again_invalid_is_final|table_server_answer_next|invalid
+fault_is_sent_again_invalid_is_final|add_table_row|t|2000|2.0
+fault_is_sent_again_invalid_is_final|table_tick
+fault_is_sent_again_invalid_is_final|table_tick
+fault_is_sent_again_invalid_is_final|expect_table_sequences|0,0,1
+fault_is_sent_again_invalid_is_final|expect_table_frame_connections|1,1,1
+fault_is_sent_again_invalid_is_final|expect_table_rows|t|1
+fault_is_sent_again_invalid_is_final|expect_table_rows_dropped|t|1
+
+refused_table_on_the_connection_is_registered_again|create_collector_on_session|100|50|10000
+refused_table_on_the_connection_is_registered_again|create_table_sensor_at_product|t|bid:double
+refused_table_on_the_connection_is_registered_again|start
+refused_table_on_the_connection_is_registered_again|table_register|t|15
+refused_table_on_the_connection_is_registered_again|table_wait_connection_up|1|15
+refused_table_on_the_connection_is_registered_again|table_server_refuse_table_next|t|UnknownSensor
+refused_table_on_the_connection_is_registered_again|add_table_row|t|1000|1.0
+refused_table_on_the_connection_is_registered_again|table_tick
+refused_table_on_the_connection_is_registered_again|expect_table_sequences|0
+refused_table_on_the_connection_is_registered_again|expect_table_state|t|pending
+refused_table_on_the_connection_is_registered_again|expect_table_rows_dropped|t|1
+
+server_protocol_errors_close_and_resend|create_collector_on_session|100|50|10000
+server_protocol_errors_close_and_resend|create_table_sensor_at_product|t|bid:double
+server_protocol_errors_close_and_resend|start
+server_protocol_errors_close_and_resend|table_register|t|15
+server_protocol_errors_close_and_resend|table_wait_connection_up|1|15
+server_protocol_errors_close_and_resend|table_server_answer_next|binary_frame
+server_protocol_errors_close_and_resend|add_table_row|t|1000|1.0
+server_protocol_errors_close_and_resend|table_tick
+server_protocol_errors_close_and_resend|expect_table_close_code|1003|5
+server_protocol_errors_close_and_resend|table_wait_connection_up|2|15
+server_protocol_errors_close_and_resend|table_tick
+server_protocol_errors_close_and_resend|table_server_answer_next|garbage_text
+server_protocol_errors_close_and_resend|add_table_row|t|2000|2.0
+server_protocol_errors_close_and_resend|table_tick
+server_protocol_errors_close_and_resend|expect_table_close_code|1007|5
+server_protocol_errors_close_and_resend|table_wait_connection_up|3|15
+server_protocol_errors_close_and_resend|table_tick
+server_protocol_errors_close_and_resend|expect_table_sequences|0,0,1,1
+server_protocol_errors_close_and_resend|expect_table_frame_connections|1,2,2,3
+server_protocol_errors_close_and_resend|expect_table_rows|t|2
+
+# --- refused upgrades ---
+
+upgrade_404_keeps_the_blocks_and_asks_again|create_collector_on_session|100|50|10000
+upgrade_404_keeps_the_blocks_and_asks_again|table_server_refuse_upgrades|404
+upgrade_404_keeps_the_blocks_and_asks_again|create_table_sensor_at_product|t|bid:double
+upgrade_404_keeps_the_blocks_and_asks_again|start
+upgrade_404_keeps_the_blocks_and_asks_again|table_register|t|15
+upgrade_404_keeps_the_blocks_and_asks_again|expect_refused_table_upgrades_at_least|1|10
+upgrade_404_keeps_the_blocks_and_asks_again|add_table_row|t|1000|1.0
+upgrade_404_keeps_the_blocks_and_asks_again|table_tick
+upgrade_404_keeps_the_blocks_and_asks_again|expect_refused_table_upgrades_at_least|2|10
+upgrade_404_keeps_the_blocks_and_asks_again|expect_table_block_attempts|0
+upgrade_404_keeps_the_blocks_and_asks_again|table_server_accept_upgrades
+upgrade_404_keeps_the_blocks_and_asks_again|table_wait_connection_up|1|10
+upgrade_404_keeps_the_blocks_and_asks_again|table_tick
+upgrade_404_keeps_the_blocks_and_asks_again|expect_table_sequences|0
+upgrade_404_keeps_the_blocks_and_asks_again|expect_table_rows|t|1
+
+upgrade_409_waits_for_the_next_session|create_collector_on_session|100|50|10000
+upgrade_409_waits_for_the_next_session|table_server_refuse_upgrades|409
+upgrade_409_waits_for_the_next_session|create_table_sensor_at_product|t|bid:double
+upgrade_409_waits_for_the_next_session|start
+upgrade_409_waits_for_the_next_session|table_register|t|15
+upgrade_409_waits_for_the_next_session|expect_refused_table_upgrades_at_least|1|10
+upgrade_409_waits_for_the_next_session|table_server_accept_upgrades
+upgrade_409_waits_for_the_next_session|add_table_row|t|1000|1.0
+upgrade_409_waits_for_the_next_session|table_tick
+upgrade_409_waits_for_the_next_session|expect_table_connections|0|0
+upgrade_409_waits_for_the_next_session|session_server_drop_sessions
+upgrade_409_waits_for_the_next_session|table_wait_connection_up|1|10
+upgrade_409_waits_for_the_next_session|table_tick
+upgrade_409_waits_for_the_next_session|expect_table_upgrade_names_session|1|1
+upgrade_409_waits_for_the_next_session|expect_table_rows|t|1
+
+# --- stop ---
+
+stop_closes_the_table_connection_before_the_session|create_collector_on_session|100|50|10000
+stop_closes_the_table_connection_before_the_session|create_table_sensor_at_product|t|bid:double
+stop_closes_the_table_connection_before_the_session|start
+stop_closes_the_table_connection_before_the_session|table_register|t|15
+stop_closes_the_table_connection_before_the_session|table_wait_connection_up|1|15
+stop_closes_the_table_connection_before_the_session|add_table_row|t|1000|1.0
+stop_closes_the_table_connection_before_the_session|stop
+stop_closes_the_table_connection_before_the_session|expect_table_rows|t|1
+stop_closes_the_table_connection_before_the_session|expect_table_close_code|1000|5
+stop_closes_the_table_connection_before_the_session|expect_table_closed_before_session|5

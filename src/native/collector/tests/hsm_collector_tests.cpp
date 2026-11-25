@@ -3717,6 +3717,20 @@ namespace
         // CONFORMANCE-UNSUPPORTED: expect_table_sequences_increasing (#1848)
         // CONFORMANCE-UNSUPPORTED: expect_table_rows (#1848)
         // CONFORMANCE-UNSUPPORTED: expect_table_row (#1848)
+        //
+        // The table connection of the session (tests/conformance/collector/table_connection_contract.hsmtest)
+        // comes with the same step; its fixture is not registered either:
+        // CONFORMANCE-UNSUPPORTED: table_register (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_refuse_upgrades (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_server_accept_upgrades (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_connections (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_refused_table_upgrades_at_least (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_upgrade_names_session (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_probe_before_blocks (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_frame_connections (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_close_code (#1848)
+        // CONFORMANCE-UNSUPPORTED: expect_table_closed_before_session (#1848)
+        // CONFORMANCE-UNSUPPORTED: table_wait_connection_up (#1848)
         static const char* const kTableVerbs[] = {
             "create_collector_without_table_transport",
             "create_table_sensor",
@@ -3748,6 +3762,17 @@ namespace
             "expect_table_sequences_increasing",
             "expect_table_rows",
             "expect_table_row",
+            "table_register",
+            "table_server_refuse_upgrades",
+            "table_server_accept_upgrades",
+            "expect_table_connections",
+            "expect_refused_table_upgrades_at_least",
+            "expect_table_upgrade_names_session",
+            "expect_table_probe_before_blocks",
+            "expect_table_frame_connections",
+            "expect_table_close_code",
+            "expect_table_closed_before_session",
+            "table_wait_connection_up",
         };
 
         for (const char* verb : kTableVerbs)

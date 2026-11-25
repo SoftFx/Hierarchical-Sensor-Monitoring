@@ -64,6 +64,7 @@ namespace HSMDataCollector.Client.Session
 
             _unavailable = FindWhySessionCannotExist(options, Url);
             _connection = new SessionConnection(Url, headers, options.AllowUntrustedServerCertificate, logger, ReportError, Directives, options.SessionTimings);
+            _sessionTimings = options.SessionTimings;
         }
 
         /// <summary>The session endpoint: ws:// or wss://host[:port]/api/sensors/session.</summary>
@@ -148,10 +149,37 @@ namespace HSMDataCollector.Client.Session
             }
 
             _connection.Start();
+
+            // The table connection, when a table sensor has made one; one made later starts on its own (Tables).
+            lock (_tablesGate)
+            {
+                _started = true;
+                _tables?.Start();
+            }
         }
 
         public async Task StopAsync(bool terminal)
         {
+            // The table connection closes before the session: the server closes it with its session anyway, and a block
+            // it is storing is answered first.
+            try
+            {
+                TableConnection tables;
+
+                lock (_tablesGate)
+                {
+                    _started = false;
+                    tables = _tables;
+                }
+
+                if (tables != null)
+                    await tables.StopAsync(terminal ? TimeSpan.Zero : CloseLinger).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Closing the table connection failed: {ex.Message}");
+            }
+
             try
             {
                 await _connection.StopAsync(terminal ? TimeSpan.Zero : CloseLinger).ConfigureAwait(false);
@@ -169,6 +197,15 @@ namespace HSMDataCollector.Client.Session
             if (Interlocked.Exchange(ref _disposed, 1) == 1)
                 return;
 
+            TableConnection tables;
+
+            lock (_tablesGate)
+            {
+                _started = false;
+                tables = _tables;
+            }
+
+            tables?.Dispose();
             _connection.Dispose();
         }
 

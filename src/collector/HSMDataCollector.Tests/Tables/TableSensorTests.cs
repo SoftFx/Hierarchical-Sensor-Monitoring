@@ -483,6 +483,150 @@ namespace HSMDataCollector.Tests.Tables
             }
         }
 
+        // A server may state a decompressed limit smaller than one row (TableSensors.MaxDecompressedBytes can be 1). Such a
+        // row is dropped at the pack, counted once on the sensor and in the run's ledger; nothing is put.
+        [Fact]
+        public async Task A_row_larger_than_the_decompressed_limit_on_its_own_is_dropped_at_the_pack()
+        {
+            var sender = new FakeTableSender { BlockLimits = new TableBlockLimits(maxDecompressedBytes: 1) };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+                var run = collector.TablePipeline.CurrentRun;
+
+                for (var i = 0; i < 5; i++)
+                    Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                await collector.TickTablesAsync();
+
+                Assert.Empty(sender.Attempts);
+                Assert.Equal(5, table.RowsDropped);
+                Assert.Equal(5, run.Ledger.TotalOf(TableDropReason.RowTooLarge));
+                Assert.Equal(0, collector.TablePipeline.BacklogBlocks);
+            }
+        }
+
+        // Guard of the delivery loop: a put answered TooLarge for a block that cannot be made smaller is final. However
+        // the channel answers, the loop makes a bounded number of puts: each answer removes the head (one row) or halves
+        // it. The channel here claims the default limits and refuses every block, as a table connection whose hello is
+        // newer than the limits the pipeline read would.
+        [Theory]
+        [InlineData(1)]     // twenty blocks of one row each
+        [InlineData(1000)]  // one block of twenty rows
+        public async Task TooLarge_answers_end_in_dropped_rows_after_a_bounded_number_of_puts(int maxRows)
+        {
+            const int Rows = 20;
+            const int Guard = 1000;
+
+            var puts = 0;
+            var sender = new FakeTableSender
+            {
+                BlockLimits = new TableBlockLimits(maxRows: maxRows),
+                AnswerEvery = _ => Interlocked.Increment(ref puts) > Guard
+                    ? TableBlockAck.NotDelivered("the guard of this test: the delivery loop did not end")
+                    : TableBlockAck.TooLarge("scripted: the table connection takes less than the pipeline was told"),
+            };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+                var run = collector.TablePipeline.CurrentRun;
+
+                for (var i = 0; i < Rows; i++)
+                    Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                await collector.TickTablesAsync();
+
+                // One put per one-row block; a block of n rows takes at most 2n - 1 (a halving tree).
+                Assert.True(sender.Attempts.Count <= 2 * Rows - 1, $"{sender.Attempts.Count} put(s) for {Rows} row(s)");
+                Assert.Equal(Rows, table.RowsDropped);
+                Assert.Equal(Rows, run.Ledger.TotalOf(TableDropReason.RowTooLarge));
+                Assert.Equal(0, collector.TablePipeline.BacklogBlocks);
+            }
+        }
+
+        // A pack that fails part way: the blocks queued before the fault are delivered and their rows are not counted as
+        // lost; only the rows in no queued block are counted, once, as "packing failed"; every reservation returns.
+        [Fact]
+        public async Task A_failed_pack_counts_only_the_rows_in_no_queued_block()
+        {
+            // One table per block: four sensors, four groups, the encoder fails on the third.
+            var sender = new FakeTableSender { BlockLimits = new TableBlockLimits(maxTables: 1) };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var tables = Enumerable.Range(0, 4).Select(i => collector.CreateTableSensor($"t{i}", Quotes())).ToList();
+                var run = collector.TablePipeline.CurrentRun;
+
+                foreach (var table in tables)
+                    for (var i = 0; i < 3; i++)
+                        Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                var passes = 0;
+                collector.TablePipeline.OnPackPassForTests = () =>
+                {
+                    if (++passes == 3)
+                        throw new InvalidOperationException("scripted: the encoder fails on the third group");
+                };
+
+                await collector.TickTablesAsync();
+
+                var delivered = tables.Where(t => sender.RowsOf(t.Path).Count > 0).ToList();
+                var lost = tables.Except(delivered).ToList();
+
+                Assert.Equal(2, sender.Stored.Count);
+                Assert.Equal(2, delivered.Count);
+                Assert.All(delivered, t => Assert.Equal(3, sender.RowsOf(t.Path).Count));
+                Assert.All(delivered, t => Assert.Equal(0, t.RowsDropped));
+                Assert.All(lost, t => Assert.Equal(3, t.RowsDropped));
+                Assert.Equal(6, run.Ledger.TotalOf(TableDropReason.PackingFailed));
+                Assert.Equal(6, run.Ledger.Total);
+                Assert.Equal(0, collector.TablePipeline.BufferedBytes);
+
+                // Offered = accepted + dropped, and what the server got is the accepted rows that were not lost.
+                Assert.All(tables, t => Assert.Equal(3, t.RowsAccepted));
+                Assert.Equal(12 - 6, tables.Sum(t => sender.RowsOf(t.Path).Count));
+            }
+        }
+
+        // A block whose frame went out on a connection that was lost before its ack (the server may have stored it), and
+        // whose put then met a smaller hello on the next connection: its sequence is never given to other rows. Here
+        // every row of it breaks the new limit and is dropped by the repack; the block behind it and a block of new rows
+        // take the sequences after it. Given its sequence, the next block would be answered "duplicate" by a server that
+        // stored the first one, and its rows would be neither stored nor counted.
+        [Fact]
+        public async Task A_block_that_may_be_on_the_server_keeps_its_sequence_from_other_rows_when_it_is_packed_again()
+        {
+            var sender = new FakeTableSender { BlockLimits = new TableBlockLimits(maxRows: 2) };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+
+                for (var i = 0; i < 4; i++)
+                    Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                // The first block: written on a connection that was lost, then too large for the next one, which takes
+                // no row at all.
+                sender.AnswerNext(_ =>
+                {
+                    sender.MaxBlockBytes = 10;
+                    return TableBlockAck.TooLarge("scripted: a smaller hello after a lost ack", maybeSent: true);
+                });
+
+                await collector.TickTablesAsync();
+
+                sender.MaxBlockBytes = 4 * 1024 * 1024 - 40;
+                Assert.True(table.AddRow(T0.AddSeconds(10), 10, 10));
+                await collector.TickTablesAsync();
+
+                Assert.Equal(new long[] { 0, 1, 2 }, sender.Attempts.Select(a => a.Sequence));
+                Assert.Equal(2, table.RowsDropped);
+                Assert.Equal(3, sender.RowsOf("t").Count);
+            }
+        }
+
         [Fact]
         public async Task The_backlog_bound_drops_the_oldest_blocks_and_counts_their_rows()
         {
