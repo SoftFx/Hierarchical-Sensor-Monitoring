@@ -152,7 +152,12 @@ namespace hsm::collector::tables
 
             TableSchema schema;
             schema.columns_ = columns;
+#if defined(HSM_COLLECTOR_TABLES)
             schema.id_ = TableBlockCrc32(canonical.data(), canonical.size());
+#else
+            // No zlib in this build, and no block that would carry the id either.
+            schema.id_ = 0;
+#endif
             schema.canonical_ = std::move(canonical);
             out = std::move(schema);
             return true;

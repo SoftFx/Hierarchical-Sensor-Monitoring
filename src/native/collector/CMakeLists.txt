@@ -109,6 +109,11 @@ add_library(hsm_collector_core STATIC
     src/proc_metrics.cpp                         # portable /proc parsers + delta math (#1414; no OS reads)
     src/platform/hsm_linux_metric_sources.cpp    # self-guarded #if __linux__ (#1414)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
+    # Table sensors (#1848): the C ABI, the sensors, their buffers and the pipeline exist in every
+    # build; without HSM_COLLECTOR_TABLES every table sensor is Unavailable (no block writer).
+    src/tables/hsm_table_pipeline.cpp
+    src/tables/hsm_table_row_buffer.cpp
+    src/tables/hsm_table_schema.cpp
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
@@ -204,7 +209,6 @@ if(HSM_COLLECTOR_TABLES)
 
     target_sources(hsm_collector_core PRIVATE
         src/tables/hsm_table_block_writer.cpp
-        src/tables/hsm_table_schema.cpp
     )
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_TABLES=1)
     target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)

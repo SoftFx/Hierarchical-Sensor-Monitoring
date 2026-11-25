@@ -57,14 +57,6 @@ namespace hsm::collector::tables
         }
     } // namespace
 
-    bool TableBlockLimits::Valid() const noexcept
-    {
-        return max_decompressed_bytes >= 1 && max_decompressed_bytes <= TableBlockFormat::kFormatMaxDecompressedBytes &&
-               max_tables >= 1 && max_rows >= 1 &&
-               max_columns_per_table >= 1 && max_columns_per_table <= TableBlockFormat::kFormatMaxColumnsPerTable &&
-               max_table_id_length >= 1 && max_table_id_length <= TableBlockFormat::kFormatMaxTableIdLength;
-    }
-
     std::uint32_t TableBlockCrc32(const std::uint8_t* data, std::size_t size, std::uint32_t crc) noexcept
     {
         return static_cast<std::uint32_t>(crc32_z(crc, data, size));
