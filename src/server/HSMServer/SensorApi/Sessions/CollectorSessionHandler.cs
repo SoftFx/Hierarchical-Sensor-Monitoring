@@ -7,6 +7,7 @@ using HSMServer.Core.TableSensors;
 using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
+using HSMServer.SensorApi.Sessions.Files;
 using HSMServer.ServerConfiguration;
 using HSMTableBlocks;
 using Microsoft.AspNetCore.Http;
@@ -43,6 +44,11 @@ namespace HSMServer.SensorApi.Sessions
     // old) and closed when its session ends. Its requests are binary frames (TableFrame), each
     // answered with a text ack: a block put into the block store, or a probe. One block in
     // flight per connection: the collector sends the next after the ack (stop and wait).
+    //
+    // The file connection (#1884, ADR-0022 points 6-8) is a third WebSocket of a collector, subprotocol
+    // hsm.files.v1, paired with its session as the table connection is. It carries the pieces of large
+    // files: `begin` and `end` as text requests, the pieces as binary frames (FilePiece); the uploads are
+    // FileConnection's, the store behind IFileUploadStore.
     public sealed class CollectorSessionHandler
     {
         private const string MalformedBody = "malformed body";
@@ -54,6 +60,11 @@ namespace HSMServer.SensorApi.Sessions
         private const string BlockFailed = "failed to store the block";
 
         private const string TableReplacedReason = "replaced by a new table connection of its session";
+        private const string FileReplacedReason = "replaced by a new file connection of its session";
+        private const string FileFrameNotAllowedReason = "a frame over 64 KiB arrived before an accepted begin";
+
+        // How long shutdown waits for the end checks of large files to stop, after it cancelled them.
+        private static readonly TimeSpan FileCheckStopBudget = TimeSpan.FromSeconds(10);
         private const string BudgetTimeoutReason = "the server holds too many table frames; try again later";
 
         // 1013 Try Again Later (RFC 6455 registry): the end of a wait for the table frame budget.
@@ -95,6 +106,7 @@ namespace HSMServer.SensorApi.Sessions
         private const int ReservedFrameDeadlineInSilenceLimits = 1;
 
         private const string ReservedFrameTooSlowReason = "a large table frame took too long to arrive";
+        private const string LargeFileFrameTooSlowReason = "a large file frame took too long to arrive";
 
         // An ack buffer that grew past this (a batch with many per-path errors) is dropped
         // after the frame, so one large answer does not stay allocated for the session.
@@ -118,10 +130,18 @@ namespace HSMServer.SensorApi.Sessions
         // What table connections hold for frames (CollectorSessions.MaxTableBytesInFlight).
         private readonly TableFrameBudget _tableBudget;
 
+        // The store of large files (#1884); null until one is registered: file connections are then off.
+        private readonly IFileUploadStore _files;
+        private readonly FileChecks _fileChecks = new();
+
+        // The piece size a file frame carries (FilePiece.PieceBytesFor).
+        private readonly int _filePieceBytes;
+
         private volatile bool _stopping;
         private long _capWarnedAtTicks;
         private long _offWarnedAtTicks;
         private long _tablesOffWarnedAtTicks;
+        private long _filesOffWarnedAtTicks;
         private long _budgetWarnedAtTicks;
         private long _ownKeyWarnedAtTicks;
 
@@ -130,14 +150,17 @@ namespace HSMServer.SensorApi.Sessions
         private readonly RefusalThrottle _accessRefusals = new();
         private readonly RefusalThrottle _shutdownRefusals = new();
         private readonly RefusalThrottle _tableRefusals = new();
+        private readonly RefusalThrottle _fileRefusals = new();
 
 
         public CollectorSessionHandler(IServerConfig config, CollectorSessionRegistry registry, SensorIngestionService ingestion,
             ISensorApiTelemetry telemetry, ITreeValuesCache cache, AgentDirectives directives, IHostApplicationLifetime lifetime, TimeProvider time,
-            ITableBlockService tables)
+            ITableBlockService tables, IFileUploadStore files = null)
         {
             _config = config.CollectorSessions ?? new CollectorSessionsConfig();
             _tables = tables;
+            _files = files;
+            _filePieceBytes = _config.MaxFileFrameBytes > 0 ? FilePiece.PieceBytesFor(_config.MaxFileFrameBytes) : 0;
 
             var tableConfig = config.TableSensors ?? new TableSensorsConfig();
             _tableLimits = tableConfig.ToOptions().Limits;
@@ -193,12 +216,21 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            // A table connection names its own subprotocol (#1845); a server before it refuses
-            // that upgrade here, with the 400 below, before anything is upgraded.
+            // A table connection (#1845) and a file connection (#1884) name subprotocols of their own; a
+            // server before them refuses that upgrade here, with the 400 below, before anything is upgraded.
             var requested = context.WebSockets.WebSocketRequestedProtocols;
             var isTable = requested.Contains(SessionProtocol.TablesSubprotocol);
+            var isFile = requested.Contains(SessionProtocol.FilesSubprotocol);
 
-            if (!isTable && !requested.Contains(SessionProtocol.Subprotocol))
+            if (isTable && isFile)
+            {
+                LogRefusal(context, _badUpgradeRefusals, StatusCodes.Status400BadRequest, "both paired subprotocols were offered", LogLevel.Warn);
+                await Refuse(context, StatusCodes.Status400BadRequest,
+                    $"Offer one of {SessionProtocol.TablesSubprotocol} and {SessionProtocol.FilesSubprotocol}: a connection is one or the other");
+                return;
+            }
+
+            if (!isTable && !isFile && !requested.Contains(SessionProtocol.Subprotocol))
             {
                 LogRefusal(context, _badUpgradeRefusals, StatusCodes.Status400BadRequest, $"the subprotocol {SessionProtocol.Subprotocol} was not offered", LogLevel.Warn);
                 await Refuse(context, StatusCodes.Status400BadRequest, $"The subprotocol {SessionProtocol.Subprotocol} is required");
@@ -217,6 +249,18 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
+            if (isFile && (!_config.FilesEnabled || _files is null))
+            {
+                // Switched off on purpose (CollectorSessions.MaxFileFrameBytes = 0), or a server without a
+                // store of large files: that collector keeps its files and cannot deliver them.
+                if (IsTimeToWarn(ref _filesOffWarnedAtTicks))
+                    _logger.Warn($"A collector asked for a file connection from {context.Connection.RemoteIpAddress}, but file connections are switched off on this server " +
+                                 $"({(_files is null ? "no large file store" : "CollectorSessions.MaxFileFrameBytes = 0")}): it is refused with 404 and cannot deliver large files.");
+
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
             if (_stopping)
             {
                 LogRefusal(context, _shutdownRefusals, StatusCodes.Status503ServiceUnavailable, ShutdownReason, LogLevel.Info);
@@ -224,9 +268,9 @@ namespace HSMServer.SensorApi.Sessions
                 return;
             }
 
-            if (isTable)
+            if (isTable || isFile)
             {
-                await HandleTableUpgradeAsync(context, caller);
+                await HandlePairedUpgradeAsync(context, caller, isFile ? SessionKind.File : SessionKind.Table);
                 return;
             }
 
@@ -289,7 +333,7 @@ namespace HSMServer.SensorApi.Sessions
             }
             finally
             {
-                var table = _registry.Release(session, caller.RemoteIP);
+                var (table, file) = _registry.Release(session, caller.RemoteIP);
 
                 if (session is not null)
                 {
@@ -311,92 +355,118 @@ namespace HSMServer.SensorApi.Sessions
                     socket.Dispose();
                 }
 
-                // A table connection lives as long as its session: closed now, after the ack of a
-                // block it is storing.
+                // A paired connection lives as long as its session: closed now, after the ack of a
+                // block or a piece it is storing.
                 if (table is not null)
-                    await CloseTableAsync(table, SessionEndedReason);
+                    await ClosePairedAsync(table, SessionEndedReason);
+
+                if (file is not null)
+                    await ClosePairedAsync(file, SessionEndedReason);
             }
         }
 
-        // A table connection (#1845): checked against the ordinary session it names, accepted,
-        // attached to it in place of an earlier one, and run through the same loop.
-        private async Task HandleTableUpgradeAsync(HttpContext context, PublicApiRequestInfo caller)
+        // A table connection (#1845) or a file connection (#1884): checked against the ordinary session it
+        // names, accepted, attached to it in place of an earlier one of its kind, and run through the same loop.
+        private async Task HandlePairedUpgradeAsync(HttpContext context, PublicApiRequestInfo caller, SessionKind kind)
         {
+            var isFile = kind == SessionKind.File;
             var named = ReadFact(context, SessionProtocol.SessionHeader);
 
             if (named is null || !SessionProtocol.TryParseSessionId(named, out var sessionId) ||
                 _registry.FindSession(sessionId) is not { } owner || owner.KeyId != caller.Key.Id)
             {
-                LogRefusal(context, _tableRefusals, StatusCodes.Status409Conflict,
+                LogRefusal(context, isFile ? _fileRefusals : _tableRefusals, StatusCodes.Status409Conflict,
                     named is null ? $"no {SessionProtocol.SessionHeader}" : $"{SessionProtocol.SessionHeader} names no live session of this key", LogLevel.Warn);
                 await Refuse(context, StatusCodes.Status409Conflict,
-                    $"A table connection needs the id of a live session of the same key in {SessionProtocol.SessionHeader}: open the session first");
+                    $"A {(isFile ? "file" : "table")} connection needs the id of a live session of the same key in {SessionProtocol.SessionHeader}: open the session first");
                 return;
             }
 
-            CollectorSession table = null;
+            CollectorSession paired = null;
             WebSocket socket = null;
 
             try
             {
                 socket = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext
                 {
-                    SubProtocol = SessionProtocol.TablesSubprotocol,
+                    SubProtocol = isFile ? SessionProtocol.FilesSubprotocol : SessionProtocol.TablesSubprotocol,
                     KeepAliveInterval = _config.Heartbeat,
                 });
 
-                table = new CollectorSession(socket, caller,
+                paired = new CollectorSession(socket, caller,
                     ReadFact(context, SessionProtocol.CollectorKindHeader),
                     ReadFact(context, SessionProtocol.CollectorVersionHeader),
                     agentVersion: null,
                     _time.GetUtcNow().UtcDateTime,
-                    pairedSessionId: sessionId);
+                    pairedSessionId: sessionId,
+                    kind);
+
+                if (isFile)
+                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger);
 
                 SessionProtocol.MarkUpgraded(context);
 
-                if (!_registry.TryAttachTable(table, out var replaced))
+                if (!_registry.TryAttachPaired(paired, out var replaced))
                 {
                     // The session ended between the check and here.
-                    LogOpened(table);
-                    await table.CloseAsync(WebSocketCloseStatus.NormalClosure, SessionEndedReason);
+                    LogOpened(paired);
+                    await paired.CloseAsync(WebSocketCloseStatus.NormalClosure, SessionEndedReason);
                     return;
                 }
 
-                LogOpened(table);
+                LogOpened(paired);
 
                 if (replaced is not null)
-                    await CloseTableAsync(replaced, TableReplacedReason);
+                {
+                    await ClosePairedAsync(replaced, isFile ? FileReplacedReason : TableReplacedReason);
+
+                    // A replaced file connection gives its upload back before this one says hello, so the
+                    // collector's next begin does not find the file busy with its own old connection.
+                    if (isFile)
+                        await WaitEndedAsync(replaced);
+                }
 
                 if (_stopping)
-                    await table.CloseAsync(SessionProtocol.CloseGoingAway, ShutdownReason);
+                    await paired.CloseAsync(SessionProtocol.CloseGoingAway, ShutdownReason);
                 else
-                    await RunAsync(table, context.RequestAborted);
+                    await RunAsync(paired, context.RequestAborted);
             }
             catch (Exception ex) when (IsConnectionEnd(ex))
             {
-                table?.NoteEnd($"the connection ended without a close handshake ({ex.GetType().Name}: {ex.Message})", abnormal: true);
+                paired?.NoteEnd($"the connection ended without a close handshake ({ex.GetType().Name}: {ex.Message})", abnormal: true);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Collector table connection {table?.ShortId} failed: {ex}");
-                table?.Abort($"internal error ({ex.GetType().Name})");
+                _logger.Error($"Collector {(isFile ? "file" : "table")} connection {paired?.ShortId} failed: {ex}");
+                paired?.Abort($"internal error ({ex.GetType().Name})");
             }
             finally
             {
-                if (table is not null)
+                if (paired is not null)
                 {
-                    _registry.DetachTable(table);
-
                     try
                     {
-                        LogClosed(table);
+                        // The upload it holds goes back, unless its end check holds it now.
+                        paired.Files?.End();
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Failed to log the end of collector table connection {table.ShortId}: {ex}");
+                        _logger.Error($"Failed to release the upload of collector file connection {paired.ShortId}: {ex}");
                     }
 
-                    table.Dispose();
+                    _registry.DetachPaired(paired);
+
+                    try
+                    {
+                        LogClosed(paired);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to log the end of collector {(isFile ? "file" : "table")} connection {paired.ShortId}: {ex}");
+                    }
+
+                    paired.Dispose();
+                    paired.MarkEnded();
                 }
                 else if (socket is not null)
                 {
@@ -406,20 +476,45 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
-        // Closes a table connection from outside its loop: at once while it waits for a frame,
-        // after the ack while it is storing a block (so a stored block is acknowledged and not
-        // sent again). A peer that does not answer the close in time is cut off.
-        private async Task CloseTableAsync(CollectorSession table, string reason)
+        // Closes a paired connection from outside its loop: at once while it waits for a frame, after the
+        // ack while it is storing a block or a piece (so what is stored is acknowledged and not sent
+        // again). A peer that does not answer the close in time is cut off.
+        private async Task ClosePairedAsync(CollectorSession paired, string reason)
         {
             using var budget = new CancellationTokenSource(ShutdownBudget);
 
             try
             {
-                await table.SignalCloseAsync(WebSocketCloseStatus.NormalClosure, reason, budget.Token);
+                await paired.SignalCloseAsync(WebSocketCloseStatus.NormalClosure, reason, budget.Token);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to close collector table connection {table.ShortId}: {ex}");
+                _logger.Error($"Failed to close collector {(paired.IsFile ? "file" : "table")} connection {paired.ShortId}: {ex}");
+            }
+        }
+
+        // Waits for a replaced connection's handler to be done with it, its cleanup included. A collector that
+        // replaced its connection may no longer read the old one, so the close it was sent may never be
+        // answered: past the shutdown budget it is cut off, which ends its loop at once.
+        private async Task WaitEndedAsync(CollectorSession paired)
+        {
+            try
+            {
+                await paired.Ended.WaitAsync(ShutdownBudget);
+                return;
+            }
+            catch (TimeoutException)
+            {
+                paired.Abort(FileReplacedReason);
+            }
+
+            try
+            {
+                await paired.Ended.WaitAsync(ShutdownBudget);
+            }
+            catch (TimeoutException)
+            {
+                _logger.Warn($"Collector file connection {paired.ShortId} did not end within {ShutdownBudget * 2} after it was replaced; its successor goes on.");
             }
         }
 
@@ -453,23 +548,44 @@ namespace HSMServer.SensorApi.Sessions
                     silence.Arm();
             };
 
-            var maxFrameBytes = session.IsTable ? _config.MaxTableFrameBytes : _config.MaxFrameBytes;
+            var maxFrameBytes = session.Kind switch
+            {
+                SessionKind.Table => _config.MaxTableFrameBytes,
+                SessionKind.File => _config.MaxFileFrameBytes,
+                _ => _config.MaxFrameBytes,
+            };
 
             // A table connection's large frames take from the server-wide budget (#1845); whatever
-            // it holds goes back when the loop ends, on every path. A reserved frame has a deadline of
-            // its own, which bytes arriving do not move.
-            await using var frameDeadline = session.IsTable
-                ? new SilenceWatch(_time, session, _config.SilenceLimit * ReservedFrameDeadlineInSilenceLimits, ReservedFrameTooSlowReason)
+            // it holds goes back when the loop ends, on every path. A file connection's large frames
+            // (#1884) are pieces, allowed only while it holds an upload. A large frame of either has a
+            // deadline of its own, which bytes arriving do not move.
+            await using var frameDeadline = session.IsPaired
+                ? new SilenceWatch(_time, session, _config.SilenceLimit * ReservedFrameDeadlineInSilenceLimits,
+                    session.IsFile ? LargeFileFrameTooSlowReason : ReservedFrameTooSlowReason)
                 : null;
 
-            using var memory = session.IsTable
+            using var tableMemory = session.IsTable
                 ? new TableFrameMemory(_tableBudget, maxFrameBytes, session.KeyId, (reservation, token) => WaitForTableBudgetAsync(session, silence, reservation, token), frameDeadline.Arm)
                 : null;
 
-            if (session.IsTable)
-                SessionProtocol.WriteTableHello(output, maxFrameBytes, _config.HeartbeatSeconds, _tableLimits);
-            else
-                SessionProtocol.WriteHello(output, maxFrameBytes, _config.HeartbeatSeconds, session.Id);
+            var fileMemory = session.IsFile ? new FileFrameMemory(() => session.Files.HoldsUpload, frameDeadline.Arm) : null;
+
+            IFrameMemory memory = (IFrameMemory)tableMemory ?? fileMemory;
+
+            switch (session.Kind)
+            {
+                case SessionKind.Table:
+                    SessionProtocol.WriteTableHello(output, maxFrameBytes, _config.HeartbeatSeconds, _tableLimits);
+                    break;
+
+                case SessionKind.File:
+                    SessionProtocol.WriteFileHello(output, maxFrameBytes, _config.HeartbeatSeconds, _files.MaxFileBytes, _filePieceBytes);
+                    break;
+
+                default:
+                    SessionProtocol.WriteHello(output, maxFrameBytes, _config.HeartbeatSeconds, session.Id);
+                    break;
+            }
 
             _telemetry.AddResponse(session.Caller.TelemetryPath, output.WrittenCount);
 
@@ -478,8 +594,8 @@ namespace HSMServer.SensorApi.Sessions
 
             // Directives for a directive-aware agent (#1660 step 5): the rule of the header path,
             // a client that stated X-Agent-Version. After the hello, which must be the first frame.
-            // A table connection states none.
-            await using var push = session.AgentVersion is null || session.IsTable
+            // A paired connection states none.
+            await using var push = session.AgentVersion is null || session.IsPaired
                 ? null
                 : new DirectivePush(session, _directives, _cache, _telemetry, _logger, _time, (frame, token) => PushSend(session, frame, token));
 
@@ -500,6 +616,12 @@ namespace HSMServer.SensorApi.Sessions
                     // closed, the block it was sending is not stored, and the collector sends it
                     // again on its next table connection.
                     await session.CloseAsync(CloseTryAgainLater, BudgetTimeoutReason);
+                    return;
+                }
+                catch (FileFrameNotAllowedException)
+                {
+                    // Only a piece is that large, and a piece needs an upload the connection holds.
+                    await Violation(session, SessionProtocol.CloseProtocolError, FileFrameNotAllowedReason);
                     return;
                 }
 
@@ -526,9 +648,9 @@ namespace HSMServer.SensorApi.Sessions
                         await Violation(session, SessionProtocol.CloseMessageTooBig, $"a frame exceeds {maxFrameBytes} bytes");
                         return;
 
-                    // Binary frames carry blocks, and only on a table connection: the ordinary
-                    // connection stays text-only.
-                    case SessionFrameKind.Binary when !session.IsTable:
+                    // Binary frames carry blocks or pieces, and only on a paired connection: the
+                    // ordinary connection stays text-only.
+                    case SessionFrameKind.Binary when !session.IsPaired:
                         await Violation(session, SessionProtocol.CloseUnsupportedData, "binary frames are not supported");
                         return;
                 }
@@ -548,9 +670,11 @@ namespace HSMServer.SensorApi.Sessions
                 {
                     session.Touch(_time.GetUtcNow().UtcDateTime);
 
-                    open = frame.Kind == SessionFrameKind.Binary
-                        ? await HandleTableFrameAsync(session, frame, output, silence, aborted)
-                        : await HandleFrameAsync(session, frame, output, silence, aborted);
+                    open = frame.Kind != SessionFrameKind.Binary
+                        ? await HandleFrameAsync(session, frame, output, silence, aborted)
+                        : session.IsFile
+                            ? await HandleFileFrameAsync(session, frame, output, silence, aborted)
+                            : await HandleTableFrameAsync(session, frame, output, silence, aborted);
                 }
                 finally
                 {
@@ -639,15 +763,24 @@ namespace HSMServer.SensorApi.Sessions
 
                 output.Clear();
 
-                // A table connection carries blocks only: every text request is an unknown op there.
+                // A table connection carries blocks only: every text request is an unknown op there. A file
+                // connection takes begin and end only.
                 switch (request.Op)
                 {
-                    case SessionProtocol.OpList when !session.IsTable:
+                    case SessionProtocol.OpList when !session.IsPaired:
                         await HandleListAsync(session, caller, request, id, output);
                         break;
 
-                    case SessionProtocol.OpCommands when !session.IsTable:
+                    case SessionProtocol.OpCommands when !session.IsPaired:
                         await HandleCommandsAsync(session, caller, request, id, output);
+                        break;
+
+                    case SessionProtocol.OpBegin when session.IsFile:
+                        await session.Files.HandleBeginAsync(caller, request, id, output, aborted);
+                        break;
+
+                    case SessionProtocol.OpEnd when session.IsFile:
+                        session.Files.HandleEnd(request, id, output);
                         break;
 
                     default:
@@ -710,6 +843,12 @@ namespace HSMServer.SensorApi.Sessions
         // For the tests, which read the budget.
         internal TableFrameBudget TableBudget => _tableBudget;
 
+        // For the tests: the end checks of large files running now.
+        internal int FileChecksRunning => _fileChecks.Running;
+
+        // The piece size the file connection's hello announces.
+        internal int FilePieceBytes => _filePieceBytes;
+
         // The bound of a budget wait has passed. A timer may fire as the wait ends and its source
         // is disposed: nothing is left to cancel then.
         private static void TimeOut(CancellationTokenSource wait, ref int timedOut)
@@ -755,6 +894,44 @@ namespace HSMServer.SensorApi.Sessions
                 SessionProtocol.WriteAck(output, header.Id, SessionProtocol.StatusOk, NoErrors);
             else
                 await HandleBlockAsync(session, caller, header, frame.Payload[header.BlockOffset..], output, aborted);
+
+            _telemetry.AddResponse(caller.TelemetryPath, output.WrittenCount);
+
+            silence.Arm();
+            await session.SendAsync(output.WrittenMemory, aborted);
+
+            return true;
+        }
+
+        // A binary frame of a file connection (#1884): a piece or a probe. False when the connection was
+        // closed and the loop must end.
+        private async Task<bool> HandleFileFrameAsync(CollectorSession session, SessionFrame frame, ArrayBufferWriter<byte> output, SilenceWatch silence, CancellationToken aborted)
+        {
+            // Without a header it can trust there is no request id to answer: a protocol error.
+            if (!FilePiece.TryRead(frame.Payload.Span, out var header, out var error))
+            {
+                await Violation(session, SessionProtocol.CloseProtocolError, error);
+                return false;
+            }
+
+            var isProbe = header.Kind == FilePieceKind.Probe;
+
+            // Access is re-checked for every frame; a probe, like a ping, is not a use of the key.
+            if (!TryRefreshCaller(session, countsAsKeyUsage: !isProbe, out var caller, out var accessError))
+            {
+                _logger.Debug($"Collector file connection {session.ShortId} lost its access: {accessError}");
+                await session.CloseAsync(SessionProtocol.ClosePolicyViolation, Truncate(accessError));
+                return false;
+            }
+
+            _telemetry.AddRequest(caller.TelemetryPath, frame.Length);
+
+            output.Clear();
+
+            if (isProbe)
+                SessionProtocol.WriteAck(output, header.Id, SessionProtocol.StatusOk, NoErrors);
+            else
+                await session.Files.HandlePieceAsync(header, frame.Payload, output, aborted);
 
             _telemetry.AddResponse(caller.TelemetryPath, output.WrittenCount);
 
@@ -1036,6 +1213,15 @@ namespace HSMServer.SensorApi.Sessions
         {
             var caller = session.Caller;
 
+            if (session.IsFile)
+            {
+                _logger.Info($"Collector file connection {session.ShortId} of session {session.PairedShortId} opened: product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", " +
+                             $"key \"{CollectorSession.Printable(caller.Key.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", " +
+                             $"collector {CollectorSession.Printable(session.CollectorKind) ?? "(kind not stated)"} {CollectorSession.Printable(session.CollectorVersion) ?? "(version not stated)"}, " +
+                             $"from {session.RemoteIP}; {_registry.FileConnectionCount} file connection(s) open.");
+                return;
+            }
+
             if (session.IsTable)
             {
                 _logger.Info($"Collector table connection {session.ShortId} of session {session.PairedShortId} opened: product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", " +
@@ -1057,7 +1243,14 @@ namespace HSMServer.SensorApi.Sessions
             var caller = session.Caller;
             var end = session.End ?? new SessionEnd("it ended without a recorded cause", Abnormal: true);
 
-            var line = session.IsTable
+            var line = session.IsFile
+                ? $"Collector file connection {session.ShortId} of session {session.PairedShortId} closed after {FormatDuration(session.Lifetime)}: {end.Text}. " +
+                  $"Product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", from {session.RemoteIP}; " +
+                  $"frames in {session.FramesIn} ({session.BytesIn} bytes), out {session.FramesOut} ({session.BytesOut} bytes); " +
+                  $"pieces stored {session.PiecesStored} ({session.PieceBytesStored} bytes), repeated {session.PiecesRepeated}, refused {session.PiecesRefused}; " +
+                  $"uploads begun {session.UploadsBegun}, stored {session.UploadsStored}, discarded {session.UploadsDiscarded}; requests refused {session.RequestsRefused}; " +
+                  $"last frame from the collector {FormatDuration(session.SinceLastFrame)} before the end; {_registry.FileConnectionCount} file connection(s) open."
+                : session.IsTable
                 ? $"Collector table connection {session.ShortId} of session {session.PairedShortId} closed after {FormatDuration(session.Lifetime)}: {end.Text}. " +
                   $"Product \"{CollectorSession.Printable(caller.Product.DisplayName)}\", client \"{CollectorSession.Printable(session.ClientName)}\", from {session.RemoteIP}; " +
                   $"frames in {session.FramesIn} ({session.BytesIn} bytes), out {session.FramesOut} ({session.BytesOut} bytes); " +
@@ -1162,6 +1355,18 @@ namespace HSMServer.SensorApi.Sessions
             catch (Exception ex)
             {
                 _logger.Error($"Failed to close collector sessions at shutdown: {ex}");
+            }
+
+            try
+            {
+                // The end checks of large files read the store: they are cancelled and awaited before the
+                // store and the database close (a cancelled check changes nothing on the disk).
+                if (!Task.Run(() => _fileChecks.StopAsync(FileCheckStopBudget)).GetAwaiter().GetResult())
+                    _logger.Warn($"End checks of large files did not stop within {FileCheckStopBudget} of the shutdown: {_fileChecks.Running} still running.");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to stop the end checks of large files at shutdown: {ex}");
             }
         }
 

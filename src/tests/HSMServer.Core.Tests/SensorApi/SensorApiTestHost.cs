@@ -7,6 +7,7 @@ using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi;
 using HSMServer.SensorApi.Sessions;
+using HSMServer.SensorApi.Sessions.Files;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -309,7 +310,7 @@ namespace HSMServer.Core.Tests.SensorApi
         // ingestion checks a table registration against those limits, as in production (one
         // source); the defaults when none is given.
         public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null,
-            ITableBlockService tables = null, TableSensorsConfig tableSensors = null)
+            ITableBlockService tables = null, TableSensorsConfig tableSensors = null, IFileUploadStore files = null)
         {
             var telemetry = new RecordingTelemetry();
 
@@ -335,6 +336,10 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton<CollectorSessionHandler>();
             builder.Services.AddSingleton(tables ?? new Mock<ITableBlockService>(MockBehavior.Strict).Object);
             builder.Services.AddSingleton<TimeProvider>(new ManualTimeProvider());
+
+            // The store of large files the file connections upload into (#1884); none: they are off.
+            if (files is not null)
+                builder.Services.AddSingleton(files);
 
             builder.Services.AddControllers()
                 .ConfigureApplicationPartManager(manager =>
