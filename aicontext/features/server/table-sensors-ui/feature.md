@@ -112,6 +112,7 @@ The rows of `[from, to)` as CSV, in the form of the read route's CSV (`TableRows
 - **Before the first byte** the first page is read, and what it shows is answered with a status and a text the page can show: `500` when blocks or batches of it cannot be read (`The range cannot be downloaded whole: …`), `400` when it holds more than `TableSensors.MaxDownloadRows` rows or one time holds more rows than a read returns, `503` (`Retry-After: 60`) when the store cannot be read now, `503` (`Retry-After: 1`, the chart's text) when the store changed under every plan of the read, `404`/`400` as for the chart.
 - **Access per page**: the access check of the first page is made again before each later page is written: the sensor must still exist, still be a table sensor, and its product must still be one the user may see (`User.IsProductAvailable`, on the stored user, whose roles an admin changes in place). A user who lost the product while downloading gets no further page.
 - **Past the first byte** the same findings in a later page (failed blocks or batches, the row limit, one time too large, a store fault, a store that changed under every plan, the sensor removed, the access lost) **abort the connection** (`HttpContext.Abort`), logged as a `Warn` with the rows written: the browser shows a failed download, never a file that looks complete without being so.
+- **Not one snapshot.** A download is read page by page from a live store, each page from the time where the last one ended. A row that arrives while the download runs with a time behind that cursor is not in the file: a range that is still receiving data (late rows of an open hour included) can miss rows; a range that ended before the download started is complete. Every page is complete in itself (failed blocks or batches abort), but the file is not the state of one moment.
 - The row limit is known before the first byte when the range fits in the first page, and when the first page reaches the limit and was cut (a row was left out, so the range holds more): both are a `400`. Otherwise it is checked page by page while writing.
 
 ### The read gate and cancellation
@@ -165,6 +166,9 @@ Synthetic random-walk data (time, bid, ask, no nulls), two runs each; the first 
 - `HSMServer.Core.Tests/TableSensors/TableChartBenchmark.cs`: the measurement above (skipped unless `HSM_TABLE_STORE_BENCH=1`).
 
 ## Known Issues / Limitations
+
+- A download is not one snapshot of the store ("The download" above): rows that arrive behind its cursor while it runs are not in the file.
+- The abort of a download past the first byte is tested through a fake `IHttpRequestLifetimeFeature` (`HttpContext.Abort` is seen to be called), not through Kestrel and a reverse proxy: what a browser shows behind Caddy for an aborted chunked response is not verified.
 
 - `Read` holds the hour gate for its whole range (about 170 ms for 1,000,000 merged rows; about 60 ms per unmerged hour of the measured shape, so a read of a range with several unmerged hours holds it for that many times 60 ms). While it does, a deletion of merged blocks waits, and every read that starts after the deletion asked for the gate waits behind it.
 - A block the merge kept as unreadable is listed in its hour's record, but a read of the merged hour (`Read` and the chart alike) does not count it: its rows are missing and the answer says `blocksFailed = 0`, so a chart or a CSV of such an hour looks complete (before the merge the same block is counted in `BlocksFailed`). To be fixed in Core outside this step.
