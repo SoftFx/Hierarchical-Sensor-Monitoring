@@ -64,7 +64,7 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 | 13 | Load on the application | A speed limit by default (10 MB/s), one upload at a time, one background thread. |
 | 14 | Where the password is applied | On the server, not in the collector: the server makes the zip. Set per product. |
 | 16 | Scope of the mechanism | Any large file of a File sensor; a dump is a use of it. |
-| 17 | Collectors | Native (C++) first, managed right after it in the same epic; the server part before both. |
+| 17 | Collectors | Both, in parallel, in the same epic; the server part before both. (First answer: native first, managed right after it. Changed the same day, when the owner named the second consumer: the Aggregator runs on the native C++ collector, TTS on the managed .NET one, and the managed collector does not wait for #1848.) |
 | 18 | Notification | On by default for a sensor set up for dumps. |
 | 19 | When a file is complete | Size and modification time unchanged for N seconds (60 by default). |
 | 20 | UI | The sensor page. |
@@ -72,7 +72,7 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 | — | The store | Files on the server's disk, given out by Caddy ("сначала я планировал хранить это на диске и отдавать его напрямую через Caddy"). |
 | 22 | Access when Caddy serves | HSM checks every download and records it; Caddy moves the bytes. |
 
-Not answered: how often dumps appear.
+How often dumps appear, the owner's estimate: about once a month. The consumers he named: the Aggregator and TTS, which crashes and leaves dumps the same way.
 
 The rules below that are not in this table are the design's, not the owner's: they were added to make the decisions hold in the cases an independent review of 2026-11-25 raised (a restart between the check and the zip, two files with one time, a full disk in the middle, bytes that lie about their size, a file that changes while it is sent).
 
@@ -207,7 +207,7 @@ What the numbers say: LevelDB can hold the pieces and loses none in a crash, at 
 - How exactly HSM hands a file to Caddy (an internal redirect answered by `reverse_proxy` with `handle_response`, or `forward_auth` in front of a `file_server`): to be tried against the bundled Caddy 2.11 and `caddy/test.sh` in the step.
 - The zip library for AES-256 and Zip64 on the server (the zip built into .NET has no encryption), and what a build and a re-encryption of a large file cost: not measured.
 - The compression ratio and speed on a real dump: needs a sample from the owner, measured on his machine, numbers only.
-- How often dumps appear, and the link speed between the application hosts and the server: both decide the defaults (speed limit, free-space minimum).
+- The link speed between the application hosts and the server: it decides the default speed limit. (Dumps appear about once a month: at that rate and a history period of a few months the store holds a handful of files, and a crash loop is the exception the free-space refusal is for.)
 - The retention period a dump sensor gets by default.
 - Whether a product without a password should rather refuse uploads than keep files nobody can download.
 
@@ -222,8 +222,8 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 | 2 | #1884 | Server: the file connection (begin, piece, end, continue, limits, budget) | Reuses the session loop of #1845 |
 | 3 | #1885 | Server: the product's dump password, the zip, the download for the web UI, `/api/v1` and Caddy, the download log, the MCP tool | Relies on the web UI access-check work |
 | 4 | #1886 | Server: the sensor page, the alert variables, the default alert, self-monitoring | |
-| 5 | #1887 | Native collector: reading a file in pieces, the watched folder, the state file, the speed limit; conformance scenarios | Binary frames and zstd shared with #1848; first to production |
-| 6 | #1888 | Managed collector: the same behaviour; the conformance scenarios pass in the .NET driver | net6.0 and net472 |
+| 5 | #1887 | Native collector: reading a file in pieces, the watched folder, the state file, the speed limit; conformance scenarios | Binary frames and zstd shared with #1848, which it waits for. Consumer: the Aggregator |
+| 6 | #1888 | Managed collector: the same behaviour, in parallel with step 5; whichever lands first writes the conformance scenarios and marks their verbs as not yet supported in the other driver | net6.0 and net472. Does not wait for #1848. Consumer: TTS |
 | 7 | #1889 | Rollout: a real dump end to end, a file of 64 GB, the settings of production, the wiki | |
 
 ## Risks

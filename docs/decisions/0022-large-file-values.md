@@ -55,7 +55,7 @@ Constraints:
 16. **Retention is the sensor's history setting, by age only.** There is no "last N", no volume quota and no mark that protects a file. When the disk is short the server refuses new files (point 7) and deletes nothing early; the refusal is counted in a self-monitoring sensor with an alert.
 17. **A sensor set up for dumps has the alert "new data has been received" by default.** The message is sent once, when the file is stored, and carries the file name, the size and a link to the sensor page, through new template variables.
 18. **Users see large values on the sensor page:** a list with name, size, time, state and the download; no preview.
-19. **The native collector gets the feature first, the managed collector right after it,** in one epic; the server part comes before both. The epic has an integration branch of its own, cut from the branch of table sensors.
+19. **Both collectors get the feature, in parallel,** in one epic; the server part comes before both. The Aggregator runs on the native collector and TTS on the managed one, and both leave dumps. The managed collector already has its second connection and zstd from table sensors; the native collector waits for them (#1848), so the managed one is likely to reach production first. (First decided as native first; changed on 2026-11-25 when the owner named the second consumer.) The epic has an integration branch of its own, cut from the branch of table sensors.
 
 ## Consequences
 
