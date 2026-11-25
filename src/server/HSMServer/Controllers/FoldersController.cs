@@ -164,8 +164,13 @@ namespace HSMServer.Controllers
         }
 
 
+        // The Users tab of the folder edit page, which is the folder Managers' page. An unknown id and a
+        // folder the user does not manage answer the same 404.
         [HttpGet]
-        public IActionResult ResetUsers(Guid folderId) => GetUsersPartialView(_folderManager[folderId]);
+        public IActionResult ResetUsers(Guid folderId) =>
+            _folderManager.TryGetValue(folderId, out var folder) && CurrentUser.IsFolderManager(folder.Id)
+                ? GetUsersPartialView(folder)
+                : NotFound();
 
         [HttpPost]
         [FolderRoleFilterByUserRights(nameof(model), ProductRoleEnum.ProductManager)]
