@@ -28,10 +28,10 @@ namespace HSMServer.TablePages
         /// <summary>The sensor's id, as the tree's encoded id.</summary>
         public string Id { get; set; }
 
-        /// <summary>The range <c>[From, To)</c>; a time without a kind is UTC.</summary>
-        public DateTime From { get; set; }
+        /// <summary>The range <c>[From, To)</c>; a time without a kind is UTC. Both are required.</summary>
+        public DateTime? From { get; set; }
 
-        public DateTime To { get; set; }
+        public DateTime? To { get; set; }
 
         /// <summary>Ordinals of value columns; null for every double column, empty for the row counts only.</summary>
         public int[] Columns { get; set; }
@@ -56,6 +56,15 @@ namespace HSMServer.TablePages
         public const int MaxBuckets = 2000;
 
         public const string NotFoundText = "No table sensor with this id.";
+
+        public const string RangeRequiredText = "From and To are required, as times: the range is [From, To).";
+
+        // The most bytes of a chart request's body: an id, two times, a short list of column ordinals and a number need a
+        // few hundred; the list is at most a schema's columns.
+        public const int MaxChartBodyBytes = 8 * 1024;
+
+        // The most column ordinals a chart request may name: a schema holds at most this many columns.
+        public const int MaxChartColumns = TableBlockLimits.FormatMaxColumnsPerTable;
 
         // No error body names the sensor: between the access check and the answer it could have moved to a product the
         // user cannot see.
@@ -96,19 +105,28 @@ namespace HSMServer.TablePages
 
         // === The chart ===
 
-        public async Task<IActionResult> ChartAsync(HttpContext context, User user, TableChartRequest request)
+        /// <param name="bound">False when the binding of the request reported an error (a value of the wrong type).</param>
+        public async Task<IActionResult> ChartAsync(HttpContext context, User user, TableChartRequest request, bool bound)
         {
             var token = context.RequestAborted;
             NoStore(context);
 
+            // No id to resolve: the same answer whatever sensor was meant.
             if (request is null)
                 return Refuse(StatusCodes.Status400BadRequest, "The body cannot be read as a chart request.");
 
             if (Resolve(user, request.Id, out var table) is { } refused)
                 return refused;
 
-            var from = Utc(request.From);
-            var to = Utc(request.To);
+            // After the access check, so an outsider gets the same 404 for every id.
+            if (!bound || request.From is not { } fromTime || request.To is not { } toTime)
+                return Refuse(StatusCodes.Status400BadRequest, RangeRequiredText);
+
+            if (request.Columns is { Length: > MaxChartColumns })
+                return Refuse(StatusCodes.Status400BadRequest, $"At most {MaxChartColumns} columns can be named.");
+
+            var from = Utc(fromTime);
+            var to = Utc(toTime);
 
             if (from >= to)
                 return Refuse(StatusCodes.Status400BadRequest, "From must be before To: the range is [From, To).");
@@ -281,7 +299,8 @@ namespace HSMServer.TablePages
         /// the same findings cut the connection off, so the browser shows a failed download and never a file that looks
         /// complete without being so.
         /// </summary>
-        public async Task<IActionResult> DownloadAsync(HttpContext context, User user, string id, DateTime from, DateTime to)
+        /// <param name="bound">False when the binding of the query reported an error (a time that is not one).</param>
+        public async Task<IActionResult> DownloadAsync(HttpContext context, User user, string id, DateTime? from, DateTime? to, bool bound)
         {
             var token = context.RequestAborted;
             NoStore(context);
@@ -289,8 +308,12 @@ namespace HSMServer.TablePages
             if (Resolve(user, id, out var table) is { } refused)
                 return refused;
 
-            var fromUtc = Utc(from);
-            var toUtc = Utc(to);
+            // After the access check, so an outsider gets the same 404 for every id.
+            if (!bound || from is not { } fromTime || to is not { } toTime)
+                return Refuse(StatusCodes.Status400BadRequest, RangeRequiredText);
+
+            var fromUtc = Utc(fromTime);
+            var toUtc = Utc(toTime);
 
             if (fromUtc >= toUtc)
                 return Refuse(StatusCodes.Status400BadRequest, "From must be before To: the range is [From, To).");

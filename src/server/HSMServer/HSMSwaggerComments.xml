@@ -945,9 +945,9 @@
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.TableSensorsController.Chart(HSMServer.TablePages.TableChartRequest)">
-            <summary>POST /TableSensors/Chart: the chart of a range of one table sensor.</summary>
+            <summary>POST /TableSensors/Chart: the chart of a range of one table sensor. Its body is a few hundred bytes.</summary>
         </member>
-        <member name="M:HSMServer.Controllers.TableSensorsController.Download(System.String,System.DateTime,System.DateTime)">
+        <member name="M:HSMServer.Controllers.TableSensorsController.Download(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime})">
             <summary>GET /TableSensors/Download?id=&amp;from=&amp;to=: the rows of a range as CSV.</summary>
         </member>
         <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TtlAlert">
@@ -4078,7 +4078,7 @@
             <summary>The sensor's id, as the tree's encoded id.</summary>
         </member>
         <member name="P:HSMServer.TablePages.TableChartRequest.From">
-            <summary>The range <c>[From, To)</c>; a time without a kind is UTC.</summary>
+            <summary>The range <c>[From, To)</c>; a time without a kind is UTC. Both are required.</summary>
         </member>
         <member name="P:HSMServer.TablePages.TableChartRequest.Columns">
             <summary>Ordinals of value columns; null for every double column, empty for the row counts only.</summary>
@@ -4097,7 +4097,10 @@
             is not a table sensor is a 400. No access key takes part: the browser never holds one.</para>
             </summary>
         </member>
-        <member name="M:HSMServer.TablePages.TablePageService.DownloadAsync(Microsoft.AspNetCore.Http.HttpContext,HSMServer.Model.Authentication.User,System.String,System.DateTime,System.DateTime)">
+        <member name="M:HSMServer.TablePages.TablePageService.ChartAsync(Microsoft.AspNetCore.Http.HttpContext,HSMServer.Model.Authentication.User,HSMServer.TablePages.TableChartRequest,System.Boolean)">
+            <param name="bound">False when the binding of the request reported an error (a value of the wrong type).</param>
+        </member>
+        <member name="M:HSMServer.TablePages.TablePageService.DownloadAsync(Microsoft.AspNetCore.Http.HttpContext,HSMServer.Model.Authentication.User,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Boolean)">
             <summary>
             The rows of <c>[from, to)</c> as CSV, the form of the read route's CSV. The first page is read before anything
             is written, so what is known then is answered with a status and a text: failed blocks or batches (500), more
@@ -4105,6 +4108,7 @@
             the same findings cut the connection off, so the browser shows a failed download and never a file that looks
             complete without being so.
             </summary>
+            <param name="bound">False when the binding of the query reported an error (a time that is not one).</param>
         </member>
         <member name="M:HSMServer.TablePages.TablePageService.ReadPageAsync(System.Guid,System.DateTime,System.DateTime,System.Threading.CancellationToken)">
             <summary>

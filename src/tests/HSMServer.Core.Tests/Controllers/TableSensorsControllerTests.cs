@@ -321,6 +321,69 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(rows, json.GetProperty("rowCount").GetInt64());
         }
 
+        // === Binding and the size of a request ===
+
+        [Fact]
+        public async Task A_download_whose_time_does_not_bind_is_a_400_after_the_access_check()
+        {
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+            Task<IActionResult> Bogus(TableSensorsController c) => c.Download(id, null, To);
+
+            var visible = await CallFullAsync("download", Viewer(_product), id, invoke: Bogus, bindingError: true);
+            var outsider = await CallFullAsync("download", Viewer(Guid.NewGuid()), id, invoke: Bogus, bindingError: true);
+            var unknown = await CallFullAsync("download", Viewer(Guid.NewGuid()), Guid.NewGuid().ToString(), invoke: c => c.Download(Guid.NewGuid().ToString(), null, To), bindingError: true);
+
+            Assert.Equal((400, TablePageService.RangeRequiredText), (visible.Status, visible.Text));
+            Assert.Equal((404, TablePageService.NotFoundText), (outsider.Status, outsider.Text));
+            Assert.Equal((unknown.Status, unknown.Text), (outsider.Status, outsider.Text));
+        }
+
+        [Fact]
+        public async Task A_download_without_from_is_a_400()
+        {
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+
+            var (status, text, _) = await CallFullAsync("download", Viewer(_product), id, invoke: c => c.Download(id, null, To));
+            var (toStatus, _, _) = await CallFullAsync("download", Viewer(_product), id, invoke: c => c.Download(id, From, null));
+
+            Assert.Equal((400, TablePageService.RangeRequiredText), (status, text));
+            Assert.Equal(400, toStatus);
+        }
+
+        [Fact]
+        public async Task A_chart_without_from_or_with_a_binding_error_is_a_400_after_the_access_check()
+        {
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+
+            var missing = await CallAsync("chart", Viewer(_product), id, request: new TableChartRequest { Id = id, To = To, Buckets = 100 });
+            var (bogus, bogusText, _) = await CallFullAsync("chart", Viewer(_product), id, request: new TableChartRequest { Id = id, From = From, To = To, Buckets = 100 }, bindingError: true);
+            var outsider = await CallAsync("chart", Viewer(Guid.NewGuid()), id, request: new TableChartRequest { Id = id, To = To, Buckets = 100 });
+
+            Assert.Equal((400, TablePageService.RangeRequiredText), missing);
+            Assert.Equal((400, TablePageService.RangeRequiredText), (bogus, bogusText));
+            Assert.Equal((404, TablePageService.NotFoundText), outsider);
+        }
+
+        [Fact]
+        public async Task The_chart_body_is_limited_to_a_few_KiB_and_its_columns_to_a_schemas_count()
+        {
+            var limit = typeof(TableSensorsController).GetMethod(nameof(TableSensorsController.Chart))!
+                .GetCustomAttributes(true).OfType<Microsoft.AspNetCore.Http.Metadata.IRequestSizeLimitMetadata>().Single();
+            Assert.Equal(TablePageService.MaxChartBodyBytes, limit.MaxRequestBodySize);
+            Assert.True(TablePageService.MaxChartBodyBytes <= 16 * 1024);
+
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+            var columns = Enumerable.Repeat(1, TablePageService.MaxChartColumns + 1).ToArray();
+
+            var (status, text) = await CallAsync("chart", Viewer(_product), id, request: new TableChartRequest { Id = id, From = From, To = To, Columns = columns, Buckets = 100 });
+
+            Assert.Equal((400, $"At most {TablePageService.MaxChartColumns} columns can be named."), (status, text));
+        }
+
         // === The shared read gate ===
 
         [Theory]
@@ -535,7 +598,7 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         private async Task<(int Status, string Text, HttpContext Context)> CallFullAsync(string action, User user, string id, TablePageService pages = null,
-            CancellationToken token = default, TableChartRequest request = null)
+            CancellationToken token = default, TableChartRequest request = null, Func<TableSensorsController, Task<IActionResult>> invoke = null, bool bindingError = false)
         {
             var lifetime = new Lifetime(token);
             var context = new DefaultHttpContext { User = user };
@@ -548,9 +611,15 @@ namespace HSMServer.Core.Tests.Controllers
                 ControllerContext = new ControllerContext { HttpContext = context },
             };
 
-            var result = action == "chart"
-                ? await controller.Chart(request ?? new TableChartRequest { Id = id, From = From, To = To, Buckets = 100 })
-                : await controller.Download(id, From, To);
+            // A value the model binding could not convert, as MVC records it.
+            if (bindingError)
+                controller.ModelState.AddModelError("from", "The value 'bogus' is not valid.");
+
+            var result = invoke is not null
+                ? await invoke(controller)
+                : action == "chart"
+                    ? await controller.Chart(request ?? new TableChartRequest { Id = id, From = From, To = To, Buckets = 100 })
+                    : await controller.Download(id, From, To);
 
             await result.ExecuteResultAsync(new ActionContext(context, new RouteData(), new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor()));
             await context.Response.BodyWriter.FlushAsync();
