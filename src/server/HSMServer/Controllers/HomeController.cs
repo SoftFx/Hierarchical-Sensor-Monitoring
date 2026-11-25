@@ -1133,7 +1133,9 @@ namespace HSMServer.Controllers
                 : _emptyResult;
         }
 
+        // Server-wide database maintenance, offered on the admin Configuration page only.
         [HttpGet]
+        [AuthorizeIsAdmin]
         public JsonResult Compact()
         {
             if (_database.IsCompactRunning)
@@ -1157,7 +1159,9 @@ namespace HSMServer.Controllers
                 : Json(JsonSerializer.Serialize(new { Status = "Error", Error = report.ToString() }));
         }
 
+        // Server-wide database maintenance, offered on the admin Configuration page only.
         [HttpGet]
+        [AuthorizeIsAdmin]
         public JsonResult Export(string name)
         {
             if (_database.IsExportRunning)

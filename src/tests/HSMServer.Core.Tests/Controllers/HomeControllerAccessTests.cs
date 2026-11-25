@@ -230,6 +230,18 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        [Theory]
+        [InlineData(nameof(HomeController.Compact))]
+        [InlineData(nameof(HomeController.Export))]
+        [InlineData(nameof(HomeController.Unseal))]
+        public void DatabaseMaintenance_IsAdminOnly(string action)
+        {
+            var attributes = typeof(HomeController).GetMethod(action)!.GetCustomAttributes(typeof(HSMServer.Attributes.AuthorizeIsAdminAttribute), inherit: false);
+
+            Assert.NotEmpty(attributes);
+        }
+
+
         // ---- per-user state: what SelectNode connected is checked again by its readers
 
         [Fact]
