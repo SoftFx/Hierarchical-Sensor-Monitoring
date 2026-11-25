@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 15
-#define HSM_COLLECTOR_VERSION_PATCH 1
+#define HSM_COLLECTOR_VERSION_MINOR 16
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -1307,6 +1307,163 @@ size_t hsm_table_sensor_state_reason(const hsm_table_sensor_t* sensor, char* buf
 
 /* The sensor's normalized full path; valid until the handle is released. NULL for a NULL sensor. */
 const char* hsm_table_sensor_path(const hsm_table_sensor_t* sensor);
+
+/* ---- Large files (since 0.16.0, #1887, ADR-0022) ----------------------------------------------------
+   A large file is a value of a File sensor whose content travels in pieces on the file connection of
+   the collector session (a WebSocket of its own) and is kept on the server's disk; it may be as large as
+   the server allows (64 GB by design). The collector compresses each piece with zstd level 3, sends one
+   piece at a time and continues an upload that was cut, after a drop or a restart of either side, from
+   the piece the server has. The source file is deleted after the server answered that it stored the
+   whole file (unless keep_source), and only the file that was sent.
+
+   One file is uploaded at a time, on one background thread of lowered priority that the collector makes
+   at Start (or at the first watch or file while it runs) and joins at Stop; the caller's thread never
+   reads a file. Stop and dispose do not wait for an upload: it is cut and continues after the next Start.
+   The logger may be called on that thread: a logger must not call stop, dispose or destroy (a Stop or
+   Dispose called there does nothing; destroy there is not allowed, as for the lifecycle listener).
+
+   Large files need the session transport and a build with HSM_COLLECTOR_HTTP and HSM_COLLECTOR_TABLES.
+   They never make a call fail: a watch of a collector that cannot send them is UNAVAILABLE, and a file
+   handed over to it ends UNAVAILABLE, with the reason, said once through the error channel (the HTTP
+   transport or the in-memory default at Start, a build without large files, a libcurl without
+   WebSocket). HSM_RESULT_INVALID_STATE means only that the collector is disposed.
+
+   Every file not sent (refused, given up, vanished, unreadable, a link, a name that is not UTF-8, a
+   handed-over file still pending at dispose) is said once per file and run through the error channel
+   (".module/Collector errors" and the logger) and counted in ".module/Collector queue stats/Queue
+   overflow".
+
+   Paths, folders and masks are UTF-8; a relative one is made absolute from the current directory at the
+   call. Every struct starts with struct_size: the caller sets it to sizeof as it knows the struct, the
+   library reads an input struct and writes an output struct only up to min(struct_size, sizeof), and a
+   field past struct_size takes its default. 0 in every field of hsm_large_file_options_t is its default.
+   Strings are borrowed for the call and copied. Every function may be called from any thread; the calls
+   on a handle stay valid after the collector is destroyed. */
+
+/* max_bytes_per_second: no speed limit. */
+#define HSM_LARGE_FILE_NO_SPEED_LIMIT (-1)
+
+typedef struct hsm_large_file_options_t
+{
+    size_t struct_size;
+    int64_t settle_ms;            /* 0 => 60000; else at least 1000: size and modification time unchanged this long (watched folders) */
+    int32_t keep_source;          /* 0 => the source is deleted after the server stored it; 1 => kept, recorded, not sent again */
+    int64_t max_bytes_per_second; /* 0 => 10000000 bytes sent per second, kept by waiting between pieces; HSM_LARGE_FILE_NO_SPEED_LIMIT => none */
+    int32_t no_new_file_alert;    /* 0 => the File sensor is registered with the alert "new data has been received"; 1 => without */
+    int32_t sensor_location;      /* 0 => Module (ComputerName/Module/path), 1 => Product (path at the root) */
+    const char* description;      /* NULL => none */
+    int64_t keep_history_ms;      /* 0 => the server's default */
+    int64_t ttl_ms;               /* 0 => none */
+    int64_t self_destroy_ms;      /* 0 => none */
+} hsm_large_file_options_t;
+
+/* struct_size set and every other field 0 (every default). */
+hsm_large_file_options_t hsm_large_file_options_default(void);
+
+/* Where the collector keeps what must survive a restart: which files were delivered or given up, and the
+   upload in progress (its id, the facts it was begun with, the piece digests). NULL or "" restores the
+   default: <LocalAppData>/HSMDataCollector/<identity> on Windows (the known folder), $XDG_DATA_HOME or
+   $HOME/.local/share elsewhere, the temporary folder when there is none (said once); <identity> is
+   derived from the server, the port, the access key, the computer, the module and the executable's path.
+   A set folder holds the same <identity> subfolder. It applies to the watches and files made after the
+   call. A folder that cannot be created or written is said once; files are then sent without the state
+   (a kept file may be offered again after a restart: the server answers "stored" for a file it still
+   has). HSM_RESULT_INVALID_STATE after dispose only. */
+hsm_result_t hsm_collector_set_data_folder(hsm_collector_t* collector, const char* folder);
+
+/* ---- A watched folder ---- */
+typedef struct hsm_large_file_watch_t hsm_large_file_watch_t;
+
+typedef enum hsm_large_file_watch_state_t HSM_ENUM_INT32
+{
+    HSM_LARGE_FILE_WATCH_ACTIVE = 0,      /* scanning while the collector runs (or waiting for Start) */
+    HSM_LARGE_FILE_WATCH_UNAVAILABLE = 1, /* this collector cannot send large files (see the reason) */
+    HSM_LARGE_FILE_WATCH_REFUSED = 2,     /* the server refused the sensor's registration; until the next Start */
+    HSM_LARGE_FILE_WATCH_STOPPED = 3      /* released, or the collector was disposed */
+} hsm_large_file_watch_state_t;
+
+/* Watches `folder` (not its subfolders) and uploads every file whose name matches `mask` as a large value
+   of the File sensor at `sensor_path` (placed as hsm_table_sensor_options_t.sensor_location places it),
+   once the file has settled: its size and modification time unchanged for settle_ms as the collector
+   observed them and, on Windows, no process holding it open for writing. Files already there are taken
+   by the same rule, oldest first. Links and reparse points are never taken. The mask has `*` (any run of
+   characters) and `?` (one character), matches the whole name, and ignores the case of ASCII letters on
+   Windows only. A missing or unreadable folder is said once and scanned again. Callable in every state
+   but disposed; scanning runs between Start and Stop. `options` may be NULL (the defaults). `out_watch`
+   may be NULL: the watch then lasts as long as the collector.
+   HSM_RESULT_INVALID_ARGUMENT, with the reason in hsm_collector_last_error: a NULL or empty folder, mask
+   or sensor path; a mask with [, ], ;, \, / or a control character; a sensor path with no segment, a
+   backslash or a tab; a struct_size of 0; settle_ms between 1 and 999 or negative; a negative
+   max_bytes_per_second other than HSM_LARGE_FILE_NO_SPEED_LIMIT; sensor_location other than 0 or 1;
+   another negative field; a live watch of the same folder, mask and sensor path.
+   HSM_RESULT_INVALID_STATE: the collector is disposed. */
+hsm_result_t hsm_collector_watch_large_files(hsm_collector_t* collector, const char* sensor_path, const char* folder, const char* mask,
+                                             const hsm_large_file_options_t* options, hsm_large_file_watch_t** out_watch);
+
+typedef struct hsm_large_file_watch_stats_t
+{
+    size_t struct_size;
+    hsm_large_file_watch_state_t state;
+    uint64_t files_stored;   /* since the watch was made */
+    uint64_t files_not_sent; /* refused, given up, vanished, unreadable: each once per file and run */
+} hsm_large_file_watch_stats_t;
+
+/* Reads the watch's state and counters. The caller sets out->struct_size. */
+hsm_result_t hsm_large_file_watch_get_stats(const hsm_large_file_watch_t* watch, hsm_large_file_watch_stats_t* out);
+
+/* Copies why the watch is UNAVAILABLE or REFUSED, or the last problem said ("" when none), into `buffer`
+   as a NUL-terminated UTF-8 string cut to `size` bytes, and returns the length the whole text needs, NUL
+   not included. `buffer` may be NULL when `size` is 0. */
+size_t hsm_large_file_watch_state_reason(const hsm_large_file_watch_t* watch, char* buffer, size_t size);
+
+/* Stops watching and frees the handle. An upload of it in progress is cut; its part stays on the server
+   for a continue. NULL is ignored. */
+void hsm_large_file_watch_release(hsm_large_file_watch_t* watch);
+
+/* ---- One file handed over ---- */
+typedef struct hsm_large_file_t hsm_large_file_t;
+
+typedef enum hsm_large_file_outcome_t HSM_ENUM_INT32
+{
+    HSM_LARGE_FILE_PENDING = 0,     /* waiting or uploading, also across Stop and Start */
+    HSM_LARGE_FILE_STORED = 1,      /* the server stored it; the source is deleted unless keep_source */
+    HSM_LARGE_FILE_REFUSED = 2,     /* refused for good (over the server's limit, a sensor that cannot take it, ...) */
+    HSM_LARGE_FILE_GIVEN_UP = 3,    /* failures a repeat does not cure (the server discarded it three times, ...) */
+    HSM_LARGE_FILE_MISSING = 4,     /* not there, a link or a reparse point, or unreadable */
+    HSM_LARGE_FILE_UNAVAILABLE = 5, /* this collector cannot send large files; the reason says why */
+    HSM_LARGE_FILE_CANCELLED = 6    /* hsm_large_file_cancel, or the collector was disposed first */
+} hsm_large_file_outcome_t;
+
+/* Uploads one file as a large value of the File sensor at `sensor_path`. The caller says the file is
+   complete: there is no settle time, but on Windows a file still open for writing waits until it is not.
+   Handed-over files go before the files of watched folders, in the order they were handed over. Returns
+   at once; the outcome is read from `out_file` (may be NULL). The same file and sensor handed over again
+   while the first is pending is the same upload (a second handle to it). It is not kept across a restart
+   of the process: the application hands the file over again and the server continues it. Result codes as
+   for hsm_collector_watch_large_files (a NULL or empty file path is HSM_RESULT_INVALID_ARGUMENT). */
+hsm_result_t hsm_collector_send_large_file(hsm_collector_t* collector, const char* sensor_path, const char* file_path,
+                                           const hsm_large_file_options_t* options, hsm_large_file_t** out_file);
+
+typedef struct hsm_large_file_result_t
+{
+    size_t struct_size;
+    hsm_large_file_outcome_t outcome;
+    bool source_deleted;
+    int64_t stored_time_unix_ns; /* the value's time the server answered (UTC); 0 unless STORED, and 0 when the server had it before */
+} hsm_large_file_result_t;
+
+/* Reads the file's outcome. The caller sets out->struct_size. */
+hsm_result_t hsm_large_file_get_result(const hsm_large_file_t* file, hsm_large_file_result_t* out);
+
+/* Copies why the outcome is not STORED ("" when PENDING or STORED), as hsm_large_file_watch_state_reason. */
+size_t hsm_large_file_reason(const hsm_large_file_t* file, char* buffer, size_t size);
+
+/* Takes the file out of the queue; an upload of it in progress is cut (its part stays on the server).
+   The outcome becomes CANCELLED unless it was settled before. NULL is ignored. */
+void hsm_large_file_cancel(hsm_large_file_t* file);
+
+/* Frees the handle; the file stays queued. NULL is ignored. */
+void hsm_large_file_release(hsm_large_file_t* file);
 
 #ifdef __cplusplus
 }

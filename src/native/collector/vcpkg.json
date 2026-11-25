@@ -13,10 +13,14 @@
   ],
   "features": {
     "tables": {
-      "description": "zstd and zlib for the table block writer (HSM_COLLECTOR_TABLES=ON turns this feature on)",
+      "description": "zstd and zlib for the table block writer and large files, and OpenSSL libcrypto (SHA-256 of large files) off Windows (HSM_COLLECTOR_TABLES=ON turns this feature on)",
       "dependencies": [
         "zstd",
-        "zlib"
+        "zlib",
+        {
+          "name": "openssl",
+          "platform": "!windows"
+        }
       ]
     }
   }

@@ -11574,6 +11574,12 @@ namespace
 // Defined in hsm_table_block_tests.cpp (#1848).
 const std::map<std::string, std::function<void(const std::string&)>>& TableBlockTests();
 #endif
+// Defined in hsm_large_file_tests.cpp (#1887).
+const std::map<std::string, std::function<void(const std::string&)>>& LargeFileTests();
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+// Defined in hsm_file_connection_tests.cpp (#1887).
+const std::map<std::string, std::function<void(const std::string&)>>& FileConnectionTests();
+#endif
 
 int main(int argc, char** argv)
 {
@@ -11602,6 +11608,24 @@ int main(int argc, char** argv)
                 if (table_test != table_tests.end())
                 {
                     table_test->second(argument);
+                    return 0;
+                }
+#endif
+                // The large file tests live in hsm_large_file_tests.cpp (#1887).
+                const auto& large_file_tests = LargeFileTests();
+                const auto large_file_test = large_file_tests.find(argv[1]);
+                if (large_file_test != large_file_tests.end())
+                {
+                    large_file_test->second(argument);
+                    return 0;
+                }
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+                // The file connection tests live in hsm_file_connection_tests.cpp (#1887).
+                const auto& file_connection_tests = FileConnectionTests();
+                const auto file_connection_test = file_connection_tests.find(argv[1]);
+                if (file_connection_test != file_connection_tests.end())
+                {
+                    file_connection_test->second(argument);
                     return 0;
                 }
 #endif

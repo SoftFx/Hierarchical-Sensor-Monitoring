@@ -23,6 +23,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -202,6 +203,45 @@ namespace hsm::test
             return Base64(digest.data(), digest.size());
         }
     } // namespace ws_detail
+
+    // What the file side does with one message of a file connection (#1887).
+    struct FileSideAction
+    {
+        enum class Kind
+        {
+            None,  // nothing is sent
+            Reply, // `text` is sent as a text message
+            Close, // the connection is closed with `code` and `reason`, then read on until the client's close
+            Drop,  // the TCP connection is cut without a close frame
+        };
+        Kind kind = Kind::None;
+        std::string text;
+        int code = 0;
+        std::string reason;
+
+        static FileSideAction Nothing() { return {}; }
+        static FileSideAction ReplyWith(std::string text) { return { Kind::Reply, std::move(text), 0, {} }; }
+        static FileSideAction CloseWith(int code, std::string reason) { return { Kind::Close, {}, code, std::move(reason) }; }
+        static FileSideAction Cut() { return { Kind::Drop, {}, 0, {} }; }
+    };
+
+    // The server side of hsm.files.v1 that WebSocketTestServer serves file connections with
+    // (EnableFileScript). tests/file_server_script.hpp is the one the tests use; this interface keeps the
+    // server free of zstd, zlib and SHA-256. Called from the connection threads, at once: an
+    // implementation guards itself. Nothing it throws is let out of a server thread.
+    class FileSideHandler
+    {
+    public:
+        virtual ~FileSideHandler() = default;
+        // The text sent first on every accepted file connection.
+        virtual std::string HelloText() = 0;
+        // A file connection was accepted; `connection` counts the side connections from 1.
+        virtual void Opened(int connection, const std::string& session_id) = 0;
+        virtual FileSideAction OnText(int connection, const std::string& text) = 0;
+        virtual FileSideAction OnBinary(int connection, const std::string& frame) = 0;
+        // The connection is over, or replaced: the upload it holds is given back. Called once or more.
+        virtual void Released(int connection) = 0;
+    };
 
     class WebSocketTestServer
     {
@@ -814,6 +854,38 @@ namespace hsm::test
         // answers keeps a client's close linger waiting for its whole bound.
         void SetTableAnswerCloses(bool answer) { table_answer_closes_.store(answer, std::memory_order_release); }
 
+        // --- The scripted file connection (#1887), what an HSM server does on the side connections of
+        // hsm.files.v1 (wire contract, "File connection"). On with EnableFileScript; Options::side_subprotocol
+        // must be "hsm.files.v1". A side upgrade whose X-Hsm-Session names no live session is refused with
+        // 409; an accepted one gets the script's hello, every text and binary message the script's answer.
+        // One file connection per session: a new one closes the old with 1000 "replaced by a new file
+        // connection of its session", whose upload is given back before the new one's hello. When a
+        // session ends its file connections are closed with 1000 "its session ended".
+
+        void EnableFileScript(std::shared_ptr<FileSideHandler> script)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            file_handler_ = std::move(script);
+            file_script_.store(true, std::memory_order_release);
+        }
+        // File connections being served now.
+        int OpenFileConnections() const
+        {
+            std::lock_guard<std::mutex> guard(side_send_mutex_);
+            return static_cast<int>(file_open_.size());
+        }
+        // Closes every open file connection from the server's side.
+        void CloseFileConnections(uint16_t code, const std::string& reason = {})
+        {
+            std::lock_guard<std::mutex> guard(side_send_mutex_);
+            for (auto& open : file_open_)
+                if (!open.second.closing)
+                {
+                    open.second.closing = true;
+                    WriteFrame(open.second.sock, 0x8, /*fin=*/true, ClosePayload(code, reason));
+                }
+        }
+
         // Runs on the server's thread when the client's close frame of a session arrives, before it
         // is answered.
         void SetSessionCloseReceived(std::function<void()> hook)
@@ -1082,6 +1154,16 @@ namespace hsm::test
                         WriteFrame(open.second.sock, 0x8, /*fin=*/true, ClosePayload(1000, "its session ended"));
                     }
             }
+            if (file_script_.load(std::memory_order_acquire) && !ended.empty())
+            {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                for (auto& open : file_open_)
+                    if (open.second.session_id == ended && !open.second.closing)
+                    {
+                        open.second.closing = true;
+                        WriteFrame(open.second.sock, 0x8, /*fin=*/true, ClosePayload(1000, "its session ended"));
+                    }
+            }
 
             {
                 std::lock_guard<std::mutex> guard(send_mutex_);
@@ -1114,7 +1196,7 @@ namespace hsm::test
             const std::string key = ws_detail::HeaderValue(head, "sec-websocket-key");
             int refuse = side_refuse_status_.load(std::memory_order_acquire);
             const std::string named = ws_detail::HeaderValue(head, "x-hsm-session");
-            if (refuse == 0 && table_script_.load(std::memory_order_acquire))
+            if (refuse == 0 && (table_script_.load(std::memory_order_acquire) || file_script_.load(std::memory_order_acquire)))
             {
                 std::lock_guard<std::mutex> guard(mutex_);
                 if (named.empty() || named != live_session_)
@@ -1135,6 +1217,11 @@ namespace hsm::test
             }
             side_drop_.store(false, std::memory_order_release);
             side_open_.fetch_add(1, std::memory_order_release);
+            if (file_script_.load(std::memory_order_acquire))
+            {
+                side_threads_.emplace_back([this, conn, named] { ServeFile(conn, named); });
+                return;
+            }
             if (table_script_.load(std::memory_order_acquire))
             {
                 side_threads_.emplace_back([this, conn, named] { ServeTable(conn, named); });
@@ -1252,6 +1339,175 @@ namespace hsm::test
                 if (side_connection_ == conn)
                     side_connection_ = INVALID_SOCKET;
                 table_open_.erase(index);
+            }
+            side_open_.fetch_sub(1, std::memory_order_release);
+            closesocket(conn);
+        }
+
+        // The scripted file connection: the script's hello, then every message to the script and its
+        // answer back. Nothing the script throws leaves this thread.
+        void ServeFile(socket_t conn, const std::string& session_id)
+        {
+            const int index = side_upgrades_.fetch_add(1, std::memory_order_acq_rel) + 1;
+            std::shared_ptr<FileSideHandler> script;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                script = file_handler_;
+            }
+            // A new file connection of a session replaces the old one, which gives its upload back
+            // before this one's hello.
+            std::vector<int> replaced;
+            {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                side_connection_ = conn;
+                for (auto& open : file_open_)
+                {
+                    if (open.second.session_id != session_id)
+                        continue;
+                    replaced.push_back(open.first);
+                    if (!open.second.closing)
+                    {
+                        open.second.closing = true;
+                        WriteFrame(open.second.sock, 0x8, /*fin=*/true, ClosePayload(1000, "replaced by a new file connection of its session"));
+                    }
+                }
+                file_open_[index] = TableOpen{ conn, session_id, false };
+            }
+            const auto reply = [this, conn](uint8_t opcode, const std::string& payload) {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                return WriteFrame(conn, opcode, /*fin=*/true, payload);
+            };
+            const auto close_with = [this, conn, index](uint16_t code, const std::string& reason) {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                file_open_[index].closing = true;
+                return WriteFrame(conn, 0x8, /*fin=*/true, ClosePayload(code, reason));
+            };
+            const auto release = [&script](int connection) {
+                try
+                {
+                    if (script)
+                        script->Released(connection);
+                }
+                catch (...)
+                {
+                }
+            };
+
+            for (const int old : replaced)
+                release(old);
+            std::string hello;
+            try
+            {
+                if (script)
+                {
+                    script->Opened(index, session_id);
+                    hello = script->HelloText();
+                }
+            }
+            catch (...)
+            {
+                hello.clear();
+            }
+            if (!hello.empty())
+                reply(0x1, hello);
+
+            std::string message;
+            uint8_t message_opcode = 0;
+            Frame frame;
+            bool open = true;
+            bool dropped = false;
+            while (open && ReadFrame(conn, side_drop_, frame))
+            {
+                if (frame.opcode == 0x8)
+                {
+                    bool closing = false;
+                    {
+                        std::lock_guard<std::mutex> guard(side_send_mutex_);
+                        closing = file_open_[index].closing;
+                    }
+                    {
+                        std::lock_guard<std::mutex> guard(mutex_);
+                        side_close_codes_.push_back(CloseCode(frame.payload));
+                    }
+                    if (!closing)
+                        reply(0x8, frame.payload.substr(0, 2));
+                    break;
+                }
+                if (frame.opcode == 0x9)
+                {
+                    reply(0xA, frame.payload);
+                    continue;
+                }
+                if (frame.opcode == 0xA)
+                    continue;
+                if (frame.opcode != 0x0)
+                {
+                    message_opcode = frame.opcode;
+                    message.swap(frame.payload);
+                }
+                else
+                {
+                    message += frame.payload;
+                }
+                if (!frame.fin)
+                    continue;
+
+                FileSideAction action;
+                try
+                {
+                    if (script && message_opcode == 0x1)
+                        action = script->OnText(index, message);
+                    else if (script && message_opcode == 0x2)
+                        action = script->OnBinary(index, message);
+                }
+                catch (...)
+                {
+                    action = FileSideAction::CloseWith(1011, "the script failed");
+                }
+                if (message_opcode == 0x1)
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    side_text_.push_back(message);
+                }
+                message.clear();
+                message_opcode = 0;
+
+                switch (action.kind)
+                {
+                case FileSideAction::Kind::None:
+                    break;
+                case FileSideAction::Kind::Reply:
+                    reply(0x1, action.text);
+                    break;
+                case FileSideAction::Kind::Close:
+                    close_with(static_cast<uint16_t>(action.code), action.reason);
+                    open = false;
+                    break;
+                case FileSideAction::Kind::Drop:
+                    dropped = true;
+                    open = false;
+                    break;
+                }
+            }
+
+            // A closing connection is read on until the client's close (or its end).
+            while (!open && !dropped && ReadFrame(conn, side_drop_, frame))
+            {
+                if (frame.opcode == 0x8)
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    side_close_codes_.push_back(CloseCode(frame.payload));
+                    break;
+                }
+            }
+
+            // The upload is given back before the client can see the connection end.
+            release(index);
+            {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                if (side_connection_ == conn)
+                    side_connection_ = INVALID_SOCKET;
+                file_open_.erase(index);
             }
             side_open_.fetch_sub(1, std::memory_order_release);
             closesocket(conn);
@@ -1803,7 +2059,7 @@ namespace hsm::test
         std::atomic<int> side_upgrades_{ 0 };
         std::atomic<int> side_refused_{ 0 };
         std::atomic<int> side_open_{ 0 };
-        std::mutex side_send_mutex_;
+        mutable std::mutex side_send_mutex_;
         socket_t side_connection_ = INVALID_SOCKET; // the latest side connection; guarded by side_send_mutex_
         std::string side_hello_;                    // guarded by mutex_
         std::vector<std::string> side_heads_;       // guarded by mutex_
@@ -1835,5 +2091,10 @@ namespace hsm::test
         std::map<std::string, TableFrameRecord> table_stored_;                    // guarded by mutex_
         std::set<int64_t> table_unanswered_;                                      // guarded by mutex_
         std::function<void()> session_close_received_;                            // guarded by mutex_
+
+        // The file script.
+        std::atomic<bool> file_script_{ false };
+        std::shared_ptr<FileSideHandler> file_handler_; // guarded by mutex_
+        std::map<int, TableOpen> file_open_;            // guarded by side_send_mutex_
     };
 } // namespace hsm::test
