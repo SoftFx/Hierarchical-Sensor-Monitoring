@@ -135,8 +135,9 @@ namespace HSMServer.Core.TableSensors
 
 
     /// <summary>
-    /// A chart whose read met an hour merged since its plan on every one of its plans: the store changed under it. Not a
-    /// fault of the store and not a wrong request; the same request later is answered.
+    /// A read or a chart every one of whose plans met a change of the batch store (its generation: an hour committed, a
+    /// week dropped, a placement written): the store changed under it. Not a fault of the store and not a wrong request;
+    /// the same request later is answered.
     /// </summary>
     public sealed class TableReadChangedException(string message) : Exception(message);
 }

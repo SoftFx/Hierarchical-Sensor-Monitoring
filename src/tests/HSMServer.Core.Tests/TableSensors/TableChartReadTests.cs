@@ -261,12 +261,12 @@ namespace HSMServer.Core.Tests.TableSensors
             _service.AfterChartPlan = null;
             var after = Reduce(a, 100);
 
-            // Both read hour 0 from its batches: the rows of the two readable blocks, and no failure counted (the record of
-            // the commit lists the block it kept; the read of a merged hour does not count it, as Read does not).
+            // Both read hour 0 from its batches: the rows of the two readable blocks, and the block the commit lists as kept
+            // unreadable is counted as a failed block (#1850 part 4b), as it is before the merge: the answer is incomplete.
             Assert.Equal(after.BucketRows, during.BucketRows);
             Assert.Equal((after.RowCount, after.BlocksFailed, after.BatchesFailed, after.IsIncomplete),
                 (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
-            Assert.Equal((2L, 0, 0, false), (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
+            Assert.Equal((2L, 1, 0, true), (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
         }
 
         [Fact]
@@ -410,6 +410,154 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
 
+        // === Placements and retention (#1850 part 4b) ===
+
+        [Fact]
+        public async Task A_block_kept_unreadable_is_a_failed_block_before_and_after_its_hour_is_merged()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            var damaged = _producerSequence + 1;
+            Put(Block(("a", [Row(Hour0.AddMinutes(2).Ticks, 2, 2)])));
+            var damagedSequence = _blocks.GetBlocks(_product).Single(e => e.ProducerSequence == damaged).Sequence;
+
+            _blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == damagedSequence)
+                    throw new Exception("Corruption: block checksum mismatch: 000005.ldb");
+            };
+
+            var before = Reduce(a, 100);
+            var beforeRead = _service.Read(a.Id, From, To).Value;
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            Assert.Equal(new[] { damagedSequence }, _batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+            var after = Reduce(a, 100);
+            var afterRead = _service.Read(a.Id, From, To).Value;
+            _blocks.BeforeBlockGet = null;
+
+            Assert.Equal((1L, 1, true), (before.RowCount, before.BlocksFailed, before.IsIncomplete));
+            Assert.Equal((1L, 1, true), (after.RowCount, after.BlocksFailed, after.IsIncomplete));
+            Assert.Equal((1, 1), (beforeRead.RowCount, beforeRead.BlocksFailed));
+            Assert.Equal((1, 1), (afterRead.RowCount, afterRead.BlocksFailed));
+
+            // Counted for a range that holds the block only: a range after it does not count it.
+            var later = _service.Reduce(a.Id, Hour0.AddMinutes(30), To, Columns, 10).Value;
+            Assert.Equal(0, later.BlocksFailed);
+        }
+
+        [Fact]
+        public async Task Both_readers_see_the_rows_merged_under_a_period_before_its_change()
+        {
+            var a = await RegisterAsync("a");
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+            _now = Hour0.AddMinutes(70);
+            Put(Block(("a", [Row(Hour0.AddMinutes(61).Ticks, 2, 2)])));
+            Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+            _now = Hour0.AddMinutes(130);
+            Put(Block(("a", [Row(Hour0.AddMinutes(121).Ticks, 3, 3)])));
+            Assert.Null(Pass(Hour0.AddHours(3).AddMinutes(3)).Fault);
+
+            // Hours 0 and 1 in P1 (before the cut-off), hour 2 in P5: one database each, the reads take each from its own.
+            Assert.Equal([1], _batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal([5], _batches.GetHour(_product, Hour0.AddHours(2).Ticks).Classes.Select(c => c.PeriodWeeks));
+
+            var read = _service.Read(a.Id, From, To).Value;
+            Assert.Equal(new[] { Hour0.AddMinutes(1).Ticks, Hour0.AddMinutes(61).Ticks, Hour0.AddMinutes(121).Ticks }, read.Time.Take(read.RowCount));
+            Assert.Equal((0, 0), (read.BlocksFailed, read.BatchesFailed));
+
+            var chart = Reduce(a, 100);
+            Assert.Equal((3L, false), (chart.RowCount, chart.IsIncomplete));
+            Assert.Equal(3, chart.BatchesRead);
+        }
+
+        [Fact]
+        public async Task A_week_dropped_after_the_chart_planned_it_is_planned_again_and_left_out_whole()
+        {
+            var a = await RegisterAsync("a");
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            _now = Hour0.AddMinutes(70);
+            Put(Block(("a", [Row(Hour0.AddMinutes(61).Ticks, 2, 2)])));
+            Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+            var week = new HSMDatabase.AccessManager.TableBatches.TableBatchWeek(HSMDatabase.AccessManager.StorageWeek.GetStartTicks(Hour0.Ticks), 1);
+
+            var replans = new List<long>();
+            _service.BeforeChartReplan = replans.Add;
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan == 1)
+                    _batches.DropWeek(_product, week);
+            };
+
+            var chart = Reduce(a, 100);
+            Assert.Equal([Hour0.Ticks], replans);
+            Assert.Equal((0L, 0, false), (chart.RowCount, chart.BatchesRead, chart.IsIncomplete));
+        }
+
+        [Fact]
+        public async Task A_batch_whose_record_survives_without_its_bytes_is_a_failed_batch_for_both_readers()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+
+            // The index record of the hour's batch is there, its bytes are not.
+            _batches.BatchMissing = (hour, ordinal) => hour == Hour0.Ticks && ordinal == 0;
+
+            var read = _service.Read(a.Id, From, To).Value;
+            var chart = Reduce(a, 100);
+            _batches.BatchMissing = null;
+
+            Assert.Equal((0, 0, 1), (read.RowCount, read.BlocksFailed, read.BatchesFailed));
+            Assert.Equal((0L, 1, true), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
+        }
+
+
+        [Fact]
+        public async Task A_merged_hour_is_selected_by_the_range_of_the_class_that_holds_the_sensors_rows_not_through_the_gap_between_two_classes()
+        {
+            // The review's sequence: one hour with rows of a (kept one week, P1) only at minute 1 and rows of c (kept five
+            // weeks, P5) only at minute 30.
+            var a = await RegisterAsync("a");
+            var c = await RegisterAsync("c");
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = c.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(35).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(40);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)]), ("c", [Row(Hour0.AddMinutes(30).Ticks, 3, 3)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            Assert.Equal([(1, Hour0.AddMinutes(1).Ticks), (5, Hour0.AddMinutes(30).Ticks)],
+                _batches.GetHour(_product, Hour0.Ticks).Classes.Select(x => (x.PeriodWeeks, x.MinTime)));
+
+            // Every index record of the hour survives without its bytes.
+            _batches.BatchMissing = (hour, _) => hour == Hour0.Ticks;
+
+            // A range between the two classes' rows can hold no row of a: the hour is not read for it, and nothing failed.
+            var (from, to) = (Hour0.AddMinutes(10), Hour0.AddMinutes(11));
+            var read = _service.Read(a.Id, from, to).Value;
+            var chart = _service.Reduce(a.Id, from, to, Columns, 10).Value;
+            Assert.Equal((0, 0), (read.RowCount, read.BatchesFailed));
+            Assert.Equal((0L, 0, false), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
+
+            // A range that holds a's row reads the hour and reports the batch it could not read.
+            read = _service.Read(a.Id, From, To).Value;
+            chart = Reduce(a, 10);
+            _batches.BatchMissing = null;
+            Assert.Equal((0, 1), (read.RowCount, read.BatchesFailed));
+            Assert.Equal((0L, 1, true), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
+        }
+
+
         // === The plan: one generation of the store (the third review) ===
 
         [Fact]
@@ -493,19 +641,80 @@ namespace HSMServer.Core.Tests.TableSensors
             _service.PlanTaken = stale.Add;
             _service.PlanStep = Once("blocks", () =>
             {
-                // Hour 0 is committed into its week database, which retention then drops: the list of merged hours is empty
-                // before and after, and hour 0 is not merged any more.
+                // Hour 0 is committed into its week database, which is then dropped: the list of merged hours is empty before
+                // and after, and so is the list of week databases. With the placements (#1850 part 4b) the hour keeps its
+                // record after the drop (it is forgotten only once its blocks are gone), so it stays committed.
                 Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
                 Assert.Single(_batches.GetHours(_product));
                 _batches.DropWeek(_product, _batches.GetWeeks(_product).Single());
                 Assert.Empty(_batches.GetHours(_product));
-                Assert.False(_batches.IsHourMerged(_product, Hour0.Ticks));
+                Assert.Empty(_batches.GetWeeks(_product));
+                Assert.True(_batches.IsHourMerged(_product, Hour0.Ticks));
             });
 
             var rows = _service.Read(a.Id, From, To).Value;
 
+            // Stale by the generation alone (no list changed), and planned again. The second plan finds the hour committed
+            // and its week gone: the rows went with the database, and the blocks of a committed hour are not read.
+            Assert.Equal(new[] { true, false }, stale);
+            Assert.Equal(0, rows.RowCount);
+            Assert.Equal((0, 0), (rows.BlocksFailed, rows.BatchesFailed));
+        }
+
+        [Fact]
+        public async Task A_placement_written_or_hours_forgotten_during_a_plan_make_it_stale()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            var placement = _batches.GetPlacement(_product, a.Id);
+            Assert.NotNull(placement);
+
+            // A placement written between two steps of a plan: the class of an hour (ClassOf) may not be the one the plan took.
+            var stale = new List<bool>();
+            _service.PlanTaken = stale.Add;
+            _service.PlanStep = Once("blocks", () => _batches.SetPlacement(_product, a.Id, placement.Retarget(placement.Target + 1, Hour0.AddHours(5).Ticks)));
+
+            var rows = _service.Read(a.Id, From, To).Value;
             Assert.Equal(new[] { true, false }, stale);
             Assert.Equal(Expected((Hour0.AddMinutes(1).Ticks, 1.0, 1L)), Snapshot(rows));
+
+            // Hours forgotten between two steps: an hour the plan found committed may not be committed any more. The week
+            // is dropped first (an hour is forgotten only once no database of its week is left).
+            _batches.DropWeek(_product, _batches.GetWeeks(_product).Single());
+            stale.Clear();
+            _service.PlanStep = Once("blocks", () =>
+            {
+                _batches.ForgetHours(_product, [Hour0.Ticks]);
+                Assert.False(_batches.IsHourMerged(_product, Hour0.Ticks));
+            });
+
+            _service.Read(a.Id, From, To);
+            Assert.Equal(new[] { true, false }, stale);
+        }
+
+        [Fact]
+        public async Task A_placement_written_after_the_chart_planned_is_planned_again()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+            var placement = _batches.GetPlacement(_product, a.Id);
+
+            var replans = new List<long>();
+            _service.BeforeChartReplan = replans.Add;
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan == 1)
+                    _batches.SetPlacement(_product, a.Id, placement.Retarget(placement.Target + 1, Hour0.AddHours(5).Ticks));
+            };
+
+            var chart = Reduce(a, 100);
+
+            Assert.Equal([Hour0.Ticks], replans);
+            Assert.Equal((1L, false), (chart.RowCount, chart.IsIncomplete));
         }
 
         [Fact]
