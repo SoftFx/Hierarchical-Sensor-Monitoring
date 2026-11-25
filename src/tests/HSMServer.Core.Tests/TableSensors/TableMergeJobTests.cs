@@ -244,7 +244,7 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal([1.0, 3.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
 
             // The feed counters of the product have it at the commit (#1847); the service started after the puts.
-            Assert.Equal(1, _server.Service.Feed.DrainProducts()[_product].UnreadableBlocks);
+            Assert.Equal(1, _server.Service.Feed.Drain(tables: false).Products[_product].UnreadableBlocks);
 
             // Past the delay the other blocks go; the damaged one stays.
             Pass(Hour0.AddHours(30));

@@ -43,20 +43,32 @@
         <member name="T:HSMServer.BackgroundServices.TableFeedSensorsService">
             <summary>
             Posts the feed sensors of table sensors (#1847): ordinary sensors in the table sensor's own product, under
-            <c>.tables</c>, that users set their alerts on (a table sensor owns no alerts and no TTL). Drains
-            <see cref="T:HSMServer.Core.TableSensors.TableFeedCounters"/> every product period (the product's sensors) and every table period (the Rows sensor
-            of each table sensor). Counts are per period, not since a start. A product or table without activity in a period
-            posts nothing; a failure counter posts 0 once after a period in which it was above 0. A sensor is registered the
-            first time a value finds none on its path. A tick never throws into the host: a failure is logged and the next tick
-            goes on (its counts were drained and are lost with the failed tick, which the log says).
+            <c>.tables</c>, that users set their alerts on (a table sensor owns no alerts and no TTL). Every tick drains the
+            period of <see cref="T:HSMServer.Core.TableSensors.TableFeedCounters"/> (the product counters, and the table counters when a table period ended)
+            and hands each product's values to that product's lane; lanes post on their own, so a slow product queue delays
+            only its own product, and a tick never waits for the posts of the one before. Counts are per period, not since a
+            start. A product or table without activity in a period posts nothing; a failure counter posts 0 once after a period
+            in which it was above 0, and keeps that 0 pending until a write of it was accepted. A tick never throws into the
+            host: a failure is logged and the next tick goes on.
             <para>Documented in <c>aicontext/features/server/table-feed-sensors/feature.md</c>.</para>
+            </summary>
+        </member>
+        <member name="F:HSMServer.BackgroundServices.TableFeedSensorsService.MaxPendingPeriods">
+            <summary>
+            The most periods a product's lane holds while its queue does not answer (an hour of the default product period);
+            past it the oldest period is dropped, with an Error once per stall.
             </summary>
         </member>
         <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.TickAsync(System.DateTime,System.Threading.CancellationToken)">
             <summary>
-            One period of the product sensors, and of the table sensors when <paramref name="utcNow"/> is in a table period
-            after the last one drained (the first tick drains both). The values carry <paramref name="utcNow"/> as their time.
+            Drains one period (the product counters, and the table counters when <paramref name="utcNow"/> is in a table
+            period after the last one drained; the first tick drains both) and hands the values to the products' lanes. The
+            values carry <paramref name="utcNow"/> as their time. The task completes when the lanes of this tick's products
+            have posted everything they hold; the drain itself is done when the method returns.
             </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.WhenPosted(System.Guid)">
+            <summary>The posts of a product's lane: done when it holds nothing. For tests.</summary>
         </member>
         <member name="T:HSMServer.Controllers.AccessKeysApiController">
             <summary>

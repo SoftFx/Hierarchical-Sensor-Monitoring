@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
-using HSMDatabase.AccessManager.TableBlocks;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -19,6 +18,7 @@ using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using HSMServer.ServerConfiguration;
 using HSMTableBlocks;
 using Xunit;
+using ApiValues = HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMServer.Core.Tests.TableSensors
 {
@@ -29,9 +29,10 @@ namespace HSMServer.Core.Tests.TableSensors
 
 
     /// <summary>
-    /// The feed sensors of table sensors (#1847): the counters a put and the merge's commit add to, and the service that
-    /// drains them into ordinary sensors of the table's product. No timing: the service's tick takes its time as a
-    /// parameter, the counters' clock is a seam.
+    /// The feed sensors of table sensors (#1847) against a real cache and block store: the counters a put adds to, the
+    /// service that posts them into ordinary sensors of the table's product, and the keyless value path of the cache with
+    /// the paths it must leave alone. No timing: the service's tick takes its time as a parameter and is awaited, the
+    /// store's clock is a seam.
     /// </summary>
     [Collection("Database collection")]
     public class TableFeedSensorsTests : MonitoringCoreTestsBase<TableFeedSensorsFixture>
@@ -56,7 +57,7 @@ namespace HSMServer.Core.Tests.TableSensors
             : base(fixture, registerFixture)
         {
             _service = new TableBlockService(_databaseCoreManager.DatabaseCore, _valuesCache, new TableBlockOptions { MinFreeDiskMb = 0 });
-            _service.Feed.Clock = () => _now;
+            ((HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase)_databaseCoreManager.DatabaseCore.TableBlocks).Clock = () => _now;
         }
 
 
@@ -73,7 +74,8 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(TableBlockPutOutcome.Stored, stored.Outcome);
             Assert.Equal(1, stored.RefusedCount);
 
-            var product = Assert.Single(_service.Feed.DrainProducts());
+            var (products, tables) = _service.Feed.Drain(tables: true);
+            var product = Assert.Single(products);
             Assert.Equal(_product, product.Key);
             Assert.Equal(1, product.Value.Blocks);
             Assert.Equal(5, product.Value.Rows);
@@ -81,15 +83,15 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(0, product.Value.UnreadableBlocks);
             Assert.Equal(_databaseCoreManager.DatabaseCore.TableBlocks.GetBlocks(_product).Single().StoredLength, product.Value.Bytes);
 
-            var tables = _service.Feed.DrainTables();
             Assert.Equal(2, tables.Count);
             Assert.Equal(3, tables[a.Id]);
             Assert.Equal(2, tables[b.Id]);
 
             // The same producer and sequence again: a duplicate, nothing counted.
             Assert.Equal(TableBlockPutOutcome.Duplicate, _service.Put(_product, _producer, 1, block).Outcome);
-            Assert.Empty(_service.Feed.DrainProducts());
-            Assert.Empty(_service.Feed.DrainTables());
+            var again = _service.Feed.Drain(tables: true);
+            Assert.Empty(again.Products);
+            Assert.Empty(again.Tables);
         }
 
         [Fact]
@@ -100,16 +102,18 @@ namespace HSMServer.Core.Tests.TableSensors
             var result = _service.Put(_product, _producer, 1, Block(("x", 2, T0), ("y", 1, T0)));
             Assert.Equal(TableBlockPutOutcome.AllRefused, result.Outcome);
 
-            var product = Assert.Single(_service.Feed.DrainProducts()).Value;
+            var (products, tables) = _service.Feed.Drain(tables: true);
+            var product = Assert.Single(products).Value;
             Assert.Equal((0L, 0L, 0L, 2L), (product.Blocks, product.Rows, product.Bytes, product.RefusedTables));
-            Assert.Empty(_service.Feed.DrainTables());
+            Assert.Empty(tables);
         }
 
         [Fact]
-        public async Task The_lag_is_the_largest_of_the_period_and_a_provider_clock_ahead_gives_a_negative_one()
+        public async Task The_lag_is_taken_from_the_stores_arrival_time_is_the_largest_of_the_period_and_may_be_negative()
         {
             await RegisterAsync("a");
 
+            // The store's clock is the arrival time: it is read before the write, so a slow write adds nothing to the lag.
             _now = T0.AddSeconds(90);
             Put(Block(("a", 1, T0.AddSeconds(30))));   // 60 s
             _now = T0.AddSeconds(100);
@@ -117,28 +121,31 @@ namespace HSMServer.Core.Tests.TableSensors
             _now = T0.AddSeconds(120);
             Put(Block(("a", 1, T0.AddSeconds(110)))); // 10 s
 
-            var period = _service.Feed.DrainProducts()[_product];
+            var period = _service.Feed.Drain(tables: false).Products[_product];
             Assert.Equal(3, period.Blocks);
             Assert.Equal(TimeSpan.FromSeconds(89).Ticks, period.MaxLagTicks);
+            Assert.Equal(_databaseCoreManager.DatabaseCore.TableBlocks.GetBlocks(_product).Max(e => e.ArrivalTicks - e.LastTime), period.MaxLagTicks);
 
             _now = T0;
             Put(Block(("a", 1, T0.AddSeconds(5))));
-            Assert.Equal(TimeSpan.FromSeconds(-5).Ticks, _service.Feed.DrainProducts()[_product].MaxLagTicks);
+            Assert.Equal(TimeSpan.FromSeconds(-5).Ticks, _service.Feed.Drain(tables: false).Products[_product].MaxLagTicks);
         }
 
         // === The service ===
 
         [Fact]
-        public async Task The_sensors_are_created_under_the_tables_product_with_their_paths_types_units_descriptions_and_values()
+        public async Task The_sensors_are_created_under_the_tables_product_with_their_paths_types_units_descriptions_and_values_and_no_key()
         {
             var a = await RegisterAsync("a");
+            var product = _valuesCache.GetProduct(_product);
+            var keysBefore = product.AccessKeys.Keys.OrderBy(k => k).ToList();
+            var allKeysBefore = _valuesCache.GetAccessKeys().Count;
 
             _now = T0.AddSeconds(50);
             Put(Block(("a", 3, T0.AddSeconds(20)), ("unknown", 1, T0)));
             var bytes = _databaseCoreManager.DatabaseCore.TableBlocks.GetBlocks(_product).Single().StoredLength;
 
-            var feed = Feed();
-            await feed.TickAsync(T0.AddMinutes(1));
+            await Feed().TickAsync(T0.AddMinutes(1));
 
             var rows = Sensor(".tables/Rows");
             Assert.Equal(SensorType.Integer, rows.Type);
@@ -174,7 +181,6 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(3, Int(tableRows));
 
             // Ordinary sensors of the table's product, in its tree (a user of the product sees them), the table sensor untouched.
-            var product = _valuesCache.GetProduct(_product);
             var node = Assert.Single(product.SubProducts.Values, p => p.DisplayName == ".tables");
             Assert.Equal(4, node.Sensors.Count);
             foreach (var sensor in new[] { rows, stored, lag, refused, tableRows })
@@ -185,6 +191,31 @@ namespace HSMServer.Core.Tests.TableSensors
 
             Assert.IsType<TableSensorModel>(_valuesCache.GetSensor(a.Id));
             Assert.Null(_valuesCache.GetSensor(a.Id).LastValue);
+
+            // No access key anywhere: the product's keys are what they were, no node under .tables has one, and the
+            // server holds no more keys than before; the nodes have no author.
+            Assert.Equal(keysBefore, product.AccessKeys.Keys.OrderBy(k => k));
+            Assert.Equal(allKeysBefore, _valuesCache.GetAccessKeys().Count);
+            Assert.All(Nodes(node), n => Assert.Empty(n.AccessKeys));
+            Assert.All(Nodes(node), n => Assert.Equal(Guid.Empty, n.AuthorId));
+            Assert.Equal(3, Nodes(node).Count); // .tables, .tables/<root>, .tables/<root>/a
+        }
+
+        [Fact]
+        public async Task A_product_without_any_access_key_still_gets_its_feed_sensors()
+        {
+            await RegisterAsync("a");
+
+            foreach (var key in _valuesCache.GetProduct(_product).AccessKeys.Keys.ToList())
+                Assert.NotNull(_valuesCache.RemoveAccessKey(key));
+            Assert.Empty(_valuesCache.GetProduct(_product).AccessKeys);
+
+            Put(Block(("a", 2, T0)));
+            await Feed().TickAsync(T0.AddMinutes(1));
+
+            Assert.Equal(2, Int(Sensor(".tables/Rows")));
+            Assert.Equal(2, Int(Sensor($".tables/{_root}/a/Rows")));
+            Assert.Empty(_valuesCache.GetProduct(_product).AccessKeys);
         }
 
         [Fact]
@@ -236,6 +267,41 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task The_0_after_a_failure_period_stays_pending_while_its_sensor_refuses_it()
+        {
+            await RegisterAsync("a");
+            var feed = Feed();
+
+            Put(Block(("a", 1, T0), ("unknown", 1, T0)));
+            _service.Feed.AddUnreadable(_product, 3);
+            await feed.TickAsync(T0.AddMinutes(1));
+
+            var refused = Sensor(".tables/Tables refused");
+            var unreadable = Sensor(".tables/Blocks the merge could not read");
+            Assert.Equal((1, 3), (Int(refused), Int(unreadable)));
+
+            await SetStateAsync(refused, SensorState.Blocked);
+            await SetStateAsync(unreadable, SensorState.Blocked);
+
+            // Two quiet periods while blocked: the 0 is refused each time and stays pending.
+            await feed.TickAsync(T0.AddMinutes(2));
+            await feed.TickAsync(T0.AddMinutes(3));
+            Assert.Equal((1, 3), (Int(refused), Int(unreadable)));
+
+            await SetStateAsync(refused, SensorState.Available);
+            await SetStateAsync(unreadable, SensorState.Available);
+
+            await feed.TickAsync(T0.AddMinutes(4));
+            AssertLast(".tables/Tables refused", 0, T0.AddMinutes(4));
+            AssertLast(".tables/Blocks the merge could not read", 0, T0.AddMinutes(4));
+
+            // Accepted: silent after it.
+            await feed.TickAsync(T0.AddMinutes(5));
+            AssertLast(".tables/Tables refused", 0, T0.AddMinutes(4));
+            AssertLast(".tables/Blocks the merge could not read", 0, T0.AddMinutes(4));
+        }
+
+        [Fact]
         public async Task The_per_table_sensors_can_be_switched_off()
         {
             await RegisterAsync("a");
@@ -261,9 +327,9 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
-        public async Task Odd_table_paths_get_their_sensor_and_a_table_sensor_on_a_feed_path_is_not_shadowed()
+        public async Task Odd_table_paths_get_their_sensor_and_a_table_sensor_on_a_feed_path_is_left_as_it_is()
         {
-            var odd = await RegisterAsync("a b.c/ünï code/.tables");
+            await RegisterAsync("a b.c/ünï code/.tables");
             var onFeedPath = await RegisterPathAsync(".tables/Rows");
             // Nine parts: .tables and Rows would make eleven, more than a path may have.
             var deep = await RegisterAsync("1/2/3/4/5/6/7/8");
@@ -285,41 +351,101 @@ namespace HSMServer.Core.Tests.TableSensors
 
             // The other product sensors are posted as usual.
             Assert.NotNull(Sensor(".tables/Stored").LastValue);
-            Assert.NotNull(odd);
         }
 
         [Fact]
-        public async Task Server_values_are_added_only_to_an_existing_sensor_of_their_type_that_is_not_a_table_sensor()
+        public async Task An_existing_ordinary_sensor_takes_the_value_and_keeps_its_settings_and_one_of_another_type_is_left_alone()
+        {
+            await RegisterAsync("a");
+            await CreateSensorAsync(SensorType.Double, ".tables/Stored");
+            await CreateSensorAsync(SensorType.Integer, ".tables/Delivery lag");
+            var stored = Sensor(".tables/Stored");
+            var lag = Sensor(".tables/Delivery lag");
+            var lagValue = lag.LastValue;
+
+            Put(Block(("a", 2, T0)));
+            await Feed().TickAsync(T0.AddMinutes(1));
+
+            // The user's Double sensor took the value; its description and unit are its own (unset), not the feed's.
+            Assert.Same(stored, Sensor(".tables/Stored"));
+            Assert.Equal(T0.AddMinutes(1), stored.LastValue.Time);
+            Assert.Null(stored.Description);
+            Assert.Null(stored.OriginalUnit);
+
+            // The Integer sensor on the lag's path is not the feed's: no value, nothing changed.
+            Assert.Same(lag, Sensor(".tables/Delivery lag"));
+            Assert.Same(lagValue, lag.LastValue);
+            Assert.Null(lag.Description);
+        }
+
+        [Fact]
+        public async Task A_moved_feed_sensors_alias_is_never_followed_into_the_other_product()
+        {
+            await RegisterAsync("a");
+            var other = await _valuesCache.AddProductAsync($"other{Guid.NewGuid():N}"[..16], Guid.NewGuid());
+            var feed = Feed();
+
+            Put(Block(("a", 2, T0)));
+            await feed.TickAsync(T0.AddMinutes(1));
+            var rows = Sensor(".tables/Rows");
+
+            var move = await _valuesCache.MoveSensorAsync(rows.Id, other.Id, "moved/Rows");
+            Assert.Equal(SensorMoveOutcome.Moved, move.Outcome);
+            Assert.Equal(T0.AddMinutes(1), rows.LastValue.Time);
+
+            Put(Block(("a", 5, T0)));
+            await feed.TickAsync(T0.AddMinutes(2));
+
+            // The value stays in A and goes nowhere: the moved sensor in B has no new value, no sensor is put on the path.
+            Assert.Equal((2, T0.AddMinutes(1)), (Int(rows), rows.LastValue.Time));
+            Assert.Equal(other.Id, rows.Root.Id);
+            Assert.False(_valuesCache.TryGetSensorFromCache(_product, ".tables/Rows", out _));
+            // The product's other sensors are posted as usual.
+            Assert.Equal(T0.AddMinutes(2), Sensor(".tables/Stored").LastValue.Time);
+        }
+
+        [Fact]
+        public async Task A_users_alias_on_a_feed_path_is_left_working_and_the_feed_posts_nothing_there()
+        {
+            await RegisterAsync("a");
+            await CreateSensorAsync(SensorType.Double, ".tables/Rows");
+            var user = Sensor(".tables/Rows");
+
+            var move = await _valuesCache.MoveSensorAsync(user.Id, _product, "elsewhere/Rows");
+            Assert.Equal(SensorMoveOutcome.Moved, move.Outcome);
+
+            Put(Block(("a", 2, T0)));
+            await Feed().TickAsync(T0.AddMinutes(1));
+
+            // No Integer sensor displaced the alias: the path has no sensor and the collector still reaches the moved one.
+            Assert.False(_valuesCache.TryGetSensorFromCache(_product, ".tables/Rows", out _));
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Double, ".tables/Rows", T0.AddMinutes(2));
+            Assert.True((await _valuesCache.AddSensorValueAsync(Key, _product, value)).IsOk);
+            Assert.Equal(T0.AddMinutes(2), user.LastValue.Time);
+            Assert.Equal(user.Id, Sensor("elsewhere/Rows").Id);
+        }
+
+        [Fact]
+        public async Task Server_values_are_refused_on_a_table_sensor_another_type_and_an_unknown_product()
         {
             var table = await RegisterPathAsync(".tables/t");
-            IServerSensorValues values = _valuesCache;
+            await CreateSensorAsync(SensorType.Integer, ".tables/i");
+            IServerSensorValues values = new ServerSensorValues(_valuesCache);
 
             var answer = await values.AddServerValuesAsync(_product, [
-                new HSMSensorDataObjects.SensorValueRequests.IntSensorValue { Path = ".tables/missing", Value = 1, Time = T0 },
-                new HSMSensorDataObjects.SensorValueRequests.IntSensorValue { Path = ".tables/t", Value = 1, Time = T0 },
+                Server(new ApiValues.IntSensorValue { Path = ".tables/t", Value = 1, Time = T0 }),
+                Server(new ApiValues.DoubleSensorValue { Path = ".tables/i", Value = 1, Time = T0 }),
+                Server(new ApiValues.IntSensorValue { Path = ".tables/new", Value = 7, Time = T0 }),
             ]);
 
-            Assert.Equal(IServerSensorValues.NoSensor, answer[".tables/missing"]);
             Assert.Contains("table sensor", answer[".tables/t"]);
-            Assert.False(_valuesCache.TryGetSensorByPath(_product, ".tables/missing", out _));
+            Assert.Contains("Integer", answer[".tables/i"]);
+            Assert.False(answer.ContainsKey(".tables/new"));
             Assert.Null(table.LastValue);
+            Assert.Equal(7, Int(Sensor(".tables/new")));
+            Assert.Equal("d", Sensor(".tables/new").Description);
 
-            // A sensor of another type takes no value.
-            Assert.True((await values.AddServerValuesAsync(_product, [
-                new HSMSensorDataObjects.SensorValueRequests.DoubleSensorValue { Path = ".tables/i", Value = 1, Time = T0 }])).ContainsKey(".tables/i"));
-            await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, ".tables/i")
-            {
-                Update = new SensorUpdate { Id = Guid.Empty },
-                Type = SensorType.Integer,
-                TypeIsExplicit = true,
-            });
-            var wrong = await values.AddServerValuesAsync(_product, [
-                new HSMSensorDataObjects.SensorValueRequests.DoubleSensorValue { Path = ".tables/i", Value = 1, Time = T0 }]);
-            Assert.Contains("Integer", wrong[".tables/i"]);
-
-            // An unknown product.
-            Assert.Single(await values.AddServerValuesAsync(Guid.NewGuid(), [
-                new HSMSensorDataObjects.SensorValueRequests.IntSensorValue { Path = "x", Value = 1, Time = T0 }]));
+            Assert.Single(await values.AddServerValuesAsync(Guid.NewGuid(), [Server(new ApiValues.IntSensorValue { Path = "x", Value = 1, Time = T0 })]));
         }
 
         [Fact]
@@ -339,8 +465,12 @@ namespace HSMServer.Core.Tests.TableSensors
 
         // === Helpers ===
 
+        private static Guid Key => Guid.Parse(TestProductsManager.TestProductKey.Id);
+
         private TableFeedSensorsService Feed(TableSensorsConfig config = null) =>
-            new(_service.Feed, _valuesCache, _valuesCache, config ?? new TableSensorsConfig());
+            new(_service.Feed, _valuesCache, new ServerSensorValues(_valuesCache), config ?? new TableSensorsConfig());
+
+        private static ServerSensorValue Server(ApiValues.SensorValueBase value) => new(value, "d", Unit.Count, "test");
 
         private long NextProducerSequence() => Interlocked.Increment(ref _producerSequence) + 1000;
 
@@ -362,11 +492,23 @@ namespace HSMServer.Core.Tests.TableSensors
             return Sensor(path);
         }
 
+        // An ordinary sensor made the way a collector makes one: by its first value, sent with the product's key.
+        private async Task CreateSensorAsync(SensorType type, string path)
+        {
+            var value = SensorValuesFactory.BuildSensorValue(type, path, T0.AddSeconds(-1));
+            Assert.True((await _valuesCache.AddSensorValueAsync(Key, _product, value)).IsOk);
+        }
+
+        private async Task SetStateAsync(BaseSensorModel sensor, SensorState state) =>
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, State = state })).IsOk);
+
         private BaseSensorModel Sensor(string path)
         {
             Assert.True(_valuesCache.TryGetSensorByPath(_product, path, out var sensor), $"no sensor at {path}");
             return sensor;
         }
+
+        private static List<ProductModel> Nodes(ProductModel node) => [node, .. node.SubProducts.Values.SelectMany(Nodes)];
 
         private void AssertLast(string path, int value, DateTime time)
         {

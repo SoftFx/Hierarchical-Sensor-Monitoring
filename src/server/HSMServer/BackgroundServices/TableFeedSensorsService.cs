@@ -7,24 +7,22 @@ using System.Threading.Tasks;
 using HSMCommon.Extensions;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TableSensors;
 using HSMServer.ServerConfiguration;
-using SensorType = HSMCommon.Model.SensorType;
 
 namespace HSMServer.BackgroundServices
 {
     /// <summary>
     /// Posts the feed sensors of table sensors (#1847): ordinary sensors in the table sensor's own product, under
-    /// <c>.tables</c>, that users set their alerts on (a table sensor owns no alerts and no TTL). Drains
-    /// <see cref="TableFeedCounters"/> every product period (the product's sensors) and every table period (the Rows sensor
-    /// of each table sensor). Counts are per period, not since a start. A product or table without activity in a period
-    /// posts nothing; a failure counter posts 0 once after a period in which it was above 0. A sensor is registered the
-    /// first time a value finds none on its path. A tick never throws into the host: a failure is logged and the next tick
-    /// goes on (its counts were drained and are lost with the failed tick, which the log says).
+    /// <c>.tables</c>, that users set their alerts on (a table sensor owns no alerts and no TTL). Every tick drains the
+    /// period of <see cref="TableFeedCounters"/> (the product counters, and the table counters when a table period ended)
+    /// and hands each product's values to that product's lane; lanes post on their own, so a slow product queue delays
+    /// only its own product, and a tick never waits for the posts of the one before. Counts are per period, not since a
+    /// start. A product or table without activity in a period posts nothing; a failure counter posts 0 once after a period
+    /// in which it was above 0, and keeps that 0 pending until a write of it was accepted. A tick never throws into the
+    /// host: a failure is logged and the next tick goes on.
     /// <para>Documented in <c>aicontext/features/server/table-feed-sensors/feature.md</c>.</para>
     /// </summary>
     public sealed class TableFeedSensorsService : BaseDelayedBackgroundService
@@ -36,8 +34,15 @@ namespace HSMServer.BackgroundServices
         internal const string RefusedName = "Tables refused";
         internal const string UnreadableName = "Blocks the merge could not read";
 
-        private const string Initiator = "Table feed sensors";
-        private const int MaxWarnedPaths = 10_000;
+        internal const string Initiator = "Table feed sensors";
+
+        /// <summary>
+        /// The most periods a product's lane holds while its queue does not answer (an hour of the default product period);
+        /// past it the oldest period is dropped, with an Error once per stall.
+        /// </summary>
+        internal const int MaxPendingPeriods = 60;
+
+        private const int MaxLoggedPaths = 10_000;
 
         private readonly TableFeedCounters _counters;
         private readonly ITreeValuesCache _cache;
@@ -46,12 +51,16 @@ namespace HSMServer.BackgroundServices
         private readonly TimeSpan _tablePeriod;
         private readonly bool _tableSensors;
 
-        // Products whose failure counter was above 0 in the last period: they post 0 once at the next period without one.
-        private readonly HashSet<Guid> _refusedPending = [];
-        private readonly HashSet<Guid> _unreadablePending = [];
+        // The 0-once state of the failure counters, per product and counter; guarded by _stateLock.
+        private readonly object _stateLock = new();
+        private readonly Dictionary<(Guid Product, string Path), FailureState> _failures = [];
 
-        // Paths a failure was logged for, so a failure that repeats every period is logged once.
+        private readonly object _lanesLock = new();
+        private readonly Dictionary<Guid, Lane> _lanes = [];
+
+        // Paths a failure or a clamp was logged for: once per product and path; guarded by themselves.
         private readonly HashSet<string> _warned = [];
+        private readonly HashSet<string> _clamped = [];
 
         private DateTime _lastTableSlot = DateTime.MinValue;
 
@@ -73,59 +82,62 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        protected override async Task ServiceActionAsync(CancellationToken token = default)
+        protected override Task ServiceActionAsync(CancellationToken token = default)
         {
+            // Not awaited: the period is drained now, its posts go on in their lanes, and the next tick is not held up.
             try
             {
-                await TickAsync(DateTime.UtcNow, token);
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
+                _ = TickAsync(DateTime.UtcNow, token);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Table feed sensors: a tick failed; the counts drained in it are not posted");
             }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>
-        /// One period of the product sensors, and of the table sensors when <paramref name="utcNow"/> is in a table period
-        /// after the last one drained (the first tick drains both). The values carry <paramref name="utcNow"/> as their time.
+        /// Drains one period (the product counters, and the table counters when <paramref name="utcNow"/> is in a table
+        /// period after the last one drained; the first tick drains both) and hands the values to the products' lanes. The
+        /// values carry <paramref name="utcNow"/> as their time. The task completes when the lanes of this tick's products
+        /// have posted everything they hold; the drain itself is done when the method returns.
         /// </summary>
-        internal async Task TickAsync(DateTime utcNow, CancellationToken token = default)
+        internal Task TickAsync(DateTime utcNow, CancellationToken token = default)
         {
-            var products = _counters.DrainProducts();
-
             var tableSlot = utcNow.Floor(_tablePeriod);
-            Dictionary<Guid, long> tables = null;
+            var drainTables = tableSlot > _lastTableSlot;
 
-            if (tableSlot > _lastTableSlot)
-            {
+            if (drainTables)
                 _lastTableSlot = tableSlot;
-                tables = _counters.DrainTables();
-            }
 
+            var (products, tables) = _counters.Drain(drainTables);
             var posts = new Dictionary<Guid, List<FeedValue>>();
 
-            foreach (var productId in products.Keys.Union(_refusedPending).Union(_unreadablePending).ToList())
+            List<Guid> pending;
+            lock (_stateLock)
+                pending = _failures.Keys.Select(k => k.Product).ToList();
+
+            foreach (var productId in products.Keys.Union(pending).ToList())
                 AddProductValues(posts, productId, products.GetValueOrDefault(productId), utcNow);
 
             if (tables is not null && _tableSensors)
                 foreach (var (sensorId, rows) in tables)
                     AddTableValue(posts, sensorId, rows, utcNow);
 
-            // One product's failure costs that product's values of the period only.
+            var lanes = new List<Task>(posts.Count);
+
             foreach (var (productId, values) in posts)
-            {
-                try
-                {
-                    await PostAsync(productId, values, token);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException || !token.IsCancellationRequested)
-                {
-                    _logger.Error(ex, $"Table feed sensors: the values of product {productId} for the period ending {utcNow:O} were not posted");
-                }
-            }
+                lanes.Add(Enqueue(productId, values, utcNow, token));
+
+            return Task.WhenAll(lanes);
+        }
+
+        /// <summary>The posts of a product's lane: done when it holds nothing. For tests.</summary>
+        internal Task WhenPosted(Guid productId)
+        {
+            lock (_lanesLock)
+                return _lanes.TryGetValue(productId, out var lane) ? lane.Running : Task.CompletedTask;
         }
 
         private void AddProductValues(Dictionary<Guid, List<FeedValue>> posts, Guid productId, TableFeedProductPeriod period, DateTime time)
@@ -133,8 +145,10 @@ namespace HSMServer.BackgroundServices
             // A removed product: its sensors went with it.
             if (!_cache.TryGetRootProduct(productId, out _, out _))
             {
-                _refusedPending.Remove(productId);
-                _unreadablePending.Remove(productId);
+                lock (_stateLock)
+                    foreach (var key in _failures.Keys.Where(k => k.Product == productId).ToList())
+                        _failures.Remove(key);
+
                 return;
             }
 
@@ -143,34 +157,67 @@ namespace HSMServer.BackgroundServices
 
             if (period is { Blocks: > 0 })
             {
-                Add(posts, productId, Int(product + RowsName, period.Rows, time),
+                Add(posts, productId, Int(productId, product + RowsName, period.Rows, time),
                     $"Rows of the table sensors of this product the server took in the last {minutes} (rows of refused tables are not counted). " +
                     "No value in a period means no block arrived: a TTL alert on this sensor watches the feed.", Unit.Count);
                 Add(posts, productId, Double(product + StoredName, period.Bytes / 1024.0 / 1024.0, time),
                     $"Size of the table blocks of this product stored in the last {minutes}, as stored (MB).", Unit.MB);
                 Add(posts, productId, Double(product + LagName, period.MaxLagTicks / (double)TimeSpan.TicksPerSecond, time),
-                    $"Delivery lag of the table blocks of this product, the largest in the last {minutes} (seconds): the time a block arrived " +
-                    "minus the time of its last row. Measured against the clock of the provider that wrote the rows, so a clock skew is in it; " +
+                    $"Delivery lag of the table blocks of this product, the largest in the last {minutes} (seconds): the time the server received " +
+                    "a block minus the time of its last row. Measured against the clock of the provider that wrote the rows, so a clock skew is in it; " +
                     "negative when that clock is ahead of the server's. Posted only for a period in which a block was stored.", Unit.Seconds);
             }
 
-            AddFailure(posts, productId, product + RefusedName, period?.RefusedTables ?? 0, _refusedPending, time,
+            AddFailure(posts, productId, product + RefusedName, period?.RefusedTables ?? 0, time,
                 $"Tables of the blocks of this product the server refused in the last {minutes}: unknown or blocked table sensor, " +
                 "another kind of sensor, another schema, an invalid identifier. Their rows are never served; the server log has the reasons. " +
                 "Posts 0 once after a period with refusals, then nothing until the next refusal.");
-            AddFailure(posts, productId, product + UnreadableName, period?.UnreadableBlocks ?? 0, _unreadablePending, time,
+            AddFailure(posts, productId, product + UnreadableName, period?.UnreadableBlocks ?? 0, time,
                 $"Table blocks of this product the hourly merge could not read (missing or damaged) in the hours it committed in the last {minutes}. " +
                 "They are kept in the block store; their rows are not served. Posts 0 once after a period with such blocks, then nothing until the next.");
         }
 
-        private void AddFailure(Dictionary<Guid, List<FeedValue>> posts, Guid productId, string path, long count, HashSet<Guid> pending, DateTime time, string description)
+        // A count above 0 is posted and leaves a 0 pending; a period without one posts the pending 0, which stays pending
+        // until a write of it is accepted (and no newer count came meanwhile). One 0 in flight at a time.
+        private void AddFailure(Dictionary<Guid, List<FeedValue>> posts, Guid productId, string path, long count, DateTime time, string description)
         {
-            if (count > 0)
-                pending.Add(productId);
-            else if (!pending.Remove(productId))
-                return;
+            ZeroTag tag = null;
 
-            Add(posts, productId, Int(path, count, time), description, Unit.Count);
+            lock (_stateLock)
+            {
+                var key = (productId, path);
+                _failures.TryGetValue(key, out var state);
+
+                if (count > 0)
+                {
+                    state ??= _failures[key] = new FailureState();
+                    state.Version++;
+                }
+                else if (state is null || state.ZeroInFlight)
+                    return;
+                else
+                {
+                    state.ZeroInFlight = true;
+                    tag = new ZeroTag(key, state.Version);
+                }
+            }
+
+            if (!Add(posts, productId, Int(productId, path, count, time), description, Unit.Count, tag) && tag is not null)
+                Settle(tag, accepted: false);
+        }
+
+        private void Settle(ZeroTag tag, bool accepted)
+        {
+            lock (_stateLock)
+            {
+                if (!_failures.TryGetValue(tag.Key, out var state))
+                    return;
+
+                state.ZeroInFlight = false;
+
+                if (accepted && state.Version == tag.Version)
+                    _failures.Remove(tag.Key);
+            }
         }
 
         private void AddTableValue(Dictionary<Guid, List<FeedValue>> posts, Guid sensorId, long rows, DateTime time)
@@ -179,12 +226,12 @@ namespace HSMServer.BackgroundServices
             if (_cache.GetSensor(sensorId) is not TableSensorModel { Root: { } root } table)
                 return;
 
-            Add(posts, root.Id, Int($"{Node}/{table.Path}/{RowsName}", rows, time),
+            Add(posts, root.Id, Int(root.Id, $"{Node}/{table.Path}/{RowsName}", rows, time),
                 $"Rows of the table sensor '{table.Path}' the server took in the last {Minutes(_tablePeriod)}. " +
                 "No value in a period means no rows arrived for it: a TTL alert on this sensor watches the table.", Unit.Count);
         }
 
-        private void Add(Dictionary<Guid, List<FeedValue>> posts, Guid productId, SensorValueBase value, string description, Unit unit)
+        private bool Add(Dictionary<Guid, List<FeedValue>> posts, Guid productId, SensorValueBase value, string description, Unit unit, ZeroTag tag = null)
         {
             // The path as the server stores it, and the checks of any value's path (a table path deep enough leaves no
             // room for .tables and the sensor's name).
@@ -193,7 +240,7 @@ namespace HSMServer.BackgroundServices
             if (!normalized.TryCheckRequest(out var error))
             {
                 Warn(productId, value.Path, $"not posted: {error}");
-                return;
+                return false;
             }
 
             value.Path = normalized.Path;
@@ -201,87 +248,164 @@ namespace HSMServer.BackgroundServices
             if (!posts.TryGetValue(productId, out var list))
                 posts[productId] = list = [];
 
-            list.Add(new FeedValue(value, description, unit));
+            list.Add(new FeedValue(new ServerSensorValue(value, description, unit, Initiator), tag));
+            return true;
         }
 
-        private async Task PostAsync(Guid productId, List<FeedValue> feed, CancellationToken token)
+        // === Lanes: one per product with values to post, alive while it holds any ===
+
+        private Task Enqueue(Guid productId, List<FeedValue> values, DateTime time, CancellationToken token)
         {
-            var answer = await _values.AddServerValuesAsync(productId, feed.Select(f => f.Value).ToList(), token);
-            var missing = new List<FeedValue>();
+            List<FeedValue> dropped = null;
+            Lane lane;
 
-            foreach (var item in feed)
+            lock (_lanesLock)
             {
-                if (!answer.TryGetValue(item.Value.Path, out var error))
-                    continue;
+                if (!_lanes.TryGetValue(productId, out lane))
+                    _lanes[productId] = lane = new Lane();
 
-                if (error == IServerSensorValues.NoSensor)
-                    missing.Add(item);
-                else
-                    Warn(productId, item.Value.Path, $"not posted: {error}");
+                lane.Pending.Enqueue(new Period(time, values));
+
+                // A lane that is not running starts with its first period taken out: the bound below counts only the
+                // periods waiting behind the one being posted.
+                if (!lane.Active)
+                {
+                    var first = lane.Pending.Dequeue();
+                    lane.Active = true;
+                    lane.Running = Task.Run(() => RunLaneAsync(productId, lane, first, token));
+                }
+
+                if (lane.Pending.Count > MaxPendingPeriods)
+                {
+                    var oldest = lane.Pending.Dequeue();
+                    dropped = oldest.Values;
+
+                    if (!lane.OverflowLogged)
+                    {
+                        lane.OverflowLogged = true;
+                        _logger.Error($"Table feed sensors: the queue of product {productId} has not taken the values of {MaxPendingPeriods} periods; " +
+                                      $"the oldest are dropped, first the period ending {oldest.Time:O} (logged once until the queue answers again)");
+                    }
+                }
             }
 
-            if (missing.Count == 0)
-                return;
+            if (dropped is not null)
+                foreach (var item in dropped)
+                    if (item.Tag is not null)
+                        Settle(item.Tag, accepted: false);
 
-            var registered = new List<FeedValue>(missing.Count);
-
-            foreach (var item in missing)
-                if (await RegisterAsync(productId, item, token))
-                    registered.Add(item);
-
-            if (registered.Count == 0)
-                return;
-
-            answer = await _values.AddServerValuesAsync(productId, registered.Select(f => f.Value).ToList(), token);
-
-            foreach (var (path, error) in answer)
-                Warn(productId, path, $"not posted after its registration: {error}");
+            return lane.Running;
         }
 
-        // An ordinary sensor of the value's type, with its description and unit; it inherits the TTL of its parent as any
-        // new sensor does.
-        private async Task<bool> RegisterAsync(Guid productId, FeedValue item, CancellationToken token)
+        private async Task RunLaneAsync(Guid productId, Lane lane, Period period, CancellationToken token)
         {
-            var request = new SensorAddOrUpdateRequest(productId, item.Value.Path)
+            while (true)
             {
-                Type = item.Value.Type == HSMSensorDataObjects.SensorType.IntSensor ? SensorType.Integer : SensorType.Double,
-                TypeIsExplicit = true,
-                Update = new SensorUpdate
+                try
                 {
-                    Id = Guid.Empty,
-                    Description = item.Description,
-                    SelectedUnit = item.Unit,
-                    Initiator = InitiatorInfo.AsSystemInfo(Initiator),
-                },
-            };
+                    await PostAsync(productId, period, token);
 
-            var result = await _cache.AddOrUpdateSensorAsync(request, token);
+                    lock (_lanesLock)
+                        lane.OverflowLogged = false;
+                }
+                catch (Exception ex)
+                {
+                    foreach (var item in period.Values)
+                        if (item.Tag is not null)
+                            Settle(item.Tag, accepted: false);
 
-            if (!result.IsOk)
-                Warn(productId, item.Value.Path, $"not registered: {result.Error}");
+                    if (!token.IsCancellationRequested)
+                        _logger.Error(ex, $"Table feed sensors: the values of product {productId} for the period ending {period.Time:O} were not posted");
+                }
 
-            return result.IsOk;
+                lock (_lanesLock)
+                {
+                    if (lane.Pending.Count == 0 || token.IsCancellationRequested)
+                    {
+                        // Periods left at a stop are not posted (the server stops).
+                        lane.Active = false;
+                        lane.Pending.Clear();
+                        _lanes.Remove(productId);
+                        return;
+                    }
+
+                    period = lane.Pending.Dequeue();
+                }
+            }
         }
+
+        private async Task PostAsync(Guid productId, Period period, CancellationToken token)
+        {
+            var answer = await _values.AddServerValuesAsync(productId, period.Values.Select(v => v.Value).ToList(), token);
+            var productError = answer.GetValueOrDefault(productId.ToString());
+
+            foreach (var item in period.Values)
+            {
+                var path = item.Value.Value.Path;
+                var error = answer.GetValueOrDefault(path) ?? productError;
+
+                if (error is not null)
+                    Warn(productId, path, $"not posted: {error}");
+
+                if (item.Tag is not null)
+                    Settle(item.Tag, accepted: error is null);
+            }
+        }
+
+        // === Values and logs ===
 
         private void Warn(Guid productId, string path, string message)
         {
-            if (_warned.Count >= MaxWarnedPaths)
-                _warned.Clear();
-
-            if (_warned.Add($"{productId}/{path}"))
+            if (Once(_warned, $"{productId}/{path}"))
                 _logger.Warn($"Table feed sensor '{path}' of product {productId} {message} (logged once per sensor)");
         }
 
-        private static IntSensorValue Int(string path, long value, DateTime time) =>
-            new() { Path = path, Value = (int)Math.Min(value, int.MaxValue), Time = time };
+        private IntSensorValue Int(Guid productId, string path, long value, DateTime time)
+        {
+            // The sensor stays Integer: a count beyond it is posted as int.MaxValue, and said once (rule 8).
+            if (value > int.MaxValue && Once(_clamped, $"{productId}/{path}"))
+                _logger.Error($"Table feed sensor '{path}' of product {productId}: the count {value} of the period ending {time:O} is above the Integer range " +
+                              $"and is posted as {int.MaxValue} (logged once per sensor)");
+
+            return new() { Path = path, Value = (int)Math.Min(value, int.MaxValue), Time = time };
+        }
 
         private static DoubleSensorValue Double(string path, double value, DateTime time) =>
             new() { Path = path, Value = Math.Round(value, 3), Time = time };
+
+        private static bool Once(HashSet<string> logged, string key)
+        {
+            lock (logged)
+            {
+                if (logged.Count >= MaxLoggedPaths)
+                    logged.Clear();
+
+                return logged.Add(key);
+            }
+        }
 
         private static string Minutes(TimeSpan period) =>
             period.TotalMinutes == 1 ? "minute" : $"{period.TotalMinutes.ToString(CultureInfo.InvariantCulture)} minutes";
 
 
-        private sealed record FeedValue(SensorValueBase Value, string Description, Unit Unit);
+        private sealed record FeedValue(ServerSensorValue Value, ZeroTag Tag);
+
+        private sealed record ZeroTag((Guid Product, string Path) Key, long Version);
+
+        private sealed record Period(DateTime Time, List<FeedValue> Values);
+
+        private sealed class FailureState
+        {
+            public long Version;
+            public bool ZeroInFlight;
+        }
+
+        private sealed class Lane
+        {
+            public readonly Queue<Period> Pending = new();
+            public Task Running = Task.CompletedTask;
+            public bool Active;
+            public bool OverflowLogged;
+        }
     }
 }
