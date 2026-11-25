@@ -1,0 +1,111 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+namespace HSMServer.Core.LargeFiles.Archives
+{
+    /// <summary>The state of a large file as the archive side sees it (ADR-0022 point 12).</summary>
+    public enum LargeArchiveFileState : byte
+    {
+        Uploading = 1,
+        Verified = 2,
+        Packed = 3,
+    }
+
+
+    /// <summary>
+    /// The description of a large file the archive side needs: the store's record (#1883) without what only the upload uses.
+    /// </summary>
+    public sealed record LargeArchiveFile
+    {
+        public Guid FileId { get; init; }
+
+        /// <summary>The root product the file was uploaded to; its dump password protects the archive.</summary>
+        public Guid ProductId { get; init; }
+
+        public Guid SensorId { get; init; }
+
+        /// <summary>The original file name as the collector sent it: an archive entry name after sanitizing, never a path.</summary>
+        public string Name { get; init; }
+
+        public string Extension { get; init; }
+
+        /// <summary>The original (decompressed) size.</summary>
+        public long Size { get; init; }
+
+        public DateTime SourceModifiedUtc { get; init; }
+
+        /// <summary>Bytes of the part covered by the record; a part of another length is not built.</summary>
+        public long PartLength { get; init; }
+
+        /// <summary>SHA-256 of the original bytes, set when the file is verified.</summary>
+        public byte[] ContentSha256 { get; init; }
+
+        public LargeArchiveFileState State { get; init; }
+
+        public Guid? ArchiveId { get; init; }
+
+        public int? PasswordVersion { get; init; }
+
+        public long? ArchiveLength { get; init; }
+
+        /// <summary>SHA-256 of the archive bytes as written.</summary>
+        public byte[] ArchiveSha256 { get; init; }
+    }
+
+
+    /// <summary>An archive being built: its new id and the temporary path to write it to (same volume as the archives).</summary>
+    public sealed record LargeArchiveTarget(Guid FileId, Guid ArchiveId, string TempPath);
+
+
+    /// <summary>
+    /// The seam between the archive side (#1885) and the large file store (#1883). The production implementation adapts
+    /// the store; tests use a fake over a temporary folder. Faults throw; nothing here retries.
+    /// </summary>
+    public interface ILargeFileArchiveStore
+    {
+        /// <summary>Raised after a file became verified and its value row was written. Not durable: see <see cref="GetFiles"/>.</summary>
+        event Action<LargeArchiveFile> FileVerified;
+
+        /// <summary>The record of a file, or null when the file is unknown or removed.</summary>
+        LargeArchiveFile TryGetFile(Guid fileId);
+
+        IReadOnlyList<LargeArchiveFile> GetFiles(LargeArchiveFileState state);
+
+        /// <summary>A read-only stream of a verified part: zstd frames, one per piece, which decode as one zstd stream.</summary>
+        Stream OpenPart(Guid fileId);
+
+        /// <summary>The current part length on the disk, compared with <see cref="LargeArchiveFile.PartLength"/> before a build.</summary>
+        long GetPartLengthOnDisk(Guid fileId);
+
+        /// <summary>A read-only stream of the current archive of a packed file (FileShare.Read | FileShare.Delete).</summary>
+        Stream OpenArchive(Guid fileId);
+
+        /// <summary>The absolute path of the file's current archive.</summary>
+        string ArchivePath(LargeArchiveFile file);
+
+        /// <summary>
+        /// True when the store's volume can take an archive of <paramref name="archiveBytes"/> for this file now, after its
+        /// minimum free space and the reservations of the other files.
+        /// </summary>
+        bool HasRoomForArchive(LargeArchiveFile file, long archiveBytes);
+
+        /// <summary>A new archive id and its temporary path, for a verified (first pack) or packed (re-encryption) file.</summary>
+        LargeArchiveTarget BeginArchive(Guid fileId);
+
+        /// <summary>Syncs the temporary file, renames it into the archives durably, writes the record as packed, then
+        /// removes the part (first pack) or the replaced archive (re-encryption).</summary>
+        void CommitArchive(LargeArchiveTarget target, int passwordVersion, long archiveLength, byte[] archiveSha256);
+
+        /// <summary>Deletes the temporary file of a build; the record is unchanged.</summary>
+        void AbandonArchive(LargeArchiveTarget target);
+    }
+
+
+    /// <summary>The path of an archive under the archives folder, built only from the two GUIDs.</summary>
+    public static class LargeArchivePaths
+    {
+        /// <summary>"&lt;productId:N&gt;/&lt;archiveId:N&gt;.zip": the folder layout of #1883, relative to the archives folder.</summary>
+        public static string RelativeArchivePath(Guid productId, Guid archiveId) => $"{productId:N}/{archiveId:N}.zip";
+    }
+}
