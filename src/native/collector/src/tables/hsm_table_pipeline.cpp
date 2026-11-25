@@ -1437,9 +1437,12 @@ namespace hsm::collector::tables
                  " row(s) are lost and it is not sent again.");
             break;
         case TableBlockOutcome::TooLarge:
-            block->DropRows(TableDropReason::RefusedByServer);
+            // Final, never packed again: the frame was on the wire, so its sequence is spent (the server
+            // may have stored it), and packing the same rows again could repeat the refusal for ever.
+            // The next block takes the next sequence; nothing goes back below this one.
+            block->DropRows(TableDropReason::RowTooLarge);
             Note("The table connection refused a block of " + std::to_string(block->BlockBytes()) +
-                 " bytes as larger than its frame limit; its " + std::to_string(block->rows) + " row(s) are lost.");
+                 " bytes as larger than its frame limit; its " + std::to_string(block->rows) + " row(s) are dropped and it is not sent again.");
             break;
         case TableBlockOutcome::NotDelivered:
             break;

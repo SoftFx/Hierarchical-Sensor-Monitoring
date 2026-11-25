@@ -365,8 +365,12 @@ its calls return `HSM_RESULT_INVALID_STATE`.
 - A create on a disposed collector is refused with `HSM_RESULT_INVALID_STATE`, like every native create (managed gives
   an `Unavailable` sensor).
 - The final pack at stop is not cut by the drain budget (it runs before the value drain); only the delivery is.
-- A `TooLarge` answer (a frame limit that shrank after packing; only a real connection gives it) drops the block's rows
-  under "refused by the server"; it is not packed again (the pipeline keeps no rows after packing).
+- A `TooLarge` answer (a frame limit that shrank after packing; only a real connection gives it) is final: the
+  block's rows are dropped and counted once as "row too large", and the block is never packed or sent again (the
+  pipeline keeps no rows after packing). Its sequence was on the wire, so it is never given to other rows: sequences
+  only rise. A row that alone breaks a limit (the frame, or the decompressed bytes) is dropped once at packing and never
+  put. So no input makes delivery loop without progress (a block settled or dropped) or a wait for the next tick
+  (`native_table_too_large_is_final_and_sequences_never_go_back`).
 - The loss report goes to the one `Queue overflow` bar (native has no per-queue split); the stop line is the managed
   one.
 - A writer paused between the moment it reads that the ledger is open and its count, across a whole stop, has its rows

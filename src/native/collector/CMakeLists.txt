@@ -381,6 +381,7 @@ if(HSM_COLLECTOR_TABLES)
             native_table_stop_drain_is_bounded
             native_table_losses_at_stop_reach_the_stop_line
             native_table_split_keeps_every_row
+            native_table_too_large_is_final_and_sequences_never_go_back
             native_table_stress_writers_ticks_and_restarts)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()

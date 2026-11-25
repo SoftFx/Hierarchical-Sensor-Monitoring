@@ -1497,6 +1497,60 @@ namespace
     }
 
     // A block over the frame limit is split by tables, then rows; a row that cannot fit is dropped.
+    // Too large is final, and a sequence that was on the wire is never given to other rows (#1848, the
+    // defects the managed review found): N blocks the channel answers "too large" cost exactly N puts and
+    // N dropped rows, the next block takes the next sequence, and a row larger than the frame limit on
+    // its own is dropped at packing, once, with no put at all.
+    void TooLargeIsFinalAndSequencesNeverGoBack()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+
+        constexpr int kRefused = 5;
+        for (int i = 0; i < kRefused; ++i)
+        {
+            channel->AnswerNext([](const RecordingChannel::PutRecord&) {
+                tables::TableBlockAck ack;
+                ack.outcome = tables::TableBlockOutcome::TooLarge;
+                ack.error = "scripted: frame too large";
+                return ack;
+            });
+            Check(AddDouble(table, i, i) == HSM_RESULT_OK, "add");
+            tables::test::RunTick(collector.value);
+        }
+        // More ticks with nothing new: nothing is sent again.
+        tables::test::RunTick(collector.value);
+        tables::test::RunTick(collector.value);
+        Check(AddDouble(table, 99, 99) == HSM_RESULT_OK, "add after the refusals");
+        tables::test::RunTick(collector.value);
+
+        const auto puts = channel->Puts();
+        CheckEqual(std::size_t{ kRefused + 1 }, puts.size(), "puts");
+        for (std::size_t i = 0; i < puts.size(); ++i)
+            CheckEqual(static_cast<std::int64_t>(i), puts[i].sequence, "sequence of put " + std::to_string(i));
+        CheckEqual(std::uint64_t{ kRefused }, Stats(table).rows_dropped, "dropped");
+        auto* pipeline = tables::test::Pipeline(collector.value);
+        CheckEqual(std::int64_t{ kRefused }, pipeline->Ledger().Total(tables::TableDropReason::RowTooLarge), "counted once each");
+        CheckEqual(std::size_t{ 1 }, channel->RowsOf(hsm_table_sensor_path(table.value)).size(), "the later row");
+
+        // A row that alone breaks the frame limit: dropped at packing, never put.
+        channel->SetMaxBlock(30);
+        for (int i = 0; i < 3; ++i)
+            Check(AddDouble(table, 1000 + i, i) == HSM_RESULT_OK, "add");
+        tables::test::RunTick(collector.value);
+        tables::test::RunTick(collector.value);
+        CheckEqual(puts.size(), channel->Puts().size(), "puts of rows that cannot fit");
+        CheckEqual(std::int64_t{ kRefused + 3 }, pipeline->Ledger().Total(tables::TableDropReason::RowTooLarge), "the split ends at one row");
+        CheckEqual(std::uint64_t{ kRefused + 3 }, Stats(table).rows_dropped, "every row that cannot fit is counted");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        CheckEqual(puts.size(), channel->Puts().size(), "the stop sent nothing again");
+    }
+
     void SplitKeepsEveryRow()
     {
         Collector collector;
@@ -1733,6 +1787,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_stop_drain_is_bounded", [](const std::string&) { StopDrainIsBounded(); } },
         { "native_table_losses_at_stop_reach_the_stop_line", [](const std::string&) { LossesAtStopReachTheStopLine(); } },
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
+        { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
         { "native_table_stress_writers_ticks_and_restarts", [](const std::string&) { StressWritersTicksAndRestarts(); } },
 #endif
     };
