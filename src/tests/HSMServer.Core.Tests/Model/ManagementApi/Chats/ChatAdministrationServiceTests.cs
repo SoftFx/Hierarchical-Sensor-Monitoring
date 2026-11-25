@@ -581,6 +581,40 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Equal(Chat.AggregationTimeRangeText, range.FormatErrorMessage("Messages delay"));
         }
 
+        // The form's own validation, run the way MVC runs it (NotificationsController has
+        // no harness of its own): an out-of-range delay is refused before the engine, with
+        // the engine's text; a delay at the edges passes; the name is held trimmed.
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(86_401)]
+        public void TheWebForm_RefusesAnOutOfRangeDelay_WithTheEnginesText(int delay)
+        {
+            var model = new ChatViewModel { Name = "Ops alerts", MessagesDelay = delay };
+            var results = new List<ValidationResult>();
+
+            var isValid = Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
+
+            Assert.False(isValid);
+            var refusal = Assert.Single(results);
+            Assert.Equal([nameof(ChatViewModel.MessagesDelay)], refusal.MemberNames);
+            Assert.Equal(Chat.AggregationTimeRangeText, refusal.ErrorMessage);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(86_400)]
+        public void TheWebForm_AcceptsADelayAtTheEdges_OfTheRange(int delay)
+        {
+            var model = new ChatViewModel { Name = "  Ops alerts  ", MessagesDelay = delay };
+            var results = new List<ValidationResult>();
+
+            var isValid = Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
+
+            Assert.True(isValid);
+            Assert.Empty(results);
+            Assert.Equal("Ops alerts", model.Name);
+        }
+
         // One rule, one text: the form formats its length message from the attribute's
         // arguments and holds the name trimmed (the length rule measures the same value
         // the engine measures); the engine carries the text as a constant.
