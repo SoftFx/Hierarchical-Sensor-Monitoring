@@ -136,6 +136,16 @@ namespace HSMServer.BackgroundServices
             Add("Merged hours holding blocks", () => Interlocked.Read(ref merge.MergedHoursHoldingBlocks), false,
                 "Arrival hours merged for every product whose blocks are still in the block store, waiting for TableSensors.DeleteMergedBlocksAfterHours.", _batchCounters);
 
+            // Retention (#1850 part 4).
+            Add("Batch weeks dropped", () => Interlocked.Read(ref stats.WeeksDropped), false,
+                "Week databases of the batch store dropped since the server started because the period of their class had passed for their week (rows are kept by whole weeks and may stay up to a week past their period).", _batchCounters);
+            Add("Retention faults", () => Interlocked.Read(ref merge.RetentionFaults), true,
+                "Faults of retention since the server started: a week database not dropped, expired blocks not deleted. Tried again an hour later; the log has the reason. Error in the sample in which it grew.", _batchCounters);
+            Add("Expired blocks deleted", () => Interlocked.Read(ref merge.ExpiredBlocksDeleted), false,
+                "Blocks never merged into batches (their product's hour not committed, or unreadable) that retention deleted since the server started because the period of every table sensor with rows in them had passed. Each deletion is logged as an Error.", _batchCounters);
+            Add("Expired block rows deleted", () => Interlocked.Read(ref merge.ExpiredBlockRowsDeleted), false,
+                "Rows of the expired blocks deleted since the server started (every table of a block, from the block index).", _batchCounters);
+
             _batchesCreated = true;
         }
 

@@ -137,6 +137,60 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Directory.Delete(root, recursive: true);
         }
 
+        /// <summary>
+        /// Retention (#1850 part 4): the time to drop a year of week databases of one product (53 weeks of class P53, every hour
+        /// written), each week by <see cref="TableBatchDatabase.DropWeek"/> on a store opened fresh, as retention finds them
+        /// after a restart (closed weeks; the newest is opened by nothing).
+        /// <c>HSM_TABLE_BATCH_STORE_BENCH=1 dotnet test --filter "FullyQualifiedName~Dropping_a_year"</c>
+        /// </summary>
+        [TableBatchStoreBenchmarkFact]
+        public void Dropping_a_year_of_week_databases()
+        {
+            int share = int.TryParse(Environment.GetEnvironmentVariable("HSM_TABLE_BATCH_STORE_BENCH_SHARE"), out var s) ? s : 4;
+            var (hour, _, _) = BuildHour(share);
+            var root = Path.Combine(_root, "drop");
+            var product = Guid.NewGuid();
+            const int weeks = 53;
+
+            var timer = Stopwatch.StartNew();
+            using (var store = new TableBatchDatabase(root))
+            {
+                for (long h = Week0; h < Week0 + weeks * Week; h += Hour)
+                    store.WriteHour(product, Commit(h, h), [new TableBatchHourPart(53, Shift(hour, h - Week0))]);
+            }
+
+            var bytes = Size(root);
+            output.WriteLine($"runtime {RuntimeInformation.FrameworkDescription}, {RuntimeInformation.OSDescription}");
+            output.WriteLine($"== {weeks} week databases of one product, {bytes / 1073741824.0:F1} GB, written in {timer.Elapsed.TotalSeconds:F0} s");
+
+            using (var store = new TableBatchDatabase(root))
+            {
+                timer.Restart();
+                var listed = store.GetWeeks(product);
+                var openMs = timer.Elapsed.TotalMilliseconds;
+
+                var each = new List<double>();
+                timer.Restart();
+                foreach (var week in listed)
+                {
+                    var one = Stopwatch.StartNew();
+                    store.DropWeek(product, week);
+                    each.Add(one.Elapsed.TotalMilliseconds);
+                }
+
+                var total = timer.Elapsed.TotalMilliseconds;
+                each.Sort();
+
+                Assert.Empty(store.GetWeeks(product));
+                Assert.Empty(store.GetHours(product));
+                output.WriteLine($"product opened and its weeks listed in {openMs:F0} ms; {listed.Count} weeks dropped in {total:F0} ms " +
+                                 $"({bytes / 1048576.0 / Math.Max(total / 1000, 0.001):F0} MB/s); per week: median {each[each.Count / 2]:F0} ms, max {each[^1]:F0} ms; " +
+                                 $"left on disk {Size(root) / 1048576.0:F1} MB");
+            }
+
+            Directory.Delete(root, recursive: true);
+        }
+
         private void TenProducts(List<TableBatchToWrite> hour, Guid median)
         {
             var root = Path.Combine(_root, "ten");

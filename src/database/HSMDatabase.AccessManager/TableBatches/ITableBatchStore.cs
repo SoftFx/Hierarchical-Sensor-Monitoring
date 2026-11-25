@@ -82,7 +82,7 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>
         /// Parts of a merged hour, left by a run that did not commit, that the repeat wrote again or deleted (their class is not
         /// in the record it commits). Counted after the write. Not posted to self-monitoring, like the other
-        /// recovery counters (<see cref="HoursRebuilt"/>, <see cref="WeeksDropped"/>): each case is logged as a warning.
+        /// recovery counter <see cref="HoursRebuilt"/>: each case is logged as a warning.
         /// </summary>
         public long PartsRewritten;
 
@@ -120,6 +120,13 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long LastMergeMilliseconds;
         /// <summary>Gauge: arrival hours committed for every product whose blocks wait for their deletion delay.</summary>
         public long MergedHoursHoldingBlocks;
+
+        /// <summary>Faults of retention (#1850 part 4): a week database not dropped, expired blocks not deleted (tried again an hour later).</summary>
+        public long RetentionFaults;
+        /// <summary>Blocks never merged that retention deleted because the period of every table sensor with rows in them had passed.</summary>
+        public long ExpiredBlocksDeleted;
+        /// <summary>Rows of those blocks (from the block index, every table of a block).</summary>
+        public long ExpiredBlockRowsDeleted;
 
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
 

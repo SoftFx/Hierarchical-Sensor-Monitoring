@@ -36,6 +36,12 @@ namespace HSMServer.Core.TableSensors
 
         /// <summary>Another pass was running.</summary>
         public bool Busy { get; init; }
+
+        /// <summary>Week databases retention dropped (#1850 part 4).</summary>
+        public int WeeksDropped { get; init; }
+
+        /// <summary>Arrival hours retention deleted with blocks never merged whose period had passed (#1850 part 4).</summary>
+        public int ExpiredHoursDeleted { get; init; }
     }
 
 
@@ -60,7 +66,7 @@ namespace HSMServer.Core.TableSensors
     /// products and the deletions go on; a rerun of a committed hour or of
     /// parts already written changes nothing. Nothing holds a store's lock while blocks are read or batches encoded.
     /// </summary>
-    public sealed class TableMergeJob
+    public sealed partial class TableMergeJob
     {
         /// <summary>
         /// The bytes the merge holds per row of a table of <paramref name="columns"/> columns (the time column included) while
@@ -173,7 +179,11 @@ namespace HSMServer.Core.TableSensors
 
                 Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
 
-                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault };
+                // After the merge, so that a catch-up merges what it can before retention judges what is left.
+                var (weeks, expired) = RunRetention(utcNow, token, ref fault);
+
+                return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
+                    WeeksDropped = weeks, ExpiredHoursDeleted = expired };
             }
             catch (Exception ex)
             {

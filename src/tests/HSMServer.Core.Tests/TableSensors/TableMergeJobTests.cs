@@ -917,6 +917,163 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
 
+        // === Retention (#1850 part 4) ===
+
+        private static readonly long Week = 7 * TimeSpan.TicksPerDay;
+        private static readonly long WeekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(Hour0.Ticks);
+
+        [Fact]
+        public async Task Retention_drops_a_week_database_once_its_class_has_passed_for_the_week_and_never_one_kept_for_ever()
+        {
+            var a = await RegisterAsync("a", keep: TimeIntervalModel.None);
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            var c = await RegisterAsync("c", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]), ("b", [(Hour0.AddMinutes(2), 2.0, 2)]), ("c", [(Hour0.AddMinutes(3), 3.0, 3)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            Assert.Equal([0, 1, 5], _server.Batches.GetWeeks(_product).Select(w => w.PeriodWeeks));
+            var (rowsA, rowsC) = (Rows(a), Rows(c));
+            Assert.Single(Rows(b));
+
+            // P1: the week's end plus one week. A tick before it nothing is dropped.
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            Assert.Equal(0, Pass(p1.AddTicks(-1)).WeeksDropped);
+            Assert.Single(Rows(b));
+
+            // At it, a drop that faults is counted and tried again in the next hour, not in the same one.
+            _server.Job.RetentionCheckpoint = p =>
+            {
+                if (p == "week-dropping")
+                    throw new IOException("the folder is held");
+            };
+            var faulted = Pass(p1);
+            Assert.NotNull(faulted.Fault);
+            Assert.Equal(1, _server.Batches.MergeStatistics.RetentionFaults);
+            _server.Job.RetentionCheckpoint = null;
+            Assert.Equal(0, Pass(p1.AddMinutes(1)).WeeksDropped);
+            Assert.Single(Rows(b));
+
+            Assert.Equal(1, Pass(p1.AddHours(1)).WeeksDropped);
+            Assert.Equal([0, 5], _server.Batches.GetWeeks(_product).Select(w => w.PeriodWeeks));
+            Assert.Equal(1, _server.Batches.Statistics.WeeksDropped);
+            Assert.Empty(Rows(b));
+            Assert.Equal(rowsA, Rows(a));
+            Assert.Equal(rowsC, Rows(c));
+
+            // P5 at the week's end plus five weeks.
+            var p5 = new DateTime(WeekStart + 6 * Week, DateTimeKind.Utc);
+            Assert.Equal(0, Pass(p5.AddTicks(-1)).WeeksDropped);
+            Assert.Equal(rowsC, Rows(c));
+            Assert.Equal(1, Pass(p5).WeeksDropped);
+            Assert.Empty(Rows(c));
+
+            // P0 is kept for ever.
+            Assert.Equal(0, Pass(Hour0.AddYears(10)).WeeksDropped);
+            Assert.Equal([0], _server.Batches.GetWeeks(_product).Select(w => w.PeriodWeeks));
+            Assert.Equal(rowsA, Rows(a));
+        }
+
+        [Fact]
+        public async Task Blocks_never_merged_are_deleted_once_every_sensor_with_rows_in_them_has_passed_and_never_while_merely_late()
+        {
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            var c = await RegisterAsync("c", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1), (Hour0.AddMinutes(2), 2.0, 2)]))));
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(3), 3.0, 3)]), ("c", [(Hour0.AddMinutes(4), 4.0, 4)]))));
+
+            // The hour does not verify: not committed, held on its blocks (not tried again in this process).
+            _server.Job.AfterDecode = (_, batch) => batch.Columns[1].DoubleValues[0] += 0.5;
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).Mismatches);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.Ticks));
+
+            // Late, not expired: before the week's end plus a week nothing is even looked at.
+            Assert.Equal(0, Pass(Hour0.AddDays(5)).ExpiredHoursDeleted);
+            Assert.Equal(0, Pass(new DateTime(WeekStart + 2 * Week - 1, DateTimeKind.Utc)).ExpiredHoursDeleted);
+            Assert.Equal(2, _server.Blocks.GetBlocks(_product).Count);
+
+            // b's period has passed, c's (rows in the second block) has not: the hour stays whole.
+            Assert.Equal(0, Pass(new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc)).ExpiredHoursDeleted);
+            Assert.Equal(2, _server.Blocks.GetBlocks(_product).Count);
+            Assert.Equal(3, Rows(b).Count);
+
+            Assert.Equal(0, Pass(new DateTime(WeekStart + 6 * Week - 1, DateTimeKind.Utc)).ExpiredHoursDeleted);
+            var report = Pass(new DateTime(WeekStart + 6 * Week, DateTimeKind.Utc));
+            Assert.Null(report.Fault);
+            Assert.Equal(1, report.ExpiredHoursDeleted);
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+            Assert.Equal(2, _server.Batches.MergeStatistics.ExpiredBlocksDeleted);
+            Assert.Equal(4, _server.Batches.MergeStatistics.ExpiredBlockRowsDeleted);
+            Assert.Empty(Rows(b));
+            Assert.Empty(Rows(c));
+        }
+
+        [Fact]
+        public async Task An_hour_never_merged_with_rows_of_a_sensor_kept_for_ever_is_never_deleted()
+        {
+            var a = await RegisterAsync("a", keep: TimeIntervalModel.None);
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]), ("b", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+            var before = All(a, b);
+
+            _server.Job.AfterDecode = (_, batch) => batch.Columns[1].DoubleValues[0] += 0.5;
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).Mismatches);
+
+            Assert.Equal(0, Pass(Hour0.AddYears(10)).ExpiredHoursDeleted);
+            Assert.Single(_server.Blocks.GetBlocks(_product));
+            Assert.Equal(before, All(a, b));
+        }
+
+        [Fact]
+        public async Task An_unreadable_block_is_judged_by_every_table_sensor_of_its_product()
+        {
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
+            var a = await RegisterAsync("a", other, keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            var z = await RegisterAsync("z", other, keep: TimeIntervalModel.None);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(_server.Service.Put(other, _producer, 1, Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            var damaged = _server.Service.Put(other, _producer, 2, Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)]))).Sequence.Value;
+
+            await RestartAsync(crash: false, beforeOpen: settings =>
+            {
+                using var db = new global::LevelDB.DB(Path.Combine(settings.PathToTableBlocks, TableBlockDatabase.BlocksName), new global::LevelDB.Options());
+                var key = TableBlockDatabase.Key(Hour0.Ticks, damaged);
+                var value = db.Get(key);
+                value[^1] ^= 0x55;
+                db.Put(key, value, new global::LevelDB.WriteOptions { Sync = true });
+            });
+
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            Assert.Equal([damaged], _server.Batches.GetHour(other, Hour0.Ticks).UnreadableBlocks);
+            Pass(Hour0.AddHours(30));
+            Assert.Equal([damaged], _server.Blocks.GetBlocks(other).Select(e => e.Sequence));
+
+            // Its directory cannot be read, so it may hold rows of z, which is kept for ever: it stays.
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            Assert.Equal(0, Pass(p1).ExpiredHoursDeleted);
+            Assert.Single(_server.Blocks.GetBlocks(other));
+
+            // Once every table sensor of the product has a period that has passed, it goes.
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = z.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+            // Its week database was dropped at p1 (a's class), which took the hour's record out of Hours: the next pass merges
+            // the hour again (every row expired, the block listed again) and commits it, and the deletion waits for that
+            // commit's delay.
+            Assert.Equal(0, Pass(p1.AddHours(1)).ExpiredHoursDeleted);
+            Assert.True(_server.Batches.IsHourMerged(other, Hour0.Ticks));
+            Assert.Equal(1, Pass(p1.AddHours(26)).ExpiredHoursDeleted);
+            Assert.Empty(_server.Blocks.GetBlocks(other));
+            Assert.Equal(1, _server.Batches.MergeStatistics.ExpiredBlocksDeleted);
+            Assert.Equal(1, _server.Batches.MergeStatistics.ExpiredBlockRowsDeleted);
+            Assert.Equal(0, _server.Batches.MergeStatistics.RetentionFaults);
+            Assert.Equal(0, _server.Service.Read(a.Id, From, To).Value.RowCount);
+        }
+
+
         // === Helpers ===
 
         private sealed record Server(IDatabaseCore Database, ITreeValuesCache Cache, TableBlockService Service, TableBlockDatabase Blocks, TableBatchDatabase Batches)
@@ -1006,7 +1163,7 @@ namespace HSMServer.Core.Tests.TableSensors
             return (a, b);
         }
 
-        private async Task<BaseSensorModel> RegisterAsync(string name, Guid? product = null, TableSchema schema = null)
+        private async Task<BaseSensorModel> RegisterAsync(string name, Guid? product = null, TableSchema schema = null, TimeIntervalModel keep = null)
         {
             var path = $"{_root}/{name}";
             var result = await _server.Cache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(product ?? _product, path)
@@ -1019,6 +1176,10 @@ namespace HSMServer.Core.Tests.TableSensors
 
             Assert.True(result.IsOk, result.Error);
             Assert.True(_server.Cache.TryGetSensorByPath(product ?? _product, path, out var sensor));
+
+            if (keep is not null)
+                Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = keep })).IsOk);
+
             return sensor;
         }
 
