@@ -298,8 +298,11 @@ namespace HSMServer.Core.Tests.SensorApi
 
 
         // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
-        // setting and the folder whose agent/version.txt names the staged agent.
-        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null)
+        // setting and the folder whose agent/version.txt names the staged agent. `tableLimits` are
+        // the configured TableSensors limits the ingestion checks a table schema against (#1845);
+        // without them it uses the defaults, as the service does when none are given.
+        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null,
+            HSMTableBlocks.TableBlockLimits tableLimits = null)
         {
             var telemetry = new RecordingTelemetry();
 
@@ -316,6 +319,8 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton<ISensorApiTelemetry>(telemetry);
             builder.Services.AddSingleton(config.Object);
             builder.Services.AddSingleton<TelemetryCollector>();
+            if (tableLimits is not null)
+                builder.Services.AddSingleton(tableLimits);
             builder.Services.AddSingleton<SensorIngestionService>();
             builder.Services.AddSingleton<AgentDirectives>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();

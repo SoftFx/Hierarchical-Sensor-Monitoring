@@ -144,6 +144,52 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Null(Sensor("wire/wide"));
         }
 
+        // A registration with a very large TableColumns array is refused by its count, as any schema
+        // over the limit, before its columns are mapped.
+        [Fact]
+        public async Task Commands_ATableSchemaWithAVeryLargeColumnArray_IsRefused()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var columns = string.Join(",", new[] { "{\"Name\":\"time\",\"Type\":1}" }.Concat(Enumerable.Range(1, 9_999).Select(i => $"{{\"Name\":\"c{i}\",\"Type\":2}}")));
+
+            var answer = await PostAsync(host, "commands", $"[{Table("wire/huge", $"\"TableColumns\":[{columns}]")}]");
+
+            Assert.Equal(HttpStatusCode.OK, answer.Status);
+
+            var error = (string)JsonNode.Parse(answer.Body)["wire/huge"];
+
+            Assert.StartsWith(Refused, error);
+            Assert.Contains("at most 64 columns, this one has 10000", error);
+            Assert.Null(Sensor("wire/huge"));
+        }
+
+        // The column limit is the configured TableSensors.MaxColumnsPerTable, not the default of 64:
+        // a host configured with 8 refuses a schema of 9 columns and takes one of 8.
+        [Fact]
+        public async Task Commands_TheConfiguredColumnLimit_IsTheOneApplied()
+        {
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig(), tableLimits: new TableBlockLimits(maxColumnsPerTable: 8));
+
+            static string Columns(int count) => string.Join(",", new[] { "{\"Name\":\"time\",\"Type\":1}" }
+                .Concat(Enumerable.Range(1, count - 1).Select(i => $"{{\"Name\":\"c{i}\",\"Type\":3}}")));
+
+            var answer = await PostAsync(host, "commands",
+                $"[{Table("wire/limit/nine", $"\"TableColumns\":[{Columns(9)}]")},{Table("wire/limit/eight", $"\"TableColumns\":[{Columns(8)}]")}]");
+
+            Assert.Equal(HttpStatusCode.OK, answer.Status);
+
+            var errors = JsonNode.Parse(answer.Body).AsObject();
+            var error = (string)errors["wire/limit/nine"];
+
+            Assert.StartsWith(Refused, error);
+            Assert.Contains("at most 8 columns, this one has 9", error);
+            Assert.Null(Sensor("wire/limit/nine"));
+
+            Assert.False(errors.ContainsKey("wire/limit/eight"));
+            Assert.Equal(8, Assert.IsType<TableSensorModel>(Sensor("wire/limit/eight")).Schema.Columns.Count);
+        }
+
         // The table identifier inside a block is the registered path byte for byte (#1844), so a
         // table sensor is registered only under the normalized form of its path, which the
         // refusal names. Nothing is created under the other spelling.
@@ -189,7 +235,7 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         // Retention of a table sensor is the sensor's history setting (owner decision of
-        // 2026-11-25): a registration carries it as for any sensor, and it is stored. Applying it
+        // 2026-11-24): a registration carries it as for any sensor, and it is stored. Applying it
         // is #1850.
         [Fact]
         public async Task Commands_ATableRegistrationWithKeepHistory_StoresTheSetting()
