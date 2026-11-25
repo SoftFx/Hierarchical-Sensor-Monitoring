@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -92,6 +93,10 @@ namespace hsm::http
         static constexpr int64_t kMaxLingerMs = 5000;
         // The orderly close of a refused message (SetCloseOnRefusal).
         static constexpr int64_t kRefusalLingerMs = 1000;
+        // The most payload handed to one curl_ws_send. With the frame header (at most 14 bytes) it
+        // stays inside one TLS record (16384 bytes), so with Schannel one call encrypts and writes
+        // one record, and only after the socket was seen writable (SendFrame in the .cpp says why).
+        static constexpr size_t kMaxPieceBytes = 16000;
         // Oldest libcurl accepted, as LIBCURL_VERSION_NUM: 8.14.0. Two things this class relies on
         // are missing before it. Up to 8.12 the frames of a fragmented message are reported
         // without saying which one is the last (the flags came from the opcode alone), so a
@@ -125,8 +130,14 @@ namespace hsm::http
             const std::string& subprotocol,
             int64_t timeout_ms);
 
-        // Sends one text message as one frame. False on failure, timeout or cancellation; the
-        // connection is released then (a frame may be half-written).
+        // Sends one text message as one frame. False on failure, timeout ("send timed out") or
+        // cancellation ("cancelled"); the connection is released then (a frame may be
+        // half-written).
+        //
+        // What bounds a send, on every TLS backend: before EACH call into libcurl this class waits
+        // for the socket to be writable, with the caller's deadline and the cancel flag, and each
+        // call passes at most kMaxPieceBytes, so no call into libcurl waits on its own. SendFrame
+        // in the .cpp says why libcurl cannot be left to wait (Schannel).
         bool SendText(const std::string& text, int64_t timeout_ms, std::string& error);
 
         // Sends `size` bytes as one binary message in one frame, with the outcomes of SendText.
@@ -134,12 +145,14 @@ namespace hsm::http
         //
         // A frame of many megabytes (the table connection sends up to the server's maxFrameBytes)
         // is still ONE frame: no fragmentation flag is set, so libcurl writes one header with the
-        // whole payload length and FIN set. It masks the payload into its own send buffer, at
-        // most two chunks of 64 KiB, so memory does not grow with the frame, and the caller's
-        // buffer must stay untouched until the call returns. When the socket blocks part-way,
-        // curl_ws_send reports how much of the payload it took and SendFrame waits for the
-        // socket and passes the rest of the SAME frame (what libcurl requires: a shorter or a
-        // longer remainder is refused). So the call blocks until the last byte is handed to the
+        // whole payload length and FIN set. A frame larger than kMaxPieceBytes is handed to
+        // libcurl in pieces of at most kMaxPieceBytes (curl_ws_send with CURLWS_OFFSET, the whole
+        // length declared with the first piece), each after the socket was seen writable. libcurl
+        // masks the payload into its own send buffer, so memory does not grow with the frame, and
+        // the caller's buffer must stay untouched until the call returns. When the socket takes
+        // only part of a piece, curl_ws_send reports how much of the payload it took and the next
+        // call goes on with the rest of the SAME frame (libcurl refuses a call that passes less
+        // than it still holds buffered). So the call blocks until the last byte is handed to the
         // socket; `timeout_ms` bounds the whole frame, not each piece, and a cancel is seen
         // within one wait slice. A peer that reads slowly makes the send slow, not large. A send
         // that fails part-way leaves half a frame on the wire, so the connection is released.
@@ -158,9 +171,11 @@ namespace hsm::http
         // Sends a close frame and releases the connection. Idempotent; after Receive returned
         // Closed or Error there is nothing left to close, so no second close frame is written.
         //
-        // linger_ms == 0 (the default, and what the destructor does): one non-blocking write, then
-        // release. Never waits, but if inbound data is still unread the OS may reset the
-        // connection and the server sees an abort instead of a normal closure.
+        // linger_ms == 0 (the default, and what the destructor does): when the socket is writable
+        // right now, one write of the close frame; when it is not (a peer that stopped reading
+        // left the buffers full), no close frame at all. Then the release. Never waits, but if
+        // inbound data is still unread the OS may reset the connection and the server sees an
+        // abort instead of a normal closure.
         // linger_ms > 0: the orderly close for a planned stop. Waits up to that long (capped at
         // kMaxLingerMs) for the close frame to go out and for the peer's own close to come back,
         // dropping anything else that arrives.
@@ -197,6 +212,17 @@ namespace hsm::http
         // The receive cap this connection was built with.
         size_t MaxMessageBytes() const { return max_message_bytes_; }
 
+        // For tests, set before Open: called on the owner thread for every curl_ws_send of this
+        // connection, before the call, with the payload bytes passed and whether a wait that found
+        // the socket writable came right before it (no other curl_ws_send in between).
+        void SetSendTraceForTests(std::function<void(size_t bytes, bool after_writable_wait)> trace) { send_trace_for_tests_ = std::move(trace); }
+
+        // For tests, set before Open: consulted by every wait for a writable socket; false makes the
+        // socket count as not writable, as if a peer that stopped reading had filled the buffers.
+        // It stands in for a state a test cannot hold on to: the OS keeps moving bytes into the
+        // peer's buffer for as long as the peer's window allows.
+        void SetWritableForTests(std::function<bool()> writable) { writable_for_tests_ = std::move(writable); }
+
     private:
         enum class Wait
         {
@@ -210,7 +236,13 @@ namespace hsm::http
 
         static Deadline DeadlineIn(int64_t timeout_ms);
 
-        Wait WaitForSocket(bool for_read, Deadline deadline);
+        // Polls at least once, even when the deadline has passed: with a past deadline it is a
+        // zero-timeout check.
+        Wait WaitForSocket(bool for_read, Deadline deadline, bool honour_cancel = true);
+        // One zero-timeout check that the socket takes a write now; a cancel does not count.
+        bool WritableNow();
+        // One curl_ws_send (a CURLcode as an int), traced for the tests.
+        int WsSend(const char* data, size_t size, size_t* sent, int64_t fragsize, unsigned int flags);
         bool SendFrame(const char* data, size_t size, unsigned int flags, Deadline deadline, std::string& error);
         // One whole data message, text or binary: the body of SendText and SendBinary.
         bool SendDataMessage(const char* data, size_t size, unsigned int flags, int64_t timeout_ms, std::string& error);
@@ -235,5 +267,9 @@ namespace hsm::http
         bool close_on_refusal_ = false;
         int refusal_code_ = 0;
         bool close_cancelled_ = false;
+        // The last wait for a writable socket found it writable, and no curl_ws_send came since.
+        bool writable_seen_ = false;
+        std::function<void(size_t, bool)> send_trace_for_tests_;
+        std::function<bool()> writable_for_tests_;
     };
 } // namespace hsm::http

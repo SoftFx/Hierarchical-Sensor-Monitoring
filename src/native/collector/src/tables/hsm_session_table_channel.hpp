@@ -62,6 +62,9 @@ namespace hsm::collector::tables
         std::function<void(bool error, const std::string& message)> log;
         /// For tests: see AckedLinkOptions::ack_abandoned_for_tests.
         std::function<bool(std::int64_t request_id)> ack_abandoned_for_tests;
+        /// For tests: the bound of one block's write in place of the channel's own (at least 10 s,
+        /// ten heartbeats); 0 keeps the channel's.
+        std::int64_t send_bound_ms_for_tests = 0;
     };
 
     class SessionTableChannel final : public ITableChannel
