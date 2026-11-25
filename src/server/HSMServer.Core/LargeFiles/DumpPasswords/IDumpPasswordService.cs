@@ -82,8 +82,9 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         IReadOnlyCollection<Guid> GetProductIds();
 
         /// <summary>
-        /// Stores a new version (the previous maximum + 1) durably, then writes "dump password changed" to the journal without
-        /// any value. A password can be replaced, never cleared. Throws when the configuration database cannot be written.
+        /// Stores a new version (past both the highest kept version and the highest version an archive of the product carries)
+        /// durably, then writes "dump password changed" to the journal without any value. A password can be replaced, never
+        /// cleared. Throws when the configuration database cannot be written or the archives cannot be listed.
         /// </summary>
         DumpPasswordSetResult SetPassword(Guid productId, string password, bool generated, InitiatorInfo initiator);
 

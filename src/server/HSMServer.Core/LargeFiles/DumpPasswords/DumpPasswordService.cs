@@ -38,22 +38,28 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         private readonly ITreeValuesCache _cache;
         private readonly TimeSpan _retention;
         private readonly Func<DateTime> _clock;
+        private readonly Func<Guid, int> _highestCarriedVersion;
 
 
         public event Action<Guid, int> PasswordChanged;
 
 
-        public DumpPasswordService(IDatabaseCore database, IJournalService journal, ITreeValuesCache cache, TimeSpan? retention = null)
-            : this(database, journal, cache, retention, null) { }
+        // highestCarriedVersion: the highest password version any archive of the product carries (0: none); null: none. A
+        // new version is allocated past it, so a version stays unique even when the row of the product was lost.
+        public DumpPasswordService(IDatabaseCore database, IJournalService journal, ITreeValuesCache cache, TimeSpan? retention = null,
+                                   Func<Guid, int> highestCarriedVersion = null)
+            : this(database, journal, cache, retention, null, highestCarriedVersion) { }
 
         // clock: the time a version is set at (test seam); null: the system clock.
-        internal DumpPasswordService(IDatabaseCore database, IJournalService journal, ITreeValuesCache cache, TimeSpan? retention, Func<DateTime> clock)
+        internal DumpPasswordService(IDatabaseCore database, IJournalService journal, ITreeValuesCache cache, TimeSpan? retention, Func<DateTime> clock,
+                                     Func<Guid, int> highestCarriedVersion = null)
         {
             _database = database ?? throw new ArgumentNullException(nameof(database));
             _journal = journal ?? throw new ArgumentNullException(nameof(journal));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _retention = retention ?? DefaultRetention;
             _clock = clock ?? (() => DateTime.UtcNow);
+            _highestCarriedVersion = highestCarriedVersion ?? (_ => 0);
 
             if (_retention < TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(retention), "The retention of replaced dump passwords cannot be negative.");
@@ -122,13 +128,18 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
 
             initiator ??= InitiatorInfo.System;
 
+            // Read outside the lock: an archive carries only a version this service allocated, which the kept versions
+            // cover unless the row was lost, and the archives are not listed while every other reader of the
+            // passwords waits.
+            var carried = HighestCarriedVersion(productId);
+
             int version;
 
             lock (_lock)
             {
                 var kept = _versions.GetValueOrDefault(productId) ?? [];
 
-                version = (kept.Length > 0 ? kept[0].Version : 0) + 1;
+                version = Math.Max(kept.Length > 0 ? kept[0].Version : 0, carried) + 1;
 
                 DumpPasswordVersion[] next = [new DumpPasswordVersion(version, password, _clock(), initiator.ToString(), null), .. kept];
 
@@ -262,6 +273,20 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                 return DumpPasswordSetOutcome.TooLong;
 
             return DumpPasswordSetOutcome.Set;
+        }
+
+        // Throws when the archives cannot be listed: a version allocated without them could repeat one an archive carries.
+        private int HighestCarriedVersion(Guid productId)
+        {
+            try
+            {
+                return _highestCarriedVersion(productId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"The password versions the archives of product {productId} carry could not be read");
+                throw;
+            }
         }
 
         private bool IsExpired(DumpPasswordVersion version, DateTime nowUtc) =>

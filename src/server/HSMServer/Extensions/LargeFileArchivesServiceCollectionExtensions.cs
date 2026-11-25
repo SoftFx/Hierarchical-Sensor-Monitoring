@@ -29,9 +29,16 @@ namespace HSMServer.ServiceExtensions
 
             services.AddSingleton<IArchiveWriter, SharpZipArchiveWriter>();
 
-            services.AddSingleton<IDumpPasswordService>(provider => new DumpPasswordService(
-                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<IJournalService>(),
-                provider.GetRequiredService<ITreeValuesCache>(), archives.PasswordRetention));
+            // The service reads the store, never the builder: the builder depends on the service.
+            services.AddSingleton<IDumpPasswordService>(provider =>
+            {
+                var store = provider.GetRequiredService<ILargeFileArchiveStore>();
+
+                return new DumpPasswordService(
+                    provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<IJournalService>(),
+                    provider.GetRequiredService<ITreeValuesCache>(), archives.PasswordRetention,
+                    productId => HighestCarriedVersion(store, productId));
+            });
 
             services.AddSingleton<IDownloadLog>(provider => new DownloadLog(
                 provider.GetRequiredService<IDatabaseCore>().DownloadLog,
@@ -49,6 +56,19 @@ namespace HSMServer.ServiceExtensions
             services.AddHostedService<LargeFileArchiveBackgroundService>();
 
             return services;
+        }
+
+
+        // The highest dump password version a packed archive of the product carries; 0 when it has none.
+        private static int HighestCarriedVersion(ILargeFileArchiveStore store, Guid productId)
+        {
+            var highest = 0;
+
+            foreach (var file in store.GetFiles(LargeArchiveFileState.Packed))
+                if (file.ProductId == productId && file.PasswordVersion is int version && version > highest)
+                    highest = version;
+
+            return highest;
         }
     }
 }

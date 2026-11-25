@@ -46,9 +46,9 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
         }
 
 
-        internal DumpPasswordService CreateService(TimeSpan? retention = null)
+        internal DumpPasswordService CreateService(TimeSpan? retention = null, Func<Guid, int> highestCarriedVersion = null)
         {
-            var service = new DumpPasswordService(Database, Journal.Object, Cache.Object, retention, () => Now);
+            var service = new DumpPasswordService(Database, Journal.Object, Cache.Object, retention, () => Now, highestCarriedVersion);
 
             _services.Add(service);
 
@@ -133,6 +133,49 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             var reloaded = _context.CreateService().GetVersions(_context.Product.Id);
 
             Assert.Equal(versions, reloaded);
+        }
+
+        [Fact]
+        public void A_Lost_Row_Never_Reuses_A_Version_An_Archive_Carries()
+        {
+            // The row of the product is gone (a power loss, a restore of an older backup), but an archive still carries
+            // version 5: the next version is 6, never a second version 1 under another password.
+            var service = _context.CreateService(highestCarriedVersion: id => id == _context.Product.Id ? 5 : 0);
+
+            var result = service.SetPassword(_context.Product.Id, TypedPassword, generated: false, Manager);
+
+            Assert.True(result.IsOk);
+            Assert.Equal(6, result.Version);
+            Assert.Equal(6, service.GetCurrent(_context.Product.Id).Version);
+            Assert.Equal(6, _context.CreateService().GetCurrent(_context.Product.Id).Version);
+        }
+
+        [Fact]
+        public void The_Next_Version_Is_Past_Both_The_Kept_And_The_Carried_Versions()
+        {
+            var carried = 0;
+            var service = _context.CreateService(highestCarriedVersion: _ => carried);
+
+            Assert.Equal(1, service.SetPassword(_context.Product.Id, TypedPassword, false, Manager).Version);
+            Assert.Equal(2, service.SetPassword(_context.Product.Id, TypedPassword, false, Manager).Version);
+
+            carried = 1;
+            Assert.Equal(3, service.SetPassword(_context.Product.Id, TypedPassword, false, Manager).Version);
+
+            carried = 7;
+            Assert.Equal(8, service.SetPassword(_context.Product.Id, TypedPassword, false, Manager).Version);
+        }
+
+        [Fact]
+        public void A_Carried_Version_That_Cannot_Be_Read_Fails_The_Change_Without_A_Write()
+        {
+            var service = _context.CreateService(highestCarriedVersion: _ => throw new IOException("the store is unavailable"));
+
+            Assert.Throws<IOException>(() => service.SetPassword(_context.Product.Id, TypedPassword, false, Manager));
+
+            Assert.False(service.HasPassword(_context.Product.Id));
+            Assert.False(_context.CreateService().HasPassword(_context.Product.Id));
+            Assert.Empty(_context.JournalRecords);
         }
 
         [Fact]
