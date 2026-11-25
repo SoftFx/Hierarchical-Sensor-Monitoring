@@ -417,6 +417,15 @@ in the native driver until the native collector has table sensors (#1848, step 6
 `CMakeLists.txt` until then. The managed driver runs it like every shared fixture; its table side is a scripted
 table channel of the recording sender, and the table tick runs only through `table_tick`.
 
+The table connection verbs (`collector/table_connection_contract.hsmtest`, #1846 part 2; listed in its header) are in
+the same state in the native driver, under the same issue. In the managed driver the collector of those cases is on
+the scripted session server (`create_collector_on_session`), which also takes the table connection (the upgrade with
+`hsm.tables.v1` and `X-Hsm-Session`, the table hello, the probe, block frames, one ack each); on such a collector the
+block verbs of the table fixture (`table_server_frame_limit`, `table_server_answer_next`, `expect_table_sequences`,
+`expect_table_rows`, ...) read the scripted server instead of the recording sender. A driver shortens the two long
+waits of the table connection as it shortens the session's backoff: the pause after an upgrade refused with 404 or
+400, and how long a block waits for a table connection before its tick gives up.
+
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced
 in CI by [`scripts/conformance-unsupported-triage.ps1`](../../scripts/conformance-unsupported-triage.ps1)

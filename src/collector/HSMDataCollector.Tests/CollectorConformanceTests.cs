@@ -1382,6 +1382,11 @@ namespace HSMDataCollector.Tests
                     break;
 
                 default:
+                    // The table connection verbs first: on a session collector they also serve the block verbs of
+                    // the table fixture, with the scripted server in place of the recording sender.
+                    if (await ExecuteTableConnectionStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
                     if (await ExecuteTableStepAsync(state, step).ConfigureAwait(false))
                         break;
 
@@ -1422,10 +1427,18 @@ namespace HSMDataCollector.Tests
                 RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
+                // As for the recording sender's collector: the table tick never runs on its own in a driver.
+                ManualTableTick = true,
                 SessionTimings = new HSMDataCollector.Client.Session.SessionTimings
                 {
                     MinBackoff = TimeSpan.FromMilliseconds(50),
                     MaxBackoff = TimeSpan.FromMilliseconds(500),
+
+                    // The long pauses of the table connection, shortened like the backoff: how long a refused
+                    // upgrade (404, 400) waits before it is asked again, and how long a block waits for a table
+                    // connection before its tick gives up. No scenario depends on their length.
+                    TableRefusedRetry = TimeSpan.FromMilliseconds(200),
+                    TableConnectionWait = TimeSpan.FromMilliseconds(500),
                 },
             };
 

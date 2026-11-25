@@ -320,6 +320,19 @@ namespace HSMDataCollector.Tests.Transport
                     await table.SendBinaryAsync(new byte[] { 1, 2, 3 }).ConfigureAwait(false);
                     return true;
 
+                case TableAnswerKind.RefuseAll:
+                    received.Outcome = "allRefused";
+                    received.Refused = received.TableNames.ToDictionary(name => name, _ => answer.Text);
+                    await table.SendTextAsync(BlockAck(id, "allRefused", received)).ConfigureAwait(false);
+                    return true;
+
+                case TableAnswerKind.DropSession:
+                    // The session goes without a close handshake; its end closes this table connection with 1000
+                    // "its session ended" (ServeAsync's finally), as the server does. The frame gets no answer.
+                    received.Outcome = "session dropped";
+                    DropSessions();
+                    return true;
+
                 default:
                     throw new InvalidOperationException(answer.Kind.ToString());
             }
@@ -347,6 +360,8 @@ namespace HSMDataCollector.Tests.Transport
             Silent,
             Close,
             Binary,
+            RefuseAll,
+            DropSession,
         }
 
         /// <summary>How the scripted server answers one block frame.</summary>
@@ -384,6 +399,15 @@ namespace HSMDataCollector.Tests.Transport
 
             /// <summary>A binary frame instead of an answer (a protocol error of the server).</summary>
             public static TableAnswer BinaryFrame() => new TableAnswer { Kind = TableAnswerKind.Binary };
+
+            /// <summary><c>allRefused</c>: every table of the block refused with <paramref name="reason"/>; nothing stored.</summary>
+            public static TableAnswer RefuseAll(string reason = "SensorCreatedAfterBlock") => new TableAnswer { Kind = TableAnswerKind.RefuseAll, Text = reason };
+
+            /// <summary>
+            /// No answer: the session is cut without a close handshake instead, and the server closes the table
+            /// connection with 1000 "its session ended". Nothing stored.
+            /// </summary>
+            public static TableAnswer DropSession() => new TableAnswer { Kind = TableAnswerKind.DropSession };
         }
 
         /// <summary>One block frame as the server read it.</summary>
