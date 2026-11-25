@@ -74,15 +74,13 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             service.RemoveExpired(_context.Now.AddDays(1));
             service.RemoveProduct(id);
 
-            // A typed value that is too long.
-            Capture(exceptions, () => service.SetPassword(id, Typed + new string('x', DumpPasswordRules.MaxLength), false, InitiatorInfo.System));
 
             // A reload logs too.
             _context.CreateService();
 
             var logs = _memory.Logs.ToArray();
 
-            Assert.Equal(5, exceptions.Count);
+            Assert.Equal(4, exceptions.Count);
             Assert.Contains(logs, l => l.Contains("could not be stored"));
             Assert.Contains(logs, l => l.Contains("could not be removed"));
             Assert.Contains(logs, l => l.Contains("journal record"));

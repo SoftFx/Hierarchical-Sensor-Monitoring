@@ -99,12 +99,21 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                 return _versions.ContainsKey(productId);
         }
 
+        public IReadOnlyCollection<Guid> GetProductIds()
+        {
+            lock (_lock)
+                return [.. _versions.Keys];
+        }
+
         public DumpPasswordSetResult SetPassword(Guid productId, string password, bool generated, InitiatorInfo initiator)
         {
             var product = _cache.GetProduct(productId);
 
             if (product is null)
                 return new DumpPasswordSetResult(DumpPasswordSetOutcome.ProductUnknown, 0);
+
+            if (!product.IsRoot)
+                return new DumpPasswordSetResult(DumpPasswordSetOutcome.NotRootProduct, 0);
 
             var outcome = Validate(password, generated);
 
@@ -248,9 +257,8 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                 if (c < '\x20' || c > '\x7E')
                     return DumpPasswordSetOutcome.NotPrintableAscii;
 
-            // The outcomes of the contract have no "too long": the page limits the field, so a longer value is a caller's bug.
             if (password.Length > DumpPasswordRules.MaxLength)
-                throw new ArgumentOutOfRangeException(nameof(password), $"A dump password is at most {DumpPasswordRules.MaxLength} characters.");
+                return DumpPasswordSetOutcome.TooLong;
 
             return DumpPasswordSetOutcome.Set;
         }

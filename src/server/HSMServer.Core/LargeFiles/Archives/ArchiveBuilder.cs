@@ -492,6 +492,10 @@ namespace HSMServer.Core.LargeFiles.Archives
         {
             try
             {
+                // Products with a password but no file seen in this process (after a restart) are retired too.
+                foreach (var productId in _passwords.GetProductIds())
+                    _products.TryAdd(productId, 0);
+
                 var carried = new HashSet<(Guid, int)>();
                 foreach (var file in _store.GetFiles(LargeArchiveFileState.Packed))
                 {

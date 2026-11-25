@@ -237,6 +237,20 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             Assert.Empty(_context.Database.GetAllDumpPasswords());
         }
 
+        [Fact]
+        public void A_Product_That_Is_Not_A_Root_Is_Refused_Without_A_Write()
+        {
+            var child = new ProductModel("Child");
+            _context.Product.AddSubProduct(child);
+            _context.Cache.Setup(c => c.GetProduct(child.Id)).Returns(child);
+
+            var result = _context.CreateService().SetPassword(child.Id, TypedPassword, generated: false, Manager);
+
+            Assert.Equal(DumpPasswordSetOutcome.NotRootProduct, result.Outcome);
+            Assert.Empty(_context.JournalRecords);
+            Assert.Empty(_context.Database.GetAllDumpPasswords());
+        }
+
         [Theory]
         [InlineData(null, false, DumpPasswordSetOutcome.TooShort)]
         [InlineData("", false, DumpPasswordSetOutcome.TooShort)]
@@ -273,10 +287,9 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
 
             Assert.True(service.SetPassword(_context.Product.Id, new string('a', DumpPasswordRules.MaxLength), false, Manager).IsOk);
 
-            var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
-                service.SetPassword(_context.Product.Id, new string('b', DumpPasswordRules.MaxLength + 1), false, Manager));
+            var result = service.SetPassword(_context.Product.Id, new string('b', DumpPasswordRules.MaxLength + 1), false, Manager);
 
-            Assert.DoesNotContain(new string('b', 32), ex.ToString());
+            Assert.Equal(DumpPasswordSetOutcome.TooLong, result.Outcome);
             Assert.Equal(1, service.GetCurrent(_context.Product.Id).Version);
         }
 

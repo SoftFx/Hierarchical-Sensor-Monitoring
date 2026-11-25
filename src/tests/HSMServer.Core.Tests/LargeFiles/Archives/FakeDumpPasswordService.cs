@@ -47,6 +47,12 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
                 return _versions.TryGetValue(productId, out var list) ? list.FirstOrDefault(v => v.Version == version) : null;
         }
 
+        public IReadOnlyCollection<Guid> GetProductIds()
+        {
+            lock (_lock)
+                return [.. _versions.Keys];
+        }
+
         public IReadOnlyList<DumpPasswordVersion> GetVersions(Guid productId)
         {
             lock (_lock)
