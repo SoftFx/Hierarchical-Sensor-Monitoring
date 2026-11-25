@@ -1152,7 +1152,7 @@ namespace hsm::test
                 std::lock_guard<std::mutex> guard(side_send_mutex_);
                 return WriteFrame(conn, opcode, /*fin=*/true, payload);
             };
-            const auto close = [this, conn, index](uint16_t code, const std::string& reason) {
+            const auto close_with = [this, conn, index](uint16_t code, const std::string& reason) {
                 std::lock_guard<std::mutex> guard(side_send_mutex_);
                 table_open_[index].closing = true;
                 return WriteFrame(conn, 0x8, /*fin=*/true, ClosePayload(code, reason));
@@ -1224,7 +1224,7 @@ namespace hsm::test
                 }
                 else if (message_opcode == 0x2)
                 {
-                    open = AnswerTableFrame(index, message, reply, close);
+                    open = AnswerTableFrame(index, message, reply, close_with);
                 }
                 message.clear();
                 message_opcode = 0;
@@ -1281,11 +1281,11 @@ namespace hsm::test
 
         // False when the connection is over (closing).
         template <class Reply, class Close>
-        bool AnswerTableFrame(int index, const std::string& frame, const Reply& reply, const Close& close)
+        bool AnswerTableFrame(int index, const std::string& frame, const Reply& reply, const Close& close_with)
         {
             if (frame.size() < 40 || frame[0] != 1 || (frame[1] != 1 && frame[1] != 2) || frame[2] != 0 || frame[3] != 0 || ReadLittleEndian(frame, 4, 4) != 40)
             {
-                close(1002, "a binary frame without a trusted header");
+                close_with(1002, "a binary frame without a trusted header");
                 return false;
             }
             const int64_t id = ReadLittleEndian(frame, 8, 8);
@@ -1322,7 +1322,7 @@ namespace hsm::test
             }
             if (static_cast<int64_t>(frame.size()) > max_frame)
             {
-                close(1009, "a frame over maxFrameBytes");
+                close_with(1009, "a frame over maxFrameBytes");
                 return false;
             }
             std::vector<std::string> names;
@@ -1409,7 +1409,7 @@ namespace hsm::test
             case TableAnswer::Kind::Close:
                 record.outcome = "closed " + std::to_string(answer.status);
                 keep(record);
-                close(static_cast<uint16_t>(answer.status), answer.text);
+                close_with(static_cast<uint16_t>(answer.status), answer.text);
                 return false;
             case TableAnswer::Kind::Binary:
                 record.outcome = "binary";

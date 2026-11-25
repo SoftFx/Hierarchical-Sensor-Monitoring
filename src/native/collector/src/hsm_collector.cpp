@@ -1780,6 +1780,7 @@ namespace
         return json.str();
     }
 
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
     // The registration of a table sensor (#1845, wire contract "Table sensor registration"): the
     // AddOrUpdateSensorRequest of BuildWireRegistrationJson with SensorType 11 and its schema in
     // TableColumns, right after where PreviousPaths would be (a table sensor has none). Byte-identical
@@ -1806,6 +1807,7 @@ namespace
              << ",\"Path\":\"" << EscapeJsonWire(registration.path) << "\"}";
         return json.str();
     }
+#endif
 
     // C# Math.Round(value, precision, MidpointRounding.AwayFromZero) — std::round is
     // half-away-from-zero, matching the double-bar field rounding contract.
@@ -6806,8 +6808,8 @@ namespace
         // The stop budget of the table run: its drain and the close of the table connection. Written
         // and read by the stop's thread only (under op_mutex_).
         std::chrono::steady_clock::time_point table_stop_deadline_{};
-        static constexpr std::int64_t kTableCloseLingerMs = 1000;
 #if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+        static constexpr std::int64_t kTableCloseLingerMs = 1000;
         // The table connection of the session (#1848 part 4): made with the first table sensor of a
         // collector on the session, under tables_mutex_.
         std::shared_ptr<tables::SessionTableChannel> session_table_channel_;
