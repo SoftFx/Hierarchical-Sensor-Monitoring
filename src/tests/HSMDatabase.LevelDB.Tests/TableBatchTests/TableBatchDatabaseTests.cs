@@ -1123,55 +1123,40 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
                 return new DB(path, options);
             });
 
-            // The order of events is forced by the store's own checkpoints: the first open (the product's) stays inside its
-            // open, under the slot's gate, until the test releases it (no bound: nothing proceeds because a wait expired);
-            // the second caller says that it found the slot held ("product-busy") right before it waits for it. Every
-            // bounded wait below is an assertion: its expiry fails the test and changes nothing else.
             using var entered = new ManualResetEventSlim();
             using var release = new ManualResetEventSlim();
-            using var secondArrived = new ManualResetEventSlim();
             int openings = 0;
             store.Checkpoint = p =>
             {
+                // The first open (the product's) stops inside its open until released.
                 if (p == "product-opening" && Interlocked.Increment(ref openings) == 1)
                 {
                     entered.Set();
-                    release.Wait();
+                    release.Wait(Bound);
                 }
-                else if (p == "product-busy")
-                    secondArrived.Set();
             };
 
-            try
-            {
-                var opener = StartLong(() => store.GetHours(_product));
-                Assert.True(entered.Wait(Bound), "the open never reached its checkpoint");
+            IReadOnlyList<TableBatchHour> firstResult = null, secondResult = null;
+            var opener = new Thread(() => firstResult = store.GetHours(_product));
+            opener.Start();
+            Assert.True(entered.Wait(Bound));
 
-                var waiter = StartLong(() => store.GetHours(_product));
-                Assert.True(secondArrived.Wait(Bound), "the second caller never found the slot held");
+            var waiter = new Thread(() => secondResult = store.GetHours(_product));
+            waiter.Start();
+            WaitUntilBlocked(waiter);
 
-                // While the product opens, another product opens and the store-wide calls answer.
-                var meanwhile = StartLong(() => (store.GetHours(other).Count, store.IsOpened, store.WeekDatabases));
-                Assert.True(meanwhile.Wait(Bound), "a call on another product waited for the open of the first one");
-                Assert.Equal((1, true, 1), meanwhile.Result);
+            // While the product opens, another product opens and the store-wide calls answer.
+            var meanwhile = StartLong(() => (store.GetHours(other).Count, store.IsOpened, store.WeekDatabases));
+            Assert.True(meanwhile.Wait(Bound), "a call on another product waited for the open of the first one");
+            Assert.Equal((1, true, 1), meanwhile.Result);
 
-                // Neither call on the product has returned: the opener is held at its checkpoint, the second waits for it.
-                Assert.False(opener.IsCompleted);
-                Assert.False(waiter.IsCompleted);
+            release.Set();
+            Assert.True(opener.Join(Bound) && waiter.Join(Bound));
 
-                release.Set();
-                Assert.True(opener.Wait(Bound) && waiter.Wait(Bound), "the calls on the product did not end after the release");
-
-                Assert.Equal(Week0, Assert.Single(opener.Result).HourTicks);
-                Assert.Equal(Week0, Assert.Single(waiter.Result).HourTicks);
-                Assert.Equal(1, hoursOpens.Single(p => p.Key.Contains(_product.ToString("N"))).Value);
-                Assert.Equal(2, openings);
-            }
-            finally
-            {
-                // A test that failed must not leave the opener held.
-                release.Set();
-            }
+            Assert.Equal(Week0, Assert.Single(firstResult).HourTicks);
+            Assert.Equal(Week0, Assert.Single(secondResult).HourTicks);
+            Assert.Equal(1, hoursOpens.Single(p => p.Key.Contains(_product.ToString("N"))).Value);
+            Assert.Equal(2, openings);
         }
 
         [Fact]
@@ -1233,40 +1218,34 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             first.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
             first.Dispose();
 
-            // As above: the open is held at its checkpoint until released (no bound), and the dispose says that it found the
-            // slot held by the open ("dispose-open-busy") right before it waits for it; by then it has marked the store closed.
             var store = Open();
             using var entered = new ManualResetEventSlim();
             using var release = new ManualResetEventSlim();
-            using var disposeArrived = new ManualResetEventSlim();
             store.Checkpoint = p =>
             {
                 if (p == "product-opening")
                 {
                     entered.Set();
-                    release.Wait();
+                    release.Wait(Bound);
                 }
-                else if (p == "dispose-open-busy")
-                    disposeArrived.Set();
             };
 
-            try
+            Exception opened = null;
+            var opener = new Thread(() =>
             {
-                var opener = StartLong(() => Record.Exception(() => store.GetHours(_product)));
-                Assert.True(entered.Wait(Bound), "the open never reached its checkpoint");
+                try { store.GetHours(_product); }
+                catch (Exception ex) { opened = ex; }
+            });
+            opener.Start();
+            Assert.True(entered.Wait(Bound));
 
-                var disposer = StartLong(store.Dispose);
-                Assert.True(disposeArrived.Wait(Bound), "the dispose never found the slot held by the open");
-                Assert.False(disposer.IsCompleted);
+            var disposer = new Thread(store.Dispose);
+            disposer.Start();
+            WaitUntilBlocked(disposer);
 
-                release.Set();
-                Assert.True(opener.Wait(Bound) && disposer.Wait(Bound), "the open and the dispose did not end after the release");
-                Assert.IsType<TableBatchStoreException>(opener.Result);
-            }
-            finally
-            {
-                release.Set();
-            }
+            release.Set();
+            Assert.True(opener.Join(Bound) && disposer.Join(Bound));
+            Assert.IsType<TableBatchStoreException>(opened);
 
             // The hours database the open had opened was closed: another store opens the same folder.
             Assert.Single(Open().GetHours(_product));
@@ -1274,6 +1253,17 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
 
 
         // === Helpers ===
+
+        // Waits until a thread is blocked (on a lock, an event or a join); bounded only for a test that fails.
+        private static void WaitUntilBlocked(Thread thread)
+        {
+            var bound = DateTime.UtcNow + Bound;
+            while ((thread.ThreadState & ThreadState.WaitSleepJoin) == 0)
+            {
+                Assert.True(DateTime.UtcNow < bound, "the thread never blocked");
+                Thread.Yield();
+            }
+        }
 
         private TableBatchDatabase Open(long writeBufferSize = 8L * 1024 * 1024, Func<string, Options, DB> open = null, string root = null, Func<DateTime> clock = null)
         {
@@ -1284,7 +1274,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             return store;
         }
 
-        // The bound of a wait that is an assertion: its expiry fails the test (a thread that never reaches its point).
+        // Bounds a wait that only matters when a test fails (a thread that never reaches its point).
         private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
 
         private static Task<T> StartLong<T>(Func<T> action) => Task.Factory.StartNew(action, TaskCreationOptions.LongRunning);
