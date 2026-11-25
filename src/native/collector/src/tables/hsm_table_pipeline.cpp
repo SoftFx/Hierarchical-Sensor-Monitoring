@@ -377,13 +377,15 @@ namespace hsm::collector::tables
             spare_ = std::move(buffer);
     }
 
-    std::int64_t TableSensor::DiscardRows(TableDropReason reason)
+    std::int64_t TableSensor::DiscardRows(TableDropReason reason) noexcept
     {
-        std::unique_ptr<TableRowBuffer> taken = TakeRows();
-        if (!taken)
-            return 0;
-        const auto rows = static_cast<std::int64_t>(taken->Count());
-        ReturnRows(std::move(taken));
+        // Cleared in place: nothing is allocated, so a stop or a refusal can always drop and count.
+        std::int64_t rows = 0;
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            rows = static_cast<std::int64_t>(active_->Count());
+            active_->Clear();
+        }
         shared_->Release(rows * row_bytes_);
         Drop(rows, reason);
         return rows;
@@ -425,14 +427,17 @@ namespace hsm::collector::tables
             table.sensor->Drop(table.rows, reason);
     }
 
-    std::vector<std::shared_ptr<PendingBlock>> TableBacklog::Append(std::shared_ptr<PendingBlock> block)
+    std::size_t TableBacklog::Append(std::shared_ptr<PendingBlock> block)
     {
-        std::vector<std::shared_ptr<PendingBlock>> dropped;
         std::lock_guard<std::mutex> guard(mutex_);
-        bytes_ += block->BlockBytes();
+        const std::int64_t bytes = block->BlockBytes();
+        // The only step that can throw, first: a block that cannot be appended changes nothing.
         blocks_.push_back(std::move(block));
+        bytes_ += bytes;
 
-        // The oldest blocks go first, never the one being sent.
+        // The oldest blocks go first, never the one being sent. Their rows are counted here (atomic
+        // counters only), so nothing that can fail stands between a block leaving and its count.
+        std::size_t dropped = 0;
         for (auto it = blocks_.begin(); bytes_ > max_bytes_ && it != blocks_.end();)
         {
             if (it->get() == in_flight_)
@@ -441,8 +446,9 @@ namespace hsm::collector::tables
                 continue;
             }
             bytes_ -= (*it)->BlockBytes();
-            dropped.push_back(std::move(*it));
+            (*it)->DropRows(TableDropReason::BacklogFull);
             it = blocks_.erase(it);
+            ++dropped;
         }
         return dropped;
     }
@@ -522,7 +528,7 @@ namespace hsm::collector::tables
         Dispose();
     }
 
-    void TablePipeline::Note(std::string message)
+    void TablePipeline::Note(std::string message) noexcept
     {
         try
         {
@@ -535,15 +541,45 @@ namespace hsm::collector::tables
         }
     }
 
-    void TablePipeline::FlushReports()
+    void TablePipeline::Fault(TableFault fault) noexcept
     {
-        std::vector<std::string> reports;
+        faults_[static_cast<std::size_t>(fault)].store(true, std::memory_order_release);
+    }
+
+    namespace
+    {
+        const char* FaultText(TableFault fault) noexcept
         {
-            std::lock_guard<std::mutex> guard(reports_mutex_);
-            reports.swap(reports_);
+            switch (fault)
+            {
+            case TableFault::PackFailed:
+                return "Packing table rows failed; the rows it took are dropped and counted (packing failed).";
+            default:
+                return "A table sensor operation failed.";
+            }
         }
-        for (const std::string& report : reports)
-            detail::InvokeIsolated([&] { host_.ReportTableError(report); });
+    } // namespace
+
+    void TablePipeline::FlushReports() noexcept
+    {
+        try
+        {
+            std::vector<std::string> reports;
+            {
+                std::lock_guard<std::mutex> guard(reports_mutex_);
+                reports.swap(reports_);
+            }
+            for (const std::string& report : reports)
+                detail::InvokeIsolated([&] { host_.ReportTableError(report); });
+        }
+        catch (...)
+        {
+            // Reports that cannot be written are lost; the counters still hold the rows.
+        }
+
+        for (std::size_t i = 0; i < faults_.size(); ++i)
+            if (faults_[i].exchange(false, std::memory_order_acq_rel))
+                detail::InvokeIsolated([&] { host_.ReportTableError(FaultText(static_cast<TableFault>(i))); });
     }
 
     std::string TablePipeline::Describe(TableDropReason reason) const
@@ -769,14 +805,7 @@ namespace hsm::collector::tables
 
         // The final take: each sensor's mutex once. A writer that got in before is packed; one after
         // sees `accepting` false under the same mutex and is counted.
-        try
-        {
-            Pack(/*final_pack=*/true);
-        }
-        catch (...)
-        {
-            Note("The final pack of the table sensors failed.");
-        }
+        Pack(/*final_pack=*/true);
         ReportLosses();
     }
 
@@ -1086,172 +1115,255 @@ namespace hsm::collector::tables
 
     // ---- Packing -------------------------------------------------------------------------------------
 
-    void TablePipeline::Pack(bool final_pack)
+    // The rows of one sensor a pack took, and how many of them are settled: in a queued block or
+    // counted as lost.
+    struct TablePipeline::Taken
     {
-        std::vector<std::pair<std::shared_ptr<TableSensor>, std::unique_ptr<TableRowBuffer>>> taken;
+        std::shared_ptr<TableSensor> sensor;
+        std::unique_ptr<TableRowBuffer> rows;
+        std::int64_t settled = 0;
+    };
+
+    // What one pack reports once, after its passes.
+    struct TablePipeline::PackPass
+    {
+        std::size_t max_block = 0;
+        std::int64_t too_large = 0;
+        const TableSensor* too_large_sensor = nullptr;
+        std::int64_t failed = 0;
+        const char* failed_error = nullptr;
+    };
+
+    void TablePipeline::PackAllocation()
+    {
+        if (on_pack_allocation_for_tests)
+            on_pack_allocation_for_tests();
+    }
+
+    void TablePipeline::Pack(bool final_pack) noexcept
+    {
+        std::vector<Taken> taken;
+        bool failed = false;
         {
-            std::lock_guard<std::mutex> guard(pack_mutex_);
-            if (!final_pack && !shared_->accepting.load(std::memory_order_acquire))
-                return;
-
-            for (const auto& sensor : SnapshotSensors())
+            std::unique_lock<std::mutex> guard(pack_mutex_, std::defer_lock);
+            try
             {
-                if (sensor->State() != HSM_TABLE_SENSOR_REGISTERED)
+                guard.lock();
+                if (!final_pack && !shared_->accepting.load(std::memory_order_acquire))
+                    return;
+
+                const std::vector<std::shared_ptr<TableSensor>> sensors = SnapshotSensors();
+                // Room for every take before the first: a take is never lost to a growing vector.
+                PackAllocation();
+                taken.reserve(sensors.size());
+                for (const auto& sensor : sensors)
                 {
-                    // At stop, the rows of a sensor that is not registered have no way out.
-                    if (final_pack)
-                        sensor->DiscardRows(TableDropReason::NotDeliveredAtStop);
-                    continue;
-                }
-                std::unique_ptr<TableRowBuffer> rows = sensor->TakeRows();
-                if (rows)
-                    taken.emplace_back(sensor, std::move(rows));
-            }
-
-            if (!taken.empty())
-            {
-#if defined(HSM_COLLECTOR_TABLES)
-                const std::shared_ptr<ITableChannel> channel = channel_;
-                const TableBlockLimits limits = channel ? channel->Limits() : TableBlockLimits{};
-                const std::size_t max_block = channel ? channel->MaxBlockBytes() : (std::numeric_limits<std::size_t>::max)() / 2;
-
-                if (!writer_ || writer_->Limits() != limits)
-                    writer_ = std::make_unique<TableBlockWriter>(limits);
-
-                // The rows of each sensor in pieces that each fit the limits on their own: an upper
-                // bound of a table's directory entry, and per row its values and its share of the maps.
-                std::vector<Piece> pieces;
-                for (auto& entry : taken)
-                {
-                    TableSensor& sensor = *entry.first;
-                    const auto overhead = static_cast<std::int64_t>(32 + sensor.Path().size() + sensor.ColumnCount() + 1);
-                    const auto per_row = static_cast<std::int64_t>(8 * (sensor.ColumnCount() + 1) + sensor.ColumnCount() + 1);
-                    const std::int64_t by_bytes = (limits.max_decompressed_bytes - overhead) / per_row;
-                    const auto max_rows = static_cast<std::size_t>((std::max)(std::int64_t{ 1 }, (std::min)(std::int64_t{ limits.max_rows }, by_bytes)));
-                    const std::size_t count = entry.second->Count();
-                    for (std::size_t start = 0; start < count; start += max_rows)
-                        pieces.push_back(Piece{ &sensor, entry.second.get(), entry.first, start, (std::min)(max_rows, count - start) });
-                }
-
-                // Pieces in groups that keep to the limits, a table once per block.
-                std::vector<std::vector<Piece>> groups;
-                std::vector<Piece> group;
-                std::int64_t group_rows = 0;
-                std::int64_t group_bytes = 0;
-                for (const Piece& piece : pieces)
-                {
-                    const auto overhead = static_cast<std::int64_t>(32 + piece.sensor->Path().size() + piece.sensor->ColumnCount() + 1);
-                    const auto per_row = static_cast<std::int64_t>(8 * (piece.sensor->ColumnCount() + 1) + piece.sensor->ColumnCount() + 1);
-                    const std::int64_t estimate = overhead + static_cast<std::int64_t>(piece.count) * per_row;
-                    if (!group.empty() &&
-                        (static_cast<std::int64_t>(group.size()) + 1 > limits.max_tables ||
-                         group_rows + static_cast<std::int64_t>(piece.count) > limits.max_rows ||
-                         group_bytes + estimate > limits.max_decompressed_bytes || group.back().sensor == piece.sensor))
+                    if (sensor->State() != HSM_TABLE_SENSOR_REGISTERED)
                     {
-                        groups.push_back(std::move(group));
-                        group.clear();
-                        group_rows = 0;
-                        group_bytes = 0;
+                        // At stop, the rows of a sensor that is not registered have no way out.
+                        if (final_pack)
+                            sensor->DiscardRows(TableDropReason::NotDeliveredAtStop);
+                        continue;
                     }
-                    group.push_back(piece);
-                    group_rows += static_cast<std::int64_t>(piece.count);
-                    group_bytes += estimate;
+                    std::unique_ptr<TableRowBuffer> rows = sensor->TakeRows();
+                    if (rows)
+                        taken.push_back(Taken{ sensor, std::move(rows), 0 });
                 }
-                if (!group.empty())
-                    groups.push_back(std::move(group));
 
-                for (const auto& each : groups)
-                    EncodeAndQueue(each, max_block, limits);
-#else
-                // No block writer in this build: no sensor can be registered, so this is unreachable.
-                for (auto& entry : taken)
-                    entry.first->Drop(static_cast<std::int64_t>(entry.second->Count()), TableDropReason::PackingFailed);
-#endif
+                if (!taken.empty())
+                {
+                    PackPass pass;
+                    PackTaken(taken, pass);
+                }
+            }
+            catch (...)
+            {
+                failed = true;
             }
 
-            for (auto& entry : taken)
+            // On every exit (the managed catch and finally): what the pack took is in a queued block
+            // or counted here, once on its sensor and once in the ledger, and its room goes back.
+            for (Taken& entry : taken)
             {
-                shared_->Release(static_cast<std::int64_t>(entry.second->Count()) * entry.first->RowBytes());
-                entry.first->ReturnRows(std::move(entry.second));
+                const auto count = static_cast<std::int64_t>(entry.rows->Count());
+                if (entry.settled < count)
+                {
+                    entry.sensor->Drop(count - entry.settled, TableDropReason::PackingFailed);
+                    failed = true;
+                }
+                shared_->Release(count * entry.sensor->RowBytes());
+                entry.sensor->ReturnRows(std::move(entry.rows));
             }
         }
+        if (failed)
+            Fault(TableFault::PackFailed);
         FlushReports();
+    }
+
+    // Caller holds pack_mutex_. May throw: whatever it has not settled is counted by the caller.
+    void TablePipeline::PackTaken(std::vector<Taken>& taken, PackPass& pass)
+    {
+#if defined(HSM_COLLECTOR_TABLES)
+        const std::shared_ptr<ITableChannel> channel = channel_;
+        const TableBlockLimits limits = channel ? channel->Limits() : TableBlockLimits{};
+        pass.max_block = channel ? channel->MaxBlockBytes() : (std::numeric_limits<std::size_t>::max)() / 2;
+
+        if (!writer_ || writer_->Limits() != limits)
+        {
+            PackAllocation();
+            writer_ = std::make_unique<TableBlockWriter>(limits);
+        }
+
+        // The rows of each sensor in pieces that each fit the limits on their own: an upper bound of a
+        // table's directory entry, and per row its values and its share of the maps.
+        std::vector<Piece> pieces;
+        for (Taken& entry : taken)
+        {
+            TableSensor& sensor = *entry.sensor;
+            const auto overhead = static_cast<std::int64_t>(32 + sensor.Path().size() + sensor.ColumnCount() + 1);
+            const auto per_row = static_cast<std::int64_t>(8 * (sensor.ColumnCount() + 1) + sensor.ColumnCount() + 1);
+            const std::int64_t by_bytes = (limits.max_decompressed_bytes - overhead) / per_row;
+            const auto max_rows = static_cast<std::size_t>((std::max)(std::int64_t{ 1 }, (std::min)(std::int64_t{ limits.max_rows }, by_bytes)));
+            const std::size_t count = entry.rows->Count();
+            for (std::size_t start = 0; start < count; start += max_rows)
+            {
+                PackAllocation();
+                pieces.push_back(Piece{ &sensor, entry.rows.get(), entry.sensor, start, (std::min)(max_rows, count - start), &entry.settled });
+            }
+        }
+
+        // Pieces in groups that keep to the limits, a table once per block.
+        std::vector<std::vector<Piece>> groups;
+        std::vector<Piece> group;
+        std::int64_t group_rows = 0;
+        std::int64_t group_bytes = 0;
+        for (const Piece& piece : pieces)
+        {
+            const auto overhead = static_cast<std::int64_t>(32 + piece.sensor->Path().size() + piece.sensor->ColumnCount() + 1);
+            const auto per_row = static_cast<std::int64_t>(8 * (piece.sensor->ColumnCount() + 1) + piece.sensor->ColumnCount() + 1);
+            const std::int64_t estimate = overhead + static_cast<std::int64_t>(piece.count) * per_row;
+            if (!group.empty() &&
+                (static_cast<std::int64_t>(group.size()) + 1 > limits.max_tables ||
+                 group_rows + static_cast<std::int64_t>(piece.count) > limits.max_rows ||
+                 group_bytes + estimate > limits.max_decompressed_bytes || group.back().sensor == piece.sensor))
+            {
+                PackAllocation();
+                groups.push_back(std::move(group));
+                group.clear();
+                group_rows = 0;
+                group_bytes = 0;
+            }
+            PackAllocation();
+            group.push_back(piece);
+            group_rows += static_cast<std::int64_t>(piece.count);
+            group_bytes += estimate;
+        }
+        if (!group.empty())
+        {
+            PackAllocation();
+            groups.push_back(std::move(group));
+        }
+
+        for (const auto& each : groups)
+            EncodeAndQueue(each, pass.max_block, pass);
+
+        // One report per pack, whatever the number of rows: a split never writes a line per row.
+        if (pass.too_large > 0)
+        {
+            PackAllocation();
+            Note(pass.too_large == 1 ? "A row of the table sensor " + pass.too_large_sensor->Path() + " does not fit a frame of the table connection (" +
+                                           std::to_string(pass.max_block) + " bytes) and is dropped."
+                                     : std::to_string(pass.too_large) + " table rows (the first of the table sensor " + pass.too_large_sensor->Path() +
+                                           ") do not fit a frame of the table connection (" + std::to_string(pass.max_block) +
+                                           " bytes) one by one and are dropped.");
+        }
+        if (pass.failed > 0)
+        {
+            PackAllocation();
+            Note("Packing " + std::to_string(pass.failed) + " table row(s) into a block failed (" +
+                 (pass.failed_error != nullptr ? pass.failed_error : "unknown") + "); they are dropped and counted.");
+        }
+#else
+        (void)pass;
+        // No block writer in this build: no sensor can be registered, so this is unreachable.
+        for (Taken& entry : taken)
+        {
+            const auto count = static_cast<std::int64_t>(entry.rows->Count());
+            entry.sensor->Drop(count, TableDropReason::PackingFailed);
+            entry.settled = count;
+        }
+#endif
     }
 
 #if defined(HSM_COLLECTOR_TABLES)
     // One block per group; a block larger than a frame allows is split, by tables first and then by
-    // rows. Caller holds pack_mutex_.
-    void TablePipeline::EncodeAndQueue(const std::vector<Piece>& group, std::size_t max_block, const TableBlockLimits& limits)
+    // rows. Caller holds pack_mutex_. Every row of the group is settled when it returns; when it throws
+    // (a split that cannot allocate), the rows it has not settled are counted by Pack.
+    void TablePipeline::EncodeAndQueue(const std::vector<Piece>& group, std::size_t max_block, PackPass& pass)
     {
-        std::int64_t rows = 0;
-        for (const Piece& piece : group)
-            rows += static_cast<std::int64_t>(piece.count);
-
         std::vector<std::uint8_t> frame;
-        std::string error;
+        const char* error = nullptr;
         int status = 0;
         try
         {
-            status = Encode(group, max_block, limits, frame, error);
+            status = Encode(group, max_block, frame, error);
+            if (status == static_cast<int>(TableBlockStatus::Ok))
+            {
+                Enqueue(group, std::move(frame));
+                for (const Piece& piece : group)
+                    *piece.settled += static_cast<std::int64_t>(piece.count);
+                return;
+            }
         }
-        catch (const std::bad_alloc&)
+        catch (...)
         {
             status = static_cast<int>(TableBlockStatus::OutOfMemory);
             error = "out of memory";
-        }
-
-        if (status == static_cast<int>(TableBlockStatus::Ok))
-        {
-            try
-            {
-                Enqueue(group, std::move(frame));
-                return;
-            }
-            catch (const std::bad_alloc&)
-            {
-                status = static_cast<int>(TableBlockStatus::OutOfMemory);
-                error = "out of memory";
-            }
         }
 
         const bool too_large = status == static_cast<int>(TableBlockStatus::FrameTooLarge) || status == static_cast<int>(TableBlockStatus::LimitExceeded);
         if (too_large && group.size() > 1)
         {
             // Both halves are built before either is queued: a failure here queues nothing twice.
+            PackAllocation();
             const auto half = group.size() / 2;
             std::vector<Piece> first(group.begin(), group.begin() + static_cast<std::ptrdiff_t>(half));
             std::vector<Piece> second(group.begin() + static_cast<std::ptrdiff_t>(half), group.end());
-            EncodeAndQueue(first, max_block, limits);
-            EncodeAndQueue(second, max_block, limits);
+            EncodeAndQueue(first, max_block, pass);
+            EncodeAndQueue(second, max_block, pass);
             return;
         }
         if (too_large && group[0].count > 1)
         {
+            PackAllocation();
             const Piece& piece = group[0];
             const std::size_t first_rows = piece.count / 2;
-            std::vector<Piece> first{ Piece{ piece.sensor, piece.buffer, piece.owner, piece.start, first_rows } };
-            std::vector<Piece> second{ Piece{ piece.sensor, piece.buffer, piece.owner, piece.start + first_rows, piece.count - first_rows } };
-            EncodeAndQueue(first, max_block, limits);
-            EncodeAndQueue(second, max_block, limits);
+            std::vector<Piece> first{ Piece{ piece.sensor, piece.buffer, piece.owner, piece.start, first_rows, piece.settled } };
+            std::vector<Piece> second{ Piece{ piece.sensor, piece.buffer, piece.owner, piece.start + first_rows, piece.count - first_rows, piece.settled } };
+            EncodeAndQueue(first, max_block, pass);
+            EncodeAndQueue(second, max_block, pass);
             return;
         }
         if (too_large)
         {
             group[0].sensor->Drop(1, TableDropReason::RowTooLarge);
-            Note("A row of the table sensor " + group[0].sensor->Path() + " does not fit a frame of the table connection (" +
-                 std::to_string(max_block) + " bytes) and is dropped.");
+            *group[0].settled += 1;
+            if (pass.too_large++ == 0)
+                pass.too_large_sensor = group[0].sensor;
             return;
         }
 
         for (const Piece& piece : group)
+        {
             piece.sensor->Drop(static_cast<std::int64_t>(piece.count), TableDropReason::PackingFailed);
-        Note("Packing " + std::to_string(rows) + " table row(s) into a block failed (" + error + "); they are dropped and counted.");
+            *piece.settled += static_cast<std::int64_t>(piece.count);
+            pass.failed += static_cast<std::int64_t>(piece.count);
+        }
+        pass.failed_error = error;
     }
 
-    int TablePipeline::Encode(const std::vector<Piece>& group, std::size_t max_block, const TableBlockLimits& limits,
-                              std::vector<std::uint8_t>& frame, std::string& error)
+    int TablePipeline::Encode(const std::vector<Piece>& group, std::size_t max_block, std::vector<std::uint8_t>& frame, const char*& error)
     {
-        (void)limits;
         TableBlockWriter& writer = *writer_;
         writer.Reset();
 
@@ -1267,6 +1379,7 @@ namespace hsm::collector::tables
             for (std::size_t column = 0; status == TableBlockStatus::Ok && column < sensor.ColumnCount(); ++column)
             {
                 const std::size_t map_length = (piece.count + 7) / 8;
+                PackAllocation();
                 null_map_.assign(map_length, 0);
                 const bool has_nulls = rows.CopyNullMap(column, piece.start, piece.count, null_map_.data());
                 status = writer.AddColumn(sensor.ColumnType(column), rows.Values(column) + piece.start, piece.count,
@@ -1284,21 +1397,25 @@ namespace hsm::collector::tables
         return static_cast<int>(status);
     }
 
-    // Caller holds pack_mutex_, so the sequence rises in the order of the blocks.
+    // Caller holds pack_mutex_, so the sequence rises in the order of the blocks. Throws only before the
+    // block is in the backlog; a sequence is spent only by a queued block.
     void TablePipeline::Enqueue(const std::vector<Piece>& group, std::vector<std::uint8_t> frame)
     {
+        PackAllocation();
         auto block = std::make_shared<PendingBlock>();
         block->frame = std::move(frame);
+        PackAllocation();
         block->tables.reserve(group.size());
         for (const Piece& piece : group)
         {
             block->tables.push_back(PendingBlock::Table{ piece.owner, static_cast<std::int64_t>(piece.count) });
             block->rows += static_cast<std::int64_t>(piece.count);
         }
-        block->sequence = next_sequence_++;
+        block->sequence = next_sequence_;
 
-        for (const auto& dropped : backlog_.Append(std::move(block)))
-            dropped->DropRows(TableDropReason::BacklogFull);
+        PackAllocation();
+        backlog_.Append(std::move(block));
+        ++next_sequence_;
     }
 #endif
 

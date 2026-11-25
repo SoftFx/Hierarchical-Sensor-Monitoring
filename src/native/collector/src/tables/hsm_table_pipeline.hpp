@@ -163,7 +163,8 @@ namespace hsm::collector::tables
         void ReturnRows(std::unique_ptr<TableRowBuffer> buffer) noexcept;
 
         /// Drops every buffered row under `reason`, gives their room back, returns how many there were.
-        std::int64_t DiscardRows(TableDropReason reason);
+        /// Allocates nothing.
+        std::int64_t DiscardRows(TableDropReason reason) noexcept;
 
         TableRegistration BuildRegistration() const;
 
@@ -223,8 +224,9 @@ namespace hsm::collector::tables
         {
         }
 
-        /// Appends a block; returns the blocks the bound dropped (count their rows outside the lock).
-        std::vector<std::shared_ptr<PendingBlock>> Append(std::shared_ptr<PendingBlock> block);
+        /// Appends a block; the blocks the bound drops are counted as BacklogFull at once. Returns how
+        /// many blocks went. Throws only when the block cannot be appended, and then nothing changed.
+        std::size_t Append(std::shared_ptr<PendingBlock> block);
         /// The head, now in flight; null when empty.
         std::shared_ptr<PendingBlock> BeginHead();
         /// A put that got no final answer: the block stays at the head, no longer in flight.
@@ -258,6 +260,13 @@ namespace hsm::collector::tables
         /// Hands lost rows to the Queue overflow sensor; false when it takes none now (not registered,
         /// or it has published the last bar of the run): the rows then stay in the ledger.
         virtual bool TryReportDroppedTableRows(std::int64_t rows) = 0;
+    };
+
+    /// A failure whose report allocates nothing when it happens: a flag, worded when reports are written.
+    enum class TableFault : int
+    {
+        PackFailed = 0,
+        Count,
     };
 
     struct TablePipelineOptions
@@ -314,7 +323,9 @@ namespace hsm::collector::tables
         /// Nudges the tick to read the clock again (a manual clock moved).
         void WakeTick();
         /// Writes the queued reports. Call with no lock of the pipeline held.
-        void FlushReports();
+        void FlushReports() noexcept;
+        /// Records a failure to report, allocating nothing.
+        void Fault(TableFault fault) noexcept;
 
         // ---- Tests ----
         /// One tick on the caller's thread; with manual_tick its registration and delivery too.
@@ -331,14 +342,21 @@ namespace hsm::collector::tables
         bool HasWriter() const;
         /// For tests: runs after a block got its answer and before the answer is applied.
         std::function<void()> on_ack_for_tests;
+        /// For tests: runs before every allocation of a pack (a test makes it throw std::bad_alloc).
+        std::function<void()> on_pack_allocation_for_tests;
 
     private:
+        struct Taken;
+        struct PackPass;
+
         void Tick() noexcept;
         void ReportLosses();
-        void Note(std::string message);
+        void Note(std::string message) noexcept;
         std::vector<std::shared_ptr<TableSensor>> SnapshotSensors() const;
         void RegisterPending();
-        void Pack(bool final_pack);
+        void Pack(bool final_pack) noexcept;
+        void PackTaken(std::vector<Taken>& taken, PackPass& pass);
+        void PackAllocation();
         void Deliver(bool at_stop, std::chrono::steady_clock::time_point deadline);
         void Settle(const std::shared_ptr<PendingBlock>& block, const TableBlockAck& ack);
         void ApplyRefusals(const PendingBlock& block, const TableBlockAck& ack, bool count_rows);
@@ -355,9 +373,11 @@ namespace hsm::collector::tables
             std::shared_ptr<TableSensor> owner;
             std::size_t start;
             std::size_t count;
+            /// The rows of its take that are in a queued block or counted as lost.
+            std::int64_t* settled;
         };
-        void EncodeAndQueue(const std::vector<Piece>& group, std::size_t max_block, const TableBlockLimits& limits);
-        int Encode(const std::vector<Piece>& group, std::size_t max_block, const TableBlockLimits& limits, std::vector<std::uint8_t>& frame, std::string& error);
+        void EncodeAndQueue(const std::vector<Piece>& group, std::size_t max_block, PackPass& pass);
+        int Encode(const std::vector<Piece>& group, std::size_t max_block, std::vector<std::uint8_t>& frame, const char*& error);
         void Enqueue(const std::vector<Piece>& group, std::vector<std::uint8_t> frame);
         std::unique_ptr<TableBlockWriter> writer_;
         std::vector<std::uint8_t> null_map_;
@@ -405,5 +425,6 @@ namespace hsm::collector::tables
 
         std::mutex reports_mutex_;
         std::vector<std::string> reports_;
+        std::array<std::atomic<bool>, static_cast<std::size_t>(TableFault::Count)> faults_{};
     };
 } // namespace hsm::collector::tables

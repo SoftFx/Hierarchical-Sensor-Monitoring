@@ -362,19 +362,16 @@ namespace
         auto sensor = std::make_shared<tables::TableSensor>(shared, "p", std::vector<tables::TableRegistrationColumn>{ { "v", tables::TableColumnType::Double } }, schema, "", 0);
 
         tables::TableBacklog backlog(250);
-        Check(backlog.Append(Block(0, 100, sensor)).empty(), "first");
+        CheckEqual(std::size_t{ 0 }, backlog.Append(Block(0, 100, sensor)), "first");
         const auto head = backlog.BeginHead();
         CheckEqual(std::int64_t{ 0 }, head->sequence, "head");
-        Check(backlog.Append(Block(1, 100, sensor)).empty(), "second");
-        // 300 bytes: the oldest that is not in flight goes, leaving a gap.
-        auto dropped = backlog.Append(Block(2, 100, sensor));
-        CheckEqual(std::size_t{ 1 }, dropped.size(), "dropped");
-        CheckEqual(std::int64_t{ 1 }, dropped[0]->sequence, "the one after the head went");
-        for (const auto& block : dropped)
-            block->DropRows(tables::TableDropReason::BacklogFull);
+        CheckEqual(std::size_t{ 0 }, backlog.Append(Block(1, 100, sensor)), "second");
+        // 300 bytes: the oldest that is not in flight goes, leaving a gap, and its rows are counted.
+        CheckEqual(std::size_t{ 1 }, backlog.Append(Block(2, 100, sensor)), "dropped");
         CheckEqual(std::uint64_t{ 1 }, sensor->RowsDropped(), "dropped rows counted");
+        CheckEqual(std::int64_t{ 1 }, shared->ledger.Total(tables::TableDropReason::BacklogFull), "in the ledger as backlog full");
         const auto sequences = backlog.Sequences();
-        Check(sequences == std::vector<std::int64_t>{ 0, 2 }, "sequences after the drop");
+        Check(sequences == std::vector<std::int64_t>{ 0, 2 }, "sequences after the drop: the one after the head went");
         // Not delivered: stays at the head.
         backlog.EndFlight(head);
         CheckEqual(std::int64_t{ 0 }, backlog.BeginHead()->sequence, "head again");
@@ -383,9 +380,8 @@ namespace
         CheckEqual(std::int64_t{ 100 }, backlog.Bytes(), "bytes");
         // With nothing in flight, the bound drops the head too.
         backlog.EndFlight(head);
-        dropped = backlog.Append(Block(3, 200, sensor));
-        CheckEqual(std::size_t{ 1 }, dropped.size(), "head dropped when idle");
-        CheckEqual(std::int64_t{ 2 }, dropped[0]->sequence, "oldest");
+        CheckEqual(std::size_t{ 1 }, backlog.Append(Block(3, 200, sensor)), "head dropped when idle");
+        Check(backlog.Sequences() == std::vector<std::int64_t>{ 3 }, "the oldest went");
     }
 
     // ---- The C ABI in every build --------------------------------------------------------------------
@@ -652,7 +648,11 @@ namespace
             return max_block_;
         }
 
-        tables::TableBlockLimits Limits() const override { return tables::TableBlockLimits{}; }
+        tables::TableBlockLimits Limits() const override
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return limits_;
+        }
 
         tables::TableRegistrationResult Register(const std::vector<tables::TableRegistration>& registrations) override
         {
@@ -735,6 +735,11 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             max_block_ = bytes;
         }
+        void SetLimits(const tables::TableBlockLimits& limits)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            limits_ = limits;
+        }
         void RefuseRegistration(const std::string& path, const std::string& reason)
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -816,6 +821,7 @@ namespace
         mutable std::mutex mutex_;
         std::condition_variable cancel_cv_;
         std::size_t max_block_ = 4 * 1024 * 1024 - 40;
+        tables::TableBlockLimits limits_{};
         std::vector<std::vector<tables::TableRegistration>> registrations_;
         std::vector<PutRecord> puts_;
         std::map<std::string, std::string> refuse_;
@@ -1598,6 +1604,121 @@ namespace
         Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
+    // Three sensors of 100 rows each, registered on a channel whose limits cut them into pieces of 40 rows
+    // and whose frame limit makes most blocks split: every allocation point of a pack is met.
+    struct PackFixture
+    {
+        static constexpr int kRows = 100;
+        Collector collector;
+        std::shared_ptr<RecordingChannel> channel = std::make_shared<RecordingChannel>();
+        std::vector<Table> sensors;
+
+        PackFixture()
+        {
+            tables::TableBlockLimits limits;
+            limits.max_rows = 40;
+            channel->SetLimits(limits);
+            channel->SetMaxBlock(600);
+            tables::test::InstallChannel(collector.value, channel);
+            tables::test::SetManualTick(collector.value, true);
+            for (const char* name : { "a", "b", "c" })
+                sensors.push_back(CreateTable(collector.value, name, { { "x", HSM_TABLE_COLUMN_INT64 } }));
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            tables::test::RunTick(collector.value);
+            std::uint64_t seed = 7;
+            for (auto& sensor : sensors)
+            {
+                CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(sensor).state), "registered");
+                std::vector<std::int64_t> times(kRows);
+                std::vector<hsm_table_cell_t> cells(kRows);
+                for (int r = 0; r < kRows; ++r)
+                {
+                    seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+                    times[static_cast<std::size_t>(r)] = r;
+                    cells[static_cast<std::size_t>(r)].i64 = static_cast<std::int64_t>(seed);
+                }
+                Check(hsm_table_sensor_add_rows(sensor.value, times.data(), cells.data(), nullptr, kRows, nullptr) == HSM_RESULT_OK, "add rows");
+            }
+        }
+
+        tables::TablePipeline& Pipeline() { return *tables::test::Pipeline(collector.value); }
+
+        // Rows of all sensors still in their buffers: accepted, neither delivered nor counted as lost.
+        std::int64_t Buffered()
+        {
+            std::int64_t rows = 0;
+            for (auto& sensor : sensors)
+            {
+                const auto stats = Stats(sensor);
+                rows += static_cast<std::int64_t>(stats.rows_accepted) - static_cast<std::int64_t>(channel->RowsOf(hsm_table_sensor_path(sensor.value)).size()) -
+                        static_cast<std::int64_t>(stats.rows_dropped);
+            }
+            return rows;
+        }
+    };
+
+    // A pack that fails at any of its allocations (the writer, the takes, the pieces, the groups, a
+    // split, a block, the backlog, a report) settles every row it took: in a queued block or counted
+    // once as "packing failed", on its sensor and in the ledger, with its room given back. The tick's
+    // pack and the stop's final pack alike.
+    void PackFailureSettlesEveryRow()
+    {
+        for (const bool at_stop : { false, true })
+        {
+            int failures = 0;
+            for (int fail_at = 0;; ++fail_at)
+            {
+                PackFixture fixture;
+                auto& pipeline = fixture.Pipeline();
+                int calls = 0;
+                pipeline.on_pack_allocation_for_tests = [&] {
+                    if (calls++ == fail_at)
+                        throw std::bad_alloc();
+                };
+                const std::string what = std::string(at_stop ? "stop" : "tick") + ", failure at allocation " + std::to_string(fail_at);
+                if (at_stop)
+                {
+                    Check(hsm_collector_stop(fixture.collector.value) == HSM_RESULT_OK, what + ": stop");
+                }
+                else
+                {
+                    tables::test::RunTick(fixture.collector.value);
+                    // What the pack did not take is still buffered and holds exactly its room.
+                    CheckEqual(fixture.Buffered() * 16, pipeline.ReservedBytes(), what + ": reserved bytes after the failed pack");
+                }
+                pipeline.on_pack_allocation_for_tests = nullptr;
+                const bool failed = calls > fail_at;
+
+                if (!at_stop)
+                {
+                    tables::test::RunTick(fixture.collector.value);
+                    Check(hsm_collector_stop(fixture.collector.value) == HSM_RESULT_OK, what + ": stop");
+                }
+                CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), what + ": reserved bytes after stop");
+                std::uint64_t dropped = 0;
+                for (auto& sensor : fixture.sensors)
+                {
+                    const auto stats = Stats(sensor);
+                    CheckEqual(std::uint64_t{ PackFixture::kRows }, stats.rows_accepted, what + ": accepted");
+                    CheckEqual(std::uint64_t{ PackFixture::kRows }, fixture.channel->RowsOf(hsm_table_sensor_path(sensor.value)).size() + stats.rows_dropped,
+                               what + ": delivered + dropped");
+                    dropped += stats.rows_dropped;
+                }
+                const auto& ledger = pipeline.Ledger();
+                CheckEqual(static_cast<std::int64_t>(dropped),
+                           ledger.Total(tables::TableDropReason::PackingFailed) + ledger.Total(tables::TableDropReason::NotDeliveredAtStop),
+                           what + ": the ledger has every dropped row");
+                if (!failed)
+                {
+                    CheckEqual(std::uint64_t{ 0 }, dropped, what + ": nothing failed, nothing dropped");
+                    break;
+                }
+                ++failures;
+            }
+            Check(failures >= 10, "only " + std::to_string(failures) + " allocation points were met");
+        }
+    }
+
     // Writer threads against ticks and Stop / Start / Stop on every boundary, a fixed number of rows and
     // runs. Per sensor: offered = accepted + refused at the add call; dropped = refused + lost after
     // acceptance; every accepted row is in exactly one stored block of a run that was accepting while
@@ -1788,6 +1909,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_losses_at_stop_reach_the_stop_line", [](const std::string&) { LossesAtStopReachTheStopLine(); } },
         { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
         { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
+        { "native_table_pack_failure_settles_every_row", [](const std::string&) { PackFailureSettlesEveryRow(); } },
         { "native_table_stress_writers_ticks_and_restarts", [](const std::string&) { StressWritersTicksAndRestarts(); } },
 #endif
     };

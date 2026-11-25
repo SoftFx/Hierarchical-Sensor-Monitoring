@@ -355,6 +355,11 @@ owner. A sensor handle holds the sensor, and the sensor only a shared block of f
 the collector, so an application thread can never become the collector's last owner; after the collector is disposed
 its calls return `HSM_RESULT_INVALID_STATE`.
 
+**Failures.** A pack that fails at any step (an allocation of its pieces, groups, a split, a block, the backlog or a
+report) settles every row it took on every exit, as the managed catch and finally do: a row is in a queued block or
+counted once as "packing failed" (on its sensor and in the ledger), and its room in the buffer bound goes back, so a
+failed pack never shrinks the bound for later adds. The tick's pack and the stop's final pack alike.
+
 **Differences from the managed collector.**
 
 - `Unavailable` is decided at creation and again **at every Start** (the managed collector decides it once, when it is
@@ -370,7 +375,8 @@ its calls return `HSM_RESULT_INVALID_STATE`.
   pipeline keeps no rows after packing). Its sequence was on the wire, so it is never given to other rows: sequences
   only rise. A row that alone breaks a limit (the frame, or the decompressed bytes) is dropped once at packing and never
   put. So no input makes delivery loop without progress (a block settled or dropped) or a wait for the next tick
-  (`native_table_too_large_is_final_and_sequences_never_go_back`).
+  (`native_table_too_large_is_final_and_sequences_never_go_back`). The rows a pack drops as too large are reported
+  in one line per pack (managed writes a line per row and its error deduplication collapses them).
 - The loss report goes to the one `Queue overflow` bar (native has no per-queue split); the stop line is the managed
   one.
 - A writer paused between the moment it reads that the ledger is open and its count, across a whole stop, has its rows
@@ -379,7 +385,8 @@ its calls return `HSM_RESULT_INVALID_STATE`.
 **Tests.** `src/native/collector/tests/hsm_table_pipeline_tests.cpp`: the parts (buffer growth, failed growth, null map
 on first use, swap; the bound's compare-and-swap under eight threads; the backlog with a block in flight; splitting;
 paths; the ledger), the ABI and the wrapper, a host without table sensors, a handle that outlives its collector, the
-threads that exist only while running, a writer held across Stop and Start, a bounded drain, losses at stop, and a
+threads that exist only while running, a writer held across Stop and Start, a bounded drain, losses at stop, a pack
+failing at each of its allocations (`native_table_pack_failure_settles_every_row`), and a
 stress test (four writers, three sensors, eight runs of three ticks, a stop and a start, each boundary met by writes in
 flight; per sensor offered = accepted + refused, dropped = refused + lost after acceptance, every delivered row
 accepted once and under a run that was accepting during its call). The shared fixture
