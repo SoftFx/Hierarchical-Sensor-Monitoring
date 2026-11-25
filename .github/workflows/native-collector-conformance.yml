@@ -32,6 +32,9 @@ on:
       - 'src/native/**'
       - 'tests/conformance/**'
       - 'docs/native-collector/**'
+      # The managed table block library: the http-transport lane reads the native blocks with it.
+      - 'src/api/HSMTableBlocks/**'
+      - 'src/tests/HSMTableBlocks.Tests/**'
       - '.github/workflows/native-collector-conformance.yml'
   pull_request:
     # ready_for_review is required so tests run when a draft is marked ready
@@ -174,8 +177,8 @@ jobs:
     # transport-only tests: the in-proc capture-server E2E, the endpoint route table, and the
     # retry policy. Table sensors (HSM_COLLECTOR_TABLES=ON, #1848) are built here too: zstd and
     # zlib come from the same vcpkg manifest, and the managed HSMTableBlocks reader reads the
-    # blocks the native writer wrote (the cross-language check of the block format). curl comes from vcpkg manifest mode (src/native/collector/vcpkg.json), so
-    # the baseline there must stay an upstream microsoft/vcpkg commit. Feature set ssl +
+    # blocks the native writer wrote (the cross-language check of the block format).
+    # curl comes from vcpkg manifest mode (src/native/collector/vcpkg.json), so the baseline there must stay an upstream microsoft/vcpkg commit. Feature set ssl +
     # websockets → Schannel on Windows / OpenSSL on Linux, no heavyweight TLS build.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
