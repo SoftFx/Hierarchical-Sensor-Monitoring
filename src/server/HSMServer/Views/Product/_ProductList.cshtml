@@ -227,9 +227,11 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        // POST + antiforgery header, as the removal above: the action rejects GET and a missing token.
         $.ajax({
-            type: 'GET',
+            type: 'POST',
             url: this.href,
+            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').first().val() },
             cache: false,
             async: true
         }).done(function () {
