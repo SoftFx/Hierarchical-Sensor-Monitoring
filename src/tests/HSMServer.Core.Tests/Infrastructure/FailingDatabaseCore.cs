@@ -56,6 +56,10 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public long TableBlocksDbSize => _inner.TableBlocksDbSize;
 
+        public HSMDatabase.AccessManager.LargeFiles.ILargeFileStore LargeFiles => _inner.LargeFiles;
+
+        public byte[] GetSensorValue(Guid sensorId, long ticks) => _inner.GetSensorValue(sensorId, ticks);
+
         public int SensorValuesPageCount => _inner.SensorValuesPageCount;
 
         public List<ISensorValuesDatabase> SensorValuesDatabases => _inner.SensorValuesDatabases;

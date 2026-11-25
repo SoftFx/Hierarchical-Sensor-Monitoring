@@ -31,6 +31,14 @@
             two counters are posted only once one of them is above zero (a sealed week is still read).
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileSensors">
+            <summary>
+            Self-monitoring of the large file store (#1883), under <c>Database/Large files</c>, posted from the 5-minute
+            self-monitoring sample. Inert until the store's folder exists: a server that never took a large file creates none of
+            these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
+            Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
+            </summary>
+        </member>
         <member name="T:HSMServer.BackgroundServices.TableBlockSensors">
             <summary>
             Self-monitoring of the block store of table sensors (#1844), under <c>Database/Tables</c>, posted from the 5-minute

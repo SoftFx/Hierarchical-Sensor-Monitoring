@@ -32,6 +32,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                     JournalValuesDatabaseName = $"JournalValues{number}_{Environment.CurrentManagedThreadId}",
                     ChangeSetsDatabaseName = $"ChangeSets{number}_{Environment.CurrentManagedThreadId}",
                     TableBlocksFolderName = $"Tables{number}_{Environment.CurrentManagedThreadId}",
+                    LargeFilesFolder = System.IO.Path.Combine(databaseFolder, $"LargeFiles{number}_{Environment.CurrentManagedThreadId}"),
                 });
         }
 

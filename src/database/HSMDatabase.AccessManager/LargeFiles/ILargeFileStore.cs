@@ -184,6 +184,9 @@ namespace HSMDatabase.AccessManager.LargeFiles
 
         /// <summary>The sensor was removed, moved to another product or can no longer take the value: discarded (final).</summary>
         SensorGone,
+
+        /// <summary>The end check of this file is running already (a second finish); nothing changed. Ask again later.</summary>
+        Checking,
     }
 
 

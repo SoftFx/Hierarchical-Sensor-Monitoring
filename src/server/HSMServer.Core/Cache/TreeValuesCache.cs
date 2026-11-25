@@ -1569,6 +1569,10 @@ namespace HSMServer.Core.Cache
 
             _database.ClearSensorValues(sensor.Id, from, to);
 
+            // The files of the large values just erased (#1883): removed now, not left to the store's pass, whose floor
+            // (HistoryClearedTo) is not kept across a restart.
+            RemoveLargeFilesOfClearedRange(sensor, from, to);
+
             // The retention-floor half for late values: everything up to the clear
             // was just erased on purpose — an out-of-order write must not re-fill
             // the cleared window (#1441 round-3). Storage.From is not usable for
@@ -3496,6 +3500,12 @@ namespace HSMServer.Core.Cache
                 case SensorMergeRefreshRequest request:
                     RefreshMergedSensor(request);
                     break;
+                case LargeFileValueRequest request:
+                    AddLargeFileValue(request);
+                    break;
+                case LargeFileCheckRequest request:
+                    CheckLargeFiles(request);
+                    break;
             }
 
             queue.Stopwatch.Stop();
@@ -3609,12 +3619,7 @@ namespace HSMServer.Core.Cache
                 // batch loop, and shifting 0 floors at UtcNow and would refuse
                 // every out-of-order value. Any ticks window too large to
                 // represent below DateTime.MinValue is the same no-floor case.
-                var keepPolicy = sensor.Settings.KeepHistory.Value;
-                var keepFloor = keepPolicy.IsNone || (keepPolicy.UseTicks && (keepPolicy.Ticks <= 0L || keepPolicy.Ticks >= DateTime.UtcNow.Ticks))
-                    ? DateTime.MinValue
-                    : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
-                var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
-                var floor = keepFloor > clearFloor ? keepFloor : clearFloor;
+                var floor = HistoryFloor(sensor, DateTime.UtcNow);
 
                 if (lateValue.Time < floor)
                 {

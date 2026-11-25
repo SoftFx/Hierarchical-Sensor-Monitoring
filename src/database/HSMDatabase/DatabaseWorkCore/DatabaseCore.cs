@@ -37,6 +37,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IDatabaseSettings _settings;
         private readonly HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase _tableBlocks;
         private readonly HSMDatabase.LevelDB.TableBatches.TableBatchDatabase _tableBatches;
+        private readonly HSMDatabase.LevelDB.LargeFiles.LargeFileStore _largeFiles;
 
         public IDashboardCollection Dashboards { get; }
 
@@ -104,6 +105,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long TableBlocksDbSize => _settings.PathToTableBlocks.GetSize();
 
+        public HSMDatabase.AccessManager.LargeFiles.ILargeFileStore LargeFiles => _largeFiles;
+
         public long BackupsSize => _settings.DatabaseBackupsFolder.GetSize();
 
         public List<ISensorValuesDatabase> SensorValuesDatabases => [.. _sensorValuesDatabases.OrderBy(x => x.From)];
@@ -143,6 +146,9 @@ namespace HSMDatabase.DatabaseWorkCore
             // No IO here: the store opens on its first use (#1844).
             _tableBlocks = new HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase(_settings.PathToTableBlocks);
             _tableBatches = new HSMDatabase.LevelDB.TableBatches.TableBatchDatabase(_settings.PathToTableBlocks);
+
+            // No IO here either: the records are read at the first call that needs them, the folder created by the first upload (#1883).
+            _largeFiles = new HSMDatabase.LevelDB.LargeFiles.LargeFileStore(_settings.PathToLargeFiles);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
@@ -167,6 +173,18 @@ namespace HSMDatabase.DatabaseWorkCore
                     if (value is not null)
                         return value;
                 }
+
+            return null;
+        }
+
+        public byte[] GetSensorValue(Guid sensorId, long ticks)
+        {
+            // The whole key as the prefix: the row at exactly this tick, never the next one.
+            var key = new DbKey(sensorId, ticks).ToBytes();
+
+            foreach (var database in _sensorValuesDatabases)
+                if (database.Overlaps(ticks, ticks + 1))
+                    return database.Get(key, key);
 
             return null;
         }
@@ -1767,6 +1785,7 @@ namespace HSMDatabase.DatabaseWorkCore
             // Waits for a put in flight, then closes the block store (#1844).
             _tableBlocks.Dispose();
             _tableBatches.Dispose();
+            _largeFiles.Dispose();
             
             _logger.Info($"{nameof(DatabaseCore)} dispposed");
         }

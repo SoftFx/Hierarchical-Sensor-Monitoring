@@ -45,6 +45,10 @@ namespace HSMServer.Core.DataLayer
         // The size of its folder on disk; 0 when it does not exist (nothing is opened).
         long TableBlocksDbSize { get; }
 
+        // The large file store (#1883): files in a folder of their own, outside the databases. Nothing is created before
+        // the first upload.
+        HSMDatabase.AccessManager.LargeFiles.ILargeFileStore LargeFiles { get; }
+
         int SensorValuesPageCount { get; }
 
         List<ISensorValuesDatabase> SensorValuesDatabases { get; }
@@ -157,6 +161,12 @@ namespace HSMServer.Core.DataLayer
         (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId);
 
         byte[] GetLatestValue(Guid sensorId, long to);
+
+        /// <summary>
+        /// The stored row of a sensor at exactly <paramref name="ticks"/> (#1883): null when there is none, an empty array
+        /// when it could not be read (a read error is logged by the store). Opens or creates no week database.
+        /// </summary>
+        byte[] GetSensorValue(Guid sensorId, long ticks);
 
         byte[] GetFirstValue(Guid sensorId);
 

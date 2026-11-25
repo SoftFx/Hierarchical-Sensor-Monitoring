@@ -286,6 +286,7 @@ services:
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
+      - ./LargeFiles:/app/LargeFiles
 
   caddy:
     image: 'hsmonitoring/hsm-caddy:2.11.4-8'
@@ -373,6 +374,7 @@ docker run -u 0 -d \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
   -v /host/path/DatabasesBackups:/app/DatabasesBackups \
+  -v /host/path/LargeFiles:/app/LargeFiles \
   -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -388,6 +390,7 @@ docker run -u 0 -d ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^
   -v C:\HSM\DatabasesBackups:/app/DatabasesBackups ^
+  -v C:\HSM\LargeFiles:/app/LargeFiles ^
   -p 443:443 ^
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -429,6 +432,7 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
+| `./LargeFiles` | `/app/LargeFiles` | Large files of File sensors (dumps): not a database and not in the backups |
 
 > The `Databases` volume is the most critical — it contains all sensor history and configuration. Never remove it without a backup.
 
