@@ -58,9 +58,16 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         public const int DefaultMaxOpenDatabases = 32;
 
-        // A key below the region of moved batches and above every hour key: a compaction of [FlushKey, FlushKey] has no file
-        // to merge and only writes the memtable out (LevelDB flushes the memtable at the start of every CompactRange).
-        private static readonly byte[] FlushKey = [0xFE];
+        // The point a flush compacts: LevelDB writes the memtable out at the start of every CompactRange, then compacts the
+        // table files whose range contains [FlushKey, FlushKey]. The point must lie above every key a week database can hold,
+        // so that no file contains it and the call only writes the memtable out: the hour region starts with the hour's
+        // first byte (0x00..0x2B), the deleted-bytes counter is 0xFE 'D', and the region of moved batches is 0xFF followed by
+        // the hour (0xFF 0x00..0x2B ...); 0xFF 0xFF is above all of them. The earlier point, 0xFE, lay between the hour keys
+        // and the moved region: a file holding both (a copy writes the hour's mark with its moved keys) or the counter with
+        // hour keys (a delete writes tombstones and the counter) contains it, and every flush then compacted that file and
+        // the next level's files it overlaps (TableBatchDatabaseTests.A_flush_writes_the_memtable_out_and_rewrites_no_table_file).
+        // Only week databases are flushed: Hours and Placements (whose 16-byte sensor keys can start with 0xFF 0xFF) never are.
+        internal static readonly byte[] FlushKey = [0xFF, 0xFF];
 
         private static readonly WriteOptions _syncWrite = new() { Sync = true };
         private static readonly Logger _logger = LogManager.GetLogger("TableBatches");

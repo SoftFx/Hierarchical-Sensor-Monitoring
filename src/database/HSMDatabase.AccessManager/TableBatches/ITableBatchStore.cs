@@ -344,7 +344,12 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// ordinal), numbered again 0..n-1, as bytes (an index record whose batch is missing, or a batch that does not decode,
         /// is carried as it is), and the hour's mark, the source's bytes, where the target has none. Creates the target
         /// database when there is something to write; refuses (<see cref="TableBatchStoreException"/>, nothing written) a
-        /// target database retention dropped, and an hour whose source holds the sensor's records but no mark. The source is
+        /// target database retention dropped, an hour whose source holds the sensor's records but no mark, and a target that
+        /// holds index records of the sensor of any of those hours in its hour region (they may be the sensor's only rows of
+        /// the hour, in the class that holds it, or a source a move left behind: the store cannot tell, so it deletes nothing
+        /// and the caller, which knows from the placement that the target is not the class of those hours, deletes them first
+        /// with <see cref="DeleteSensorHours"/>; copied beside them, they would be read twice). Nothing written, no generation
+        /// changed. The source is
         /// not changed. Changes only the sensor's generation. Bytes deleted in the target count in its deleted-bytes counter
         /// (<see cref="GetDeletedShare"/>). Answers what was written.
         /// </summary>
@@ -377,10 +382,13 @@ namespace HSMDatabase.AccessManager.TableBatches
 
         /// <summary>
         /// Compacts a whole week database (LevelDB's <c>CompactRange</c> over every key: deleted keys give their space back),
-        /// holding a lease on it (a drop waits for it) and neither the product's lock nor anything a read waits for, then
+        /// holding a lease on it and not the product's lock while it compacts (reads and writes of the product go on), then
         /// lowers its deleted-bytes counter by the value it had before the compaction, in one synced write. A crash in between
-        /// leaves the counter as it was (the compaction is repeated). Nothing for a database that does not exist.
-        /// Throws <see cref="TableBatchStoreException"/> on a fault.
+        /// leaves the counter as it was (the compaction is repeated). Nothing for a database that does not exist. Others wait
+        /// for it while they hold the product's lock: a <see cref="DropWeek"/> of the same database (for the lease), the flush
+        /// of the same database while it is the newest week's (LevelDB runs one manual compaction at a time), and a dispose
+        /// (for the lease, without a bound). So the caller never compacts the newest week's databases and compacts on its own
+        /// thread, never beside a drop of the same database. Throws <see cref="TableBatchStoreException"/> on a fault.
         /// </summary>
         void CompactWeek(Guid productId, TableBatchWeek week);
 
@@ -390,7 +398,9 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// <summary>
         /// Adds a week database to the product's compaction list, durably (a small file written atomically, before the
         /// compaction is made, so a crash does not forget it). Nothing for a product without a folder. Throws
-        /// <see cref="TableBatchStoreException"/> on a fault, with the list unchanged.
+        /// <see cref="TableBatchStoreException"/> on a fault, with the list in memory unchanged; when the fault is the sync of
+        /// the folder after the rename (Linux), the file on disk already holds the new list, so memory and disk may differ
+        /// until the next open. Harmless: the list is a hint (a database's counter says again whether it is due).
         /// </summary>
         void AddToCompactList(Guid productId, TableBatchWeek week);
 
@@ -404,7 +414,10 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// Writes the product's step of the move in flight durably (a small file written atomically and synced, strict), or
         /// deletes it (null), then in memory. A record's hours lie inside its week and its classes differ
         /// (<see cref="ArgumentException"/>). A record for a product without a folder is a fault. Throws
-        /// <see cref="TableBatchStoreException"/> on a fault, with the record unchanged.
+        /// <see cref="TableBatchStoreException"/> on a fault, with the record in memory unchanged; when the fault is the sync
+        /// of the folder after the rename or the delete (Linux), the disk already holds the new state, so memory and disk may
+        /// differ until the next open. Harmless: the recovery of a step takes every decision from the placement, and the
+        /// record only names the other class that may hold a copy.
         /// </summary>
         void SetMoveInFlight(Guid productId, TableMoveInFlight record);
     }

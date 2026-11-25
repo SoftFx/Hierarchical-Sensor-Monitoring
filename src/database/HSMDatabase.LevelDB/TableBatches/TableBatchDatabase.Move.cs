@@ -75,6 +75,14 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                     try
                     {
+                        // The target holds rows of the sensor of these hours in its hour region: either they are the
+                        // sensor's rows there (the target is the class that holds the hour: a copy into it would make a
+                        // read return them twice) or a source a move left behind. The store cannot tell which, so it
+                        // refuses, with nothing written; the caller, which knows from the placement that the target is not
+                        // the class of those hours, deletes them first (DeleteSensorHours). Never deleted here: in the class
+                        // that holds the hour they are the only copy.
+                        RefuseHourRegionRecords(handle.Db, productId, sensorId, to, hours.Select(h => h.Hour));
+
                         // A database created here is on disk from now on, whether or not the write below succeeds. It holds no
                         // row of another sensor (the source is a database of the same week, so the week had one already, and
                         // another sensor's rows of the week went into databases that existed then): only this sensor's
@@ -293,10 +301,13 @@ namespace HSMDatabase.LevelDB.TableBatches
             var key = (productId, week.WeekStartTicks, week.PeriodWeeks);
             long before;
 
-            // A lease and nothing more: a drop waits for it (and a read that starts finds the database open), reads and writes
-            // of the product go on meanwhile (LevelDB compacts under them), and the product's lock is not held, so the drop,
-            // which takes it and then waits for the leases of the week, cannot wait on this compaction while it waits for
-            // the lock.
+            // A lease and nothing more: reads and writes of the product go on meanwhile (LevelDB compacts under them), and the
+            // product's lock is not held while it compacts, so a drop, which takes that lock and then waits for the leases of
+            // the week, never waits for this compaction while this compaction waits for the lock. Others do wait for it while
+            // they hold the product's lock: a DropWeek of this database (for the lease), a flush of this database pinned as the
+            // newest week (LevelDB runs one manual compaction at a time), and a Dispose (for the lease, unbounded). Hence the
+            // job's rule: never compact the newest (pinned) week, and compact on the job's own thread, never beside a drop of
+            // the same database.
             var handle = Acquire(key, create: false, pin: false);
             if (handle is null)
                 return;
@@ -542,6 +553,25 @@ namespace HSMDatabase.LevelDB.TableBatches
             return result;
         }
 
+        private void RefuseHourRegionRecords(DB db, Guid productId, Guid sensorId, TableBatchWeek target, IEnumerable<long> hours)
+        {
+            using var iterator = db.CreateIterator();
+
+            foreach (var hour in hours)
+            {
+                var prefix = IndexPrefix(hour, sensorId);
+                iterator.Seek(prefix);
+
+                if (iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix))
+                {
+                    Statistics.Add(ref Statistics.WriteFailures);
+                    throw new TableBatchStoreException($"The table batch database {WeekName(target.WeekStartTicks, target.PeriodWeeks)} of product {productId} holds batches of " +
+                                                       $"sensor {sensorId} of hour {new DateTime(hour, DateTimeKind.Utc):O} in its hour region: nothing is copied into it " +
+                                                       "until they are deleted (when it is not the class that holds the hour) or the copy is not made (when it is).");
+                }
+            }
+        }
+
         // Adds to the batch a delete of every key of the sensor in the region of moved batches of one hour (0xFF | hour |
         // sensor: its index records and its batches) and answers what its index records counted; a batch no index record
         // names counts its own bytes.
@@ -632,15 +662,29 @@ namespace HSMDatabase.LevelDB.TableBatches
                 record.FromClass.ToString(CultureInfo.InvariantCulture), record.ToClass.ToString(CultureInfo.InvariantCulture),
                 record.FirstHour.ToString(CultureInfo.InvariantCulture), record.EndHour.ToString(CultureInfo.InvariantCulture)) + "\n";
 
-        // A record that does not read is logged and taken as none: the placement, not this record, says where the rows are,
-        // so what it loses is only where a copy may be left (deleted at the sensor's next step there, its removal or the drop).
+        // A record that does not read (damaged, of another format, or a file that cannot be opened: a sharing violation, an
+        // access right) is logged and taken as none, and the product opens: the placement, not this record, says where the
+        // rows are, so what it loses is where a copy or a source not yet deleted may be left. Such leftovers stay until the
+        // sensor's removal or the drop of their database deletes them; a later step out of that class deletes them there with
+        // its source, and a later step into it is refused by CopySensorHours while its hour region holds them, until the job
+        // deletes them first.
         private static TableMoveInFlight ReadMove(Guid productId, string folder)
         {
             var path = Path.Combine(folder, MoveName);
             if (!File.Exists(path))
                 return null;
 
-            var text = File.ReadAllText(path).Trim();
+            string text;
+            try
+            {
+                text = File.ReadAllText(path).Trim();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.Error($"The move in flight of the table batches of product {productId} could not be read ({ex.Message}); taken as none");
+                return null;
+            }
+
             var fields = text.Split(' ');
 
             if (fields.Length == 7 && fields[0] == MoveVersion && Guid.TryParseExact(fields[1], "N", out var sensor) && TryParseWeek(fields[2], out var week) &&
@@ -672,7 +716,19 @@ namespace HSMDatabase.LevelDB.TableBatches
             if (!File.Exists(path))
                 return weeks;
 
-            foreach (var line in File.ReadAllLines(path))
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A hint only (a database left out is compacted when its counter is next found over the threshold).
+                _logger.Error($"The compaction list of the table batches of product {productId} could not be read ({ex.Message}); taken as empty");
+                return weeks;
+            }
+
+            foreach (var line in lines)
                 if (TryParseWeek(line, out var week))
                     weeks.Add(week);
                 else if (line.Length > 0)

@@ -2,6 +2,7 @@ using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.LevelDB.TableBatches;
 using LevelDB;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace HSMDatabase.LevelDB.Tests.TableBatchTests
 {
@@ -12,6 +13,10 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
     public sealed partial class TableBatchDatabaseTests
     {
         private static readonly int PayloadLength = Payload(Guid.Empty, 0, 0).Length;
+
+        private readonly ITestOutputHelper _output;
+
+        public TableBatchDatabaseTests(ITestOutputHelper output) => _output = output;
 
         // === CopySensorHours ===
 
@@ -33,8 +38,9 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(new TableBatchSensorHours(3, 30, 3 * PayloadLength), store.CopySensorHours(_product, sensorS, p1, 5, hour, hour + Hour));
             Assert.Equal(mark, store.ReadMark(_product, p5, hour));
 
-            // P4 gets S's three batches of P1 in its moved region beside its own: its mark (the same record) stays.
-            store.CopySensorHours(_product, sensorS, p1, 4, hour, hour + Hour);
+            // P4 gets the same three batches in its moved region beside its own (written by hand: a copy into a database that
+            // holds the sensor's hour-region records of the hour is refused); its mark stays.
+            store = PutMoved(store, p4, hour, null, Enumerable.Range(0, 3).Select(i => Batch(sensorS, hour + 10 * i, i)).ToArray());
             Assert.Equal(mark, store.ReadMark(_product, p4, hour));
             var fromP4 = store.ReadSensor(_product, sensorS, 4, [hour]);
             Assert.Equal([(false, 0), (true, 0), (true, 1), (true, 2)], fromP4.Select(r => (r.Moved, r.Ordinal)));
@@ -295,6 +301,143 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(default, reopened.GetDeletedShare(_product, new TableBatchWeek(Week0, 9)));
         }
 
+        [Fact]
+        public void A_copy_into_a_class_whose_hour_region_holds_the_sensors_rows_is_refused_so_no_read_returns_them_twice()
+        {
+            // S merged into P1 for the hour (its hour region), R beside it.
+            var store = Open();
+            long hour = Week0 + Hour;
+            var (p1, p5) = (new TableBatchWeek(Week0, 1), new TableBatchWeek(Week0, 5));
+            store.WriteHour(_product, Commit(hour), [Part(1, (_sensorA, Hour, 2), (_sensorB, Hour, 1))]);
+            store.SetPlacement(_product, _sensorA, new TablePlacement(5, hour, [new TablePlacementSegment(hour, hour + Hour, 1)]));
+            var rows = store.ReadSensor(_product, _sensorA, 1, [hour]).Select(r => r.Batch).ToList();
+
+            // A step P1 -> P5: its record, the copy, the switch; the process dies before the delete of the source.
+            store.SetMoveInFlight(_product, new TableMoveInFlight(_sensorA, Week0, 1, 5, hour, hour + Hour));
+            store.CopySensorHours(_product, _sensorA, p1, 5, hour, hour + Hour);
+            store.SetPlacement(_product, _sensorA, new TablePlacement(5, hour));
+            store.CloseWithoutFlush();
+
+            // At the restart the record does not read (damaged, or of a newer format after a rollback): taken as none, so no
+            // recovery deletes the source. P1 keeps S's rows of the hour in its hour region, and the placement says P5.
+            File.WriteAllText(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.MoveName), "damaged");
+            store = Open();
+            Assert.Null(store.GetMoveInFlight(_product));
+            Assert.Equal(rows, ReadByPlacement(store, _sensorA, [hour]).Select(r => r.Batch));
+
+            // The period goes back to P1: the step P5 -> P1 would copy into P1's moved region beside the left source, and once
+            // switched a read of P1 would return every row twice. It is refused, with nothing written and no generation changed.
+            var generations = (store.GetGeneration(_product), store.GetGeneration(_product, _sensorA));
+            var failures = store.Statistics.WriteFailures;
+            Assert.Throws<TableBatchStoreException>(() => store.CopySensorHours(_product, _sensorA, p5, 1, hour, hour + Hour));
+            Assert.Equal(generations, (store.GetGeneration(_product), store.GetGeneration(_product, _sensorA)));
+            Assert.Equal(failures + 1, store.Statistics.WriteFailures);
+            Assert.Equal([false, false], store.ReadSensor(_product, _sensorA, 1, [hour]).Select(r => r.Moved));
+
+            // The job, which knows from the placement that P1 is not the class of the hour, deletes the leftover first; then
+            // the step completes and the read returns every row once.
+            store.DeleteSensorHours(_product, _sensorA, p1, hour, hour + Hour);
+            store.CopySensorHours(_product, _sensorA, p5, 1, hour, hour + Hour);
+            store.SetPlacement(_product, _sensorA, new TablePlacement(1, hour));
+            store.DeleteSensorHours(_product, _sensorA, p5, hour, hour + Hour);
+            Assert.Equal(rows, ReadByPlacement(store, _sensorA, [hour]).Select(r => r.Batch));
+            Assert.Single(store.ReadSensor(_product, _sensorB, 1, [hour]));
+        }
+
+        // === The flush of a week database ===
+
+        [Fact]
+        public void A_flush_writes_the_memtable_out_and_rewrites_no_table_file()
+        {
+            // The native library itself, with the store's options: table files that hold hour keys only, hour-key tombstones
+            // with the deleted-bytes counter (what DeleteSensorHours writes), and an hour's mark with moved keys (what
+            // CopySensorHours writes), each written out by a flush of its own.
+            var path = Path.Combine(_root, "flush");
+            Directory.CreateDirectory(_root);
+            long h10 = Week0 + 10 * Hour, h11 = Week0 + 11 * Hour, h12 = Week0 + 12 * Hour;
+            var log = new List<string>();
+
+            using var db = new DB(path, new Options { CreateIfMissing = true, CompressionLevel = CompressionLevel.NoCompression });
+            var sync = new WriteOptions { Sync = true };
+
+            void Write(params (byte[] Key, byte[] Value)[] entries)
+            {
+                using var batch = new WriteBatch();
+                foreach (var (key, value) in entries)
+                    if (value is null)
+                        batch.Delete(key);
+                    else
+                        batch.Put(key, value);
+                db.Write(batch, sync);
+            }
+
+            Dictionary<string, long> Tables() => Directory.GetFiles(path).Where(f => f.EndsWith(".ldb") || f.EndsWith(".sst"))
+                .ToDictionary(Path.GetFileName, f => new FileInfo(f).Length);
+
+            string Describe(Dictionary<string, long> tables) => string.Join(", ", tables.OrderBy(t => t.Key).Select(t => $"{t.Key} {t.Value} B"));
+
+            var value = new byte[4096];
+            Write([.. new[] { h10, h11, h12 }.SelectMany(h => Enumerable.Range(0, 4).Select(i => (TableBatchDatabase.IndexKey(h, _sensorA, h + i, i), value)))]);
+            db.CompactRange(TableBatchDatabase.FlushKey, TableBatchDatabase.FlushKey);
+            Write((TableBatchDatabase.IndexKey(h11, _sensorA, h11, 0), null), (TableBatchDatabase.IndexKey(h11, _sensorA, h11 + 1, 1), null),
+                (TableBatchDatabase.DeletedKey, new byte[8]));
+            db.CompactRange(TableBatchDatabase.FlushKey, TableBatchDatabase.FlushKey);
+            Write((TableBatchDatabase.HourKey(h12, TableBatchDatabase.TagMark), value), (TableBatchDatabase.MovedIndexKey(_sensorB, h12, h12, 0), value),
+                (TableBatchDatabase.MovedBatchKey(_sensorB, h12, 0), value));
+            db.CompactRange(TableBatchDatabase.FlushKey, TableBatchDatabase.FlushKey);
+
+            var before = Tables();
+            log.Add($"before: {Describe(before)}");
+            Assert.Equal(3, before.Count);
+
+            // A flush at the store's point: every table file stays as it is, one file is added (the memtable).
+            Write((TableBatchDatabase.IndexKey(Week0, _sensorA, Week0, 0), value));
+            db.CompactRange(TableBatchDatabase.FlushKey, TableBatchDatabase.FlushKey);
+            var afterNew = Tables();
+            log.Add($"after a flush at 0xFF 0xFF: {Describe(afterNew)}");
+            Assert.True(before.All(t => afterNew.TryGetValue(t.Key, out var size) && size == t.Value), string.Join("\n", log));
+            Assert.Equal(before.Count + 1, afterNew.Count);
+
+            // The same flush at the earlier point, 0xFE, which the files of the counter and of the moved keys span: table files
+            // are rewritten (this test fails with it).
+            Write((TableBatchDatabase.IndexKey(Week0 + Hour, _sensorA, Week0 + Hour, 0), value));
+            db.CompactRange([0xFE], [0xFE]);
+            var afterOld = Tables();
+            log.Add($"after a flush at 0xFE: {Describe(afterOld)}");
+            Assert.False(afterNew.All(t => afterOld.ContainsKey(t.Key)), string.Join("\n", log));
+
+            _output.WriteLine(string.Join("\n", log));
+        }
+
+        // === Files of a product that cannot be read ===
+
+        [Fact]
+        public void A_move_in_flight_or_a_compaction_list_that_cannot_be_opened_is_logged_and_taken_as_none_and_the_product_opens()
+        {
+            var store = Open();
+            store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 1))]);
+            store.SetMoveInFlight(_product, new TableMoveInFlight(_sensorA, Week0, 1, 5, Week0, Week0 + Hour));
+            store.AddToCompactList(_product, new TableBatchWeek(Week0, 1));
+            store.Dispose();
+
+            // Both files held open with no sharing (a scanner, an editor) while the product opens.
+            var folder = Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"));
+            using (new FileStream(Path.Combine(folder, TableBatchDatabase.MoveName), FileMode.Open, FileAccess.Read, FileShare.None))
+            using (new FileStream(Path.Combine(folder, TableBatchDatabase.CompactName), FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var reopened = Open();
+                Assert.Single(reopened.GetHours(_product));
+                Assert.Null(reopened.GetMoveInFlight(_product));
+                Assert.Empty(reopened.GetCompactList(_product));
+                reopened.Dispose();
+            }
+
+            // Once they can be read, they are back.
+            var again = Open();
+            Assert.NotNull(again.GetMoveInFlight(_product));
+            Assert.Single(again.GetCompactList(_product));
+        }
+
         // === Crash points of the new durable writes ===
 
         [Theory]
@@ -421,7 +564,9 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             var other = new TableBatchWeek(Week0, 1);
 
             // The compaction holds its lease and is about to compact: on another thread, a read of B, the generation (the
-            // product's lock) and a write of the product (another class of the week) finish meanwhile.
+            // product's lock) and a write of the product (another class of the week) finish meanwhile. This half runs before
+            // CompactRange starts, so it shows that the compaction holds no lock they need, not that they run beside a
+            // compaction in progress; the second half does that.
             List<byte[]> readMeanwhile = null;
             bool finished = false;
             store.Checkpoint = p =>
