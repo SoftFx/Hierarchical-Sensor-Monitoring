@@ -356,6 +356,11 @@ namespace HSMServer.Core.Cache
             if (product == null)
                 return TaskResult.FromError(ErrorProductNotFound);
 
+            // Answered here, before the queue: the handler's own check throws,
+            // which the queue logs as an error.
+            if (RenameRefusal(product, request) is { } refusal)
+                return TaskResult.FromError(refusal);
+
             if (!product.IsRoot)
                 product = product.Root;
 
@@ -363,10 +368,44 @@ namespace HSMServer.Core.Cache
         }
 
 
+        // Why a ProductUpdate may not change the node's name, or null.
+        //
+        // A node below the root is never renamed. Its name is a segment of the
+        // path of every sensor under it, and the ingestion index
+        // (CachedValue.Sensors) and the aliases are keyed by those paths: a
+        // rename that only changed DisplayName left the index on the old
+        // paths until the next restart rebuilt it from the new ones, so the
+        // old path kept feeding the renamed sensors, the new path created a
+        // second sensor with the same name in the same node, and after the
+        // restart the old path created a new node. Renaming a node means
+        // moving its sensors (MoveSensorAsync, which leaves an alias at each
+        // old path); nodes themselves are never moved (ADR-0018).
+        //
+        // A root's name is no part of a sensor path, so a root is renamed
+        // freely; only an empty name is refused, which would leave the root
+        // in _productsByName under its old name.
+        private static string RenameRefusal(ProductModel product, ProductUpdate update)
+        {
+            if (update.Name is null || update.Name == product.DisplayName)
+                return null;
+
+            if (string.IsNullOrWhiteSpace(update.Name))
+                return $"Cannot rename '{product.FullPath}': the name is empty.";
+
+            if (!product.IsRoot)
+                return $"Cannot rename node '{product.FullPath}' to '{update.Name}': only a root product can be renamed, " +
+                       "a node's name is part of its sensors' paths. Move the sensors to the new path instead.";
+
+            return null;
+        }
+
         private void UpdateProduct(ProductUpdate update)
         {
             if (!_tree.TryGetValue(update.Id, out ProductModel product))
                 return;
+
+            if (RenameRefusal(product, update) is { } refusal)
+                throw new InvalidOperationException(refusal);
 
             if (product.IsRoot && !string.IsNullOrEmpty(update.Name) && product.DisplayName != update.Name)
             {
