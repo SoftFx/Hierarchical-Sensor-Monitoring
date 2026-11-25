@@ -3067,6 +3067,10 @@
             "only folders the caller manages" rule. The web controller delegates here; the
             /api/v1 + MCP surface (#1829) will call the same engine. Transport-agnostic: it answers
             the area's write envelope (<see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult"/>), never an IActionResult.
+            The NAME rule (required, at most 100 characters) is not here yet — it lives in the
+            view model's DataAnnotations, so the web flow enforces it but a non-MVC caller does
+            not; #1829 moves it behind the shared name validator of the chat-setup initiative
+            (docs/initiatives/chat-setup-via-mcp.md) before the API/MCP write surface ships.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.CreateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo)">
@@ -3094,22 +3098,26 @@
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding">
             <summary>
-            The folder binding of a chat write: the folders the caller wants the chat bound to
-            (Desired) and the folders the caller manages (Managed). Adds touch Desired ∩ Managed,
-            removals touch (the chat's current folders minus Desired) ∩ Managed — folders the
-            caller cannot manage are never touched. Managed is the scope the engine applies, not
-            something it derives: it must be built from the authenticated caller's own folders,
-            never taken from request data.
+            The folder binding of a chat write. Keep: the bindings the caller still wants (the edit
+            form's kept rows) — they decide only removals. Add: the folders to bind (the form's
+            SelectedFolders half) — the only source of new bindings. Managed: the folders the
+            caller manages. Adds touch Add ∩ Managed; removals touch (the chat's current folders
+            minus Keep) ∩ Managed — folders the caller cannot manage are never touched. A caller
+            holding one desired list passes it as both Keep and Add. Managed is the scope the
+            engine applies, not something it derives: it must be built from the authenticated
+            caller's own folders, never taken from request data.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding.#ctor(System.Collections.Generic.IReadOnlyCollection{System.Guid},System.Collections.Generic.IReadOnlyCollection{System.Guid})">
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding.#ctor(System.Collections.Generic.IReadOnlyCollection{System.Guid},System.Collections.Generic.IReadOnlyCollection{System.Guid},System.Collections.Generic.IReadOnlyCollection{System.Guid})">
             <summary>
-            The folder binding of a chat write: the folders the caller wants the chat bound to
-            (Desired) and the folders the caller manages (Managed). Adds touch Desired ∩ Managed,
-            removals touch (the chat's current folders minus Desired) ∩ Managed — folders the
-            caller cannot manage are never touched. Managed is the scope the engine applies, not
-            something it derives: it must be built from the authenticated caller's own folders,
-            never taken from request data.
+            The folder binding of a chat write. Keep: the bindings the caller still wants (the edit
+            form's kept rows) — they decide only removals. Add: the folders to bind (the form's
+            SelectedFolders half) — the only source of new bindings. Managed: the folders the
+            caller manages. Adds touch Add ∩ Managed; removals touch (the chat's current folders
+            minus Keep) ∩ Managed — folders the caller cannot manage are never touched. A caller
+            holding one desired list passes it as both Keep and Add. Managed is the scope the
+            engine applies, not something it derives: it must be built from the authenticated
+            caller's own folders, never taken from request data.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">

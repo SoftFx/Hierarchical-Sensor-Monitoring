@@ -242,17 +242,20 @@ namespace HSMServer.Controllers
         private IActionResult MapEngineResult(PolicyWriteResult result) =>
             result.Success ? Ok() : NotFound();
 
-        // The binding the caller asks for (the folders the form keeps, plus the newly picked ones)
-        // against the folders the caller manages — the engine applies the intersection rule.
+        // The binding the caller asks for, in the form's two halves, against the folders the
+        // caller manages. The halves are same-typed, so they are passed by name: the hidden
+        // kept rows (model.Folders.Folders) decide only removals — a stale kept row never
+        // re-binds (the #1840 review) — and the SelectedFolders half is the only source of new
+        // bindings (its picker is commented out in _ChatFolders.cshtml today, so an honest post
+        // carries none). The engine applies the intersection rules.
         private ChatFolderBinding BuildFolderBinding(ChatViewModel model)
         {
             var managed = _folderManager.GetUserFolders(CurrentUser).Select(f => f.Id).ToHashSet();
 
-            var desired = new HashSet<Guid>(model.Folders?.Folders ?? []);
-            foreach (var selected in model.Folders?.SelectedFolders ?? [])
-                desired.Add(selected);
+            var keep = new HashSet<Guid>(model.Folders?.Folders ?? []);
+            var add = new HashSet<Guid>(model.Folders?.SelectedFolders ?? []);
 
-            return new ChatFolderBinding(desired, managed);
+            return new ChatFolderBinding(Keep: keep, Add: add, Managed: managed);
         }
 
         // Only the Invalid outcome's field-keyed errors reach the form; the other outcomes keep
