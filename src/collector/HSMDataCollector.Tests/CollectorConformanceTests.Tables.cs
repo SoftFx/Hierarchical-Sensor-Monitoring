@@ -328,6 +328,8 @@ namespace HSMDataCollector.Tests
 
             Task<TableBlockAck> ITableBlockChannel.PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token) =>
                 Tables.PutBlockAsync(producer, sequence, block, token);
+
+            Task ITableBlockChannel.CloseAsync(CancellationToken budget) => Task.CompletedTask;
         }
     }
 }

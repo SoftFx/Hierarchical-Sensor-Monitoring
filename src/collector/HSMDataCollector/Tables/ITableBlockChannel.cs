@@ -39,6 +39,12 @@ namespace HSMDataCollector.Tables
         /// <see cref="OperationCanceledException"/> when cancelled.
         /// </summary>
         Task<TableBlockAck> PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token);
+
+        /// <summary>
+        /// Closes the transport of the blocks at the end of a stop's table drain, within <paramref name="budget"/>; the
+        /// next Start of the collector opens it again. Does not throw.
+        /// </summary>
+        Task CloseAsync(CancellationToken budget);
     }
 
 

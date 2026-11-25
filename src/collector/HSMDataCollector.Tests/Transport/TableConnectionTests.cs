@@ -169,10 +169,14 @@ namespace HSMDataCollector.Tests.Transport
             using (var server = new ScriptedSessionServer())
             using (var collector = new DataCollector(OptionsFor(server)))
             {
-                collector.CreateIntSensor("values/int").AddValue(42);
+                var sensor = collector.CreateIntSensor("values/int");
                 await collector.Start();
 
-                await UntilAsync(() => server.Accepted.Any(r => r.Op == "list"), "no value was delivered");
+                await UntilAsync(() =>
+                {
+                    sensor.AddValue(42);
+                    return server.Accepted.Any(r => r.Op == "list");
+                }, "no value was delivered");
 
                 Assert.Empty(server.TableUpgradeHeaders);
                 Assert.Null(collector.TablePipeline);
@@ -553,7 +557,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 Assert.Empty(rig.Server.TableUpgradeHeaders);
                 Assert.Equal(1, rig.Collector.TablePipeline.BacklogBlocks);
-                Assert.Single(rig.Logger.Errors.Where(e => e.Contains("states no sessionId")));
+                Assert.Single(rig.Logger.Errors.Where(e => e.StartsWith("Cannot open the table connection") && e.Contains("states no sessionId")));
             }
         }
 

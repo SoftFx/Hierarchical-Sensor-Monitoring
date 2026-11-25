@@ -87,6 +87,8 @@ namespace HSMDataCollector.Tests.Tables
 
         public Task WaitUntilReadyAsync(CancellationToken token) => Task.CompletedTask;
 
+        public Task CloseAsync(CancellationToken budget) => Task.CompletedTask;
+
         public Task<TableRegistrationResult> RegisterTablesAsync(IReadOnlyList<AddOrUpdateSensorRequest> registrations, CancellationToken token)
         {
             lock (_lock)

@@ -33,6 +33,9 @@ namespace HSMDataCollector.Client.Session
         Task<TableBlockAck> ITableBlockChannel.PutBlockAsync(Guid producer, long sequence, byte[] block, CancellationToken token) =>
             _tables.PutAsync(producer, sequence, block, token);
 
+        // The table connection closes at the end of the stop's table drain, inside its budget and before the session.
+        Task ITableBlockChannel.CloseAsync(CancellationToken budget) => _tables.StopAsync(CloseLinger, budget);
+
         async Task<TableRegistrationResult> ITableBlockChannel.RegisterTablesAsync(IReadOnlyList<AddOrUpdateSensorRequest> registrations, CancellationToken token)
         {
             var room = _connection.MaxBodyBytes;

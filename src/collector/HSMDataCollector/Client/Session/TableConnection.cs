@@ -48,6 +48,9 @@ namespace HSMDataCollector.Client.Session
         private const int ConnectionsPerPut = 3;
 
         private static readonly TimeSpan CloseAnswerTimeout = TimeSpan.FromSeconds(1);
+
+        // How long writing the close frame of a stop may take; the frame is a few bytes.
+        private static readonly TimeSpan CloseFrameBound = TimeSpan.FromMilliseconds(250);
         private static readonly Regex StatusInMessage = new Regex(@"status code '(\d{3})'|\((\d{3})\)", RegexOptions.CultureInvariant);
 
         private readonly SessionConnection _session;
@@ -159,14 +162,19 @@ namespace HSMDataCollector.Client.Session
 
             var link = _link;
 
-            if (link != null && linger > TimeSpan.Zero && !budget.IsCancellationRequested)
+            if (link != null && linger > TimeSpan.Zero)
             {
                 try
                 {
+                    // The close frame is written even when the budget is spent (a drain that waited for an ack to its
+                    // end): it is a few bytes, bounded on its own, and lets the server see a normal closure. Only the
+                    // wait for the server's answer is the budget's.
+                    using (var write = new CancellationTokenSource(CloseFrameBound))
+                        await CloseOutputAsync(link, WebSocketCloseStatus.NormalClosure, "collector stopped", write.Token).ConfigureAwait(false);
+
                     using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(budget))
                     {
                         timeout.CancelAfter(linger);
-                        await CloseOutputAsync(link, WebSocketCloseStatus.NormalClosure, "collector stopped", timeout.Token).ConfigureAwait(false);
                         await Task.WhenAny(link.Ended, Task.Delay(Timeout.Infinite, timeout.Token)).ConfigureAwait(false);
                     }
                 }
@@ -788,6 +796,11 @@ namespace HSMDataCollector.Client.Session
                     if (block.Length + FrameHeaderSize > link.MaxFrameBytes)
                         return TableBlockAck.TooLarge($"a block of {block.Length + FrameHeaderSize} bytes with its frame header is larger than the table connection takes ({link.MaxFrameBytes} bytes)");
 
+                    // The block limits of the hello, from the block's header (nothing is decompressed): a block packed
+                    // for larger limits would be refused for good (400), so it is packed again instead.
+                    if (ExceedsLimits(block, BlockLimits, out var exceeded))
+                        return TableBlockAck.TooLarge($"a block exceeds the block limits of the table connection ({exceeded})");
+
                     var answer = await SendBlockAsync(link, producer, sequence, block, token).ConfigureAwait(false);
 
                     if (answer != null)
@@ -801,6 +814,30 @@ namespace HSMDataCollector.Client.Session
                 _putLock.Release();
             }
         }
+
+        private static bool ExceedsLimits(byte[] block, TableBlockLimits limits, out string why)
+        {
+            try
+            {
+                var header = TableBlockReader.ReadHeader(block, ReadBackLimits);
+
+                why = header.RowCount > limits.MaxRows ? $"{header.RowCount} rows, at most {limits.MaxRows}"
+                    : header.TableCount > limits.MaxTables ? $"{header.TableCount} tables, at most {limits.MaxTables}"
+                    : header.DecompressedLength > limits.MaxDecompressedBytes ? $"{header.DecompressedLength} bytes decompressed, at most {limits.MaxDecompressedBytes}"
+                    : null;
+
+                return why != null;
+            }
+            catch (TableBlockFormatException)
+            {
+                // Not this collector's to judge: the server answers it.
+                why = null;
+                return false;
+            }
+        }
+
+        private static readonly TableBlockLimits ReadBackLimits = new TableBlockLimits(TableBlockLimits.FormatMaxDecompressedBytes, int.MaxValue, int.MaxValue,
+                                                                                         TableBlockLimits.FormatMaxColumnsPerTable, TableBlockLimits.FormatMaxTableIdLength);
 
         private async Task<Link> WaitForLinkAsync(CancellationToken token)
         {
