@@ -28,7 +28,7 @@ namespace HSMServer.Controllers
         /// <summary>POST /TableSensors/Chart: the chart of a range of one table sensor.</summary>
         [HttpPost]
         public Task<IActionResult> Chart([FromBody] TableChartRequest request) =>
-            _pages.ChartAsync(CurrentUser, request, HttpContext.RequestAborted);
+            _pages.ChartAsync(HttpContext, CurrentUser, request);
 
         /// <summary>GET /TableSensors/Download?id=&amp;from=&amp;to=: the rows of a range as CSV.</summary>
         [HttpGet]

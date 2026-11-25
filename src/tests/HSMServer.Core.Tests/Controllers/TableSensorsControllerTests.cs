@@ -124,6 +124,20 @@ namespace HSMServer.Core.Tests.Controllers
 
         [Theory]
         [MemberData(nameof(Actions))]
+        public async Task Every_answer_tells_caches_not_to_store_it(string action)
+        {
+            var table = await SeedAsync(3);
+
+            var (status, _, read) = await CallFullAsync(action, Viewer(_product), table.Id.ToString());
+            var (hiddenStatus, _, hidden) = await CallFullAsync(action, Viewer(Guid.NewGuid()), table.Id.ToString());
+
+            Assert.Equal((200, 404), (status, hiddenStatus));
+            Assert.Equal("no-store", read.Response.Headers.CacheControl.ToString());
+            Assert.Equal("no-store", hidden.Response.Headers.CacheControl.ToString());
+        }
+
+        [Theory]
+        [MemberData(nameof(Actions))]
         public async Task A_sensor_that_is_not_a_table_sensor_is_a_400(string action)
         {
             var result = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, $"{_root}/plain")

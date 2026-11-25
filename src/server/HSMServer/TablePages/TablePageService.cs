@@ -92,8 +92,11 @@ namespace HSMServer.TablePages
 
         // === The chart ===
 
-        public async Task<IActionResult> ChartAsync(User user, TableChartRequest request, CancellationToken token)
+        public async Task<IActionResult> ChartAsync(HttpContext context, User user, TableChartRequest request)
         {
+            var token = context.RequestAborted;
+            NoStore(context);
+
             if (request is null)
                 return Refuse(StatusCodes.Status400BadRequest, "The body cannot be read as a chart request.");
 
@@ -274,6 +277,7 @@ namespace HSMServer.TablePages
         public async Task<IActionResult> DownloadAsync(HttpContext context, User user, string id, DateTime from, DateTime to)
         {
             var token = context.RequestAborted;
+            NoStore(context);
 
             if (Resolve(user, id, out var table) is { } refused)
                 return refused;
@@ -399,6 +403,10 @@ namespace HSMServer.TablePages
         }
 
         private static IActionResult StoreFault() => new StoreFaultResult();
+
+        // Every answer of both routes holds a product's data or says whether a sensor exists: no cache between the browser
+        // and the server may keep one and hand it to another user.
+        private static void NoStore(HttpContext context) => context.Response.Headers.CacheControl = "no-store";
 
         private static ContentResult Refuse(int status, string text) => new() { StatusCode = status, Content = text, ContentType = "text/plain; charset=utf-8" };
 
