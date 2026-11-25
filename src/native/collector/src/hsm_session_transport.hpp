@@ -43,6 +43,9 @@ namespace hsm::http
         long status = 0;
         // Why there is no ack, or the server's `error` text of a failure ack.
         std::string error;
+        // The ack's `body` as JSON text when it carried one that is not empty (the per-path errors
+        // of a `commands` ack, which the table registrations read, #1848); empty otherwise.
+        std::string body;
 
         bool IsSuccess() const { return acked && status >= 200 && status < 300; }
     };
@@ -118,6 +121,15 @@ namespace hsm::http
         // A wait that times out ends the session (the late ack must not be taken for another
         // request's), which then reconnects.
         SessionResult Request(const char* op, const std::string& body, int64_t timeout_ms);
+
+        // The same, and the wait also ends (with the error "cancelled") once `abandon` reads true
+        // after a Wake. Only this request gives up: the session and the other requests go on, and
+        // an ack that comes later finds no one waiting. For a caller that must be cancellable on
+        // its own (the table channel's registrations, #1848).
+        SessionResult Request(const char* op, const std::string& body, int64_t timeout_ms, const std::atomic<bool>& abandon);
+
+        // Wakes every waiting request so that it reads its `abandon` flag again. Any thread.
+        void Wake();
 
         // Makes waiting and later requests fail at once, until ResetCancel. The session stays up.
         void Cancel();

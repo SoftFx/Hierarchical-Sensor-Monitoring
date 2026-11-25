@@ -12,7 +12,7 @@ endif()
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.15.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.15.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -175,7 +175,8 @@ if(HSM_COLLECTOR_HTTP)
     # private, so it adds nothing to what a consumer of the built library links.
     find_package(nlohmann_json REQUIRED)
     get_target_property(HSM_NLOHMANN_JSON_INCLUDES nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
-    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp
+        src/hsm_acked_binary_link.cpp) # the second connection of a session (#1848)
     target_include_directories(hsm_collector_core SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
     target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
@@ -218,6 +219,11 @@ if(HSM_COLLECTOR_TABLES)
     target_sources(hsm_collector_core PRIVATE
         src/tables/hsm_table_block_writer.cpp
     )
+    # The table connection of the collector session (#1848 part 4): blocks reach a server only with
+    # the session transport, so only a build that has it delivers them.
+    if(HSM_COLLECTOR_HTTP)
+        target_sources(hsm_collector_core PRIVATE src/tables/hsm_session_table_channel.cpp)
+    endif()
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_TABLES=1)
     target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
 endif()
@@ -393,6 +399,43 @@ if(HSM_COLLECTOR_TABLES)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
     set_tests_properties(native_table_stress_writers_ticks_and_restarts PROPERTIES TIMEOUT 600)
+    # The table connection of the collector session (#1848 part 4), against the scripted table side of
+    # tests/ws_test_server.hpp: the tables build with the session transport only.
+    if(HSM_COLLECTOR_HTTP)
+        foreach(name
+                native_table_block_after_hello_and_probe
+                native_table_every_ack_status_maps_to_its_answer
+                native_table_lost_ack_then_duplicate
+                native_table_close_1013_sends_the_same_frame
+                native_table_close_1000_sends_the_same_frame
+                native_table_upgrade_404_asked_again_later
+                native_table_upgrade_400_asked_again_later
+                native_table_upgrade_404_asked_with_the_next_session
+                native_table_upgrade_400_asked_with_the_next_session
+                native_table_upgrade_406_uses_the_backoff
+                native_table_upgrade_503_uses_the_backoff
+                native_table_upgrade_409_waits_for_the_next_session
+                native_table_block_in_flight_across_a_new_session
+                native_table_splits_by_the_hello_limits
+                native_table_block_packed_before_a_smaller_hello
+                native_table_stop_with_a_block_in_flight
+                native_table_server_protocol_errors
+                native_table_heartbeat
+                native_table_start_stop_start
+                native_table_dispose_from_every_state
+                native_table_no_connection_without_a_table_sensor
+                native_table_link_carries_4_and_16_mib_frames
+                native_table_stress_writers_reconnects_and_stop
+                native_table_cancel_reaches_a_closing_connection
+                native_table_reports_are_said_once_per_kind
+                native_table_retry_after_as_managed
+                native_table_service_reports_the_connection_of_a_new_session
+                native_table_three_lost_connections_keep_the_block_at_the_head)
+            add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+        endforeach()
+        set_tests_properties(native_table_stress_writers_reconnects_and_stop native_table_dispose_from_every_state
+                             native_table_every_ack_status_maps_to_its_answer PROPERTIES TIMEOUT 600)
+    endif()
     # A report written under a lock the host's callback takes again deadlocks: the timeout fails it.
     set_tests_properties(native_table_reports_reach_the_host_with_no_lock_held PROPERTIES TIMEOUT 120)
     # Blocks and their rows as text, read by the managed reader in NativeBlockVectorTests
@@ -955,6 +998,11 @@ if(HSM_COLLECTOR_TABLES)
         COMMAND hsm_collector_tests meta_must_fail
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_table_rows_wrong_count.hsmtest
     )
+    # The table connection of the collector session (#1848 part 4): the scripted session server takes it,
+    # so it needs the session transport too.
+    if(HSM_COLLECTOR_HTTP)
+        add_conformance_test(conformance_table_connection_contract table_connection_contract.hsmtest)
+    endif()
 endif()
 
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads

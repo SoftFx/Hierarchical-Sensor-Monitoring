@@ -20,7 +20,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <deque>
+#include <functional>
+#include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -675,6 +679,149 @@ namespace hsm::test
             return sent && answered;
         }
 
+        // --- The scripted table connection (#1848 part 4), what an HSM server does on the side
+        // connections of hsm.tables.v1 (wire contract, "Table connection"; the managed counterpart is
+        // ScriptedSessionServer.Tables.cs). On with EnableTableScript; Options::side_subprotocol must be
+        // the table subprotocol. A side upgrade whose X-Hsm-Session names no live session is refused
+        // with 409; an accepted one gets the table hello, every probe its ack, every block frame the
+        // scripted answer (without a script: stored, or duplicate for a producer and sequence stored
+        // before). When a session ends its table connections are closed with 1000 "its session ended".
+
+        struct TableAnswer
+        {
+            enum class Kind
+            {
+                Store,       // stored (duplicate when stored before), `refuse` tables refused
+                Status,      // a failure ack with `status` (and retryAfter when >= 0); nothing stored
+                Text,        // `text` as the answer, "{id}" replaced by the request id
+                Silent,      // no answer, nothing stored
+                Close,       // the connection closed with `status` and `text`; nothing stored
+                Binary,      // a binary frame instead of an answer
+                RefuseAll,   // allRefused, every table with `text` as the reason; nothing stored
+                DropSession, // the session cut without a close; its table connection then closed 1000
+            };
+            Kind kind = Kind::Store;
+            int status = 0;
+            int retry_after = -1;
+            std::string text;
+            bool silent = false; // with Store: stored, and no ack
+            std::map<std::string, std::string> refuse;
+
+            static TableAnswer Stored(std::map<std::string, std::string> refuse = {}) { return { Kind::Store, 0, -1, {}, false, std::move(refuse) }; }
+            static TableAnswer StoredSilently() { return { Kind::Store, 0, -1, {}, true, {} }; }
+            static TableAnswer WithStatus(int status, int retry_after = -1) { return { Kind::Status, status, retry_after, {}, false, {} }; }
+            static TableAnswer WithText(std::string text) { return { Kind::Text, 0, -1, std::move(text), false, {} }; }
+            static TableAnswer NoAnswer() { return { Kind::Silent, 0, -1, {}, false, {} }; }
+            static TableAnswer CloseWith(int code, std::string reason = {}) { return { Kind::Close, code, -1, std::move(reason), false, {} }; }
+            static TableAnswer BinaryFrame() { return { Kind::Binary, 0, -1, {}, false, {} }; }
+            static TableAnswer RefuseAll(std::string reason = "SensorCreatedAfterBlock") { return { Kind::RefuseAll, 0, -1, std::move(reason), false, {} }; }
+            static TableAnswer DropSession() { return { Kind::DropSession, 0, -1, {}, false, {} }; }
+        };
+
+        // One block frame as the server read it.
+        struct TableFrameRecord
+        {
+            int connection = 0; // 1 = the first table connection accepted
+            int64_t id = 0;
+            std::string producer; // 16 bytes
+            int64_t sequence = 0;
+            std::string block; // the frame after its 40-byte header
+            size_t frame_bytes = 0;
+            std::string outcome;
+            bool stored = false;
+            std::map<std::string, std::string> refused; // by table name
+        };
+
+        // `table_names` reads the table names of a block in directory order (the test's block
+        // reader); without one the acks list no refusals by index.
+        void EnableTableScript(std::function<std::vector<std::string>(const std::string& block)> table_names)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            table_names_ = std::move(table_names);
+            table_script_.store(true, std::memory_order_release);
+        }
+
+        // What the table hello of the connections accepted from now on states.
+        void SetTableHello(int max_frame_bytes, int heartbeat_seconds, int max_rows = 8 * 1024 * 1024, int max_tables = 65536)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            table_max_frame_bytes_ = max_frame_bytes;
+            table_heartbeat_seconds_ = heartbeat_seconds;
+            table_max_rows_ = max_rows;
+            table_max_tables_ = max_tables;
+        }
+        int TableMaxFrameBytes() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return table_max_frame_bytes_;
+        }
+        void SetTableMaxFrameBytes(int bytes)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            table_max_frame_bytes_ = bytes;
+        }
+        // The table hello is sent as this text instead, when not empty (a broken server).
+        void SetTableHelloOverride(std::string text)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            table_hello_override_ = std::move(text);
+        }
+        // The next block frame is answered as `answer` says (one per call, in order).
+        void AnswerTableNext(TableAnswer answer)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            table_script_answers_.push_back(std::move(answer));
+        }
+        // Closes every open table connection from the server's side.
+        void CloseTableConnections(uint16_t code, const std::string& reason = {})
+        {
+            std::lock_guard<std::mutex> guard(side_send_mutex_);
+            for (auto& open : table_open_)
+                if (open.second.sock != INVALID_SOCKET)
+                {
+                    open.second.closing = true;
+                    WriteFrame(open.second.sock, 0x8, /*fin=*/true, ClosePayload(code, reason));
+                }
+        }
+        int TableConnections() const { return side_upgrades_.load(std::memory_order_acquire); }
+        int RefusedTableUpgrades() const { return side_refused_.load(std::memory_order_acquire); }
+        int TablePings() const { return table_pings_.load(std::memory_order_acquire); }
+        // The X-Hsm-Session of every table upgrade the server saw (accepted or refused), in order.
+        std::vector<std::string> TableUpgradeSessionIds() const
+        {
+            std::vector<std::string> ids;
+            for (const auto& head : SideUpgradeHeads())
+                ids.push_back(ws_detail::HeaderValue(head, "x-hsm-session"));
+            return ids;
+        }
+        std::vector<int64_t> TableProbes() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return table_probes_;
+        }
+        std::vector<TableFrameRecord> TableFrames() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return table_frames_;
+        }
+        // True once the server decided to leave the block frame of request `id` without an answer.
+        bool TableFrameUnanswered(int64_t id) const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return table_unanswered_.count(id) != 0;
+        }
+        // Answer the client's close of a table connection (the default) or not: a server that never
+        // answers keeps a client's close linger waiting for its whole bound.
+        void SetTableAnswerCloses(bool answer) { table_answer_closes_.store(answer, std::memory_order_release); }
+
+        // Runs on the server's thread when the client's close frame of a session arrives, before it
+        // is answered.
+        void SetSessionCloseReceived(std::function<void()> hook)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            session_close_received_ = std::move(hook);
+        }
+
     private:
         // One frame as it came off the wire, unmasked.
         struct Frame
@@ -919,6 +1066,23 @@ namespace hsm::test
         {
             Serve(conn, head);
 
+            // As the server: the table connections of a session that ended are closed with 1000.
+            std::string ended;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                ended.swap(live_session_);
+            }
+            if (table_script_.load(std::memory_order_acquire) && !ended.empty())
+            {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                for (auto& open : table_open_)
+                    if (open.second.session_id == ended && !open.second.closing)
+                    {
+                        open.second.closing = true;
+                        WriteFrame(open.second.sock, 0x8, /*fin=*/true, ClosePayload(1000, "its session ended"));
+                    }
+            }
+
             {
                 std::lock_guard<std::mutex> guard(send_mutex_);
                 connection_ = INVALID_SOCKET;
@@ -948,7 +1112,14 @@ namespace hsm::test
                 side_heads_.push_back(head);
             }
             const std::string key = ws_detail::HeaderValue(head, "sec-websocket-key");
-            const int refuse = side_refuse_status_.load(std::memory_order_acquire);
+            int refuse = side_refuse_status_.load(std::memory_order_acquire);
+            const std::string named = ws_detail::HeaderValue(head, "x-hsm-session");
+            if (refuse == 0 && table_script_.load(std::memory_order_acquire))
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (named.empty() || named != live_session_)
+                    refuse = 409;
+            }
             if (refuse != 0 || key.empty())
             {
                 side_refused_.fetch_add(1, std::memory_order_release);
@@ -964,7 +1135,308 @@ namespace hsm::test
             }
             side_drop_.store(false, std::memory_order_release);
             side_open_.fetch_add(1, std::memory_order_release);
+            if (table_script_.load(std::memory_order_acquire))
+            {
+                side_threads_.emplace_back([this, conn, named] { ServeTable(conn, named); });
+                return;
+            }
             side_threads_.emplace_back([this, conn] { ServeSide(conn); });
+        }
+
+        // The scripted table connection: hello, probes, block frames and their answers.
+        void ServeTable(socket_t conn, const std::string& session_id)
+        {
+            const int index = side_upgrades_.fetch_add(1, std::memory_order_acq_rel) + 1;
+            {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                side_connection_ = conn;
+                table_open_[index] = TableOpen{ conn, session_id, false };
+            }
+            const auto reply = [this, conn](uint8_t opcode, const std::string& payload) {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                return WriteFrame(conn, opcode, /*fin=*/true, payload);
+            };
+            const auto close_with = [this, conn, index](uint16_t code, const std::string& reason) {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                table_open_[index].closing = true;
+                return WriteFrame(conn, 0x8, /*fin=*/true, ClosePayload(code, reason));
+            };
+
+            std::string hello;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                hello = !table_hello_override_.empty()
+                            ? table_hello_override_
+                            : "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":" + std::to_string(table_max_frame_bytes_) +
+                                  ",\"heartbeatSeconds\":" + std::to_string(table_heartbeat_seconds_) +
+                                  ",\"blockLimits\":{\"maxDecompressedBytes\":67108864,\"maxTables\":" + std::to_string(table_max_tables_) +
+                                  ",\"maxRows\":" + std::to_string(table_max_rows_) + ",\"maxColumnsPerTable\":64,\"maxTableIdLength\":1024}}}";
+            }
+            reply(0x1, hello);
+
+            std::string message;
+            uint8_t message_opcode = 0;
+            Frame frame;
+            bool open = true;
+            while (open && ReadFrame(conn, side_drop_, frame))
+            {
+                if (frame.opcode == 0x8)
+                {
+                    bool closing = false;
+                    {
+                        std::lock_guard<std::mutex> guard(side_send_mutex_);
+                        closing = table_open_[index].closing;
+                    }
+                    {
+                        std::lock_guard<std::mutex> guard(mutex_);
+                        side_close_codes_.push_back(CloseCode(frame.payload));
+                    }
+                    if (!table_answer_closes_.load(std::memory_order_acquire))
+                        continue; // read on, unanswered, until the client lets the connection go
+                    if (!closing)
+                        reply(0x8, frame.payload.substr(0, 2));
+                    break;
+                }
+                if (frame.opcode == 0x9)
+                {
+                    reply(0xA, frame.payload);
+                    continue;
+                }
+                if (frame.opcode == 0xA)
+                    continue;
+                if (frame.opcode != 0x0)
+                {
+                    message_opcode = frame.opcode;
+                    message.swap(frame.payload);
+                }
+                else
+                {
+                    message += frame.payload;
+                }
+                if (!frame.fin)
+                    continue;
+
+                if (message_opcode == 0x1)
+                {
+                    if (message.find("\"ping\"") != std::string::npos)
+                    {
+                        table_pings_.fetch_add(1, std::memory_order_acq_rel);
+                        reply(0x1, "{\"op\":\"pong\"}");
+                    }
+                    {
+                        std::lock_guard<std::mutex> guard(mutex_);
+                        side_text_.push_back(message);
+                    }
+                }
+                else if (message_opcode == 0x2)
+                {
+                    open = AnswerTableFrame(index, message, reply, close_with);
+                }
+                message.clear();
+                message_opcode = 0;
+            }
+
+            // A closing connection is read on until the client's close (or its end).
+            while (!open && ReadFrame(conn, side_drop_, frame))
+            {
+                if (frame.opcode == 0x8)
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    side_close_codes_.push_back(CloseCode(frame.payload));
+                    break;
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> guard(side_send_mutex_);
+                if (side_connection_ == conn)
+                    side_connection_ = INVALID_SOCKET;
+                table_open_.erase(index);
+            }
+            side_open_.fetch_sub(1, std::memory_order_release);
+            closesocket(conn);
+        }
+
+        static int64_t ReadLittleEndian(const std::string& bytes, size_t offset, size_t size)
+        {
+            uint64_t value = 0;
+            for (size_t i = size; i > 0; --i)
+                value = (value << 8) | static_cast<uint8_t>(bytes[offset + i - 1]);
+            return static_cast<int64_t>(value);
+        }
+
+        // The ack of a stored block with the refusals of its first put (a duplicate answers the
+        // first one's).
+        std::string BlockAck(int64_t id, const std::string& outcome, const TableFrameRecord& stored, const std::vector<std::string>& names) const
+        {
+            std::string list;
+            int refused = 0;
+            for (size_t i = 0; i < names.size(); ++i)
+            {
+                const auto found = stored.refused.find(names[i]);
+                if (found == stored.refused.end())
+                    continue;
+                list += (refused == 0 ? "" : ",") + std::string("{\"index\":") + std::to_string(i) + ",\"table\":\"" + names[i] +
+                        "\",\"reason\":\"" + found->second + "\"}";
+                ++refused;
+            }
+            const bool all = refused == static_cast<int>(names.size()) && !names.empty();
+            return "{\"ack\":" + std::to_string(id) + ",\"status\":200,\"body\":{\"outcome\":\"" + (all && outcome == "stored" ? std::string("allRefused") : outcome) +
+                   "\",\"tables\":" + std::to_string(names.size()) + ",\"refusedCount\":" + std::to_string(refused) + ",\"refused\":[" + list + "]}}";
+        }
+
+        // False when the connection is over (closing).
+        template <class Reply, class Close>
+        bool AnswerTableFrame(int index, const std::string& frame, const Reply& reply, const Close& close_with)
+        {
+            if (frame.size() < 40 || frame[0] != 1 || (frame[1] != 1 && frame[1] != 2) || frame[2] != 0 || frame[3] != 0 || ReadLittleEndian(frame, 4, 4) != 40)
+            {
+                close_with(1002, "a binary frame without a trusted header");
+                return false;
+            }
+            const int64_t id = ReadLittleEndian(frame, 8, 8);
+            if (frame[1] == 2)
+            {
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    table_probes_.push_back(id);
+                }
+                reply(0x1, "{\"ack\":" + std::to_string(id) + ",\"status\":200,\"body\":{}}");
+                return true;
+            }
+
+            TableFrameRecord record;
+            record.connection = index;
+            record.id = id;
+            record.producer = frame.substr(16, 16);
+            record.sequence = ReadLittleEndian(frame, 32, 8);
+            record.block = frame.substr(40);
+            record.frame_bytes = frame.size();
+
+            TableAnswer answer = TableAnswer::Stored();
+            std::function<std::vector<std::string>(const std::string&)> names_of;
+            int max_frame = 0;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                max_frame = table_max_frame_bytes_;
+                if (!table_script_answers_.empty())
+                {
+                    answer = std::move(table_script_answers_.front());
+                    table_script_answers_.pop_front();
+                }
+                names_of = table_names_;
+            }
+            if (static_cast<int64_t>(frame.size()) > max_frame)
+            {
+                close_with(1009, "a frame over maxFrameBytes");
+                return false;
+            }
+            std::vector<std::string> names;
+            if (names_of)
+            {
+                try
+                {
+                    names = names_of(record.block);
+                }
+                catch (...)
+                {
+                    names.clear();
+                }
+            }
+            const std::string key = record.producer + "/" + std::to_string(record.sequence);
+            const std::string sid = std::to_string(id);
+
+            const auto keep = [this](TableFrameRecord record_to_keep) {
+                std::lock_guard<std::mutex> guard(mutex_);
+                table_frames_.push_back(std::move(record_to_keep));
+            };
+            const auto unanswered = [this, id] {
+                std::lock_guard<std::mutex> guard(mutex_);
+                table_unanswered_.insert(id);
+            };
+
+            switch (answer.kind)
+            {
+            case TableAnswer::Kind::Store: {
+                TableFrameRecord first;
+                bool before = false;
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    const auto found = table_stored_.find(key);
+                    if (found != table_stored_.end())
+                    {
+                        before = true;
+                        first = found->second;
+                    }
+                }
+                if (before)
+                {
+                    record.outcome = "duplicate";
+                    keep(record);
+                    reply(0x1, BlockAck(id, "duplicate", first, names));
+                    return true;
+                }
+                record.refused = answer.refuse;
+                record.outcome = "stored";
+                record.stored = true;
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    table_stored_[key] = record;
+                }
+                keep(record);
+                if (answer.silent)
+                {
+                    unanswered();
+                    return true;
+                }
+                reply(0x1, BlockAck(id, "stored", record, names));
+                return true;
+            }
+            case TableAnswer::Kind::Text: {
+                std::string text = answer.text;
+                for (size_t at = text.find("{id}"); at != std::string::npos; at = text.find("{id}", at + sid.size()))
+                    text.replace(at, 4, sid);
+                record.outcome = "text";
+                keep(record);
+                reply(0x1, text);
+                return true;
+            }
+            case TableAnswer::Kind::Status:
+                record.outcome = std::to_string(answer.status);
+                keep(record);
+                reply(0x1, "{\"ack\":" + sid + ",\"status\":" + std::to_string(answer.status) + ",\"error\":\"scripted\"" +
+                               (answer.retry_after >= 0 ? ",\"retryAfter\":" + std::to_string(answer.retry_after) : std::string()) + "}");
+                return true;
+            case TableAnswer::Kind::Silent:
+                record.outcome = "no answer";
+                keep(record);
+                unanswered();
+                return true;
+            case TableAnswer::Kind::Close:
+                record.outcome = "closed " + std::to_string(answer.status);
+                keep(record);
+                close_with(static_cast<uint16_t>(answer.status), answer.text);
+                return false;
+            case TableAnswer::Kind::Binary:
+                record.outcome = "binary";
+                keep(record);
+                reply(0x2, std::string("\x01\x02\x03", 3));
+                return true;
+            case TableAnswer::Kind::RefuseAll: {
+                record.outcome = "allRefused";
+                for (const auto& name : names)
+                    record.refused[name] = answer.text;
+                keep(record);
+                reply(0x1, BlockAck(id, "allRefused", record, names));
+                return true;
+            }
+            case TableAnswer::Kind::DropSession:
+                record.outcome = "session dropped";
+                keep(record);
+                Drop();
+                return true;
+            }
+            return true;
         }
 
         void ServeSide(socket_t conn)
@@ -1127,6 +1599,7 @@ namespace hsm::test
                         session_id = "5e5510" + std::string(10, '0') + serial;
                     }
                     hello_session_ids_.push_back(session_id);
+                    live_session_ = session_id;
                 }
                 SendFrame(0x1, /*fin=*/true,
                           "{\"op\":\"hello\",\"body\":{\"maxFrameBytes\":" +
@@ -1143,10 +1616,14 @@ namespace hsm::test
                 std::string& payload = frame.payload;
                 if (frame.opcode == 0x8) // close: record the code, complete the handshake and end
                 {
+                    std::function<void()> hook;
                     {
                         std::lock_guard<std::mutex> guard(mutex_);
                         close_codes_.push_back(CloseCode(payload));
+                        hook = session_close_received_;
                     }
+                    if (hook)
+                        hook();
                     SendFrame(0x8, /*fin=*/true, payload.substr(0, 2));
                     return;
                 }
@@ -1333,5 +1810,30 @@ namespace hsm::test
         std::vector<std::string> side_binary_;      // guarded by mutex_
         std::vector<std::string> side_text_;        // guarded by mutex_
         std::vector<int> side_close_codes_;         // guarded by mutex_
+
+        // The table script.
+        struct TableOpen
+        {
+            socket_t sock = INVALID_SOCKET;
+            std::string session_id;
+            bool closing = false; // the server sent its close
+        };
+        std::atomic<bool> table_script_{ false };
+        std::atomic<int> table_pings_{ 0 };
+        std::atomic<bool> table_answer_closes_{ true };
+        std::map<int, TableOpen> table_open_;                                     // guarded by side_send_mutex_
+        std::string live_session_;                                                // guarded by mutex_
+        std::function<std::vector<std::string>(const std::string&)> table_names_; // guarded by mutex_
+        int table_max_frame_bytes_ = 4 * 1024 * 1024;                             // guarded by mutex_
+        int table_heartbeat_seconds_ = 30;                                        // guarded by mutex_
+        int table_max_rows_ = 8 * 1024 * 1024;                                    // guarded by mutex_
+        int table_max_tables_ = 65536;                                            // guarded by mutex_
+        std::string table_hello_override_;                                        // guarded by mutex_
+        std::deque<TableAnswer> table_script_answers_;                            // guarded by mutex_
+        std::vector<int64_t> table_probes_;                                       // guarded by mutex_
+        std::vector<TableFrameRecord> table_frames_;                              // guarded by mutex_
+        std::map<std::string, TableFrameRecord> table_stored_;                    // guarded by mutex_
+        std::set<int64_t> table_unanswered_;                                      // guarded by mutex_
+        std::function<void()> session_close_received_;                            // guarded by mutex_
     };
 } // namespace hsm::test

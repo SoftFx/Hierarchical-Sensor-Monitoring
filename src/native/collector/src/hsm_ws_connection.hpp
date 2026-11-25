@@ -36,6 +36,10 @@ namespace hsm::http
         // The address libcurl connected to, "ip:port" ("[ip]:port" for IPv6); empty when no
         // connection was made. With a CDN or a proxy in front it is theirs, not the server's.
         std::string peer;
+        // libcurl's result code of the open (CURLcode as an int), 0 when it succeeded or did not
+        // get as far as libcurl. Says what KIND of failure it was, where `error` carries libcurl's
+        // words, which may include elapsed times.
+        int curl_code = 0;
     };
 
     // How the peer ended the connection: filled when Receive returns Closed, cleared by Open.
@@ -86,6 +90,8 @@ namespace hsm::http
         static constexpr int64_t kWaitSliceMs = 100;
         // Longest Close() linger honoured.
         static constexpr int64_t kMaxLingerMs = 5000;
+        // The orderly close of a refused message (SetCloseOnRefusal).
+        static constexpr int64_t kRefusalLingerMs = 1000;
         // Oldest libcurl accepted, as LIBCURL_VERSION_NUM: 8.14.0. Two things this class relies on
         // are missing before it. Up to 8.12 the frames of a fragmented message are reported
         // without saying which one is the last (the flags came from the opcode alone), so a
@@ -160,6 +166,27 @@ namespace hsm::http
         // dropping anything else that arrives.
         void Close(int64_t linger_ms = 0);
 
+        // The same with the close frame's status code and reason (cut to the 123 bytes a close frame
+        // carries). A connection that ends for a protocol violation of the peer says which one
+        // (#1848: the table connection closes with 1002, 1007 ...).
+        void Close(int64_t linger_ms, int code, const std::string& reason);
+
+        // Off by default. On: a message Receive refuses (binary: 1003; over the receive cap: 1009)
+        // gets the orderly close with that code (the rest of the refused message read and dropped
+        // until the peer's close, at most kRefusalLingerMs, by which the call can outlast its
+        // timeout), and a Receive that is cancelled sends a close frame 1000 (one non-blocking
+        // write) before the release: the peer learns why (the table connection's rule). Off, the
+        // connection is released without a close frame, as the session has always done.
+        void SetCloseOnRefusal(bool on) { close_on_refusal_ = on; }
+
+        // The close code of the message the last Receive refused (1003, 1009), 0 when it refused
+        // none. Cleared by every Receive.
+        int LastRefusalCode() const { return refusal_code_; }
+
+        // True when the last Close ended because the connection was cancelled (before it began or
+        // during its linger) rather than by the peer's answer or the linger running out.
+        bool LastCloseCancelled() const { return close_cancelled_; }
+
         void Cancel();
 
         bool IsOpen() const { return curl_ != nullptr; }
@@ -191,6 +218,11 @@ namespace hsm::http
         void ForgetDetail();
         void Release();
 
+        // Refuses the message being received: a close frame with `code` when close_on_refusal_ is
+        // on, then the release. Returns WebSocketReceive::Error with `why` in `error`.
+        WebSocketReceive Refuse(int code, const char* why, std::string& error);
+        void CancelledRelease();
+
         void* curl_ = nullptr;    // CURL*, opaque so <curl/curl.h> stays in the .cpp
         void* headers_ = nullptr; // curl_slist* of the upgrade request, owned for the handle's life
         bool verify_peer_;
@@ -200,5 +232,8 @@ namespace hsm::http
         std::string control_;      // payload received so far of the ping or close frame in progress
         std::vector<char> detail_; // libcurl's error text for the handle (CURLOPT_ERRORBUFFER)
         WebSocketClosure closure_; // how the peer ended the connection, kept past Release
+        bool close_on_refusal_ = false;
+        int refusal_code_ = 0;
+        bool close_cancelled_ = false;
     };
 } // namespace hsm::http

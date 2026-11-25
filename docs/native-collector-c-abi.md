@@ -156,6 +156,14 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.15.1** (#1848, table sensors step 6, part 4) — no ABI change: the table connection of the
+  collector session. A collector on the session (`hsm_collector_use_session_transport`) built with
+  `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES` registers its table sensors as a `commands` request
+  of their own and delivers their blocks on a second WebSocket of the session (`hsm.tables.v1`, named
+  after the session by `X-Hsm-Session`); its table sensors are no longer `UNAVAILABLE`. A collector
+  on HTTP, or built without either option, keeps them `UNAVAILABLE` with the reason. A collector
+  without table sensors makes nothing of it. Behaviour, and what differs from the managed collector:
+  `aicontext/features/collector/table-sensors/feature.md`, "Native collector".
 - **0.15.0** (#1848, ADR-0021) — additive: table sensors. New handle `hsm_table_sensor_t`, enums
   `hsm_table_column_type_t` and `hsm_table_sensor_state_t`, the union `hsm_table_cell_t`, the
   structs `hsm_table_column_t`, `hsm_table_sensor_options_t`, `hsm_table_options_t`,
@@ -452,7 +460,7 @@ Version history:
 - **0.2.0** (#1096) — HTTP transport options consumed; wire serialization.
 - **0.1.0** (#1095) — initial lifecycle, scheduler, logging, registration core.
 
-## Table sensors (0.15.0)
+## Table sensors (0.15.0; delivered since 0.15.1)
 
 A table sensor holds rows of a fixed schema: the time first (implicit, named `time`), then value
 columns of `int64` or `double`, each nullable (ADR-0021). The behaviour is the managed collector's
@@ -499,6 +507,12 @@ hsm_collector_stop(c); hsm_table_sensor_release(t);
 - **Threads.** The first table sensor makes the collector's table pipeline; from Start to Stop it has
   a tick thread (`tick_period_ms`) and, when the collector can send tables, a delivery thread. Stop
   joins both before it returns. A collector without table sensors has neither, and no zstd context.
+- **Delivery** (since 0.15.1). Only a collector on the session transport sends tables: the
+  registrations as a `commands` request of their own on the session, the blocks on the session's table
+  connection (the wire contract's "Table connection"), opened by the delivery thread once a
+  registration was accepted and closed by Stop before the session. Without a session the blocks wait
+  in memory (`max_backlog_bytes`, the oldest dropped and counted) and go again with the same producer
+  and sequence.
 
 ## Alerts (registration payload)
 

@@ -37,6 +37,7 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+		void UseHttpTransport();
 		hsm::collector::Collector& Native();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc);
 		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
@@ -87,8 +88,14 @@ namespace hsm_wrapper
 	};
 
 	// NOTE (native backend): this DLL now runs on the native hsm::collector C++ API, not C++/CLI over
-	// the managed HSMDataCollector. The ABI is unchanged, but a few behaviors differ behind it — see
-	// docs/native-collector-migration.md. The surprising ones for a relinking consumer:
+	// the managed HSMDataCollector. The ABI only grew (2.0.0 added UseHttpTransport), but a few behaviors
+	// differ behind it — see docs/native-collector-migration.md. The surprising ones for a relinking consumer:
+	//   * The transport is the collector session (WebSocket) unless UseHttpTransport() is called before
+	//     Start; a server without sessions (before 3.43.0) receives nothing until that call is made.
+	//   * On the session a file from SendFileAsync must fit one frame of the server as JSON (each file
+	//     byte is written as a decimal number, up to 4 bytes): with the server's default 4 MiB frame that
+	//     is about 1 MiB. A larger file is dropped, logged (.module/Collector errors) and counted in
+	//     Queue overflow; over HTTP files up to the 10 MiB cap are sent.
 	//   * Initialize(config_path, write_debug) is a no-op (the collector is configured via the ctor).
 	//   * Initialize*Monitoring boolean sub-flags are ignored — the whole native group is registered;
 	//     InitializeDiskMonitoring's `target` is ignored, so it is equivalent to InitializeAllDisksMonitoring.
@@ -105,6 +112,21 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+
+		// Transport. The collector talks to the server over the collector session (one WebSocket,
+		// /api/sensors/session) unless this is called: it is for a server too old to have sessions
+		// (HSMServer before 3.43.0), and makes this collector send over the HTTP Sensor API instead.
+		// Table sensors (Native().CreateTableSensor) need the session and a server that has them: on
+		// HTTP they are Unavailable. Call it before Start (or after Stop; the next Start then uses
+		// HTTP). Otherwise it throws hsm::collector::Error and the transport stays as it is: after
+		// Start until Stop; after StartAsync until that start and a later stop have finished (also
+		// while the asynchronous start has not begun yet); after StopAsync until that stop has
+		// finished. A call made concurrently with a StartAsync on ANOTHER thread is not ordered with
+		// it: either may come first, so do not change the transport while another thread starts the
+		// collector. There is no way back to the session on this proxy, and no automatic switch
+		// either way: a collector on the session never falls back to HTTP. On the session a file
+		// larger than about 1 MiB is dropped (see the note above).
+		void UseHttpTransport();
 
 		// Escape hatch for incremental migration off the wrapper: returns the underlying native
 		// collector so new sensors can be created directly against hsm::collector on the SAME

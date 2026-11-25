@@ -418,15 +418,27 @@ tick runs only through `table_tick`, which also does the tick's registration and
 native driver registers the fixture and its must-fail `meta/meta_table_rows_wrong_count.hsmtest` in the tables build
 only (`HSM_COLLECTOR_TABLES`): the rows are decoded with the test block reader, which needs libzstd.
 
-The table connection verbs (`collector/table_connection_contract.hsmtest`, #1846 part 2; listed in its header) are in
-the same state in the native driver, under the same issue. In the managed driver the collector of those cases is on
-the scripted session server (`create_collector_on_session`), which also takes the table connection (the upgrade with
-`hsm.tables.v1` and `X-Hsm-Session`, the table hello, the probe, block frames, one ack each); on such a collector the
-block verbs of the table fixture (`table_server_frame_limit`, `table_server_answer_next`, `expect_table_sequences`,
-`expect_table_rows`, ...) read the scripted server instead of the recording sender.
+The table connection verbs (`collector/table_connection_contract.hsmtest`, #1846 part 2; listed in its header) run in
+both drivers (native since 0.15.1, #1848 part 4). In each the collector of those cases is on the scripted session
+server (`create_collector_on_session`), which also takes the table connection (the upgrade with `hsm.tables.v1` and
+`X-Hsm-Session`, the table hello, the probe, block frames, one ack each); on such a collector the block verbs of the
+table fixture (`table_server_frame_limit`, `table_server_answer_next`, `expect_table_sequences`, `expect_table_rows`,
+...) read the scripted server instead of the recording sender. The native scripted server is the session mode of
+`src/native/collector/tests/ws_test_server.hpp` with its side connections on and its table script enabled
+(`EnableTableScript`); the native driver registers the fixture in builds with both `HSM_COLLECTOR_HTTP` and
+`HSM_COLLECTOR_TABLES` (`conformance_table_connection_contract`), which runs only where libcurl carries a WebSocket,
+as the session fixture does.
+
+**The native driver's manual tick has no delivery thread.** As in the table fixture, the native driver's collectors
+tick only through `table_tick` (the pipeline's manual tick: the tick, its registration and its delivery on the
+driver's thread). A real native collector opens, keeps and reopens its table connection on its delivery thread
+between ticks (the managed collector has a loop of its own for it); with the manual tick the driver does that work in
+the polls of `table_wait_connection_up` and `expect_refused_table_upgrades_at_least` (an internal test seam,
+`tables::test::ServiceChannelNow`, the same call the delivery thread makes when its channel asks for it). A put also
+opens a connection itself when it needs one, as in a real collector.
 
 No case of that fixture is decided by a duration, and a driver keeps it so with three rules (each a few lines in a
-driver; the native driver implements them with the verbs in step 6):
+driver):
 
 - **`table_wait_connection_up|count|timeout_s` reads the collector's own state**: the table connection numbered `count`
   (1 = the first the collector opened) is open, its hello read and its probe answered, so a put sends on it at once;
@@ -436,7 +448,9 @@ driver; the native driver implements them with the verbs in step 6):
 - **The wait for a block's ack ends as "no ack in time" when the scripted server has decided not to answer that frame**
   (`store_without_ack`, `no_answer`), by the frame's request id, and never by the request timeout: the managed driver
   sets the collector's ack-deadline seam (`TableConnection.AckDeadlineForTests`) to a task the scripted server
-  completes for that request id; a frame that is answered never ends its wait that way.
+  completes for that request id; the native driver sets `SessionTableChannelOptions::ack_abandoned_for_tests` to a
+  test of the scripted server's record of the frames it left unanswered (`TableFrameUnanswered`), polled while the
+  put waits. A frame that is answered never ends its wait that way.
 - **The long waits of the table connection may be shortened, and decide nothing**: the pause after an upgrade refused
   with 404 or 400 (shortened so a case that waits for a second refusal is quick), and how long a put waits for a table
   connection before it answers "not delivered" (a put that gives up leaves its block at the head with its sequence;

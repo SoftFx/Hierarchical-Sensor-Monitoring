@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 15
-#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION_PATCH 1
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -1184,10 +1184,11 @@ hsm_result_t hsm_collector_enable_service_status_monitoring(
    The functions exist in every build. Whether a sensor can send is decided when it is created and
    again at every Start: a sensor that cannot is in state UNAVAILABLE with the reason in
    hsm_table_sensor_state_reason, and its rows are dropped and counted. The reasons: the library was
-   built without table support (HSM_COLLECTOR_TABLES=OFF); the collector does not use the session
-   transport (hsm_collector_use_session_transport); and, in this version, the table connection that
-   carries blocks over the session is not implemented yet, so EVERY table sensor of a real host is
-   UNAVAILABLE in 0.15.0 and counts its rows as dropped.
+   built without table support (HSM_COLLECTOR_TABLES=OFF) or without the network transport
+   (HSM_COLLECTOR_HTTP=OFF); the collector does not use the session transport
+   (hsm_collector_use_session_transport); the libcurl of the process cannot carry a WebSocket. Since
+   0.15.1 a collector on the session delivers its blocks over the session's table connection (in
+   0.15.0 every table sensor of a real host was UNAVAILABLE).
 
    Every dropped row is counted on its sensor (rows_dropped) and, while the collector runs, reported
    once per tick through the error channel (".module/Collector errors" and the logger) and the
