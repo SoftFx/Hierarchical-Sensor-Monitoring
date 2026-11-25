@@ -524,7 +524,7 @@ namespace HSMServer.Core.Tests.TableSensors
 
 
         [Fact]
-        public async Task A_merged_hour_is_selected_by_the_range_of_the_class_that_holds_the_sensors_rows_not_through_the_gap_between_two_classes()
+        public async Task An_hour_selected_through_the_gap_between_two_classes_returns_no_row_and_reports_no_failed_batch()
         {
             // The review's sequence: one hour with rows of a (kept one week, P1) only at minute 1 and rows of c (kept five
             // weeks, P5) only at minute 30.
@@ -542,7 +542,9 @@ namespace HSMServer.Core.Tests.TableSensors
             // Every index record of the hour survives without its bytes.
             _batches.BatchMissing = (hour, _) => hour == Hour0.Ticks;
 
-            // A range between the two classes' rows can hold no row of a: the hour is not read for it, and nothing failed.
+            // A range between the two classes' rows can hold no row of a. The union of the hour's class ranges meets it, so
+            // the hour is selected and its batches are read (#1850 part 4c); the store skips a's record, out of the range,
+            // before its batch: no row and nothing failed.
             var (from, to) = (Hour0.AddMinutes(10), Hour0.AddMinutes(11));
             var read = _service.Read(a.Id, from, to).Value;
             var chart = _service.Reduce(a.Id, from, to, Columns, 10).Value;

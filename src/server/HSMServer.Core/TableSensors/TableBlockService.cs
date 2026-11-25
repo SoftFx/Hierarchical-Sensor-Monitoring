@@ -562,11 +562,15 @@ namespace HSMServer.Core.TableSensors
         // merged into one class of the record, and a move copies them unchanged into another class, which the record may
         // name too: rows moved from P1 into P5 are within P1's range, not P5's own, so P5's own range would miss them. The
         // hour is read only when the union meets the range asked for. An hour selected through the gap between two classes
-        // (rows of P1 only at 10:00 and of P5 only at 12:00, a read of the P1 sensor for 11:00) costs a seek and reports
-        // nothing: the store skips every index record whose rows cannot meet the range before it fetches the batch
-        // (ReadBatches), so a record whose batch is missing is not counted as failed for a range that can hold none of its
-        // rows (TableChartReadTests.A_merged_hour_is_selected_by_the_range_of_the_class_that_holds_the_sensors_rows_...).
-        // Part 4b answered a named class's own range instead; the move needs the union.
+        // (rows of P1 only at 10:00 and of P5 only at 12:00, a read of the P1 sensor for 11:00) reports nothing: the store
+        // skips every index record whose rows cannot meet the range before it fetches the batch (ReadBatches), so a record
+        // whose batch is missing is not counted as failed for a range that can hold none of its rows
+        // (TableChartReadTests.An_hour_selected_through_the_gap_between_two_classes_returns_no_row_and_reports_no_failed_batch).
+        // It is not free: such an hour is a source whose MinTime is the read's from (so the early stop never stops before
+        // it), and costs the gate, two readings of the generation (the chart), the acquire of its week database (an open
+        // when it is not cached), an iterator and two seeks, all answering nothing. One sensor with wide row times in any
+        // class makes every other class's reads select its hours (feature doc, Known Issues). Part 4b answered a named
+        // class's own range instead (the union already for a class the record does not name); the move needs the union.
         private static (long Min, long Max) RowTimes(TableBatchHour hour)
         {
             long min = long.MaxValue, max = long.MinValue;
