@@ -75,6 +75,9 @@ undelivered blocks (`TableSpoolDirectory`, opt-in) is part 3.
   of this feature, at Start, during the run and at Stop. A table sensor created while the collector runs starts the
   pipeline's run at once. A compressor that cannot be made makes the sensor `Unavailable` with the reason; it never fails
   `Start`.
+- **A collector with a table sensor has a run from `Start` to `Stop`, also when none of its sensors can send** (an
+  HTTP collector, a custom sender, no compressor): that run has the tick and the ledger and no delivery loop, and it
+  never makes the compressor. The rows an `Unavailable` sensor refuses are lost rows, reported like every other loss.
 - **One object per run.** Everything a run owns is in its `TableRun`, made at `Start` and closed at the end of its stop:
   the cancellation, the packing and delivery gates, the backlog and the block in flight, the producer id and sequence,
   the bytes reserved by writers, the registration marks and the loss ledger. A sensor holds a reference to its current

@@ -257,9 +257,12 @@ namespace HSMDataCollector.Tests.Tables
         public async Task A_compressor_that_cannot_be_made_leaves_the_sensor_unavailable_and_the_start_whole()
         {
             var sender = new FakeTableSender();
+            var logger = new CapturingLogger();
 
             using (var collector = new DataCollector(Options(sender, o => o.TableCompressorFactory = () => throw new InvalidOperationException("no compressor here"))))
             {
+                collector.AddCustomLogger(logger);
+
                 var before = collector.CreateTableSensor("before", Quotes());
 
                 await collector.Start();
@@ -276,8 +279,84 @@ namespace HSMDataCollector.Tests.Tables
                 await collector.Stop();
 
                 Assert.Equal(CollectorStatus.Stopped, collector.Status);
-                Assert.Equal(0, collector.TablePipeline.RunCount);
                 Assert.False(collector.TablePipeline.HasCompressor);
+
+                // The row the sensor refused is a lost row like any other: the run carries its ledger without a compressor.
+                Assert.Equal(new[] { "1" }, StopLines(logger).Select(CountIn));
+            }
+        }
+
+        // Third review, finding a: the rows given to a sensor that cannot send (here a collector with a custom sender, as
+        // one on HTTP) were counted on the sensor and said by no report: a pipeline whose sensors cannot send had no run,
+        // so no ledger, no tick and no stop line.
+        [Fact]
+        public async Task Rows_given_to_an_unavailable_sensor_are_in_the_stop_line()
+        {
+            var sender = new RecordingValueSender();
+            var logger = new CapturingLogger();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                collector.AddCustomLogger(logger);
+
+                var table = collector.CreateTableSensor("t", Quotes());
+
+                Assert.Equal(TableSensorState.Unavailable, table.State);
+
+                await collector.Start();
+
+                for (var row = 0; row < 10; row++)
+                    Assert.False(table.AddRow(T0.AddTicks(row), 1.0, 2.0));
+
+                await collector.TickTablesAsync();
+                await collector.Stop();
+
+                Assert.Equal(10, table.RowsDropped);
+                Assert.False(collector.TablePipeline.HasCompressor);
+                Assert.Equal(new[] { "10" }, StopLines(logger).Select(CountIn));
+            }
+        }
+
+        // The same rows with the Queue overflow sensor registered: the tick hands them to it, and the stop line
+        // says only what that sensor did not take. Each row is reported once.
+        [Fact]
+        public async Task Rows_given_to_an_unavailable_sensor_are_reported_once_by_the_overflow_sensor_or_the_stop_line()
+        {
+            var sender = new RecordingValueSender();
+            var logger = new CapturingLogger();
+
+            using (var collector = new DataCollector(Options(sender)))
+            {
+                collector.AddCustomLogger(logger);
+
+                if (DataCollector.IsWindowsOS)
+                    collector.Windows.AddQueueOverflow();
+                else
+                    collector.Unix.AddQueueOverflow();
+
+                await collector.Start();
+
+                // Created while the collector runs: the sensor belongs to the run at once.
+                var table = collector.CreateTableSensor("t", Quotes());
+
+                Assert.Equal(TableSensorState.Unavailable, table.State);
+
+                for (var row = 0; row < 10; row++)
+                    Assert.False(table.AddRow(T0.AddTicks(row), 1.0, 2.0));
+
+                await collector.TickTablesAsync();
+
+                // One more after the tick: the stop finds the sensor's last bar published and says it itself.
+                Assert.False(table.AddRow(T0, 1.0, 2.0));
+
+                await collector.Stop();
+
+                Assert.Equal(11, table.RowsDropped);
+
+                var bar = sender.OverflowBars.Last();
+
+                Assert.Contains($"{TablePipeline.DroppedRowsQueueName}: 10", bar.Comment);
+                Assert.Equal(new[] { "1" }, StopLines(logger).Select(CountIn));
             }
         }
 

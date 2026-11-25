@@ -272,12 +272,13 @@ namespace HSMDataCollector.Tables
                 {
                     _sensors[normalized] = sensor;
 
-                    // A sensor created while a run goes belongs to it at once.
-                    if (_run != null && sensor.State == TableSensorState.Pending)
+                    // A sensor created while a run goes belongs to it at once, also one that cannot send: the rows it
+                    // refuses are counted in the run's ledger and reported with every other loss.
+                    if (_run != null)
                     {
                         sensor.Attach(_run);
 
-                        if (!_manualTick)
+                        if (sensor.State == TableSensorState.Pending && !_manualTick)
                             KickRegistration(_run);
                     }
                 }
@@ -422,7 +423,9 @@ namespace HSMDataCollector.Tables
 
         /// <summary>
         /// Starts a run: a new producer, every sensor registered again, the tick and the delivery loop. Does nothing when a
-        /// run goes already or no sensor can send. Never throws.
+        /// run goes already or no table sensor exists. A pipeline whose sensors cannot send (no table transport, no
+        /// compressor) has a run all the same, with its tick and its ledger and no delivery loop: the rows such a sensor
+        /// refuses are lost rows and are reported like every other loss. Never throws.
         /// </summary>
         internal void Start()
         {
@@ -430,7 +433,7 @@ namespace HSMDataCollector.Tables
             {
                 lock (_runLock)
                 {
-                    if (_run != null || Volatile.Read(ref _disposed) == 1 || !HasCompressor)
+                    if (_run != null || Volatile.Read(ref _disposed) == 1 || _sensors.IsEmpty)
                         return;
 
                     var run = new TableRun(Interlocked.Increment(ref _runCount), _maxBufferBytes, () => OnReservationForTests);
