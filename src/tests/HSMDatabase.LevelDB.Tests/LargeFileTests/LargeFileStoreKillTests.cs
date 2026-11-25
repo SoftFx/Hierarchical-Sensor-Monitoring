@@ -11,9 +11,18 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
     /// prints every acknowledged piece; the test kills it at random moments, opens the store and checks that every
     /// acknowledged piece is in the part byte for byte and that the part is cut back to its record. It covers a kill of the
     /// process, not a power loss: the operating system still writes what the process had handed it.
+    /// <para>
+    /// Alone, never beside other tests: on Windows a child process started with redirected output inherits every
+    /// inheritable handle of this process, and LevelDB opens its files (its <c>LOG</c> among them) inheritable, so a child
+    /// started while another test has a database open holds that database's files until it exits, and that test cannot
+    /// delete its folder.
+    /// </para>
     /// </summary>
+    [Collection(Name)]
     public sealed class LargeFileStoreKillTests : IDisposable
     {
+        public const string Name = "Large file store kill (alone)";
+
         private const string HostProjectName = "HSMDatabase.LargeFiles.CrashHost";
         private const int PieceSize = 1024 * 1024;
         private const int Pieces = 160;
