@@ -1,3 +1,4 @@
+using HSMServer.SensorApi.Sessions;
 using System;
 using System.Text.Json.Serialization;
 
@@ -15,6 +16,10 @@ namespace HSMServer.ServerConfiguration
         public const int DefaultMaxSessionsPerAddress = 20;
         public const int DefaultHeartbeatSeconds = 30;
         public const int DefaultMaxFrameBytes = 4 * 1024 * 1024;
+        public const int DefaultMaxTableFrameBytes = 4 * 1024 * 1024;
+        public const long DefaultMaxTableBytesInFlight = 256L * 1024 * 1024;
+
+        private const long MaxTableBytesInFlightCeiling = 64L * 1024 * 1024 * 1024;
 
         private const int MinHeartbeatSeconds = 5;
         private const int MaxHeartbeatSeconds = 3600;
@@ -45,8 +50,33 @@ namespace HSMServer.ServerConfiguration
         // a frame over the limit closes the session with 1009.
         public int MaxFrameBytes { get; set; } = DefaultMaxFrameBytes;
 
+        // The largest binary frame on a table connection (#1845, ADR-0021 point 7): a block of
+        // table rows with its 40-byte frame header. Announced in the table connection's hello; a
+        // collector splits a tick's block so that every frame fits. A larger frame closes the
+        // table connection with 1009. Zero turns table connections off (the upgrade answers 404)
+        // while the ordinary sessions go on: a way to stop table ingest without stopping the
+        // collectors. Reads of stored rows are not affected.
+        public int MaxTableFrameBytes { get; set; } = DefaultMaxTableFrameBytes;
+
+        // What all table connections together may hold for frames being received and waiting for
+        // their put (#1845). A frame that outgrows 64 KiB first reserves what the largest frame can
+        // cost, its buffer and the copy the put takes (twice MaxTableFrameBytes plus one byte), and
+        // holds it until its put is answered; when the budget is spent, the connection stops
+        // reading until a reservation is given back (back-pressure through TCP). So this bounds
+        // the memory clients can make the server hold for table frames, whatever the number of
+        // connections. At least one reservation.
+        public long MaxTableBytesInFlight { get; set; } = DefaultMaxTableBytesInFlight;
+
         [JsonIgnore]
         public bool Enabled => MaxSessions > 0;
+
+        [JsonIgnore]
+        public bool TablesEnabled => Enabled && MaxTableFrameBytes > 0;
+
+        // What one table frame beyond the free allowance reserves from MaxTableBytesInFlight; defined
+        // once, by the frame memory that takes and releases it.
+        [JsonIgnore]
+        public long TableFrameReservation => TableFrameMemory.ReservationFor(MaxTableFrameBytes);
 
         [JsonIgnore]
         public TimeSpan Heartbeat => TimeSpan.FromSeconds(HeartbeatSeconds);
@@ -71,6 +101,14 @@ namespace HSMServer.ServerConfiguration
 
             if (MaxFrameBytes is < MinFrameBytes or > MaxFrameBytesCeiling)
                 throw new InvalidOperationException($"{section}.{nameof(MaxFrameBytes)} = {MaxFrameBytes} is invalid: expected {MinFrameBytes}..{MaxFrameBytesCeiling}.");
+
+            if (MaxTableFrameBytes != 0 && MaxTableFrameBytes is < MinFrameBytes or > MaxFrameBytesCeiling)
+                throw new InvalidOperationException($"{section}.{nameof(MaxTableFrameBytes)} = {MaxTableFrameBytes} is invalid: use 0 to turn table connections off, or {MinFrameBytes}..{MaxFrameBytesCeiling}.");
+
+            if (MaxTableBytesInFlight > MaxTableBytesInFlightCeiling || (MaxTableFrameBytes > 0 && MaxTableBytesInFlight < TableFrameReservation))
+                throw new InvalidOperationException($"{section}.{nameof(MaxTableBytesInFlight)} = {MaxTableBytesInFlight} is invalid: expected " +
+                                                    $"{(MaxTableFrameBytes > 0 ? TableFrameReservation : 0)}..{MaxTableBytesInFlightCeiling} " +
+                                                    $"(at least twice {nameof(MaxTableFrameBytes)} plus one byte: what one large frame reserves).");
         }
     }
 }

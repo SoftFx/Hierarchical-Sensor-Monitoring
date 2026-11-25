@@ -211,7 +211,7 @@ Synthetic feed shaped like the measured real hour: one collector, a block every 
 
 ## What later steps must do
 
-**Step 3 (#1845), the transport:**
+**Step 3 (#1845), the transport** (done: `aicontext/features/api/wire-contract/feature.md`, "Table connection"; `TableBlockPutResult.RefusalsKnown` tells a duplicate whose refusals cannot be told, set today when the stored envelope cannot be read, and by #1850 for a block merged and deleted):
 - Send a **producer id** that a collector keeps across restarts (with its spool of undelivered blocks) and its own **producer sequence** per block; pass `productId` as the root product of the key that sent the block. Deliver in order per producer: a block is sent after the previous one was acknowledged, or the resends after a restart keep the order (needed for the watermark below).
 - Answer a `TableBlockPutResult` per block: `Stored` and `Duplicate` are acknowledgements (with the refused tables), `AllRefused` and `Invalid` are final refusals (4xx-like: the collector drops the block and never sends its producer sequence again; rows of later blocks are taken once the sensors are registered), and `TableBlockStoreException` is a fault (5xx-like: the collector keeps the block and sends it again). `Read` throws the same exception when the store cannot be used (cannot open, failed and in its backoff): a fault, answered 5xx, not an error result, which would say the request is wrong.
 - Check the key's permission to send data before calling `Put`; the block service does not see keys.

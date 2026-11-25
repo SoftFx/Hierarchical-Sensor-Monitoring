@@ -25,6 +25,13 @@ namespace HSMServer.ServerConfiguration
         // Puts are refused (a fault, the collector keeps its blocks) while less is free on the store's disk; 0 turns it off.
         public long MinFreeDiskMb { get; set; } = TableBlockOptions.DefaultMinFreeDiskMb;
 
+        // How many blocks the table connections store at once (#1845). A put decompresses its block (up to
+        // MaxDecompressedBytes) and makes a synced write; a connection whose block waits for a turn is not answered until
+        // it got one, which is the collector's back-pressure (one block in flight per connection).
+        public int MaxConcurrentPuts { get; set; } = DefaultMaxConcurrentPuts;
+
+        public const int DefaultMaxConcurrentPuts = 4;
+
         // The most week databases of the batch store open at once (#1850): a read of a long range opens and closes them in turn.
         public int MaxOpenBatchDatabases { get; set; } = TableBlockOptions.DefaultMaxOpenBatchDatabases;
 
@@ -45,6 +52,7 @@ namespace HSMServer.ServerConfiguration
             Check(MaxColumnsPerTable, TableBlockLimits.FormatMaxColumnsPerTable, nameof(MaxColumnsPerTable));
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
             Check(MaxReadRows, int.MaxValue, nameof(MaxReadRows));
+            Check(MaxConcurrentPuts, 1024, nameof(MaxConcurrentPuts));
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
             Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
 

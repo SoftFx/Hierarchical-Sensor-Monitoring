@@ -1,7 +1,7 @@
 # Feature: Collector Session (server side)
 
-> Owner: server | Last reviewed: 2026-11-13 | Canonical: yes
-> Scope: server - the WebSocket session a collector may hold with the server: the endpoint, its limits and endings, directive push, the session registry and its self-monitoring
+> Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
+> Scope: server - the WebSocket session a collector may hold with the server: the endpoint, its limits and endings, directive push, the session registry and its self-monitoring; the table connection of a session (#1845)
 
 ---
 
@@ -42,6 +42,7 @@ Which transport a collector uses is a setting of the collector (`http` or `sessi
 | 4 | End a session: close from either side, violation, lost access, silence, shutdown | collector / server |
 | 5 | See how many sessions are open | operator |
 | 6 | Push the directives of an agent | server |
+| 7 | Open a table connection of a session and send blocks on it (#1845) | collector |
 
 ## API / Public Contracts
 
@@ -86,6 +87,8 @@ The access key is resolved first, by the same middleware as for every Sensor API
 |---|---|---|
 | `MaxSessions` | 1000 | Server-wide cap on open sessions. One session is one collector process. `0` turns sessions off: the endpoint answers 404. A collector over the cap cannot send, so set it well above the number of collectors. |
 | `MaxSessionsPerAddress` | 20 | Connection limit per client address; an IPv6 client is counted by its /64. Checked before the server-wide cap. `0` means no limit per address. Behind a reverse proxy the address is the client's only when `Kestrel.TrustedProxies` names the proxy; otherwise all collectors share the proxy's address and this limit. |
+| `MaxTableFrameBytes` | 4194304 | The largest binary frame of a table connection (#1845), announced in its hello. A real tick of a thousand tables is 25–50 KB. A larger frame closes the table connection with `1009`. 65536..67108864, or `0`: **table connections off** (their upgrade answers 404; sessions go on, reads of stored rows too). A way to stop table ingest without stopping the collectors. |
+| `MaxTableBytesInFlight` | 268435456 | What all table connections together may hold for frames being received and waiting for their put (#1845). A frame within 64 KiB costs nothing; a larger one first reserves twice `MaxTableFrameBytes` plus one byte (its buffer and the put's copy) and holds it until its put is answered. When the budget is spent the connection stops reading (back-pressure through TCP; the silence limit does not run meanwhile; a `Warn` at most once a minute); a wait longer than twice the silence limit closes it with `1013`. At least one reservation (8 MiB + 1 at the default frame limit), at most 64 GiB. **Limit: one reservation per access key.** An access key (commonly one product key shared by many collector installations) holds at most one reservation, from the first byte past 64 KiB of a frame until its put is answered. N collectors of one key that each send a frame larger than 64 KiB at the same time are served one after another, and the last waits (N − 1) × the time one frame holds the reservation (its transfer past 64 KiB plus its put; at most one silence limit, 90 s, plus the put). When that passes the wait bound, twice the silence limit (180 s by default), the tail is closed with `1013`, reconnects and queues again: the bound is passed beyond about 91 collectors of one key at 2 s a frame, beyond 3 at the 90 s worst case. Frames up to 64 KiB take no reservation and are not affected, nor are collectors with keys of their own. A `1013` that had room in the budget and waited only for its own key is logged as a `Warn` ("held back only by its own access key", at most once a minute). Deliberately not redesigned for now (#1845 review): the scoping is the owner's decision. |
 | `HeartbeatSeconds` | 30 | Announced in `hello`. The server drops a session after 3 × this without any inbound frame. Also the WebSocket keep-alive interval. 5..3600. |
 | `MaxFrameBytes` | 4194304 | Announced in `hello`. A larger frame closes the session with `1009`. 65536..67108864. It is also the largest file a collector can send on a session: a byte of a file is up to four bytes of JSON, so the default carries a file of about 1 MiB, and the 10 MiB the collectors accept by default need about 40 MiB. The collectors drop a larger file and say so; they do not send it. |
 
@@ -104,6 +107,7 @@ Startup validation names the key and the allowed range. The section is written i
 | `src/server/HSMServer/SensorApi/Sessions/DirectivePush.cs` | The directive push of one session: whole set after the hello, changes every 15 s, whole set every 5 min |
 | `src/server/HSMServer/SensorApi/AgentDirectives.cs` | The directive set of an agent, shared with the `X-Hsm-Directive` headers of the HTTP routes; the 15 s cache of the staged agent version |
 | `src/server/HSMServer/Middleware/Telemetry/ISensorApiTelemetry.cs` | The `Clients/...` self-monitoring counters behind an interface |
+| `src/server/HSMServer/SensorApi/Sessions/TableFrame.cs` | The binary frame header of a table connection |
 | `src/tests/HSMServer.Core.Tests/SensorApi/*` | The tests and their host |
 
 ## Directive push (#1660 step 5)
@@ -115,6 +119,19 @@ A session whose upgrade stated `X-Agent-Version` gets the agent directives (#119
 - **How**: a push is a frame like an ack and goes through the session's serialized send. Nothing is pushed once the server is closing the session (`CollectorSession.IsClosing`, shutdown); a push that fails because the session is ending ends the push loop quietly, and the handler loop reports the session's end as always. A push that fails while the session is up does not end the loop: it is logged as an `Error`, at most one line a minute per session with the number of failures in between, the rest of that round waits, and the next check pushes everything the collector was not told yet, in order. What the collector was told is only what was actually sent: a directive whose send failed is not in it. A failure to look the key up skips that round. A round that pushed something logs one `Debug` line.
 - **Cost**: two timers and one waiting task per directive-aware session; nothing for any other session.
 
+## Table connection (#1845)
+
+A collector with table sensors opens a second WebSocket on the same route, subprotocol `hsm.tables.v1`, naming its live session in `X-Hsm-Session` (the `sessionId` of the session's hello). The wire: `aicontext/features/api/wire-contract/feature.md`, "Table connection". ADR-0021 point 7.
+
+- **Upgrade** (`CollectorSessionHandler.HandleTableUpgradeAsync`): the key and the subprotocol as for a session; `404` while `MaxTableFrameBytes = 0` (a `Warn` at most once a minute: that collector cannot deliver blocks); `409` when `X-Hsm-Session` is missing, malformed or names no live session of the same key (`CollectorSessionRegistry.FindSession`; logged as a refused upgrade, throttled like the others); `503` while shutting down.
+- **The pair** (`CollectorSessionRegistry.TryAttachTable`, `DetachTable`, `Release`): no slot is taken, so `MaxSessions` and `MaxSessionsPerAddress` count collectors and the server holds at most twice `MaxSessions` sockets. A session holds at most one table connection; a new one replaces the old, which is closed with `1000` (`replaced by a new table connection of its session`). When the session ends (`Release`), its table connection is closed with `1000` (`its session ended`). Both closes go through `SignalCloseAsync`, so a block being stored is acknowledged first. The pair map changes under one lock, and a session leaves the registry before its pair is looked at: a table connection is never attached to a session that has ended (it is then closed with `its session ended` right after its upgrade).
+- **The loop** is the session's (`RunAsync`): the hello (`WriteTableHello`: the frame limit, the heartbeat, the block limits of section `TableSensors`), the silence limit, access re-checked for every frame (a probe, like a ping, is not a use of the key), the deferred close. Text requests are answered `400 unknown op`; ping is answered. A binary frame is read by `TableFrame.TryRead`: a header it cannot trust closes with `1002`; a probe is answered `200`; a block goes to `HandleBlockAsync`.
+- **A block** (`HandleBlockAsync`): an empty producer id or a negative sequence is `400`; then the bytes are copied out of the session's buffer, a turn of `TableSensors.MaxConcurrentPuts` (default 4, a server-wide `SemaphoreSlim`) is taken, and `ITableBlockService.Put(root product of the key, producer, sequence, block)` runs on the thread pool. `Stored`, `Duplicate` and `AllRefused` are `200` acks with the outcome and the refused tables (`WriteBlockAck`; a duplicate whose refusals are not known, `TableBlockPutResult.RefusalsKnown = false`, carries `"refusedKnown":false` instead of the list); `Invalid` is `400 invalid block: <code>`; `TableBlockStoreException` is `503` with `retryAfter` 60 (the store's backoff), never a refusal; any other exception is logged as an `Error` and answered `500`.
+- **Back-pressure**: one block in flight per connection (the collector waits for the ack), and a block waiting for a turn of the put semaphore is simply not answered yet. The silence limit does not run while a frame is handled.
+- **Two collectors with one producer id** (`CollectorSessionRegistry.NoteProducer`): each table connection is remembered for the (product, producer id) of its last block the store took (`stored` or `duplicate`; a frame that is not a block names no producer), one entry per live connection, so the map is bounded by the connections. A block of a pair another live table connection holds logs a `Warn` naming both connections, **at most once a minute for the whole server** with the count of such blocks since the last line (the producer id is the client's: a throttle per pair would let ever new ids write a line each), and is not refused. A connection of the same session (the one a reconnect replaces) and one that is closing do not count.
+- **A close asked for while a block is being stored** waits for its ack; the first one asked for stands, so at shutdown a table connection closes with `1001` even when its session ends under it.
+- **Log lines**: `Collector table connection 5d1c09aa of session 20e46170 opened: …; 1 table connection(s) open.` and the close line with `blocks stored, duplicate, all refused, invalid, faults; tables refused`, `Info` or `Warn` by the same rule as a session.
+
 ## Data Flow
 
 ```
@@ -123,6 +140,9 @@ upgrade request --> TelemetryMiddleware (Key -> product, key, client)  --> Senso
 frame           --> parse envelope --> re-check access --> SensorIngestionService --> ITreeValuesCache
                 <-- ack {ack, status, body | error}
 agent session   <-- {op: directive} pushes: after hello, on change (15 s check), whole set every 5 min (DirectivePush)
+table upgrade   --> checks, X-Hsm-Session -> live session of the key, attach (replace), hello with block limits
+binary frame    --> TableFrame header --> re-check access --> put semaphore --> ITableBlockService.Put
+                <-- ack {ack, status, body {outcome, tables, refused} | error [, retryAfter]}
 ```
 
 The handler loop is the only reader of a session's socket. Sends are serialized per session, so an ack and the close at shutdown cannot interleave.
@@ -154,6 +174,15 @@ NLog, logger `CollectorSessionHandler`. The key's display name is logged, never 
 
 ## Cost
 
+A table connection: the 4 KiB receive buffer and the session object, as an idle session (about 22 KiB). Its frames (`TableFrameMemory`):
+
+- **Up to 64 KiB** (the free allowance; the usual block of tens of kilobytes): buffers from the shared pool, as for a session, and no budget.
+- **Larger**: before its buffer grows past 64 KiB the connection reserves twice `MaxTableFrameBytes` plus one byte from the server-wide `MaxTableBytesInFlight` (its buffer, at most `MaxTableFrameBytes` + 1, and the exact copy the put takes, at most `MaxTableFrameBytes`), waiting first come first served while it holds nothing else, so waiting connections never hold each other up. The buffers above 64 KiB are exact allocations, never the shared pool: **after a large frame nothing stays allocated** for it; its arrays (and the buffers it outgrew while it arrived) are garbage for the next collection (the large-object heap). The reservation goes back when the frame's put is answered, and whatever a connection holds goes back when its loop ends, whatever ended it (a drop mid-frame, a frame over the limit, a put that throws, a close by its session, shutdown, the 1013 of a wait past its bound, a reserved frame past its deadline). **A reserved frame has a deadline**: one silence limit from the reservation (`ReservedFrameDeadlineInSilenceLimits`), which arriving bytes do not move (an ordinary frame may take ten limits while its bytes arrive): past it the connection is cut and the reservation goes back, so a slow sender cannot hold a reservation for a quarter of an hour. **One reservation per access key**: a second large frame of the same key waits like any other waiter until the first is done; it does not hold back the waiters of other keys behind it, nor a frame of another key that arrives later while there is room (taken at once). A waiter of a free key that waits for room is never overtaken by a later arrival (`TableFrameBudget.CanTakeNow`; `TableFrameBudgetTests`).
+- **The put** allocates the block's decompressed length (up to `TableSensors.MaxDecompressedBytes`, 64 MiB) while it checks the directory: at most `MaxConcurrentPuts` at once (4 × 64 MiB by default).
+
+So what clients can make the server hold for table frames is `MaxTableBytesInFlight` (256 MiB by default, 31 large frames at once) plus the small frames (64 KiB per connection, twice with its copy) plus the puts' decompression, whatever the number of connections. Argued from the code; the budget's accounting is tested on every exit path, the memory itself is not measured.
+
+
 An idle session holds about **22 KiB of managed memory** on the server (measured with 400 sessions opened over raw sockets, `IdleSession_CostsTensOfKilobytes`; stable to 0.1 KiB across runs). At the default cap of 1 000 sessions that is about 22 MB; every further 1 000 costs about as much. Kernel socket buffers come on top and are not measured.
 
 ## Dependencies
@@ -168,6 +197,8 @@ An idle session holds about **22 KiB of managed memory** on the server (measured
 The silence limit and the two directive timers run on a `TimeProvider`. The tests replace it with a manual clock, so none of them waits for real seconds: they assert that the watch is running, that a frame starts it again, and what happens when it fires; they fire the directive timers by hand, and move the clock's readings forward (`ManualTimeProvider.Advance`) to age the staged-version cache.
 
 The test host runs only the part of the pipeline the Sensor API passes through. The full pipeline (HTTPS, the guards, cookie and token authentication in front of the endpoint) was checked by hand against a locally started server when the feature was written: upgrade, `hello`, a `list` and a `commands` frame with their acks, ping, the two refusals, and an empty error log.
+
+`src/tests/HSMServer.Core.Tests/SensorApi/TableConnectionTests.cs` (#1845), the same host with the real block service and store underneath and a minimal table client of the test project (`TableConnectionTestClient`): the hello and its limits, `409` for no, a malformed, an unknown, another key's and an ended session, `406`, `404` with table connections off while the session works, no slot taken, a replacement, the close with the session and the close line, the probe, a block stored and read back value for value (null, NaN, −0.0, extreme integers), a refused table and every table refused with names and reasons, four `400`s and the connection going on, five headers closing with `1002`, `1009`, text on a table connection, `1003` still on the session, `1008` for a key that lost access, a duplicate after a lost ack, a duplicate after its hour was merged and its blocks deleted (`refusedKnown: false`, the merge run with a clock a day ahead), a replaced connection's put racing the resend inside the store (stored once), the session's ack not delayed by a held put, `503` with `retryAfter` and the resend stored once, shutdown during a put (ack, then `1001`), `MaxConcurrentPuts`, and the producer warning. `TableConnectionProtocolTests`: the ack forms (`refusedKnown: false` included), the hello with its `sessionId`, the frame header. `TableFrameBudgetTests`: the grant order of the frame budget without a server (a waiter of a key that holds a take does not hold back another key; a waiter that waits for room is not overtaken). The puts are held at the block service's own hook after the reservation (`TableBlockService.AfterReserve`); nothing waits for time.
 
 Not covered at all: that nothing is pushed once a session is being closed at shutdown, the bundled reverse proxy in front of the endpoint, a WebSocket over HTTP/2, a collector that stops reading (the send is bounded by the silence limit, untested), the ten-limit budget of a frame that never ends, and behaviour at thousands of sessions.
 
