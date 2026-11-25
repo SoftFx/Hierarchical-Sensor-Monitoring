@@ -376,7 +376,17 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     product.Weeks.Add(week);
                     product.Snapshot = null;
-                    product.Generation++;
+
+                    // Only the generations of the sensors whose batches it writes change (#1850 part 4c): every batch key
+                    // written carries one of their ids. A week database it creates holds no row of another sensor (its rows
+                    // of the week could only have been written into a database that existed then, and a dropped one is
+                    // refused above), so a plan of another sensor that lists it, or the hours of its week, finds nothing of
+                    // that sensor more or less than before. Without any batch, the product's generation changes.
+                    var sensors = batches.Select(b => b.SensorId).Distinct().ToList();
+                    if (sensors.Count == 0)
+                        product.Generation++;
+                    foreach (var sensor in sensors)
+                        product.ChangeSensor(sensor);
 
                     using var batch = new WriteBatch();
                     for (int i = 0; i < batches.Count; i++)
@@ -554,8 +564,21 @@ namespace HSMDatabase.LevelDB.TableBatches
             if (product is null)
                 return 0;
 
+            // Every term only grows: the sum changes with any of them.
             lock (product.Lock)
-                return product.Generation;
+                return product.Generation + product.SensorCounter;
+        }
+
+        public long GetGeneration(Guid productId, Guid sensorId)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return 0;
+
+            // Both terms only grow and are read together under the product's lock, every write that changes one of them
+            // holding the same lock: the sum never goes back, and two equal readings mean neither term changed between them.
+            lock (product.Lock)
+                return product.Generation + product.SensorGenerations.GetValueOrDefault(sensorId);
         }
 
         public TableBatchHour GetHour(Guid productId, long hourTicks)
@@ -618,9 +641,17 @@ namespace HSMDatabase.LevelDB.TableBatches
         }
 
         public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours) =>
-            ReadSensor(productId, sensorId, periodWeeks, hours, out _);
+            ReadSensor(productId, sensorId, periodWeeks, hours, null, out _);
 
-        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed)
+        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed) =>
+            ReadSensor(productId, sensorId, periodWeeks, hours, null, out failed);
+
+        public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, long fromTicks, long toTicks, out int failed) =>
+            ReadSensor(productId, sensorId, periodWeeks, hours, (fromTicks, toTicks), out failed);
+
+        // range: [from, to) of the row times; an index record whose rows cannot meet it is skipped before its batch is
+        // fetched. Null: every record.
+        private List<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, (long From, long To)? range, out int failed)
         {
             ArgumentNullException.ThrowIfNull(hours);
             failed = 0;
@@ -639,6 +670,15 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     var selected = week.OrderBy(h => h).ToArray();
                     var found = new List<TableBatchRead>();
+                    int weekFailed = 0;
+
+                    void Add(byte[] key, byte[] value, bool moved)
+                    {
+                        if (!TryReadIndexed(handle.Db, key, value, moved, range, out var read))
+                            weekFailed++;
+                        else if (read is not null)
+                            found.Add(read);
+                    }
 
                     using (var iterator = handle.Db.CreateIterator())
                     {
@@ -648,17 +688,17 @@ namespace HSMDatabase.LevelDB.TableBatches
                         {
                             var prefix = IndexPrefix(hour, sensorId);
                             for (iterator.Seek(prefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(prefix); iterator.Next())
-                                found.Add(ReadIndexed(handle.Db, iterator.Key(), iterator.Value(), moved: false));
+                                Add(iterator.Key(), iterator.Value(), moved: false);
 
                             // The region of moved batches: 0xFF | hour | sensor | 0x00 | ...
                             var movedPrefix = MovedIndexPrefix(hour, sensorId);
                             for (iterator.Seek(movedPrefix); iterator.IsValid && iterator.Key().AsSpan().StartsWith(movedPrefix); iterator.Next())
-                                found.Add(ReadIndexed(handle.Db, iterator.Key(), iterator.Value(), moved: true));
+                                Add(iterator.Key(), iterator.Value(), moved: true);
                         }
                     }
 
-                    failed += found.Count(f => f is null);
-                    result.AddRange(found.Where(f => f is not null));
+                    failed += weekFailed;
+                    result.AddRange(found);
                 }
                 finally
                 {
@@ -669,9 +709,13 @@ namespace HSMDatabase.LevelDB.TableBatches
             return result.OrderBy(r => r.HourTicks).ThenBy(r => r.Moved).ThenBy(r => r.Ordinal).ToList();
         }
 
-        // An index record and its batch; null (counted) when the batch is missing or the record is damaged.
-        private TableBatchRead ReadIndexed(DB db, byte[] key, byte[] value, bool moved)
+        // An index record and its batch. False (counted) when the batch is missing or the record is damaged; true with a null
+        // read when the record's rows cannot meet the range: skipped before its batch is fetched, so a record out of the range
+        // whose batch is missing is no failure (it would add no row to the answer either way).
+        private bool TryReadIndexed(DB db, byte[] key, byte[] value, bool moved, (long From, long To)? range, out TableBatchRead read)
         {
+            read = null;
+
             try
             {
                 Guid sensor;
@@ -699,16 +743,20 @@ namespace HSMDatabase.LevelDB.TableBatches
                 if (value.Length != 17 || value[0] != IndexVersion)
                     throw new FormatException($"an index record of {value.Length} bytes, version {(value.Length > 0 ? value[0] : 0)}");
 
+                long last = BinaryPrimitives.ReadInt64LittleEndian(value.AsSpan(1));
+                if (range is { } r && (last < r.From || first >= r.To))
+                    return true;
+
                 var batch = (BatchMissing?.Invoke(hour, ordinal) == true ? null : db.Get(batchKey)) ?? throw new FormatException("the batch of an index record is missing");
 
-                return new TableBatchRead(sensor, hour, ordinal, moved, first, BinaryPrimitives.ReadInt64LittleEndian(value.AsSpan(1)),
-                    BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(9)), batch);
+                read = new TableBatchRead(sensor, hour, ordinal, moved, first, last, BinaryPrimitives.ReadInt32LittleEndian(value.AsSpan(9)), batch);
+                return true;
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException)
             {
                 Statistics.Add(ref Statistics.ReadFailures);
                 _logger.Error($"A table batch record could not be read: {ex.Message}");
-                return null;
+                return false;
             }
         }
 
@@ -1116,8 +1164,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                 else
                     product.Placements[sensorId] = placement;
 
-                // A placement gives ClassOf, which a read's plan takes for every merged hour.
-                product.Generation++;
+                // A placement gives ClassOf, which a read's plan of this sensor takes for every merged hour. A plan of another
+                // sensor takes only its own placement: this write changes nothing it sees (#1850 part 4c).
+                product.ChangeSensor(sensorId);
             }
         }
 
@@ -1909,8 +1958,18 @@ namespace HSMDatabase.LevelDB.TableBatches
             public long PinnedWeek = long.MinValue;
             public IReadOnlyDictionary<Guid, long> Watermarks = new Dictionary<Guid, long>();
             public IReadOnlyList<TableBatchHour> Snapshot;
-            // Changed under Lock by every write that changes what a read's plan sees (GetGeneration).
+            // The product's term of the generation (GetGeneration): changed under Lock by every write that changes what a
+            // read's plan of any sensor of the product sees.
             public long Generation;
+            // The sensors' terms (#1850 part 4c): a write that changes what a plan of one sensor only sees sets that
+            // sensor's term to ++SensorCounter, under Lock. Both only grow, and an entry is never removed (a removed entry
+            // would read 0 again and could equal the value a plan took before it was set).
+            public long SensorCounter;
+            public readonly Dictionary<Guid, long> SensorGenerations = [];
+
+            // Under Lock. A change that only a plan of this sensor sees: its term becomes larger than every value any term
+            // of the product had, so no reading of its generation repeats an earlier one.
+            public void ChangeSensor(Guid sensorId) => SensorGenerations[sensorId] = ++SensorCounter;
         }
 
 
