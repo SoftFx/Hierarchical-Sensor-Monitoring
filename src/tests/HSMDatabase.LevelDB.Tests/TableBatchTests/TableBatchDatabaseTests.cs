@@ -923,7 +923,139 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
 
+        // === Opening a product (#1850 part 4: outside the store-wide lock) ===
+
+        [Fact]
+        public void Two_calls_for_the_same_product_get_one_open_and_another_product_is_not_held_up_meanwhile()
+        {
+            var other = Guid.NewGuid();
+            var first = Open();
+            first.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
+            first.WriteHour(other, Commit(Week0), [Part(4, (_sensorB, 0, 1))]);
+            first.Dispose();
+
+            var hoursOpens = new Dictionary<string, int>();
+            var store = Open(open: (path, options) =>
+            {
+                if (path.EndsWith(TableBatchDatabase.HoursName))
+                    lock (hoursOpens)
+                        hoursOpens[path] = hoursOpens.GetValueOrDefault(path) + 1;
+                return new DB(path, options);
+            });
+
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            int openings = 0;
+            store.Checkpoint = p =>
+            {
+                // The first open (the product's) stops inside its open until released.
+                if (p == "product-opening" && Interlocked.Increment(ref openings) == 1)
+                {
+                    entered.Set();
+                    release.Wait(Bound);
+                }
+            };
+
+            IReadOnlyList<TableBatchHour> firstResult = null, secondResult = null;
+            var opener = new Thread(() => firstResult = store.GetHours(_product));
+            opener.Start();
+            Assert.True(entered.Wait(Bound));
+
+            var waiter = new Thread(() => secondResult = store.GetHours(_product));
+            waiter.Start();
+            WaitUntilBlocked(waiter);
+
+            // While the product opens, another product opens and the store-wide calls answer.
+            var meanwhile = StartLong(() => (store.GetHours(other).Count, store.IsOpened, store.WeekDatabases));
+            Assert.True(meanwhile.Wait(Bound), "a call on another product waited for the open of the first one");
+            Assert.Equal((1, true, 1), meanwhile.Result);
+
+            release.Set();
+            Assert.True(opener.Join(Bound) && waiter.Join(Bound));
+
+            Assert.Equal(Week0, Assert.Single(firstResult).HourTicks);
+            Assert.Equal(Week0, Assert.Single(secondResult).HourTicks);
+            Assert.Equal(1, hoursOpens.Single(p => p.Key.Contains(_product.ToString("N"))).Value);
+            Assert.Equal(2, openings);
+        }
+
+        [Fact]
+        public void An_open_that_failed_is_retried_by_the_next_call()
+        {
+            var first = Open();
+            first.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
+            first.Dispose();
+
+            int calls = 0;
+            var store = Open(open: (path, options) =>
+            {
+                if (path.EndsWith(TableBatchDatabase.HoursName) && ++calls == 1)
+                    throw new Exception("IO error: the disk is not there for a moment");
+                return new DB(path, options);
+            });
+
+            Assert.Throws<TableBatchStoreException>(() => store.GetHours(_product));
+            Assert.False(store.IsOpened);
+
+            // Not an exception kept for the product until a restart: the next call opens it.
+            Assert.Single(store.GetHours(_product));
+            Assert.True(store.IsHourMerged(_product, Week0));
+            Assert.Equal(2, calls);
+        }
+
+        [Fact]
+        public void A_dispose_during_an_open_waits_for_it_and_leaves_nothing_of_it_open()
+        {
+            var first = Open();
+            first.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
+            first.Dispose();
+
+            var store = Open();
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            store.Checkpoint = p =>
+            {
+                if (p == "product-opening")
+                {
+                    entered.Set();
+                    release.Wait(Bound);
+                }
+            };
+
+            Exception opened = null;
+            var opener = new Thread(() =>
+            {
+                try { store.GetHours(_product); }
+                catch (Exception ex) { opened = ex; }
+            });
+            opener.Start();
+            Assert.True(entered.Wait(Bound));
+
+            var disposer = new Thread(store.Dispose);
+            disposer.Start();
+            WaitUntilBlocked(disposer);
+
+            release.Set();
+            Assert.True(opener.Join(Bound) && disposer.Join(Bound));
+            Assert.IsType<TableBatchStoreException>(opened);
+
+            // The hours database the open had opened was closed: another store opens the same folder.
+            Assert.Single(Open().GetHours(_product));
+        }
+
+
         // === Helpers ===
+
+        // Waits until a thread is blocked (on a lock, an event or a join); bounded only for a test that fails.
+        private static void WaitUntilBlocked(Thread thread)
+        {
+            var bound = DateTime.UtcNow + Bound;
+            while ((thread.ThreadState & ThreadState.WaitSleepJoin) == 0)
+            {
+                Assert.True(DateTime.UtcNow < bound, "the thread never blocked");
+                Thread.Yield();
+            }
+        }
 
         private TableBatchDatabase Open(long writeBufferSize = 8L * 1024 * 1024, Func<string, Options, DB> open = null, string root = null, Func<DateTime> clock = null)
         {

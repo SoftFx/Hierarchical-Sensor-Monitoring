@@ -62,8 +62,11 @@ namespace HSMDatabase.LevelDB.TableBatches
         private readonly Func<string, Options, DB> _open;
         private readonly Action<TimeSpan> _pause;
 
+        // The products by id. _productsLock guards the dictionary and each slot's State; a product is opened under its slot's
+        // own gate, outside _productsLock, so the open of one product (a rebuild of its Hours opens every week database)
+        // never holds up the calls on the others.
         private readonly object _productsLock = new();
-        private readonly Dictionary<Guid, ProductState> _products = [];
+        private readonly Dictionary<Guid, ProductSlot> _products = [];
 
         // The cache of open week databases. Every handle is changed under _cacheLock; a read or write uses a database while
         // holding a lease on its handle, outside the lock.
@@ -99,7 +102,8 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// memtable is written out); "read-holding" (a read holds a database and its iterator); "drop-waiting" (a drop waits
         /// for the leases of the week, under the cache lock), "drop-deleting" (before the folder is deleted), "drop-hours"
         /// (before the hours left without a class are removed from Hours); "dispose-waiting" (a dispose waits for leases,
-        /// under the cache lock), "dispose-product" (before a dispose takes a product's lock).
+        /// under the cache lock), "dispose-product" (before a dispose takes a product's lock); "product-opening" (a product's
+        /// open, under its slot's gate and outside the store-wide lock).
         /// </summary>
         internal Action<string> Checkpoint { get; set; }
 
@@ -108,7 +112,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         public string Folder => _root;
 
-        public bool IsOpened { get { lock (_productsLock) return _products.Count > 0; } }
+        public bool IsOpened { get { lock (_productsLock) return _products.Values.Any(s => s.State is not null); } }
 
         public TableBatchStoreStatistics Statistics { get; } = new();
 
@@ -136,8 +140,13 @@ namespace HSMDatabase.LevelDB.TableBatches
         {
             get
             {
+                // The products are copied under the store-wide lock and visited outside it: a product's lock held long (a
+                // synced write, a drop waiting for its reads) must not stall every other call through _productsLock.
+                List<ProductState> products;
                 lock (_productsLock)
-                    return _products.Values.Sum(p => { lock (p.Lock) return p.Weeks.Count; });
+                    products = _products.Values.Select(s => s.State).Where(p => p is not null).ToList();
+
+                return products.Sum(p => { lock (p.Lock) return p.Weeks.Count; });
             }
         }
 
@@ -743,20 +752,43 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         // === Products ===
 
+        // The product's state, opened on first use. Two calls for the same product get one open: the second waits on the
+        // slot's gate and takes the first one's state. An open that fails leaves the slot empty, so the next call opens again
+        // (unlike a Lazy, which would keep the exception until a restart). Only the slot is looked up under _productsLock.
         private ProductState Product(Guid productId, bool create)
         {
+            ProductSlot slot;
+
             lock (_productsLock)
             {
                 if (_disposed)
                     throw new TableBatchStoreException("The table batch store is closed.");
 
-                if (_products.TryGetValue(productId, out var product))
-                    return product;
+                if (_products.TryGetValue(productId, out slot) && slot.State is { } open)
+                    return open;
+
+                if (slot is null)
+                    _products[productId] = slot = new ProductSlot();
+            }
+
+            lock (slot.Gate)
+            {
+                lock (_productsLock)
+                {
+                    if (_disposed)
+                        throw new TableBatchStoreException("The table batch store is closed.");
+
+                    if (slot.State is { } opened)
+                        return opened;
+                }
 
                 var folder = ProductPath(productId);
                 if (!create && !Directory.Exists(folder))
                     return null;
 
+                Checkpoint?.Invoke("product-opening");
+
+                ProductState product;
                 try
                 {
                     product = OpenProduct(productId, folder);
@@ -767,17 +799,47 @@ namespace HSMDatabase.LevelDB.TableBatches
                     throw new TableBatchStoreException($"The table batches of product {productId} could not be opened: {ex.Message}", ex);
                 }
 
-                _products[productId] = product;
-                return product;
+                lock (_productsLock)
+                {
+                    if (!_disposed)
+                    {
+                        slot.State = product;
+                        return product;
+                    }
+                }
+
+                // The store was disposed while the product opened: its hours database is closed here, as the dispose (which
+                // waits on this gate) would have closed it.
+                product.HoursDb?.Dispose();
+                product.HoursDb = null;
+                throw new TableBatchStoreException("The table batch store is closed.");
             }
         }
 
         private ProductState OpenProduct(Guid productId, string folder)
         {
+            var product = new ProductState(productId);
+
+            try
+            {
+                return OpenProduct(product, folder);
+            }
+            catch
+            {
+                // Nothing of a product that failed to open stays open: the next call opens it again over the same folder.
+                product.HoursDb?.Dispose();
+                product.HoursDb = null;
+                throw;
+            }
+        }
+
+        private ProductState OpenProduct(ProductState product, string folder)
+        {
+            var productId = product.Id;
             var started = DateTime.UtcNow;
             Directory.CreateDirectory(folder);
 
-            var product = new ProductState(productId) { Dropped = ReadDropped(productId, folder) };
+            product.Dropped = ReadDropped(productId, folder);
 
             foreach (var dir in Directory.GetDirectories(folder))
                 if (TryParseWeek(Path.GetFileName(dir), out var week))
@@ -945,7 +1007,8 @@ namespace HSMDatabase.LevelDB.TableBatches
 
         // === The cache of week databases ===
 
-        // Lock order: a product's lock, then _cacheLock; _productsLock is never taken under _cacheLock.
+        // Lock order: a product slot's gate (an open), then _productsLock or _cacheLock, each held briefly; a product's lock,
+        // then _cacheLock. _productsLock is never taken under _cacheLock, and a product's lock never under a slot's gate.
         private Handle Acquire((Guid Product, long Week, int Period) key, bool create, bool pin)
         {
             lock (_cacheLock)
@@ -1065,8 +1128,8 @@ namespace HSMDatabase.LevelDB.TableBatches
                     }
                 }
 
-                foreach (var product in _products.Values)
-                    product.HoursDb?.Dispose();
+                foreach (var slot in _products.Values)
+                    slot.State?.HoursDb?.Dispose();
 
                 _products.Clear();
             }
@@ -1080,7 +1143,7 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// </summary>
         public void Dispose()
         {
-            List<ProductState> products;
+            List<ProductSlot> slots;
 
             lock (_productsLock)
             {
@@ -1090,8 +1153,17 @@ namespace HSMDatabase.LevelDB.TableBatches
                 lock (_cacheLock)
                     _disposed = true;
 
-                products = [.. _products.Values];
+                slots = [.. _products.Values];
             }
+
+            // An open in flight ends first (it sees the store closed and closes what it opened, or published its state
+            // before the dispose began): its gate is taken once, after which the slot's state is final.
+            var products = new List<ProductState>();
+            foreach (var slot in slots)
+                lock (slot.Gate)
+                    lock (_productsLock)
+                        if (slot.State is not null)
+                            products.Add(slot.State);
 
             lock (_cacheLock)
             {
@@ -1325,6 +1397,13 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
+
+        // A product's place in the store: Gate serialises its open, State is set (under _productsLock) once it opened.
+        private sealed class ProductSlot
+        {
+            public readonly object Gate = new();
+            public ProductState State;
+        }
 
         private sealed class ProductState(Guid id)
         {
