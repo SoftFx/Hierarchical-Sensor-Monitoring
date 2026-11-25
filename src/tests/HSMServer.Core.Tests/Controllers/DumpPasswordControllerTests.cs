@@ -133,6 +133,35 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public void AUserWithNoRoleOnTheProduct_GetsTheSame404AsForAnUnknownProduct()
+        {
+            var stranger = CreateController(new User("stranger") { ProductsRoles = { (Guid.NewGuid(), ProductRoleEnum.ProductManager) } });
+
+            foreach (var productId in new[] { _root.Id, _nested.Id })
+            {
+                var answers = new[]
+                {
+                    (stranger.Show(new DumpPasswordRequest { ProductId = productId }),
+                     stranger.Show(new DumpPasswordRequest { ProductId = Guid.NewGuid() })),
+                    (stranger.Generate(new DumpPasswordRequest { ProductId = productId }),
+                     stranger.Generate(new DumpPasswordRequest { ProductId = Guid.NewGuid() })),
+                    (stranger.Set(new DumpPasswordSetRequest { ProductId = productId, Password = CurrentValue }),
+                     stranger.Set(new DumpPasswordSetRequest { ProductId = Guid.NewGuid(), Password = CurrentValue })),
+                };
+
+                foreach (var (known, unknown) in answers)
+                {
+                    Assert.Equal(404, StatusOf(known));
+                    Assert.Equal(unknown.GetType(), known.GetType());
+                    Assert.Equal(StatusOf(unknown), StatusOf(known));
+                }
+            }
+
+            _passwords.Verify(p => p.SetPassword(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<InitiatorInfo>()), Times.Never);
+            _passwords.Verify(p => p.Generate(), Times.Never);
+        }
+
+        [Fact]
         public void AManager_SeesEveryKeptValue_NewestFirst_WithTheReplacedOneMarked()
         {
             var result = CreateController(Manager()).Show(new DumpPasswordRequest { ProductId = _root.Id });

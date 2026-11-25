@@ -157,12 +157,13 @@ namespace HSMServer.Model.LargeFiles
         {
             failure = DumpPasswordPageOutcome.NotFound;
 
-            if (!TryGetRoot(productId, out rootId))
+            // A product the user cannot see answers as an unknown one: its existence is not disclosed.
+            if (!TryGetRoot(productId, out rootId) || user is null || !user.IsProductAvailable(rootId))
                 return false;
 
             failure = DumpPasswordPageOutcome.Forbidden;
 
-            return user is not null && user.IsManager(rootId);
+            return user.IsManager(rootId);
         }
 
         private bool TryGetRoot(Guid productId, out Guid rootId)

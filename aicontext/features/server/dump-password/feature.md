@@ -48,7 +48,7 @@ The page model never holds a value. The three actions of `DumpPasswordController
 | `POST /DumpPassword/Generate` | `{productId}` | `{password}`; nothing is stored until it is saved |
 | `POST /DumpPassword/Set` | `{productId, password, generated}` | `{version, message}` |
 
-An unknown product answers 404; a caller who is not a Manager of the root product nor an admin, 403; a password that breaks a rule, 400 `{error}` with the rule. The server log records "set to version N by user" without the value.
+An unknown product, and a product the caller cannot see (`User.IsProductAvailable(root)` false), answer the same 404; a caller who sees the product but is not a Manager of the root product nor an admin, 403; a password that breaks a rule, 400 `{error}` with the rule. The server log records "set to version N by user" without the value.
 
 ## Generation and typed rules
 
@@ -106,7 +106,7 @@ There is no API or MCP route to read or set a dump password. An AI agent gets it
 
 - `src/tests/HSMServer.Core.Tests/LargeFiles/DumpPasswords/DumpPasswordServiceTests.cs` — a version is stored and becomes current; consecutive durable versions under concurrent saves; the versions read back from the database; a failed write changes nothing, journals nothing and raises nothing (also for a first password); a journal failure neither fails nor undoes the change; a throwing subscriber; unknown and non-root products refused without a write; the length bounds; the generator's length and alphabet; retirement set once and never on the current version; removal of expired retired versions only, never the current one; storage failures keep the versions and throw; removal with the product, also through the tree's delete event, without throwing into the cache; the journal record carries no password; the records print no password.
 - `src/tests/HSMServer.Core.Tests/LargeFiles/DumpPasswords/DumpPasswordServiceLoggingTests.cs` — no log line and no exception text carries a password.
-- `src/tests/HSMServer.Core.Tests/Controllers/DumpPasswordControllerTests.cs` — the actions are never cached; a Viewer cannot show, generate or set; an unknown product is 404; a Manager sees every kept value newest first with the replaced one marked; a nested node resolves to the root product; the generated flag is honoured only for a value that looks generated; a too-long value is refused before the service; a save is logged and journaled without the value; the page model never holds a value.
+- `src/tests/HSMServer.Core.Tests/Controllers/DumpPasswordControllerTests.cs` — the actions are never cached; a Viewer cannot show, generate or set; an unknown product is 404, and a user with no role on the product gets the same 404; a Manager sees every kept value newest first with the replaced one marked; a nested node resolves to the root product; the generated flag is honoured only for a value that looks generated; a too-long value is refused before the service; a save is logged and journaled without the value; the page model never holds a value.
 
 ## Known Issues / Limitations
 
