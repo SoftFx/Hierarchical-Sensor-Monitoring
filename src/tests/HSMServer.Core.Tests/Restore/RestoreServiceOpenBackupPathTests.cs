@@ -26,6 +26,7 @@ public sealed class RestoreServiceOpenBackupPathTests : IDisposable
         public string ServerLayoutDatabaseName { get; init; }
 
         public string ChangeSetsDatabaseName { get; init; } = "ChangeSets";
+        public string DownloadLogDatabaseName { get; init; } = "DownloadLog";
         public string TableBlocksFolderName { get; init; } = "Tables";
         public string EnvironmentDatabaseName { get; init; } = "EnvironmentData";
         public string SnaphotsDatabaseName { get; init; }

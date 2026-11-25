@@ -28,6 +28,9 @@ namespace HSMDatabase.AccessManager
         // separate from the sharded presentation Journal.
         public string ChangeSetsDatabaseName { get; init; }
 
+        // The download log (ADR-0022 point 15) — a dedicated LevelDB folder, not the journal.
+        public string DownloadLogDatabaseName { get; init; }
+
         // The folder of the table block store (#1844), under DatabaseFolder.
         public string TableBlocksFolderName { get; init; }
 
@@ -41,6 +44,8 @@ namespace HSMDatabase.AccessManager
         public string PathToJournalDb => Path.Combine(DatabaseFolder, JournalFolder);
 
         public string PathToChangeSetsDb => Path.Combine(DatabaseFolder, ChangeSetsDatabaseName);
+
+        public string PathToDownloadLogDb => Path.Combine(DatabaseFolder, DownloadLogDatabaseName);
 
         public string PathToExport => Path.Combine(DatabaseFolder, ExportFolder);
 
