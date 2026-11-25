@@ -64,6 +64,16 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             return SharpZipArchiveWriterTests.ReadAll(entry.Content);
         }
 
+        /// <summary>The name of the only entry of the file's archive, opened with the password.</summary>
+        public string OpenEntryName(Guid fileId, string password)
+        {
+            var record = Store.TryGetFile(fileId);
+            using var stream = new FileStream(Store.ArchivePath(record), FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var entry = new SharpZipArchiveWriter().OpenEntry(stream, password);
+
+            return entry.Name;
+        }
+
         public static bool SameHash(byte[] content, byte[] sha256) => SHA256.HashData(content).AsSpan().SequenceEqual(sha256);
 
         public void Dispose()

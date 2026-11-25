@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using HSMServer.Core.LargeFiles.Archives;
 using Xunit;
@@ -47,9 +48,15 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
                 RedirectStandardError = true,
                 RedirectStandardInput = true,
                 UseShellExecute = false,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
             foreach (var argument in arguments)
                 start.ArgumentList.Add(argument);
+
+            // The console of Windows has its own code page: ask 7-Zip for UTF-8, as it writes on Linux.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                start.ArgumentList.Add("-sccUTF-8");
 
             using var process = Process.Start(start)!;
             process.StandardInput.Close(); // a prompt for a password must not hang the test
@@ -97,6 +104,28 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
             var wrong = SevenZip.Run("t", "-pwrong", archive);
             Assert.NotEqual(0, wrong.ExitCode);
+        }
+
+        [SevenZipFact]
+        public async Task CyrillicEntryName_IsListedBySevenZipAsItWasSent()
+        {
+            const string name = "дамп процесса.dmp";
+
+            _h.Passwords.Set(_h.Product, Password);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(100_000), name: name);
+            await _h.Run();
+
+            var record = _h.Store.TryGetFile(file.FileId);
+            Assert.Equal(LargeArchiveFileState.Packed, record.State);
+            Assert.Equal(name, _h.OpenEntryName(file.FileId, Password));
+
+            var archive = _h.Store.ArchivePath(record);
+            var listing = SevenZip.Run("l", "-slt", $"-p{Password}", archive);
+            Assert.True(listing.ExitCode == 0, listing.Output);
+            Assert.Contains($"Path = {name}", listing.Output);
+
+            var good = SevenZip.Run("t", $"-p{Password}", archive);
+            Assert.True(good.ExitCode == 0, good.Output);
         }
     }
 }

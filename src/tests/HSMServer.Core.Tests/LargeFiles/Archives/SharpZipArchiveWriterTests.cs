@@ -36,6 +36,28 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             Assert.Equal(content, ReadAll(entry.Content));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void CyrillicEntryName_RoundTrips_AndIsMarkedAsUtf8(bool seekableOutput)
+        {
+            const string name = "дамп процесса.dmp";
+            var content = TestContent.Compressible(10_000);
+
+            var archive = Write(content, name, seekableOutput: seekableOutput);
+
+            using (var entry = _writer.OpenEntry(new MemoryStream(archive), Password))
+            {
+                Assert.Equal(name, entry.Name);
+                Assert.Equal(content, ReadAll(entry.Content));
+            }
+
+            // General purpose flag bit 11: the name is UTF-8, so every archiver reads it the same way, whatever its code page.
+            using var zip = new ZipFile(new MemoryStream(archive), leaveOpen: false);
+            Assert.True(zip[0].IsUnicodeText);
+            Assert.Equal(name, zip[0].Name);
+        }
+
         [Fact]
         public void EmptyContent_MakesAnArchiveOfAnEmptyEntry()
         {
