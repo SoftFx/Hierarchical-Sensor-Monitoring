@@ -53,6 +53,21 @@ namespace HSMServer.ServerConfiguration
         // The memory the merge of one product's hour may take for its rows (#1850); a larger hour is merged in several passes.
         public int MergeMemoryBudgetMb { get; set; } = TableBlockOptions.DefaultMergeMemoryBudgetMb;
 
+        // The period of the feed sensors of a product (#1847): .tables/Rows, Stored, Delivery lag, Tables refused, Blocks the
+        // merge could not read, each the count (or the maximum) of one period.
+        public int FeedProductPeriodMinutes { get; set; } = DefaultFeedProductPeriodMinutes;
+
+        public const int DefaultFeedProductPeriodMinutes = 1;
+
+        // The period of the Rows sensor of each table sensor (#1847), .tables/<the table's path>/Rows: one value per active
+        // table and period, the cost that grows with the tables. A whole number of product periods.
+        public int FeedTablePeriodMinutes { get; set; } = DefaultFeedTablePeriodMinutes;
+
+        public const int DefaultFeedTablePeriodMinutes = 5;
+
+        // False: no Rows sensor per table sensor is created or posted (the product's sensors still are).
+        public bool FeedTableSensors { get; set; } = true;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -70,6 +85,13 @@ namespace HSMServer.ServerConfiguration
             Check(MaxConcurrentReads, 1024, nameof(MaxConcurrentReads));
             Check(MaxOpenBatchDatabases, 100_000, nameof(MaxOpenBatchDatabases));
             Check(MergeMemoryBudgetMb, 1_048_576, nameof(MergeMemoryBudgetMb));
+            Check(FeedProductPeriodMinutes, 1440, nameof(FeedProductPeriodMinutes));
+            Check(FeedTablePeriodMinutes, 1440, nameof(FeedTablePeriodMinutes));
+
+            // The table period is drained on a tick of the product period.
+            if (FeedTablePeriodMinutes % FeedProductPeriodMinutes != 0)
+                throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(FeedTablePeriodMinutes)} = {FeedTablePeriodMinutes} is invalid: " +
+                                                    $"expected a multiple of {nameof(FeedProductPeriodMinutes)} ({FeedProductPeriodMinutes}).");
 
             if (DeleteMergedBlocksAfterHours < 0 || DeleteMergedBlocksAfterHours > 8760)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(DeleteMergedBlocksAfterHours)} = {DeleteMergedBlocksAfterHours} is invalid: expected 0..8760 hours.");

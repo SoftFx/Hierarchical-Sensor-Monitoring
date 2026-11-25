@@ -74,6 +74,10 @@ namespace HSMServer.ServiceExtensions
                 provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.TableSensors.ToOptions()));
             services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
 
+            // Values the server derives itself for sensors of a user's product (the feed sensors of table sensors, #1847):
+            // the cache without an access key, given only to the server's own services, never to a controller.
+            services.AddSingleton(provider => (HSMServer.Core.Cache.IServerSensorValues)provider.GetRequiredService<ITreeValuesCache>());
+
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
             // Singleton like the cache and the presentation Journal it
@@ -257,6 +261,7 @@ namespace HSMServer.ServiceExtensions
                     .AddHostedService<BackgroundServices.DatabaseServices.HistoryCompactionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistorySealingService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.TableMergeService>()
+                    .AddHostedService<BackgroundServices.TableFeedSensorsService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>

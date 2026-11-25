@@ -40,6 +40,24 @@
             a new failure (posted once more with the same value), so one transient failure does not stay Error until a restart.
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.TableFeedSensorsService">
+            <summary>
+            Posts the feed sensors of table sensors (#1847): ordinary sensors in the table sensor's own product, under
+            <c>.tables</c>, that users set their alerts on (a table sensor owns no alerts and no TTL). Drains
+            <see cref="T:HSMServer.Core.TableSensors.TableFeedCounters"/> every product period (the product's sensors) and every table period (the Rows sensor
+            of each table sensor). Counts are per period, not since a start. A product or table without activity in a period
+            posts nothing; a failure counter posts 0 once after a period in which it was above 0. A sensor is registered the
+            first time a value finds none on its path. A tick never throws into the host: a failure is logged and the next tick
+            goes on (its counts were drained and are lost with the failed tick, which the log says).
+            <para>Documented in <c>aicontext/features/server/table-feed-sensors/feature.md</c>.</para>
+            </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.TickAsync(System.DateTime,System.Threading.CancellationToken)">
+            <summary>
+            One period of the product sensors, and of the table sensors when <paramref name="utcNow"/> is in a table period
+            after the last one drained (the first tick drains both). The values carry <paramref name="utcNow"/> as their time.
+            </summary>
+        </member>
         <member name="T:HSMServer.Controllers.AccessKeysApiController">
             <summary>
             A product's access keys (#1787) — the id-discovery surface of the
