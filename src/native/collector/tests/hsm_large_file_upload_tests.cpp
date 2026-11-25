@@ -795,8 +795,12 @@ namespace
         options.not_secure = 1;
         Check(hsm_collector_send_large_file(rig.collector, "dumps", rig.folder.File("b.dmp").c_str(), &options, &second) == HSM_RESULT_OK, "send b");
         Check(WaitFor([&] { return Settled(first) && Settled(second); }), "settled");
+        // Found by name: a file that waited for the session may go after the other.
         const auto begins = rig.script->Begins();
-        Check(begins.size() == 2 && begins[0].raw.find("\"secure\":true") != std::string::npos && begins[1].raw.find("\"secure\":false") != std::string::npos,
+        std::string a_raw, b_raw;
+        for (const auto& begin : begins)
+            (begin.name == "a.dmp" ? a_raw : b_raw) = begin.raw;
+        Check(begins.size() == 2 && a_raw.find("\"secure\":true") != std::string::npos && b_raw.find("\"secure\":false") != std::string::npos,
               "secure by default, not when the options say so");
         options.not_secure = 2;
         Check(hsm_collector_send_large_file(rig.collector, "dumps", "x", &options, nullptr) == HSM_RESULT_INVALID_ARGUMENT, "not_secure is 0 or 1");

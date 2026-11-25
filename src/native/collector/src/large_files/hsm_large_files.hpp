@@ -148,8 +148,11 @@ namespace hsm::collector::large_files
         std::function<void()> count_dropped_value;
         /// The session that is up now.
         std::function<hsm::http::SessionIdentity()> session;
-        /// A `commands` request on the session (the registration of a File sensor).
-        std::function<hsm::http::SessionResult(const std::string& body)> commands;
+        /// A `commands` request on the session (the registration of a File sensor); the wait ends once
+        /// `abandon` reads true after `wake_session`.
+        std::function<hsm::http::SessionResult(const std::string& body, const std::atomic<bool>& abandon)> commands;
+        /// Wakes the session's waiting requests (a stop).
+        std::function<void()> wake_session;
         FileConnectionOptions connection;
         /// Not empty: this run cannot send large files (said once, every watch and file UNAVAILABLE).
         std::string unavailable_reason;

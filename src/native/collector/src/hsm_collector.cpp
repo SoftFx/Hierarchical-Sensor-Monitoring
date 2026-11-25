@@ -5170,7 +5170,8 @@ namespace
             watch->id = files->NextId();
             std::string error;
             if (!files->AddWatch(watch, error))
-                return SetError(HSM_RESULT_INVALID_ARGUMENT, "The watch is refused: " + error + ".");
+                return IsDisposed() ? SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.")
+                                    : SetError(HSM_RESULT_INVALID_ARGUMENT, "The watch is refused: " + error + ".");
             out = std::move(watch);
             ClearError();
             return HSM_RESULT_OK;
@@ -5247,8 +5248,12 @@ namespace
                 hsm::http::SessionTransport* session = session_transport_.get();
                 context.session = [session] { return session != nullptr ? session->CurrentSession() : hsm::http::SessionIdentity{}; };
                 const int64_t timeout = request_timeout_ms_ > 0 ? request_timeout_ms_ : 30000;
-                context.commands = [session, timeout](const std::string& body) {
-                    return session != nullptr ? session->Request("commands", body, timeout) : hsm::http::SessionResult{};
+                context.commands = [session, timeout](const std::string& body, const std::atomic<bool>& abandon) {
+                    return session != nullptr ? session->Request("commands", body, timeout, abandon) : hsm::http::SessionResult{};
+                };
+                context.wake_session = [session] {
+                    if (session != nullptr)
+                        session->Wake();
                 };
                 files->Start(std::move(context));
             }

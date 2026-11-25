@@ -31,15 +31,15 @@ namespace hsm::collector::large_files
 
     void LargeFileShared::Cut(std::uint64_t owner)
     {
-        std::function<void()> cut_now;
         {
+            // Called under the lock: the uploader's Stop clears `cut` under it before the connection
+            // can go away, so a cut never reaches a freed connection. The link's cancel takes only its
+            // own lock and the uploader never holds that lock while it takes this one.
             std::lock_guard<std::mutex> guard(mutex);
             ++wakes;
-            if (owner != 0 && owner == current_owner)
-                cut_now = cut;
+            if (owner != 0 && owner == current_owner && cut)
+                cut();
         }
-        if (cut_now)
-            cut_now();
         cv.notify_all();
     }
 
@@ -85,6 +85,10 @@ namespace hsm::collector::large_files
         constexpr int kChecksumMismatchesInARow = 3;
         constexpr int kMaxProtocolCloses = 3;
         constexpr int kHeldOpenReportAfter = 10;
+        // Restarts of one upload attempt that move nothing forward before it pauses.
+        constexpr int kMaxNoProgress = 3;
+        // The owner of the cut while the stale upload records are discarded (no watch or file).
+        constexpr std::uint64_t kStaleOwner = ~std::uint64_t{ 0 };
 
         std::int64_t ScanIntervalMs(std::int64_t settle_ms)
         {
@@ -201,6 +205,9 @@ namespace hsm::collector::large_files
         std::unique_ptr<tables::ZstdCompressor> zstd_;
         std::int64_t next_send_at_ = 0;
         bool key_refused_ = false;
+        std::map<std::uint64_t, int> changes_; // handed-over files that changed while sent
+        std::map<std::uint64_t, int> busy_;    // handed-over files held open by another program
+        std::int64_t stale_retry_at_ = 0;
         // Guarded by shared_.mutex: routed sends in the order sent.
         std::deque<std::shared_ptr<RoutedFile>> routed_;
         // The session generation whose file connection was refused (no route); 0: none.
@@ -256,10 +263,14 @@ namespace hsm::collector::large_files
         {
             try
             {
-                if (context_.report)
-                    context_.report(error, message);
-                else if (reporter_)
-                    reporter_(error, message);
+                // Read under the lock (Start sets the context on another thread); called with it free.
+                std::function<void(bool, const std::string&)> report;
+                {
+                    std::lock_guard<std::mutex> guard(shared_.mutex);
+                    report = context_.report ? context_.report : reporter_;
+                }
+                if (report)
+                    report(error, message);
             }
             catch (...)
             {
@@ -471,7 +482,7 @@ namespace hsm::collector::large_files
             hsm::http::SessionResult answer;
             try
             {
-                answer = context_.commands("[" + item.registration_json + "]");
+                answer = context_.commands("[" + item.registration_json + "]", stop_);
             }
             catch (...)
             {
@@ -570,6 +581,10 @@ namespace hsm::collector::large_files
 
             Outcome outcome;
             if (!EnsureRegistered(item, outcome))
+                return outcome;
+            // The connection before the open: a file is not held open (Windows: denying writers) while the
+            // server cannot take it.
+            if (!EnsureConnection(item, outcome))
                 return outcome;
 
             SourceFile source;
@@ -744,6 +759,7 @@ namespace hsm::collector::large_files
             facts.secure = item.options->secure;
             std::int64_t piece_bytes = record.Facts().piece_bytes > 0 && record.Facts().piece_bytes <= hello.piece_bytes ? record.Facts().piece_bytes : hello.piece_bytes;
             int in_a_row = 0;
+            int no_progress = 0;
             SetCut(item.owner);
             struct Clear
             {
@@ -793,6 +809,14 @@ namespace hsm::collector::large_files
                     continue;
                 }
                 piece_bytes = begun.piece_bytes;
+                {
+                    const std::int64_t expected = start.size == 0 ? 0 : (start.size + piece_bytes - 1) / piece_bytes;
+                    if (begun.pieces != expected)
+                    {
+                        Say("pieces:" + item.path, true, "The server answered begin for " + item.path + " with " + std::to_string(begun.pieces) + " pieces where the file has " + std::to_string(expected) + "; tried again later.");
+                        return Outcome{ Result::Later, "the server's piece count does not match the file", Now() + Backoff() };
+                    }
+                }
                 // The digests of the pieces depend on the content and the piece size only: they hold for
                 // another upload of the same file, not for another piece size.
                 const bool size_changed = record.Facts().piece_bytes != 0 && record.Facts().piece_bytes != piece_bytes;
@@ -822,7 +846,11 @@ namespace hsm::collector::large_files
                         if (sent.result != Result::Later || sent.not_before_ms != -1)
                             return sent;
                         if (restart)
+                        {
+                            if (++no_progress > kMaxNoProgress)
+                                return Outcome{ Result::Later, "the server lost the upload again", Now() + Backoff() };
                             break;
+                        }
                     }
                     if (restart)
                         break;
@@ -857,6 +885,8 @@ namespace hsm::collector::large_files
                         case FileAnswerKind::Stored:
                             return Outcome{ Result::Stored, std::string(), ended.stored_ticks };
                         case FileAnswerKind::Missing:
+                            if (ended.next >= pieces || ++no_progress > kMaxNoProgress)
+                                return Outcome{ Result::Later, "end: " + Status(ended), Now() + Backoff() };
                             next = ended.next;
                             break;
                         case FileAnswerKind::Discarded: {
@@ -869,6 +899,8 @@ namespace hsm::collector::large_files
                         case FileAnswerKind::Final:
                             return Outcome{ Result::Final, "the server refused the file at end: " + Status(ended), 0 };
                         case FileAnswerKind::NotHeld:
+                            if (++no_progress > kMaxNoProgress)
+                                return Outcome{ Result::Later, "end: " + Status(ended), Now() + Backoff() };
                             restart = true;
                             break;
                         case FileAnswerKind::RetryLater:
@@ -937,7 +969,13 @@ namespace hsm::collector::large_files
                 return Outcome{ Result::Later, "no memory for a piece", Now() + Backoff() };
             }
             if (!source.ReadAt(offset, source_.data(), length, [this, &item] { return Stopping(&item); }, error))
-                return Stopping(&item) ? Outcome{ Result::Cut, std::string(), 0 } : Outcome{ Result::Changed, "the file changed while it was sent: " + error, 0 };
+            {
+                if (Stopping(&item))
+                    return Outcome{ Result::Cut, std::string(), 0 };
+                if (error.find("shorter") != std::string::npos)
+                    return Outcome{ Result::Changed, "the file changed while it was sent: " + error, 0 };
+                return Outcome{ Result::Missing, "the file cannot be read (" + error + ")", 0 };
+            }
             Sha256Digest digest{};
             if (!Sha256Of(source_.data(), length, digest))
                 return Outcome{ Result::Later, "SHA-256 failed", Now() + Backoff() };
@@ -971,6 +1009,9 @@ namespace hsm::collector::large_files
             case FileAnswerKind::Next:
                 if (answer.status == 200 && answer.next > next)
                     record.SetDigest(next, digest, error);
+                if (answer.next == next)
+                    // An "out of order" that names this very piece: no progress; tried again after a pause.
+                    return Outcome{ Result::Later, "a piece: " + Status(answer), Now() + Backoff() };
                 in_a_row = 0;
                 next = (std::min)(answer.next, pieces);
                 return Outcome{ Result::Later, std::string(), -1 };
@@ -1294,7 +1335,7 @@ namespace hsm::collector::large_files
                 ~Clear() { self->SetCut(0); }
             } clear{ this };
 
-            int discards = 0, mismatches = 0, in_a_row = 0, closes = 0;
+            int discards = 0, mismatches = 0, in_a_row = 0, closes = 0, no_progress = 0;
             const std::int64_t piece_bytes = hello.piece_bytes;
             for (;;)
             {
@@ -1323,6 +1364,11 @@ namespace hsm::collector::large_files
                         return;
                     if (begun.kind == FileAnswerKind::Lost || begun.kind == FileAnswerKind::NotOpen || begun.kind == FileAnswerKind::Cancelled)
                         ResetConnection();
+                    RoutedLater(routed, Now() + Backoff());
+                    return;
+                }
+                if (begun.pieces != (size == 0 ? 0 : (size + begun.piece_bytes - 1) / begun.piece_bytes) || begun.piece_bytes > hello.piece_bytes)
+                {
                     RoutedLater(routed, Now() + Backoff());
                     return;
                 }
@@ -1371,6 +1417,11 @@ namespace hsm::collector::large_files
                             {
                                 digests[static_cast<std::size_t>(next)] = digest;
                                 have[static_cast<std::size_t>(next)] = true;
+                            }
+                            if (answer.next == next)
+                            {
+                                RoutedLater(routed, Now() + Backoff()); // no progress
+                                return;
                             }
                             in_a_row = 0;
                             next = (std::min)(answer.next, begun.pieces);
@@ -1469,6 +1520,11 @@ namespace hsm::collector::large_files
                         }
                         if (ended.kind == FileAnswerKind::Missing)
                         {
+                            if (ended.next >= begun.pieces || ++no_progress > kMaxNoProgress)
+                            {
+                                RoutedLater(routed, Now() + Backoff());
+                                return;
+                            }
                             next = ended.next;
                             break;
                         }
@@ -1788,9 +1844,8 @@ namespace hsm::collector::large_files
             switch (outcome.result)
             {
             case Result::Stored:
+                // Done for this run, kept or not: a file whose delete failed is not uploaded again.
                 if (run != nullptr)
-                    run->seen.erase(item.name);
-                if (run != nullptr && item.options->keep_source)
                     run->done_this_run.insert(done_key);
                 break;
             case Result::Skip:
@@ -1863,6 +1918,17 @@ namespace hsm::collector::large_files
                 }
                 if (run != nullptr)
                     run->seen.erase(item.name);
+                if (item.file)
+                {
+                    if (++changes_[item.file->id] >= kMaxDiscards)
+                    {
+                        item.file->Settle(HSM_LARGE_FILE_GIVEN_UP, "the file kept changing while it was sent");
+                        NotSent(item, "changing", "Large file " + item.path + " is given up: it kept changing while it was sent.");
+                        break;
+                    }
+                    std::lock_guard<std::mutex> guard(shared_.mutex);
+                    file_not_before_[item.file->id] = now + 1000;
+                }
                 break;
             case Result::Busy:
                 if (observation != nullptr)
@@ -1873,6 +1939,8 @@ namespace hsm::collector::large_files
                 }
                 if (item.file)
                 {
+                    if (++busy_[item.file->id] == kHeldOpenReportAfter)
+                        NotSent(item, "held-open", "Large file " + item.path + " is held open by another program (" + outcome.reason + "); it is taken when nobody holds it.");
                     std::lock_guard<std::mutex> guard(shared_.mutex);
                     file_not_before_[item.file->id] = now + 1000;
                 }
@@ -1896,7 +1964,7 @@ namespace hsm::collector::large_files
         // Upload records whose file is gone or changed (a crash, a restart): their uploads are discarded.
         void CheckStaleRecords()
         {
-            if (stale_checked_)
+            if (stale_checked_ || Now() < stale_retry_at_)
                 return;
             stale_checked_ = true;
             std::set<std::string> folders;
@@ -1928,13 +1996,15 @@ namespace hsm::collector::large_files
                         continue;
                     }
                     Item item;
+                    item.owner = kStaleOwner; // Stop cuts it like any upload
                     item.path = record.Facts().path;
                     item.sensor = record.Facts().sensor;
                     const Outcome discarded = DiscardRecorded(item, record);
                     if (discarded.result != Result::Changed)
                     {
                         record.Unload();
-                        stale_checked_ = false; // asked again on a later loop
+                        stale_checked_ = false; // asked again after the pause the discard asked for
+                        stale_retry_at_ = discarded.not_before_ms > Now() ? discarded.not_before_ms : Now() + Backoff();
                         return;
                     }
                 }
@@ -2060,6 +2130,11 @@ namespace hsm::collector::large_files
         std::string say;
         {
             std::lock_guard<std::mutex> guard(shared_->mutex);
+            if (shared_->disposed)
+            {
+                error = "the collector is disposed";
+                return false;
+            }
             for (const auto& other : impl_->watches_)
                 if (!other->released.load() && other->sensor == watch->sensor && other->mask == watch->mask && other->folder == watch->folder)
                 {
@@ -2093,7 +2168,7 @@ namespace hsm::collector::large_files
         std::string reason;
         {
             std::lock_guard<std::mutex> guard(shared_->mutex);
-            reason = impl_->UnavailableReason();
+            reason = shared_->disposed ? std::string("the collector was disposed") : impl_->UnavailableReason();
             if (reason.empty())
             {
                 impl_->files_.push_back(file);
@@ -2103,7 +2178,7 @@ namespace hsm::collector::large_files
                 say = impl_->TakeUnavailableLine();
         }
         if (!reason.empty())
-            file->Settle(HSM_LARGE_FILE_UNAVAILABLE, reason);
+            file->Settle(shared_->disposed ? HSM_LARGE_FILE_CANCELLED : HSM_LARGE_FILE_UNAVAILABLE, reason);
         if (!say.empty())
             impl_->Report(true, say);
         if (make_thread)
@@ -2229,6 +2304,7 @@ namespace hsm::collector::large_files
             impl_->file_not_before_.clear();
             impl_->stale_checked_ = false;
             impl_->key_refused_ = false;
+            impl_->thread_make_failed_ = false;
             impl_->connection_generation_ = 0;
             impl_->absent_until_ = 0;
             const std::string& reason = impl_->context_.unavailable_reason;
@@ -2257,21 +2333,32 @@ namespace hsm::collector::large_files
 
     void LargeFiles::MakeThread()
     {
-        std::lock_guard<std::mutex> guard(shared_->mutex);
-        if (impl_->thread_.joinable() || !impl_->running_)
-            return;
-        try
+        bool failed = false;
         {
-            impl_->thread_ = std::thread([this] {
-                impl_->thread_id_.store(std::this_thread::get_id());
-                impl_->thread_token_.store(CurrentThreadToken());
-                impl_->Run();
-            });
+            std::lock_guard<std::mutex> guard(shared_->mutex);
+            if (impl_->thread_.joinable() || !impl_->running_)
+                return;
+            try
+            {
+                impl_->thread_ = std::thread([this] {
+                    impl_->thread_id_.store(std::this_thread::get_id());
+                    impl_->thread_token_.store(CurrentThreadToken());
+                    impl_->Run();
+                });
+            }
+            catch (...)
+            {
+                failed = !impl_->thread_make_failed_;
+                impl_->thread_make_failed_ = true;
+                for (const auto& watch : impl_->watches_)
+                {
+                    watch->state.store(HSM_LARGE_FILE_WATCH_UNAVAILABLE);
+                    watch->SetReason("the uploader thread could not be made; tried again at the next start");
+                }
+            }
         }
-        catch (...)
-        {
-            impl_->thread_make_failed_ = true;
-        }
+        if (failed)
+            impl_->Report(true, "The large file uploader thread could not be made; large files wait for the next start.");
     }
 #endif
 
@@ -2288,14 +2375,20 @@ namespace hsm::collector::large_files
         }
         if (thread.joinable())
         {
-            std::function<void()> cut;
             {
                 std::lock_guard<std::mutex> guard(shared_->mutex);
-                cut = shared_->cut;
+                if (shared_->cut)
+                    shared_->cut();
             }
-            if (cut)
-                cut();
             shared_->cv.notify_all();
+            try
+            {
+                if (impl_->context_.wake_session)
+                    impl_->context_.wake_session(); // a registration waiting for its ack ends
+            }
+            catch (...)
+            {
+            }
             const std::uintptr_t token = impl_->thread_token_.load();
             RaiseThreadPriority(token);
             CancelThreadIo(token);
@@ -2305,9 +2398,10 @@ namespace hsm::collector::large_files
                 shared_->current_owner = 0;
                 shared_->cut = nullptr;
             }
-            impl_->thread_token_.store(0);
             impl_->thread_id_.store(std::thread::id{});
-            ReleaseThreadToken(token);
+            // The token the thread stored (also when Stop read it before the thread had).
+            ReleaseThreadToken(impl_->thread_token_.exchange(0));
+            (void)token;
         }
         // Routed sends are values: what a stop cut or did not reach is dropped, said and counted, as
         // the value queue drops what it could not send at a stop.

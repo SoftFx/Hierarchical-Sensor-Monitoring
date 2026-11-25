@@ -401,7 +401,8 @@ namespace hsm::collector::large_files
         handle_ = handle;
         return OpenResult::Ok;
 #else
-        const int fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+        // O_NONBLOCK: a FIFO put in the place of a file does not block the open (S_ISREG then refuses it).
+        const int fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
         if (fd < 0)
         {
             const int code = errno;
