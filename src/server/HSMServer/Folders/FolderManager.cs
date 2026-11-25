@@ -370,11 +370,15 @@ namespace HSMServer.Folders
                 // folder becomes its own (as when it leaves a folder, but it
                 // stays in it), then it enters the new folder.
                 fromFolder.Products.Remove(product.Id);
-                toFolder.Products[product.Id] = product;
 
                 if (await TryUpdateProductInFolder(product.Id, fromFolder, initiator, ActionType.Delete, keepsFolder: true))
                 {
                     await RevokeFolderRoles(fromFolder, product.Id);
+
+                    // Listed in the new folder only now, as it always was: a
+                    // settings update of that folder must not reach the product
+                    // before it stopped inheriting from the old one.
+                    toFolder.Products[product.Id] = product;
 
                     await TryUpdateProductInFolder(product.Id, toFolder, initiator);
                     await GrantFolderRoles(toFolder, product.Id);
