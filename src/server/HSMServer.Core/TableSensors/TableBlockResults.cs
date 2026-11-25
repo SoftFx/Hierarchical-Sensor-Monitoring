@@ -110,6 +110,18 @@ namespace HSMServer.Core.TableSensors
         /// <summary>True when more rows matched than were returned: the result holds the earliest ones.</summary>
         public bool Truncated { get; init; }
 
+        /// <summary>
+        /// Where the next page starts when <see cref="Truncated"/> (#1845), UTC ticks: the time of the first row not
+        /// returned. A truncated result never ends in the middle of the rows of one time: the rows of the time it would
+        /// have cut are left for the next page, which starts at that time, so paging by it returns every row exactly once.
+        /// The one exception is a single time with more rows than the limit: then the result is those rows cut at the
+        /// limit, <see cref="RowsAtTimeOmitted"/> is set, and the next page starts one tick later. Null when not truncated.
+        /// </summary>
+        public long? NextFromTicks { get; init; }
+
+        /// <summary>True when the rows of one time did not fit the limit and the ones past it are skipped by the next page.</summary>
+        public bool RowsAtTimeOmitted { get; init; }
+
         /// <summary>Blocks decompressed for the read.</summary>
         public int BlocksRead { get; init; }
 

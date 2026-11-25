@@ -32,6 +32,18 @@ namespace HSMServer.ServerConfiguration
 
         public const int DefaultMaxConcurrentPuts = 4;
 
+        // The most rows one CSV or JSON answer of the read route holds (#1845): text is several times the size of the
+        // rows, and a client without the library reads it whole. The blocks answer is capped by MaxReadRows.
+        public int MaxTextReadRows { get; set; } = DefaultMaxTextReadRows;
+
+        public const int DefaultMaxTextReadRows = 100_000;
+
+        // How many reads of the read route run at once (#1845); a read of rows not merged yet decompresses every block of
+        // its range. A request beyond them waits for a turn.
+        public int MaxConcurrentReads { get; set; } = DefaultMaxConcurrentReads;
+
+        public const int DefaultMaxConcurrentReads = 2;
+
 
         public void Validate() => _ = ToOptions();
 
@@ -44,6 +56,8 @@ namespace HSMServer.ServerConfiguration
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
             Check(MaxReadRows, int.MaxValue, nameof(MaxReadRows));
             Check(MaxConcurrentPuts, 1024, nameof(MaxConcurrentPuts));
+            Check(MaxTextReadRows, int.MaxValue, nameof(MaxTextReadRows));
+            Check(MaxConcurrentReads, 1024, nameof(MaxConcurrentReads));
 
             if (MinFreeDiskMb < 0)
                 throw new InvalidOperationException($"{nameof(IServerConfig.TableSensors)}.{nameof(MinFreeDiskMb)} = {MinFreeDiskMb} is invalid: expected 0 (no check) or more megabytes.");

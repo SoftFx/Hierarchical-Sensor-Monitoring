@@ -1179,6 +1179,13 @@ namespace HSMServer.Core.Tests.SensorApi
             }
         }
 
-        public TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null) => inner.Read(sensorId, from, to, maxRows);
+        public TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null, CancellationToken token = default)
+        {
+            ReadToken = token;
+            return inner.Read(sensorId, from, to, maxRows, token);
+        }
+
+        // The token of the last read, for a test that cancels one.
+        public CancellationToken ReadToken { get; private set; }
     }
 }

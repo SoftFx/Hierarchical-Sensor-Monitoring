@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.TableBlocks;
 using HSMServer.Core.Cache;
@@ -38,8 +39,11 @@ namespace HSMServer.Core.TableSensors
         /// a <see cref="DateTimeKind.Local"/> one is converted.</para>
         /// <para>Throws <see cref="TableBlockStoreException"/> when the store cannot be used: a fault, the caller answers
         /// 5xx. It is not turned into an error result, which says the request is wrong.</para>
+        /// <para>A truncated result ends at a time boundary and says where the next page starts
+        /// (<see cref="TableRows.NextFromTicks"/>, #1845). <paramref name="token"/> is checked before every block: a
+        /// cancelled read throws <see cref="OperationCanceledException"/>.</para>
         /// </summary>
-        TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null);
+        TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null, CancellationToken token = default);
     }
 
 
@@ -93,6 +97,9 @@ namespace HSMServer.Core.TableSensors
 
         // Called with the reserved sequence before the tables are matched. Test seam for a sensor created during a put.
         internal Action<long> AfterReserve { get; set; }
+
+        // Called before a read decompresses a block. Test seam for a read that is cancelled between blocks.
+        internal Action<TableBlockIndexEntry> BeforeBlockRead { get; set; }
 
 
         public TableBlockPutResult Put(Guid productId, Guid producerId, long producerSequence, byte[] block)
@@ -174,7 +181,7 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        public TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null)
+        public TaskResult<TableRows> Read(Guid sensorId, DateTime from, DateTime to, int? maxRows = null, CancellationToken token = default)
         {
             if (_cache.GetSensor(sensorId) is not { } sensor)
                 return TaskResult<TableRows>.FromError($"Sensor {sensorId} was not found.");
@@ -187,7 +194,7 @@ namespace HSMServer.Core.TableSensors
             var toTicks = Utc(to).Ticks;
 
             var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
-            var rows = collector.Collect(Store, Store.GetBlocks(table.Root.Id), table.FirstSequence, Encoding.UTF8.GetBytes(table.Path));
+            var rows = collector.Collect(Store, Store.GetBlocks(table.Root.Id), table.FirstSequence, Encoding.UTF8.GetBytes(table.Path), token, BeforeBlockRead);
 
             return TaskResult<TableRows>.FromValue(rows);
         }

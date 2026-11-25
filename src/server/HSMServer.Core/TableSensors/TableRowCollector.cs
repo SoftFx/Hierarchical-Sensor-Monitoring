@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using HSMDatabase.AccessManager.TableBlocks;
 using HSMTableBlocks;
 using NLog;
@@ -24,6 +25,9 @@ namespace HSMServer.Core.TableSensors
         private static readonly Logger _logger = LogManager.GetLogger("TableBlocks");
 
         private readonly TableSchema _schema;
+
+        // The rows a result may hold, and what is collected: one more, to know where the next page starts.
+        private readonly int _limit;
         private readonly int _maxRows;
         private readonly long _from, _to;
 
@@ -42,7 +46,8 @@ namespace HSMServer.Core.TableSensors
             _schema = schema;
             _from = fromTicks;
             _to = toTicks;
-            _maxRows = Math.Max(1, maxRows);
+            _limit = Math.Max(1, maxRows);
+            _maxRows = _limit < int.MaxValue ? _limit + 1 : _limit;
 
             _columns = new object[schema.Columns.Count];
             _nulls = new bool[schema.Columns.Count][];
@@ -62,8 +67,11 @@ namespace HSMServer.Core.TableSensors
         /// missing or damaged is counted in <see cref="BlocksFailed"/> and skipped; a <see cref="TableBlockStoreException"/>
         /// from <see cref="ITableBlockStore.ReadBlock"/> (the store closed during the read) is not caught: the read ends as
         /// that fault, never as rows silently missing.
+        /// <para>The token is checked before every block: a read whose caller went away stops decompressing
+        /// (<see cref="OperationCanceledException"/>).</para>
         /// </summary>
-        internal TableRows Collect(ITableBlockStore store, IReadOnlyList<TableBlockIndexEntry> blocks, long firstSequence, byte[] tableId)
+        internal TableRows Collect(ITableBlockStore store, IReadOnlyList<TableBlockIndexEntry> blocks, long firstSequence, byte[] tableId,
+            CancellationToken token = default, Action<TableBlockIndexEntry> beforeBlockRead = null)
         {
             for (int b = 0; b < blocks.Count; b++)
             {
@@ -71,6 +79,9 @@ namespace HSMServer.Core.TableSensors
 
                 if (entry.Sequence < firstSequence || entry.FirstTime >= _to || entry.LastTime < _from)
                     continue;
+
+                token.ThrowIfCancellationRequested();
+                beforeBlockRead?.Invoke(entry);
 
                 var record = store.ReadBlock(entry);
                 if (record is null)
@@ -245,6 +256,35 @@ namespace HSMServer.Core.TableSensors
         {
             Trim();
 
+            // One more row than the limit was collected (or more matched): the result is cut at a time boundary, and the
+            // next page starts at the time of the first row left out.
+            long? nextFrom = null;
+            var omitted = false;
+
+            if (_count > _limit)
+            {
+                var next = _time[_limit];
+                var keep = _limit;
+
+                while (keep > 0 && _time[keep - 1] == next)
+                    keep--;
+
+                if (keep == 0)
+                {
+                    // One time has more rows than the limit: they are cut at the limit, and the next page starts after it.
+                    keep = _limit;
+                    nextFrom = next + 1;
+                    omitted = true;
+                }
+                else
+                {
+                    nextFrom = next;
+                }
+
+                _count = keep;
+                _truncated = true;
+            }
+
             var columns = new TableRowsColumn[_columns.Length];
             columns[0] = new TableRowsColumn(_schema.Columns[0].Name, TableColumnType.Time, Exact(_time), null);
 
@@ -263,6 +303,8 @@ namespace HSMServer.Core.TableSensors
                 RowCount = _count,
                 Columns = columns,
                 Truncated = _truncated,
+                NextFromTicks = nextFrom,
+                RowsAtTimeOmitted = omitted,
                 BlocksRead = BlocksRead,
                 BlocksFailed = BlocksFailed,
             };
