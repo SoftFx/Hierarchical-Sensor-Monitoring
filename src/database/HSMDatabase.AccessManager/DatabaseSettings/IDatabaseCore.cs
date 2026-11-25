@@ -16,6 +16,9 @@ namespace HSMServer.Core.DataLayer
         // (unlike the dashboard collection) — see ChangeSetCollection.
         IChangeSetCollection ChangeSets { get; }
 
+        // The download log (ADR-0022 point 15), a database of its own. Write failures propagate, as the change sets' do.
+        IDownloadLogStore DownloadLog { get; }
+
         ISnapshotDatabase Snapshots { get; }
 
         public bool IsCompactRunning { get; }
@@ -124,6 +127,16 @@ namespace HSMServer.Core.DataLayer
         // delete) and returns the number removed. Bounded so one sweep stays cheap on a
         // large table; the caller repeats until it returns less than the limit.
         int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit);
+
+        #endregion
+
+        #region Dump passwords
+
+        // The dump passwords of products (ADR-0022 point 13), apart from the product entity. A scan failure throws; the put
+        // and the remove THROW on failure (unlike UpdateProduct), so a change of a password fails visibly.
+        List<ProductDumpPasswordsEntity> GetAllDumpPasswords();
+        void PutDumpPasswords(ProductDumpPasswordsEntity entity);
+        void RemoveDumpPasswords(Guid productId);
 
         #endregion
 
