@@ -27,7 +27,7 @@ namespace HSMDataCollector.Core
     }
 
 
-    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector
+    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector, ITableSensorCollector
     {
         private readonly LoggerManager _logger = new LoggerManager();
 
@@ -160,6 +160,10 @@ namespace HSMDataCollector.Core
 
             _dataProcessor.TransportReportsElsewhere = UsesTransportOfAnotherCollector;
 
+            // The table pipeline is made with the first table sensor (CreateTableSensor): a collector without table
+            // sensors has none of it. Why this collector cannot send tables is decided now, as it always was.
+            _tablesUnavailableReason = FindWhyTablesCannotBeSent();
+
             // The sender this collector created reports its faults through the collector's
             // deduplicated error channel (#1659 A4). A sender that came with the options keeps
             // whatever it reports to: routing it here would take it away from its owner.
@@ -192,6 +196,70 @@ namespace HSMDataCollector.Core
         // on it or dispose it, or the owner, still running, would deliver nothing from then on
         // and say nothing about it.
         private bool UsesTransportOfAnotherCollector => _ownTransport == null && _dataSender is ICollectorTransport;
+
+        // Why this collector cannot send table sensors, or null when it can (ADR-0021 point 7: tables need the
+        // session transport). Read once, at construction: a sensor created on a collector that cannot send tables
+        // stays Unavailable for the life of the collector.
+        private string FindWhyTablesCannotBeSent()
+        {
+            if (UsesTransportOfAnotherCollector)
+                return "this collector uses the collector session of the collector created first from the same options; create table sensors on that collector";
+
+            if (_dataSender is Tables.ITableBlockChannel channel)
+                return channel.TablesUnavailableReason;
+
+            if (_dataSender is HsmHttpsClient)
+                return _httpByDefaultReason != null
+                    ? $"table sensors need the collector session transport, and this collector sends over HTTP because {_httpByDefaultReason}"
+                    : "table sensors need the collector session transport, and this collector sends over HTTP (CollectorOptions.Transport)";
+
+            return "table sensors need the collector session transport, and this collector was given a custom CollectorOptions.DataSender";
+        }
+
+        private readonly string _tablesUnavailableReason;
+
+        // True while a run of the table pipeline may start: from the moment a Start has started the processor until a
+        // Stop, a Dispose or the rollback of that Start begins to stop it. Read and written under _opLock only, the
+        // lock those take to decide who stops the processor. The status alone does not say it: a collector is still
+        // Starting while the rollback of a failed start stops its processor, and already Starting while a ToStarting
+        // handler runs ahead of the processor start.
+        private bool _tableRunMayStart;
+
+        /// <inheritdoc/>
+        public ITableSensor CreateTableSensor(string path, TableSensorOptions options)
+        {
+            Tables.TablePipeline tables;
+            ITableSensor sensor;
+
+            // Under the lifecycle gate: the pipeline is made once, and a sensor created while the collector runs starts
+            // the pipeline's run, which a concurrent Start, Stop or start rollback must not interleave with.
+            lock (_opLock)
+            {
+                tables = _dataProcessor.Tables;
+
+                if (tables == null)
+                    _dataProcessor.Tables = tables = new Tables.TablePipeline(_options, _dataSender as Tables.ITableBlockChannel, _tablesUnavailableReason,
+                                                                              _dataProcessor, _scheduler, _logger);
+
+                sensor = tables.Create(path, options, _options.ComputerName, _options.Module, _lifecycle.CanRegisterSensors);
+
+                if (_tableRunMayStart)
+                    tables.Start();
+            }
+
+            // What the creation has to say, said outside every lock.
+            tables.FlushReports();
+
+            return sensor;
+        }
+
+        /// <summary>
+        /// For tests: one table tick now. With <see cref="CollectorOptions.ManualTableTick"/> it also waits for the
+        /// registration and the delivery it starts.
+        /// </summary>
+        internal Task TickTablesAsync() => _dataProcessor.Tables?.TickAsync() ?? Task.CompletedTask;
+
+        internal Tables.TablePipeline TablePipeline => _dataProcessor.Tables;
 
         public Task<ConnectionResult> TestConnection() => _dataSender.TestConnectionAsync().AsTask();
 
@@ -271,6 +339,10 @@ namespace HSMDataCollector.Core
                         LogAndRaise(CollectorStatus.Stopped);
                     return;
                 }
+
+                // The processor runs (and with it the run of the table pipeline, if table sensors exist): a table
+                // sensor created from now on may start that run.
+                _tableRunMayStart = true;
 
                 // The session starts connecting now, in the background; Start never waits for it.
                 // Until it is up the queues hold what the sensors produce.
@@ -413,6 +485,26 @@ namespace HSMDataCollector.Core
                 _logger.Error($"DataCollector start-rollback stop error: {ex}");
             }
 
+            // A rollback ends with no table run alive, whatever happened above: the run that exists now is closed
+            // (the processor's stop closed the one it found; this closes one it did not reach, and does nothing
+            // otherwise). None can start behind this point: TryBeginStartRollback barred it under _opLock.
+            try
+            {
+                var tables = _dataProcessor.Tables;
+
+                if (tables != null)
+                {
+                    await tables.StopWithoutFlushAsync().ConfigureAwait(false);
+
+                    // The stop line of a run closed here; nothing when the processor's stop wrote it already.
+                    tables.ReportStopLine();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector start-rollback could not close the table run: {ex}");
+            }
+
             await StopTransportAsync(terminal: true).ConfigureAwait(false);
         }
 
@@ -429,6 +521,10 @@ namespace HSMDataCollector.Core
             {
                 if (!_lifecycle.TryStop())
                     return;
+
+                // Before the handlers below: a table sensor one of them creates must not start a run this stop
+                // would not end.
+                _tableRunMayStart = false;
 
                 LogAndRaise(CollectorStatus.Stopping);
 
@@ -539,6 +635,9 @@ namespace HSMDataCollector.Core
                     return;
                 }
 
+                // As in Start: a table sensor created from now on may start the run of the table pipeline.
+                _tableRunMayStart = true;
+
                 // As in Start: this obsolete entry point runs a collector too, and one on a
                 // session delivers nothing until its transport is started.
                 StartTransport();
@@ -621,6 +720,12 @@ namespace HSMDataCollector.Core
                 if (Status != CollectorStatus.Starting)
                     return null;
 
+                // The collector stays Starting until the rollback has ended (EndStartRollback), and a table sensor
+                // created meanwhile would otherwise start a run behind the rollback: a collector that reports
+                // Stopped with a tick and a delivery loop alive. Decided here, under the lock CreateTableSensor
+                // takes: no run starts once the rollback began.
+                _tableRunMayStart = false;
+
                 var rollback = SafeStopProcessor();
                 _currentProcessorStopTask = rollback;
                 return rollback;
@@ -656,6 +761,8 @@ namespace HSMDataCollector.Core
 
                 if (previousStatus == CollectorStatus.Disposed)
                     return;
+
+                _tableRunMayStart = false;
 
                 // If another thread is already stopping with a registered processor stop task,
                 // wait for it. If the collector is Stopping but no processor stop task exists yet
