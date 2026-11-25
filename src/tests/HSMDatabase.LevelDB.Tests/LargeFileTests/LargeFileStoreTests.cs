@@ -852,6 +852,54 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         private LargeFileBeginResult Refused(LargeFileStore store) => store.Begin(Key("negative", -1) with { Secure = false }, null, Piece, Piece);
 
         [Fact]
+        public void A_new_upload_stopped_by_any_exception_while_its_files_are_written_is_taken_back()
+        {
+            var store = Open();
+            store.FaultHook = point =>
+            {
+                if (point == LargeFileStore.FaultCreatingUpload)
+                    throw new InvalidOperationException("not a file error");
+            };
+
+            Assert.Throws<InvalidOperationException>(() => Begin(store, Key("a", Piece)));
+
+            store.FaultHook = null;
+            Assert.Empty(store.GetFiles());
+            Assert.Equal(0, store.ReservedBytes);
+
+            // Not left busy: the same file begins again.
+            Assert.Equal(LargeFileBeginOutcome.Started, Begin(store, Key("a", Piece)).Outcome);
+        }
+
+        [Fact]
+        public void The_mark_that_the_server_held_a_large_file_is_written_with_the_databases_before_the_first_verified_record()
+        {
+            var mark = Path.Combine(_root + "-databases", LargeFileStore.UsedMarkName);
+            Directory.CreateDirectory(Path.GetDirectoryName(mark)!);
+
+            try
+            {
+                using var store = new LargeFileStore(_root, mark) { Clock = () => _now, FreeBytes = () => _free };
+                Assert.False(store.WasUsed);
+
+                var begin = Begin(store, Key("a", Piece));
+                Append(store, begin.Lease, 0, Content(Piece));
+                Assert.False(store.WasUsed);
+
+                store.StartFinish(begin.Lease);
+                store.MarkVerified(begin.FileId, new byte[32], _now);
+
+                Assert.True(store.WasUsed);
+                Assert.True(File.Exists(mark));
+                Assert.False(new LargeFileStore(_root).WasUsed); // a store without a mark path
+            }
+            finally
+            {
+                Directory.Delete(Path.GetDirectoryName(mark)!, recursive: true);
+            }
+        }
+
+        [Fact]
         public void A_file_is_being_checked_from_the_start_of_its_finish_to_its_end()
         {
             var store = Open();

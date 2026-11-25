@@ -12,8 +12,8 @@ namespace HSMServer.BackgroundServices
 {
     /// <summary>
     /// Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
-    /// self-monitoring sample. Inert until the store's folder exists: a server that never took a large file creates none of
-    /// these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
+    /// self-monitoring sample. Inert until the store has content (<c>uploads/</c> or <c>archives/</c> exists, not only its
+    /// folder, which a bind mount creates): a server that never took a large file creates none of these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
     /// Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
     /// </summary>
     public sealed class LargeFileSensors

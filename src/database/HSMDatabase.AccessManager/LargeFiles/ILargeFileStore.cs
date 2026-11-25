@@ -426,6 +426,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// </summary>
         bool HasContent { get; }
 
+        /// <summary>
+        /// True when the mark in the databases' folder says the server held a verified large file at some time: written
+        /// durably before the first verified record, it outlives the store's folder (lost, or replaced by an empty one).
+        /// </summary>
+        bool WasUsed { get; }
+
         /// <summary>True once the records were read in this process.</summary>
         bool IsOpened { get; }
 

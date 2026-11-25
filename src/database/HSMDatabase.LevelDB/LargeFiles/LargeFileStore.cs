@@ -96,10 +96,21 @@ namespace HSMDatabase.LevelDB.LargeFiles
         private readonly HashSet<Guid> _orphanArchiveProductsReported = [];
 
 
-        public LargeFileStore(string folder)
+        // A file in the databases' folder, written durably before the first record says Verified: the server held a large file.
+        // It survives the loss of the store's folder, so the check at start still compares the values with the store.
+        public const string UsedMarkName = "hsm-large-files-seen";
+
+        private readonly string _usedMark;
+        private volatile bool _usedMarkWritten;
+
+
+        public LargeFileStore(string folder, string usedMarkPath = null)
         {
             _folder = Path.GetFullPath(folder);
+            _usedMark = usedMarkPath is null ? null : Path.GetFullPath(usedMarkPath);
         }
+
+        public bool WasUsed => _usedMark is not null && File.Exists(_usedMark);
 
 
         /// <summary>The clock of piece times, leases and ages. Test seam.</summary>
@@ -249,7 +260,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             if (LiveLeases(Mono(), limits) >= limits.MaxUploadsInProgress)
                                 return Refused(LargeFileBeginOutcome.TooManyUploads, TooManyMessage(limits), TooManyRetry);
 
-                            var lease = Grant(entry, now, maxPieceSize);
+                            var lease = Grant(entry, maxPieceSize);
 
                             return new LargeFileBeginResult(LargeFileBeginOutcome.Continue, lease, record.FileId, record.PieceCount, pieceCount, record.PieceSize, null, null) { Secure = record.Secure };
                         }
@@ -327,7 +338,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             _files[record.FileId] = entry;
             _byKey[key] = record.FileId;
 
-            return (entry, Grant(entry, now, maxPieceSize));
+            return (entry, Grant(entry, maxPieceSize));
         }
 
         // Outside _lock: the part and the index before the record (a record always has its files), then the entry is
@@ -344,8 +355,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 CreateEmpty(IndexPath(record));
                 WriteRecord(record);
             }
-            catch (Exception ex) when (IsFileError(ex))
+            catch (Exception ex)
             {
+                // Whatever stopped it, the pending entry and its files are taken back: nothing is left busy or half-made.
                 TryDelete(PartPath(record));
                 TryDelete(IndexPath(record));
                 TryDelete(RecordPath(record));
@@ -359,7 +371,10 @@ namespace HSMDatabase.LevelDB.LargeFiles
                         _byKey.Remove(record.Key);
                 }
 
-                throw Failed($"The upload of a large file could not be started in {_folder}", ex);
+                if (IsFileError(ex))
+                    throw Failed($"The upload of a large file could not be started in {_folder}", ex);
+
+                throw;
             }
 
             lock (_lock)
@@ -647,6 +662,11 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                 try
                 {
+                    // Before the first verified record (and so before its value row): the mark that the server holds large files.
+                    if (_usedMark is not null && !_usedMarkWritten && !File.Exists(_usedMark))
+                        DurableFile.WriteAtomic(_usedMark, $"large files held since {Clock():O}", strict: true);
+
+                    _usedMarkWritten = true;
                     WriteRecord(verified);
                 }
                 catch (Exception ex) when (IsFileError(ex))
@@ -1458,7 +1478,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
         }
 
         // Under _lock.
-        private UploadLease Grant(Entry entry, DateTime now, int maxPieceSize)
+        private UploadLease Grant(Entry entry, int maxPieceSize)
         {
             entry.HasLease = true;
             entry.LeaseId = Guid.NewGuid();

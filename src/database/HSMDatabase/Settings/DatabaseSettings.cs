@@ -46,5 +46,7 @@ namespace HSMDatabase.Settings
         public string TableBlocksFolderName { get; init; } = DefaultTableBlocksFolderName;
 
         public string LargeFilesFolder { get; init; } = DefaultLargeFilesFolder;
+
+        public string LargeFilesUsedMarkName { get; init; } = HSMDatabase.LevelDB.LargeFiles.LargeFileStore.UsedMarkName;
     }
 }

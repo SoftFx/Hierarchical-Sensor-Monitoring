@@ -212,20 +212,14 @@ namespace HSMServer.Core.Cache
             LargeFileValue.IsLargeFileRow(row) && (sensor.Convert(row) as LargeFileValue)?.FileId == fileId;
 
         // The earliest time a new large value may get: now, but above the sensor's history floor (a value below it is never
-        // stored, and the pass would take its file for one removed by retention) and after its newest value (so it is the
-        // sensor's newest value, never a late one).
+        // stored, and the pass would take its file for one removed by retention). Not pushed past the sensor's newest value:
+        // a future-dated value (a skewed clock) would move every later file into the future; a large value older than the
+        // newest is stored as a late value, and the read-back writes its row when the add did not.
         private static DateTime ValueTimeFloor(BaseSensorModel sensor, DateTime utcNow)
         {
-            var time = utcNow;
             var floor = HistoryFloor(sensor, utcNow);
 
-            if (floor != DateTime.MinValue && time <= floor)
-                time = floor.AddTicks(1);
-
-            if (sensor.LastValue?.Time is { } last && time <= last)
-                time = last.AddTicks(1);
-
-            return time;
+            return floor != DateTime.MinValue && utcNow <= floor && floor < DateTime.MaxValue ? floor.AddTicks(1) : utcNow;
         }
 
         // Now, or the next tick with no row of the sensor: a value's key is the sensor and its time, so two files must never

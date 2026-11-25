@@ -148,7 +148,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _tableBatches = new HSMDatabase.LevelDB.TableBatches.TableBatchDatabase(_settings.PathToTableBlocks);
 
             // No IO here either: the records are read at the first call that needs them, the folder created by the first upload (#1883).
-            _largeFiles = new HSMDatabase.LevelDB.LargeFiles.LargeFileStore(_settings.PathToLargeFiles);
+            _largeFiles = new HSMDatabase.LevelDB.LargeFiles.LargeFileStore(_settings.PathToLargeFiles, _settings.PathToLargeFilesUsedMark);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
@@ -407,6 +407,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return (totalDataCnt, totalKeySize, totalValueSize);
         }
+
+        public bool? SensorEntityExists(Guid sensorId) => _environmentDatabase.SensorEntityExists(sensorId.ToString());
 
         public void RemoveSensorWithMetadata(Guid sensorId)
         {

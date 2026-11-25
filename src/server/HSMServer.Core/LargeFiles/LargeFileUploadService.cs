@@ -313,8 +313,9 @@ namespace HSMServer.Core.LargeFiles
 
             store.EnsureOpened();
 
-            // Only on a server that ever took a large file: the folder alone may come from a bind mount.
-            var rowsWithoutRecord = atStart && store.HasContent ? await ReportRowsWithoutRecordAsync(token) : 0;
+            // Only on a server that ever took a large file: the folder alone may come from a bind mount. The mark that it did lives
+            // with the databases, so a store folder that was lost or replaced by an empty one is still compared with the values.
+            var rowsWithoutRecord = atStart && (store.HasContent || store.WasUsed) ? await ReportRowsWithoutRecordAsync(token) : 0;
 
             // A value naming a file the store does not know: an archive no record names may be that file.
             if (rowsWithoutRecord > 0)
@@ -330,9 +331,10 @@ namespace HSMServer.Core.LargeFiles
             var alive = new List<LargeFileRecord>();
 
             // A sensor that is gone never comes back under its id: decided without the queue (its product may be gone too).
-            // Gone means gone from the database: a sensor the tree did not build at start, or whose removal failed halfway,
-            // keeps its files (reported), since they may be the only copies.
-            HashSet<Guid> stored = null;
+            // Gone means, by evidence, gone from the database: a read that succeeded did not find the key of its entity. A
+            // sensor the tree did not build at start, an entity that cannot be read back, a removal that failed halfway, or a
+            // read that failed: the files are kept (reported), since they may be the only copies. One read per sensor and pass.
+            var stored = new Dictionary<Guid, bool?>();
 
             foreach (var record in records)
             {
@@ -342,14 +344,9 @@ namespace HSMServer.Core.LargeFiles
                     continue;
                 }
 
-                stored ??= StoredSensorIds();
-
-                if (stored is null || stored.Contains(record.SensorId))
+                if (!IsGoneFromDatabase(record, stored))
                 {
                     notChecked++;
-                    stats.Add(ref stats.FilesOfUnloadedSensors);
-                    _logger.Warn($"Large file {record.FileId:N} ({record.State}) is kept: its sensor {record.SensorId} is not in the tree, " +
-                                 (stored is null ? "and the sensors in the database could not be read" : "but it is still in the database (not loaded at start, or a removal that failed)"));
                     continue;
                 }
 
@@ -382,13 +379,9 @@ namespace HSMServer.Core.LargeFiles
                     switch (verdict.Kind)
                     {
                         case LargeFileVerdictKind.SensorGone:
-                            stored ??= StoredSensorIds();
-
-                            if (stored is null || stored.Contains(record.SensorId))
+                            if (!IsGoneFromDatabase(record, stored))
                             {
                                 notChecked++;
-                                stats.Add(ref stats.FilesOfUnloadedSensors);
-                                _logger.Warn($"Large file {record.FileId:N} ({record.State}) is kept: its sensor {record.SensorId} left the tree but is still in the database");
                                 break;
                             }
 
@@ -451,18 +444,34 @@ namespace HSMServer.Core.LargeFiles
             return report;
         }
 
-        // The ids of the sensors in the database; null when they cannot be read.
-        private HashSet<Guid> StoredSensorIds()
+        // True only on evidence that the record's sensor is gone: a read of the database that succeeded did not find the key of
+        // its entity. Otherwise the file is kept, with a Warn line and a count. The answers are kept for the pass.
+        private bool IsGoneFromDatabase(LargeFileRecord record, Dictionary<Guid, bool?> stored)
         {
-            try
+            if (!stored.TryGetValue(record.SensorId, out var exists))
             {
-                return [.. _database.GetAllSensors().Select(s => Guid.Parse(s.Id))];
+                try
+                {
+                    exists = _database.SensorEntityExists(record.SensorId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, $"The entity of sensor {record.SensorId} could not be read");
+                    exists = null;
+                }
+
+                stored[record.SensorId] = exists;
             }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "The sensors in the database could not be read; no large file of a sensor missing from the tree is removed");
-                return null;
-            }
+
+            if (exists == false)
+                return true;
+
+            var store = Store;
+            store.Statistics.Add(ref store.Statistics.FilesOfUnloadedSensors);
+            _logger.Warn($"Large file {record.FileId:N} ({record.State}) is kept: its sensor {record.SensorId} is not in the tree, " +
+                         (exists is null ? "and the database could not tell whether it is still there" : "but its entity is still in the database (not loaded at start, unreadable, or a removal that failed)"));
+
+            return false;
         }
 
         // The rows of File sensors that hold a large value whose file has no record. A row is recognised by its union tag

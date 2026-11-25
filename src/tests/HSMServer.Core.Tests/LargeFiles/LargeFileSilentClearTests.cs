@@ -73,5 +73,33 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Equal(0, _database.LargeFiles.Statistics.FilesRemoved);
             Assert.NotNull(_database.GetSensorValue(sensor.Id, finish.ValueTimeUtc.Value.Ticks));
         }
+
+        [Fact]
+        public async Task A_file_of_a_sensor_missing_from_the_tree_is_kept_while_the_database_cannot_tell_and_removed_once_it_can()
+        {
+            var product = TestProductsManager.ProductId;
+            var sensorId = Guid.NewGuid(); // in neither the tree nor the database
+
+            var content = new byte[Piece];
+            var store = _database.LargeFiles;
+            var begin = store.Begin(new LargeFileUploadKey(product, sensorId, "x.dmp", content.Length, DateTime.UtcNow, null), "dmp", Piece, Piece);
+            store.Append(begin.Lease, 0, content, SHA256.HashData(content));
+            store.StartFinish(begin.Lease);
+            store.MarkVerified(begin.FileId, SHA256.HashData(content), DateTime.UtcNow);
+            store.EndFinish(begin.Lease);
+
+            _database.SensorEntityReadFails = true;
+            var kept = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(0, kept.FilesRemoved);
+            Assert.NotNull(store.TryGetFile(begin.FileId));
+            Assert.Equal(1, store.Statistics.FilesOfUnloadedSensors);
+
+            _database.SensorEntityReadFails = false;
+            var removed = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(1, removed.FilesRemoved);
+            Assert.Null(store.TryGetFile(begin.FileId));
+        }
     }
 }

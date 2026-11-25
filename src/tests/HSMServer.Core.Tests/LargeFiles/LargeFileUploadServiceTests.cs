@@ -553,8 +553,9 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             var second = await UploadAsync(sensor, Content(Piece), name: "second.dmp");
 
-            Assert.True(second.ValueTimeUtc > first.ValueTimeUtc);
-            Assert.Equal(second.FileId, Assert.IsType<LargeFileValue>(sensor.LastValue).FileId);
+            // Above the floor of the clear (not pushed past the newest value: it is stored as a late value).
+            Assert.Equal(t0.AddMinutes(-1).AddTicks(1), second.ValueTimeUtc);
+            Assert.NotNull(_databaseCoreManager.DatabaseCore.GetSensorValue(sensor.Id, second.ValueTimeUtc.Value.Ticks));
 
             var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
             Assert.Equal(0, report.FilesRemoved);
@@ -653,6 +654,128 @@ namespace HSMServer.Core.Tests.LargeFiles
             var row = Assert.IsType<LargeFileValue>(Assert.Single(await ReadRowsAsync(sensor)));
             Assert.Equal(SensorStatus.Error, row.Status);
             Assert.Equal(record.Comment, row.Comment);
+        }
+
+        [Fact]
+        public async Task A_file_whose_sensor_entity_cannot_be_read_back_is_kept_and_reported()
+        {
+            // The entity is in the database but cannot be deserialized: the tree does not build the sensor, and the list of
+            // sensors leaves it out. It exists all the same.
+            var entity = EntitiesFactory.BuildSensorEntity(name: "corrupt", parent: _product.ToString(), type: (byte)SensorType.File);
+            _databaseCoreManager.DatabaseCore.AddSensor(entity);
+            PutEnvironmentRow(entity.Id, System.Text.Encoding.UTF8.GetBytes("not an entity"));
+
+            Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.GetAllSensors(), s => s.Id == entity.Id);
+            Assert.True(_databaseCoreManager.DatabaseCore.SensorEntityExists(Guid.Parse(entity.Id)));
+
+            var fileId = VerifiedRecordOf(Guid.Parse(entity.Id));
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.NotNull(Store.TryGetFile(fileId));
+            Assert.Equal(1, Store.Statistics.FilesOfUnloadedSensors);
+        }
+
+        [Fact]
+        public async Task A_large_value_takes_its_acceptance_time_even_after_a_value_a_year_ahead()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+
+            // A skewed clock wrote a value a year ahead.
+            _valuesCache.LargeFileClock = () => DateTime.UtcNow.AddDays(365);
+            await UploadAsync(sensor, Content(Piece), name: "future.dmp");
+
+            var now = DateTime.UtcNow;
+            _valuesCache.LargeFileClock = () => now;
+            var finish = await UploadAsync(sensor, Content(Piece), name: "now.dmp");
+
+            Assert.Equal(now, finish.ValueTimeUtc);
+            Assert.NotNull(_databaseCoreManager.DatabaseCore.GetSensorValue(sensor.Id, now.Ticks));
+            Assert.Equal(2, (await ReadRowsAsync(sensor)).Count);
+        }
+
+        [Fact]
+        public async Task A_store_folder_lost_after_a_verified_file_still_gets_its_values_compared_at_start()
+        {
+            var root = Path.Combine(Path.GetTempPath(), $"hsm-lf-lost-{Guid.NewGuid():N}");
+            var settings = new HSMDatabase.Settings.DatabaseSettings
+            {
+                DatabaseFolder = Path.Combine(root, "Databases"),
+                LargeFilesFolder = Path.Combine(root, "LargeFiles"),
+            };
+
+            try
+            {
+                var first = new HSMDatabase.DatabaseWorkCore.DatabaseCore(settings);
+                first.AddProduct(TestProductsManager.TestProduct);
+                first.Dispose();
+
+                var (database, cache) = Restart(settings);
+                var service = new LargeFileUploadService(database, cache, new LargeFileOptions { MinFreeDiskMb = 0 });
+                var path = $"{_root}/f";
+
+                Assert.True((await cache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, path)
+                {
+                    Update = new SensorUpdate { Id = Guid.Empty },
+                    Type = SensorType.File,
+                    TypeIsExplicit = true,
+                })).IsOk);
+
+                var content = Content(Piece);
+                var begin = await service.BeginAsync(Request(path, content.Length), default);
+                await service.AppendAsync(begin.Lease, 0, content, SHA256.HashData(content), default);
+                Assert.Equal(LargeFileFinishOutcome.Verified, (await service.FinishAsync(begin.Lease, SHA256.HashData(content), _checker, default)).Outcome);
+
+                await cache.DisposeAsync();
+                database.Dispose();
+
+                // The volume of the store is lost, or replaced by an empty one; the databases stay.
+                Directory.Delete(((HSMDatabase.AccessManager.IDatabaseSettings)settings).PathToLargeFiles, recursive: true);
+                Directory.CreateDirectory(((HSMDatabase.AccessManager.IDatabaseSettings)settings).PathToLargeFiles);
+
+                var (restarted, restartedCache) = Restart(database.DatabaseSettings);
+                await using var _ = restartedCache;
+
+                Assert.False(restarted.LargeFiles.HasContent);
+                Assert.True(restarted.LargeFiles.WasUsed);
+
+                var report = await new LargeFileUploadService(restarted, restartedCache, new LargeFileOptions { MinFreeDiskMb = 0 })
+                    .RunPassAsync(DateTime.UtcNow, atStart: true);
+
+                Assert.Equal(1, report.RowsWithoutRecord);
+                restarted.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+                catch (IOException) { }
+            }
+        }
+
+        // A verified record of a sensor id, made through the store alone.
+        private Guid VerifiedRecordOf(Guid sensorId)
+        {
+            var content = Content(Piece);
+            var begin = Store.Begin(new LargeFileUploadKey(_product, sensorId, "x.dmp", content.Length, Modified, null), "dmp", Piece, Piece);
+            Store.Append(begin.Lease, 0, content, SHA256.HashData(content));
+            Store.StartFinish(begin.Lease);
+            Store.MarkVerified(begin.FileId, SHA256.HashData(content), DateTime.UtcNow);
+            Store.EndFinish(begin.Lease);
+
+            return begin.FileId;
+        }
+
+        // Writes raw bytes under a key of the environment database (an entity that cannot be read back).
+        private void PutEnvironmentRow(string key, byte[] value)
+        {
+            const System.Reflection.BindingFlags Private = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+
+            var environment = _databaseCoreManager.DatabaseCore.GetType().GetField("_environmentDatabase", Private)!.GetValue(_databaseCoreManager.DatabaseCore);
+            var adapter = environment!.GetType().GetField("_database", Private)!.GetValue(environment);
+            adapter!.GetType().GetMethod("Put", [typeof(byte[]), typeof(byte[])])!.Invoke(adapter, [System.Text.Encoding.UTF8.GetBytes(key), value]);
         }
 
         private static async Task WaitForAsync(Func<bool> condition)

@@ -60,6 +60,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public byte[] GetSensorValue(Guid sensorId, long ticks) => _inner.GetSensorValue(sensorId, ticks);
 
+        // A read of a sensor's entity that fails (#1883).
+        internal bool SensorEntityReadFails { get; set; }
+
+        public bool? SensorEntityExists(Guid sensorId) => SensorEntityReadFails ? null : _inner.SensorEntityExists(sensorId);
+
         public int SensorValuesPageCount => _inner.SensorValuesPageCount;
 
         public List<ISensorValuesDatabase> SensorValuesDatabases => _inner.SensorValuesDatabases;
