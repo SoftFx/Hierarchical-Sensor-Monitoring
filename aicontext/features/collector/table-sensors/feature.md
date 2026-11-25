@@ -184,8 +184,9 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
    delivery loop. Nothing is reported while a gate or lock of the pipeline is held: reports are queued and written once
    the gates are released, so a host logger that calls back into the collector (even `Dispose`) cannot deadlock it.
 3. **Delivery** (`DeliverAsync`, a loop of its own): the head of the backlog is put on the table connection (below);
-   the next block goes only after the answer to the one before. A block stays in flight, out of reach of the backlog bound, until its answer is
-   applied: the removal from the backlog, the end of in-flight and the accounting are one step under the backlog's lock.
+   the next block goes only after the answer to the one before. A block stays in flight, out of reach of the backlog
+   bound, until its answer is applied: the removal from the backlog, the end of in-flight and the accounting are one
+   step under the backlog's lock.
    An answer that came back is applied whatever the token says by then: a block the server stored is never counted as
    lost.
 4. **Stop** (`FlushAsync`, inside `DataProcessor.StopWithFlushAsync`): runs on a thread of its own beside the value
@@ -241,12 +242,12 @@ table sensor; a collector without table sensors has no object, no loop and no ta
 - **One block at a time.** A block is one binary message: the header (frame version 1, kind 1, the request id, the
   producer id, the producer sequence) and the block, written as two fragments so the block is not copied. The
   collector then waits for the text ack of that request id up to `CollectorOptions.RequestTimeout` (30 s). **No ack in
-  time closes the connection**, so a late ack cannot be taken for the next block's, and the same frame content (the
-  same producer id and sequence) goes on the next connection; a block the server had stored is answered `duplicate`
-  there. One put follows its block across up to three lost connections, waiting up to 15 s for each
-  (`SessionTimings.TableConnectionWait`); after that it answers "not delivered" and the block goes again with the next
-  delivery. Writing a frame is bounded by ten heartbeats (at least 10 s): a frame over 64 KiB may wait unread on the
-  server for its frame budget.
+  time closes the connection** (with a close frame, `1000`, not a reset), so a late ack cannot be taken for the next
+  block's, and the same frame content (the same producer id and sequence) goes on the next connection; a block the
+  server had stored is answered `duplicate` there. One put follows its block across up to three lost connections,
+  waiting up to 15 s for each (`SessionTimings.TableConnectionWait`); after that it answers "not delivered" and the
+  block goes again with the next delivery. Writing a frame is bounded by ten heartbeats (at least 10 s): a frame over
+  64 KiB may wait unread on the server for its frame budget.
 - **Heartbeat.** As on the session: a `ping` when nothing was sent for a heartbeat, and the connection is given up
   after two and a half heartbeats without a frame from the server, except while a block is being written.
 - **What the collector takes from the server**: text frames only, and of those acks, `ping` and `pong` (a push with an
