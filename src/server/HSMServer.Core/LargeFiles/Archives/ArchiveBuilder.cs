@@ -58,6 +58,10 @@ namespace HSMServer.Core.LargeFiles.Archives
         // The password versions the running build reads or writes: never retired while it runs.
         private readonly ConcurrentDictionary<(Guid Product, int Version), byte> _inFlight = new();
 
+        // The packed archives whose password version cannot be used (not kept, or newer than the current one): each pair is
+        // reported once per process and never retried by the builder itself.
+        private readonly ConcurrentDictionary<(Guid FileId, int Version), byte> _unusable = new();
+
 
         public ArchiveBuildStatistics Statistics { get; } = new();
 
@@ -151,6 +155,14 @@ namespace HSMServer.Core.LargeFiles.Archives
                 _products.TryAdd(file.ProductId, 0);
 
                 var current = _passwords.GetCurrent(file.ProductId);
+
+                if (file.PasswordVersion is int carried && UnusableVersionError(file.ProductId, carried, current) is { } error)
+                {
+                    pending.Add(file.FileId);
+                    ReportUnusable(file.FileId, file.ProductId, carried, error);
+                    continue;
+                }
+
                 if (current is null || file.PasswordVersion >= current.Version)
                     continue;
 
@@ -245,7 +257,11 @@ namespace HSMServer.Core.LargeFiles.Archives
 
                     source = _passwords.GetVersion(productId, sourceVersion);
                     if (source is null)
-                        throw new BuildException($"dump password version {sourceVersion} of the current archive is no longer kept");
+                    {
+                        // Removed between the listing and the build.
+                        ReportUnusable(fileId, productId, sourceVersion, NotKeptError(sourceVersion));
+                        return;
+                    }
 
                     inFlight.Add((productId, sourceVersion));
                 }
@@ -434,6 +450,44 @@ namespace HSMServer.Core.LargeFiles.Archives
             Interlocked.Increment(ref Statistics.Failed);
 
             _logger.Error($"Large file archives: the build of file {fileId} of product {productId} failed (attempt {attempts}, next at {next:u}): {error}");
+
+            RaiseBuildFinished(fileId, false, error);
+        }
+
+        // A packed archive cannot be re-encrypted when the version it carries is not kept (it cannot be opened), and must not
+        // be when that version is newer than the current one; null when it can.
+        private string UnusableVersionError(Guid productId, int version, DumpPasswordVersion current)
+        {
+            if (_passwords.GetVersion(productId, version) is null)
+                return NotKeptError(version);
+
+            if (current is not null && version > current.Version)
+                return $"the password version {version} of this archive is newer than the current password version";
+
+            return null;
+        }
+
+        private static string NotKeptError(int version) => $"the password version {version} of this archive is not kept";
+
+        // Failed without a next attempt: retrying cannot help, and one report per (file, version) keeps it from being
+        // repeated on every pass.
+        private void ReportUnusable(Guid fileId, Guid productId, int version, string error)
+        {
+            var status = GetStatus(fileId);
+
+            if (!_unusable.TryAdd((fileId, version), 0))
+            {
+                if (status.State != ArchiveBuildState.Failed || status.LastError != error || status.NextAttemptUtc is not null)
+                    SetStatus(fileId, productId, Status(ArchiveBuildState.Failed, status.Attempts, null, error));
+
+                return;
+            }
+
+            SetStatus(fileId, productId, Status(ArchiveBuildState.Failed, status.Attempts + 1, null, error));
+            Interlocked.Increment(ref Statistics.Failed);
+
+            _logger.Error($"Large file archives: the archive of file {fileId} of product {productId} cannot be re-encrypted, " +
+                          $"not retried by itself: {error}");
 
             RaiseBuildFinished(fileId, false, error);
         }

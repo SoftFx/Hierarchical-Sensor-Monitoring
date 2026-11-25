@@ -411,6 +411,82 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
         [Fact]
+        public async Task PackedArchiveWhoseVersionIsNotKept_FailsVisiblyOnce_AndIsNeverRetriedByItself()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(50_000));
+            await _h.Run();
+            var packed = _h.Store.TryGetFile(file.FileId);
+            _h.Finished.Clear();
+
+            _h.Passwords.Set(_h.Product, Password2);
+            _h.Passwords.Lose(_h.Product, 1);
+            var writes = _h.Writer.Writes;
+
+            for (var pass = 0; pass < 5; pass++)
+            {
+                await _h.Run();
+                _h.Advance(TimeSpan.FromHours(2));
+            }
+
+            const string error = "the password version 1 of this archive is not kept";
+            var status = _h.Builder.GetStatus(file.FileId);
+            Assert.Equal(ArchiveBuildState.Failed, status.State);
+            Assert.Equal(error, status.LastError);
+            Assert.Null(status.NextAttemptUtc);
+            Assert.Equal((file.FileId, false, error), _h.Finished.Single());
+            Assert.Equal(1, _h.Builder.Statistics.Failed);
+            Assert.Equal(writes, _h.Writer.Writes);
+            Assert.Equal(packed, _h.Store.TryGetFile(file.FileId));
+            Assert.True(File.Exists(_h.Store.ArchivePath(packed)));
+        }
+
+        [Fact]
+        public async Task PackedArchiveOfAProductWithNoKeptVersionLeft_FailsVisiblyOnce()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(20_000));
+            await _h.Run();
+            _h.Finished.Clear();
+
+            _h.Passwords.Lose(_h.Product, 1);
+            await _h.Run();
+            _h.Advance(TimeSpan.FromHours(2));
+            await _h.Run();
+
+            const string error = "the password version 1 of this archive is not kept";
+            Assert.Equal(error, _h.Builder.GetStatus(file.FileId).LastError);
+            Assert.Equal((file.FileId, false, error), _h.Finished.Single());
+        }
+
+        [Fact]
+        public async Task PackedArchiveNewerThanTheCurrentVersion_FailsVisiblyOnce_AndIsNotRewritten()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            _h.Passwords.Set(_h.Product, Password2);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(20_000));
+            await _h.Run();
+            Assert.Equal(2, _h.Store.TryGetFile(file.FileId).PasswordVersion);
+            _h.Finished.Clear();
+
+            _h.Passwords.PinCurrent(_h.Product, 1);
+            var writes = _h.Writer.Writes;
+            for (var pass = 0; pass < 3; pass++)
+            {
+                await _h.Run();
+                _h.Advance(TimeSpan.FromHours(2));
+            }
+
+            var status = _h.Builder.GetStatus(file.FileId);
+            Assert.Equal(ArchiveBuildState.Failed, status.State);
+            Assert.Contains("version 2", status.LastError);
+            Assert.Null(status.NextAttemptUtc);
+            Assert.Equal((file.FileId, false, status.LastError), _h.Finished.Single());
+            Assert.Equal(writes, _h.Writer.Writes);
+            Assert.Equal(2, _h.Store.TryGetFile(file.FileId).PasswordVersion);
+        }
+
+        [Fact]
         public async Task PasswordChangeDuringABuild_CommitsUnderTheVersionTaken_ThenReencrypts()
         {
             _h.Passwords.Set(_h.Product, Password1);

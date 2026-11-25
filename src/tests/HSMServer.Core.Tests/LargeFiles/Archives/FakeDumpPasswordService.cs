@@ -13,6 +13,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
         private readonly object _lock = new();
         private readonly Dictionary<Guid, List<DumpPasswordVersion>> _versions = new();
+        private readonly Dictionary<Guid, int> _pinnedCurrent = new();
 
 
         public Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
@@ -35,10 +36,25 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
 
+        /// <summary>Makes a kept version current although a higher one is kept: a state the real service never reaches.</summary>
+        public void PinCurrent(Guid productId, int version)
+        {
+            lock (_lock)
+                _pinnedCurrent[productId] = version;
+        }
+
+
         public DumpPasswordVersion GetCurrent(Guid productId)
         {
             lock (_lock)
-                return _versions.TryGetValue(productId, out var list) ? list.OrderByDescending(v => v.Version).FirstOrDefault() : null;
+            {
+                if (!_versions.TryGetValue(productId, out var list))
+                    return null;
+
+                return _pinnedCurrent.TryGetValue(productId, out var pinned)
+                    ? list.First(v => v.Version == pinned)
+                    : list.OrderByDescending(v => v.Version).FirstOrDefault();
+            }
         }
 
         public DumpPasswordVersion GetVersion(Guid productId, int version)
