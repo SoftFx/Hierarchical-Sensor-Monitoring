@@ -2,9 +2,17 @@
 # install/example defaults below and is only auto-set from 3.21.
 cmake_minimum_required(VERSION 3.21)
 
+# Table sensors (#1848): declared before project() so that, in a vcpkg manifest build, turning it on
+# also turns on the manifest feature "tables" (zstd, zlib) that vcpkg installs at project(). A build
+# with tables OFF resolves neither. See the option's block below for what it builds.
+option(HSM_COLLECTOR_TABLES "Build table sensor support (needs zstd and zlib)" OFF)
+if(HSM_COLLECTOR_TABLES AND NOT "tables" IN_LIST VCPKG_MANIFEST_FEATURES)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tables")
+endif()
+
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.14.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.14.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -175,6 +183,41 @@ if(HSM_COLLECTOR_HTTP)
     endif()
 endif()
 
+# Table sensors (#1848, epic #1842). Opt-in so the agent, the probe and every existing consumer build
+# exactly as before, with no new dependency; the vcpkg feature `tables` and the Conan option `tables`
+# turn it on. The block writer compresses with libzstd and checksums with zlib's crc32_z (the block's
+# own layout is written in src/tables/). Both are private to the static core, which still propagates
+# them to a consumer's link (as $<LINK_ONLY:>), so hsm_collectorConfig re-finds them. Delivery of the
+# blocks will need the session transport (HSM_COLLECTOR_HTTP); the writer itself does not.
+# (The option itself is declared above project().)
+set(HSM_COLLECTOR_ZSTD_PKGCONFIG OFF)
+if(HSM_COLLECTOR_TABLES)
+    # vcpkg and zstd's own CMake build ship a package config; a distribution package may ship only
+    # libzstd.pc (Debian's libzstd-dev), so fall back to pkg-config.
+    find_package(zstd CONFIG QUIET)
+    if(TARGET zstd::libzstd)
+        set(HSM_ZSTD_TARGET zstd::libzstd)
+    elseif(TARGET zstd::libzstd_shared)
+        set(HSM_ZSTD_TARGET zstd::libzstd_shared)
+    elseif(TARGET zstd::libzstd_static)
+        set(HSM_ZSTD_TARGET zstd::libzstd_static)
+    else()
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(HSM_ZSTD REQUIRED IMPORTED_TARGET GLOBAL libzstd)
+        set(HSM_ZSTD_TARGET PkgConfig::HSM_ZSTD)
+        set(HSM_COLLECTOR_ZSTD_PKGCONFIG ON)
+    endif()
+    find_package(ZLIB REQUIRED)
+    message(STATUS "hsm_collector: table sensors ON (zstd: ${HSM_ZSTD_TARGET}, zlib ${ZLIB_VERSION_STRING})")
+
+    target_sources(hsm_collector_core PRIVATE
+        src/tables/hsm_table_block_writer.cpp
+        src/tables/hsm_table_schema.cpp
+    )
+    target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_TABLES=1)
+    target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
+endif()
+
 # Header-only C++ RAII wrapper over the C ABI.
 add_library(hsm_collector_cpp INTERFACE)
 
@@ -282,7 +325,51 @@ if(HSM_COLLECTOR_HTTP)
     target_include_directories(hsm_collector_tests SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
 endif()
 
+# The table block tests (#1848) compile only in the tables build. The test-only block reader
+# (tests/table_block_test_reader.hpp) decompresses with libzstd, so the tests link it themselves.
+if(HSM_COLLECTOR_TABLES)
+    target_sources(hsm_collector_tests PRIVATE tests/hsm_table_block_tests.cpp)
+    target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_TABLES=1)
+    target_link_libraries(hsm_collector_tests PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
+endif()
+
 enable_testing()
+
+if(HSM_COLLECTOR_TABLES)
+    foreach(name
+            native_table_crc_check_value
+            native_table_schema_ids
+            native_table_worked_example
+            native_table_limits_and_rules_refused
+            native_table_nulls
+            native_table_nan_and_infinities_bit_exact
+            native_table_seeded_round_trips
+            native_table_thousand_tables
+            native_table_block_over_frame_limit_is_refused
+            native_table_writer_is_reusable
+            native_table_test_reader_is_strict
+            native_table_finish_refuses_impossible_reservations
+            native_table_limit_arithmetic_cannot_overflow
+            native_table_allocation_failure_leaves_the_writer_failed
+            native_table_byte_swap_writes_little_endian
+            native_table_buffers_grow_geometrically
+            native_table_refused_finish_keeps_the_writer)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    # The managed golden blocks: the test reader must accept them, and the native writer must give
+    # their header fields and decompressed payload for the same input.
+    foreach(golden mixed nulls single-row)
+        add_test(NAME native_table_golden_${golden}
+            COMMAND hsm_collector_tests native_table_golden
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/HSMTableBlocks.Tests/Golden/format1/${golden}.htb
+        )
+    endforeach()
+    # Blocks and their rows as text, read by the managed reader in NativeBlockVectorTests
+    # (HSM_NATIVE_TABLE_BLOCKS_DIR=<build>/table-block-vectors; the CI HTTP lane runs both).
+    add_test(NAME native_table_write_vectors
+        COMMAND hsm_collector_tests native_table_write_vectors ${CMAKE_CURRENT_BINARY_DIR}/table-block-vectors
+    )
+endif()
 
 if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_posts_to_capture_server

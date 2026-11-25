@@ -11245,6 +11245,11 @@ namespace
     }
 } // namespace
 
+#if defined(HSM_COLLECTOR_TABLES)
+// Defined in hsm_table_block_tests.cpp (#1848).
+const std::map<std::string, std::function<void(const std::string&)>>& TableBlockTests();
+#endif
+
 int main(int argc, char** argv)
 {
     try
@@ -11253,11 +11258,23 @@ int main(int argc, char** argv)
 
         if (argc > 1)
         {
+            const auto argument = argc > 2 ? std::string{ argv[2] } : std::string{};
             const auto test = tests.find(argv[1]);
             if (test == tests.end())
+            {
+#if defined(HSM_COLLECTOR_TABLES)
+                // The table block tests live in hsm_table_block_tests.cpp (#1848).
+                const auto& table_tests = TableBlockTests();
+                const auto table_test = table_tests.find(argv[1]);
+                if (table_test != table_tests.end())
+                {
+                    table_test->second(argument);
+                    return 0;
+                }
+#endif
                 throw std::runtime_error(std::string("Unknown test: ") + argv[1]);
+            }
 
-            const auto argument = argc > 2 ? std::string{ argv[2] } : std::string{};
             test->second(argument);
             return 0;
         }
