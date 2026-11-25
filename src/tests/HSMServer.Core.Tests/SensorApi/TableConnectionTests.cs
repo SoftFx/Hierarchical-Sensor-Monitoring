@@ -501,6 +501,34 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(2, Read(sensor).RowCount);
         }
 
+        // The same resend after the block's hour was merged and its blocks deleted (#1850): the
+        // producer's watermark makes it a duplicate whose refusals are not known any more, and the ack
+        // says so instead of listing none. The merge runs with a clock a day ahead.
+        [Fact]
+        public async Task ABlockSentAgainAfterItsHourWasMerged_IsADuplicate_WithRefusalsNotKnown()
+        {
+            await using var host = await StartHost();
+            var sensor = await RegisterAsync("q");
+            var block = Block("q", (T0, 1.0, 1L), (T0.AddSeconds(1), 2.0, 2L));
+
+            using var table = await OpenTableAsync(host);
+
+            await table.SendBlockAsync(1, _producer, 1, block);
+            Assert.Equal("stored", (await table.ReceiveAckAsync()).Outcome);
+
+            _blocks.Merge.RunPass(DateTime.UtcNow.AddHours(2));
+            Assert.True(_blocks.Merge.RunPass(DateTime.UtcNow.AddHours(26)).HoursDeleted > 0);
+
+            await table.SendBlockAsync(2, _producer, 1, block);
+
+            var ack = await table.ReceiveAckAsync();
+
+            Assert.Equal("duplicate", ack.Outcome);
+            Assert.Null(ack.Refused);
+            Assert.Null(ack.RefusedCount);
+            Assert.Equal(2, Read(sensor).RowCount);
+        }
+
         // A replaced connection still storing its block while the collector sends the same block on
         // the new connection: both puts run inside the block service at once. The first put holds
         // its reserved sequence at a gate; the resend reserves the next one, and the store appends

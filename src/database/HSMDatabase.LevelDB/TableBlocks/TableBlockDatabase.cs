@@ -128,6 +128,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         /// <summary>Called by an open before it loads the index. Test seam: what the open is under, what a reader sees meanwhile.</summary>
         internal Action OnOpen { get; set; }
 
+        /// <summary>Called with the block's sequence right before ReadBlock gets its value from LevelDB. Test seam for a read error.</summary>
+        internal Action<long> BeforeBlockGet { get; set; }
+
         /// <summary>Called by a read (GetBlocks) right before it takes the store's lock because the store is not open. Test seam.</summary>
         internal Action BeforeReadLock { get; set; }
 
@@ -286,6 +289,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                     if (_watermarks.TryGetValue((envelope.ProductId, envelope.ProducerId), out var watermark) && envelope.ProducerSequence <= watermark)
                     {
                         Statistics.Add(ref Statistics.DuplicateBlocks);
+                        Statistics.Add(ref Statistics.MergedDuplicateBlocks);
                         return new TableBlockAppendResult(TableBlockAppendOutcome.Duplicate, default, null) { Merged = true };
                     }
 
@@ -374,7 +378,27 @@ namespace HSMDatabase.LevelDB.TableBlocks
             return _maps.Products.TryGetValue(productId, out var blocks) ? blocks.Snapshot() : [];
         }
 
-        public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry)
+        // As GetBlocks: lock-free while open, an open (or nothing) otherwise. A product whose blocks were all deleted may
+        // still be listed with none.
+        public IReadOnlyList<Guid> GetProducts()
+        {
+            if (!_opened || Volatile.Read(ref _disposed) || Volatile.Read(ref _blocks) is null)
+            {
+                BeforeReadLock?.Invoke();
+
+                lock (_lock)
+                {
+                    if ((!_opened || _disposed || _blocks is null) && !EnsureOpen(create: false))
+                        return [];
+                }
+            }
+
+            return _maps.Products.Keys.OrderBy(id => id).ToArray();
+        }
+
+        public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry) => ReadBlock(entry, readErrorIsFault: false);
+
+        public TableBlockRecord ReadBlock(in TableBlockIndexEntry entry, bool readErrorIsFault)
         {
             byte[] value;
 
@@ -384,7 +408,13 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 // Closed since the caller took the index (a reopen failed meanwhile, or Dispose): the fault, so that the
                 // read ends as one instead of answering the block as missing.
                 var blocks = _blocks ?? throw Closed();
+                BeforeBlockGet?.Invoke(entry.Sequence);
                 value = blocks.Get(Key(entry.ArrivalHourTicks, entry.Sequence));
+            }
+            catch (Exception ex) when (ex is not TableBlockStoreException && readErrorIsFault && IsTransientReadError(ex))
+            {
+                // The merge (#1850): an IO error of the read is not damage of the block; a later pass reads it again.
+                throw new TableBlockStoreException($"Table block {entry.Sequence} could not be read: {ex.Message}", ex);
             }
             catch (Exception ex) when (ex is not TableBlockStoreException)
             {
@@ -413,6 +443,13 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 return null;
             }
         }
+
+        // What an error of LevelDB's Get means for the merge (#1850), by the status kind the wrapper's message starts with, as
+        // LevelDbOpen tells a transient open error: "IO error: ..." is transient (the disk, a file that could not be read
+        // now), a fault the merge retries on a later pass; any other status ("Corruption: ...", "Not found: ...", "Not
+        // implemented: ...", "Invalid argument: ...") or an exception without one is permanent, damage of the block: retrying
+        // it would hold its hour, and every later hour of its product, back for ever.
+        internal static bool IsTransientReadError(Exception ex) => ex.Message?.StartsWith("IO error", StringComparison.Ordinal) == true;
 
         private TableBlockStoreException Closed()
         {
@@ -547,6 +584,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
                 Interlocked.Add(ref maps.Count, -deleted);
             }
+
+            // A crash here leaves the deletes durable and the range not compacted: a repeat deletes nothing and compacts.
+            FaultHook?.Invoke("before-hour-compaction");
 
             // The space back, outside the lock appends take (about 70 ms an hour measured, #1844). The databases cannot close
             // meanwhile: a reopen and Dispose take _dbLock for writing.

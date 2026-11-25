@@ -85,6 +85,8 @@ namespace HSMDatabase.AccessManager.TableBlocks
         public long RowsStored;
         public long BytesStored;
         public long DuplicateBlocks;
+        /// <summary>The duplicates among <see cref="DuplicateBlocks"/> recognised by a producer's watermark (their hour merged, #1850).</summary>
+        public long MergedDuplicateBlocks;
         public long BlocksNotStored;
         public long TablesRefused;
         public long InvalidBlocks;
@@ -174,6 +176,12 @@ namespace HSMDatabase.AccessManager.TableBlocks
         IReadOnlyList<TableBlockIndexEntry> GetBlocks(Guid productId);
 
         /// <summary>
+        /// The products the in-memory index knows, as <see cref="GetBlocks"/> reads it (lock-free while open; opening, or
+        /// answering none without a folder, otherwise). For the merge (#1850): a product may be listed with no block left.
+        /// </summary>
+        IReadOnlyList<Guid> GetProducts();
+
+        /// <summary>
         /// Closes an arrival hour for the merge (#1850): no block is appended to <paramref name="hourTicks"/> or an earlier
         /// hour after this returns, also when the clock is behind. Opens nothing; held in memory, so the merge closes the
         /// newest merged hour again after a restart.
@@ -205,5 +213,13 @@ namespace HSMDatabase.AccessManager.TableBlocks
         /// failed meanwhile, or the store was disposed): a fault, not a missing block.
         /// </summary>
         TableBlockRecord ReadBlock(in TableBlockIndexEntry entry);
+
+        /// <summary>
+        /// <see cref="ReadBlock(in TableBlockIndexEntry)"/> for the merge (#1850): with <paramref name="readErrorIsFault"/>,
+        /// a transient error of the read itself (LevelDB's <c>Get</c> fails with an <c>IO error</c> status) is a
+        /// <see cref="TableBlockStoreException"/> instead of null, so that it is retried; any other status (corruption) is
+        /// damage and answers null, as a missing block or a damaged envelope does.
+        /// </summary>
+        TableBlockRecord ReadBlock(in TableBlockIndexEntry entry, bool readErrorIsFault);
     }
 }

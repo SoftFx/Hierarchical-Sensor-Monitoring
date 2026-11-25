@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager.TableBatches;
 using HSMDatabase.AccessManager.TableBlocks;
+using HSMDatabase.SealedHistory;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
@@ -33,7 +35,8 @@ namespace HSMServer.Core.TableSensors
         /// <summary>
         /// The rows of a table sensor with a time in <c>[from, to)</c>, sorted by time, equal times in the order they
         /// arrived; at most <paramref name="maxRows"/> (null: the configured maximum), the earliest ones, marked truncated
-        /// when more matched. An error for an unknown id or a sensor that is not a table sensor.
+        /// when more matched. An error for an unknown id or a sensor that is not a table sensor. An arrival hour committed
+        /// by the merge (#1850) is read from its batches only, any other from its blocks only.
         /// <para>Times are UTC: a <see cref="DateTimeKind.Unspecified"/> time is taken as UTC (as the ticks of a row are),
         /// a <see cref="DateTimeKind.Local"/> one is converted.</para>
         /// <para>Throws <see cref="TableBlockStoreException"/> when the store cannot be used: a fault, the caller answers
@@ -64,6 +67,8 @@ namespace HSMServer.Core.TableSensors
         private readonly ITreeValuesCache _cache;
         private readonly TableBlockOptions _options;
 
+        private readonly TableHourGate _gate = new();
+
         private readonly object _refusalLogLock = new();
         private readonly Dictionary<TableRefusalReason, long> _refusalsSinceLog = [];
         private DateTime _lastRefusalLog = DateTime.MinValue;
@@ -85,7 +90,12 @@ namespace HSMServer.Core.TableSensors
 
             // Nothing is opened here: a store that cannot open costs table puts only, never the construction of this
             // service or of whatever it is injected into. The sequence floor is raised by the first put (EnsureSequenceFloor).
+            Merge = new TableMergeJob(_database, _cache, _options, _gate, EnsureMergeState);
         }
+
+
+        /// <summary>The hourly merge of blocks into batches (#1850), run by the server's background service.</summary>
+        public TableMergeJob Merge { get; }
 
 
         private ITableBlockStore Store => _database.TableBlocks;
@@ -118,6 +128,7 @@ namespace HSMServer.Core.TableSensors
             var header = directory.Header;
 
             EnsureSequenceFloor(store);
+            EnsureMergeState(productId);
             var ticket = store.Reserve();
 
             try
@@ -202,10 +213,140 @@ namespace HSMServer.Core.TableSensors
             var fromTicks = Utc(from).Ticks;
             var toTicks = Utc(to).Ticks;
 
-            var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
-            var rows = collector.Collect(Store, Store.GetBlocks(table.Root.Id), table.FirstSequence, Encoding.UTF8.GetBytes(table.Path));
+            try
+            {
+                using (_gate.Read())
+                    return TaskResult<TableRows>.FromValue(ReadRows(table, fromTicks, toTicks, limit));
+            }
+            catch (TableBatchStoreException ex)
+            {
+                // One kind of fault for the caller: the store cannot be used, answered 5xx.
+                throw new TableBlockStoreException(ex.Message, ex);
+            }
+        }
 
-            return TaskResult<TableRows>.FromValue(rows);
+        // Under the read side of the gate, so no hour's blocks are deleted meanwhile.
+        //
+        // The read rule (#1850): an arrival hour is read from its batches when it is committed for the product, otherwise from
+        // its blocks; never both, never neither. The blocks are listed first; whether each hour that has candidate blocks is
+        // committed is asked next; the committed hours with their row ranges are listed last. An hour found not committed is
+        // read from its blocks even when the list taken after it says committed (a commit in between): its blocks stay until
+        // the delay after the commit has passed, and the gate holds their deletion off. An hour found committed is read from
+        // its batches, which the later list has (commits are never taken back, except by retention of a whole week).
+        //
+        // Sources (the blocks of one arrival hour, or one merged hour) are visited in the order of their earliest row in the
+        // range, and the read stops once it holds the limit, has dropped a row past it, and no source left can start before
+        // the latest row it keeps.
+        private TableRows ReadRows(TableSensorModel table, long fromTicks, long toTicks, int limit)
+        {
+            var product = table.Root.Id;
+            var store = Store;
+            var batches = _database.TableBatches;
+            var tableId = Encoding.UTF8.GetBytes(table.Path);
+
+            var blocks = store.GetBlocks(product);
+            var committed = new Dictionary<long, bool>();
+            var blockHours = new SortedDictionary<long, List<TableBlockIndexEntry>>();
+
+            for (int b = 0; b < blocks.Count; b++)
+            {
+                var entry = blocks[b];
+                if (entry.Sequence < table.FirstSequence || entry.FirstTime >= toTicks || entry.LastTime < fromTicks)
+                    continue;
+
+                var hour = entry.ArrivalHourTicks;
+                if (!committed.TryGetValue(hour, out var isCommitted))
+                    committed[hour] = isCommitted = batches?.IsHourMerged(product, hour) ?? false;
+
+                if (isCommitted)
+                    continue;
+
+                if (!blockHours.TryGetValue(hour, out var list))
+                    blockHours[hour] = list = [];
+                list.Add(entry);
+            }
+
+            var sources = new List<(long MinTime, long Hour, List<TableBlockIndexEntry> Blocks)>();
+
+            foreach (var (hour, list) in blockHours)
+            {
+                long min = long.MaxValue;
+                foreach (var entry in list)
+                    min = Math.Min(min, entry.FirstTime);
+
+                sources.Add((Math.Max(min, fromTicks), hour, list));
+            }
+
+            int period = 0;
+            if (batches is not null)
+            {
+                period = TablePeriodClass.Of(table, DateTime.UtcNow);
+
+                foreach (var hour in batches.GetHours(product))
+                {
+                    // Taken from its blocks above: it was not committed when that was decided.
+                    if (committed.TryGetValue(hour.HourTicks, out var isCommitted) && !isCommitted)
+                        continue;
+
+                    // Every block of the hour is below the sensor's first sequence: none of its rows are the sensor's.
+                    if (hour.LastBlockSequence < table.FirstSequence)
+                        continue;
+
+                    foreach (var range in hour.Classes)
+                        if (range.PeriodWeeks == period && range.Batches > 0 && range.MinTime < toTicks && range.MaxTime >= fromTicks)
+                            sources.Add((Math.Max(range.MinTime, fromTicks), hour.HourTicks, null));
+                }
+            }
+
+            sources.Sort((a, b) => a.MinTime != b.MinTime ? a.MinTime.CompareTo(b.MinTime) : a.Hour.CompareTo(b.Hour));
+
+            var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
+
+            for (int i = 0; i < sources.Count; i++)
+            {
+                var source = sources[i];
+
+                if (i > 0 && collector.CanStopBefore(source.MinTime))
+                    break;
+
+                if (source.Blocks is not null)
+                {
+                    foreach (var entry in source.Blocks)
+                        collector.AddBlock(store, entry, tableId);
+                }
+                else
+                    ReadBatches(batches, collector, product, table.Id, period, source.Hour, fromTicks, toTicks);
+            }
+
+            return collector.Build();
+        }
+
+        private static void ReadBatches(ITableBatchStore batches, TableRowCollector collector, Guid product, Guid sensorId, int period, long hour, long fromTicks, long toTicks)
+        {
+            foreach (var read in batches.ReadSensor(product, sensorId, period, [hour]))
+            {
+                if (read.LastTime < fromTicks || read.FirstTime >= toTicks)
+                    continue;
+
+                TableBatch batch;
+                try
+                {
+                    batch = TableBatchCodec.Decode(read.Batch);
+                }
+                catch (TableBatchFormatException ex)
+                {
+                    collector.BatchFailed();
+                    batches.Statistics.Add(ref batches.Statistics.ReadFailures);
+                    _logger.Error($"A table batch of sensor {sensorId}, hour {new DateTime(hour, DateTimeKind.Utc):O}, ordinal {read.Ordinal} cannot be read ({ex.Error}): {ex.Message}");
+                    continue;
+                }
+
+                if (!collector.AddBatch(batch, hour, read.Ordinal, read.Moved))
+                {
+                    batches.Statistics.Add(ref batches.Statistics.ReadFailures);
+                    _logger.Error($"A table batch of sensor {sensorId}, hour {new DateTime(hour, DateTimeKind.Utc):O}, ordinal {read.Ordinal} does not have its sensor's columns");
+                }
+            }
         }
 
 
@@ -322,6 +463,49 @@ namespace HSMServer.Core.TableSensors
                     store.RaiseNextSequence(floor);
 
                 _floorRaised = true;
+            }
+        }
+
+        // The products whose merge state is in the block store since the start; written under _mergeStateLock.
+        private readonly object _mergeStateLock = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, bool> _mergeStateLoaded = new();
+
+        // The merge's state of one product after a start (#1850), loaded once per product, before its first put and before
+        // the merge of its first hour:
+        // - its producers' watermarks from the batch store (durable there, in memory only in the block store): a block sent
+        //   again after its hour was merged and deleted is a duplicate;
+        // - its newest merged hour closed in the block store (CloseHour is in memory only): with the clock behind, a block of
+        //   the product must never be appended to an hour already committed for it, whose blocks a read ignores. (A block of
+        //   another product in an hour committed for this one is that product's hour, merged for it on its own.)
+        // Per product: a product whose batches cannot be opened (a held LOCK, permissions) faults its own puts and merges
+        // only, and is tried again on its next use. If it throws, the product stays unloaded: the put fails as the fault it
+        // is (a TableBlockStoreException), and the next one tries again.
+        internal void EnsureMergeState(Guid productId)
+        {
+            if (_mergeStateLoaded.ContainsKey(productId))
+                return;
+
+            lock (_mergeStateLock)
+            {
+                if (_mergeStateLoaded.ContainsKey(productId))
+                    return;
+
+                if (_database.TableBatches is { } batches)
+                {
+                    try
+                    {
+                        Store.RaiseWatermarks(batches.GetWatermarks(productId).Select(w => new TableBlockWatermark(productId, w.Key, w.Value)).ToList());
+
+                        if (batches.GetNewestHour(productId) is { } newest)
+                            Store.CloseHour(newest);
+                    }
+                    catch (TableBatchStoreException ex)
+                    {
+                        throw new TableBlockStoreException($"The merged hours of product {productId} could not be loaded: {ex.Message}", ex);
+                    }
+                }
+
+                _mergeStateLoaded[productId] = true;
             }
         }
 
