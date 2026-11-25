@@ -607,6 +607,16 @@ namespace HSMDatabase.LevelDB.TableBatches
                 return product.Weeks.OrderBy(w => w.WeekStartTicks).ThenBy(w => w.PeriodWeeks).ToArray();
         }
 
+        public bool IsWeekDropped(Guid productId, TableBatchWeek week)
+        {
+            var product = Product(productId, create: false);
+            if (product is null)
+                return false;
+
+            lock (product.Lock)
+                return product.Dropped.Contains(week);
+        }
+
         public IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours) =>
             ReadSensor(productId, sensorId, periodWeeks, hours, out _);
 

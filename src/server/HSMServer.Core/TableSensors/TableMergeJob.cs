@@ -345,7 +345,8 @@ namespace HSMServer.Core.TableSensors
 
         // === One product's hour ===
 
-        // The rows of one sensor in one hour: the tables of its blocks, in block sequence order, unchanged.
+        // The rows of one sensor in one hour: the tables of its blocks, in block sequence order, unchanged; and the class that
+        // holds the hour for the sensor (its placement's ClassOf).
         private sealed class SensorRows(TableSensorModel sensor, int period)
         {
             public readonly TableSensorModel Sensor = sensor;
@@ -365,7 +366,9 @@ namespace HSMServer.Core.TableSensors
 
             var budget = MemoryBudgetBytes ?? (long)_options.MergeMemoryBudgetMb * 1024 * 1024;
             var rows = entries.Sum(e => (long)e.RowCount);
-            var resolved = new Dictionary<string, (TableSensorModel Sensor, int Period)>();
+            var resolved = new Dictionary<string, (TableSensorModel Sensor, TablePlacement Placement)>();
+            // Whether the rows of a sensor of this hour are left out: decided once per sensor (IsLeftOut).
+            var leftOut = new Dictionary<Guid, bool>();
             var unreadable = new List<long>();
             long dropped = 0, expired = 0;
             long weekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
@@ -429,7 +432,7 @@ namespace HSMServer.Core.TableSensors
                         if (share is not null && (path is null || !share.Contains(path)))
                             continue;
 
-                        var (sensor, period) = Resolve(product, path, resolved, utcNow, hour, createFrom: firstHour);
+                        var (sensor, placement) = Resolve(product, path, resolved, utcNow, createFrom: firstHour);
 
                         if (sensor is null || entry.Sequence < sensor.FirstSequence || !Matches(sensor, t))
                         {
@@ -439,14 +442,19 @@ namespace HSMServer.Core.TableSensors
                             continue;
                         }
 
-                        // The sensor's period has passed for the week of this hour (a catch-up after a long downtime): its rows
-                        // would go into a week database retention drops, or has dropped; they are left out and counted.
-                        if (TableBatchRetention.IsExpired(weekStart, period, utcNow))
+                        // The sensor's rows of this hour have expired (a catch-up after a long downtime), or the week database
+                        // they would go into was dropped: they are left out and counted.
+                        if (!leftOut.TryGetValue(sensor.Id, out var skip))
+                            leftOut[sensor.Id] = skip = IsLeftOut(product, placement, hour, weekStart, utcNow);
+
+                        if (skip)
                         {
                             if (share is not null || firstPass)
                                 expired += t.RowCount;
                             continue;
                         }
+
+                        int period = placement.ClassOf(hour);
 
                         held += TableBytes(t.RowCount, t.Columns.Count, t.Columns.Count(c => c.NullMap is not null), t.TableId.Length);
                         if (share is null && held > budget)
@@ -624,20 +632,33 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        // The table sensor on a path and the class of its rows of the hour (its placement, #1850 part 4b): the merge writes
-        // them there and every read looks there. The merge creates the placement of a sensor that has none (createFrom: the
+        // Whether the merge leaves out a sensor's rows of an hour.
+        // - They have expired, by the one rule (TableBatchRetention.IsExpired of the placement): the class that holds the hour
+        //   has passed for its week and so has the period the sensor has now. A sensor whose period was lengthened before
+        //   its week expired keeps the rows of an hour that waited for its merge past the old period: they are written into
+        //   the class that holds the hour, whose week database the retention guard keeps.
+        // - Or the week database they would go into was dropped by retention (its record): the rows merged there went
+        //   when the period the sensor had then passed, a change of period after that does not bring them back, and a
+        //   write into a dropped database is refused (it would hold the product's hour, and every later one, back for ever).
+        private bool IsLeftOut(Guid product, TablePlacement placement, long hour, long weekStart, DateTime utcNow) =>
+            TableBatchRetention.IsExpired(placement, hour, utcNow) ||
+            Batches.IsWeekDropped(product, new TableBatchWeek(weekStart, placement.ClassOf(hour)));
+
+        // The table sensor on a path and its placement (#1850 part 4b): the merge writes the rows of an hour into the class
+        // the placement gives it (ClassOf) and every read looks there; whether rows have expired is asked of the placement
+        // too (TableBatchRetention.IsExpired). The merge creates the placement of a sensor that has none (createFrom: the
         // first hour of such a placement); retention creates none (null).
-        private (TableSensorModel Sensor, int Period) Resolve(Guid product, string path, Dictionary<string, (TableSensorModel, int)> resolved, DateTime utcNow,
-            long hour, long? createFrom)
+        private (TableSensorModel Sensor, TablePlacement Placement) Resolve(Guid product, string path,
+            Dictionary<string, (TableSensorModel, TablePlacement)> resolved, DateTime utcNow, long? createFrom)
         {
             if (path is null)
-                return (null, 0);
+                return (null, null);
 
             if (!resolved.TryGetValue(path, out var found))
             {
                 found = _cache.TryGetSensorByPath(product, path, out var sensor) && sensor is TableSensorModel table
-                    ? (table, PlaceSensor(product, table, utcNow, createFrom).ClassOf(hour))
-                    : (null, 0);
+                    ? (table, PlaceSensor(product, table, utcNow, createFrom))
+                    : (null, null);
 
                 resolved[path] = found;
             }

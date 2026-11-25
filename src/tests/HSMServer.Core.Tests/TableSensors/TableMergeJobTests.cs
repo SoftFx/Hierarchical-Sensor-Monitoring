@@ -1259,6 +1259,146 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_period_lengthened_before_its_week_expired_protects_an_hour_still_to_be_merged_and_a_block_kept_unreadable()
+        {
+            // The review's sequence. A sensor kept for one week; hour 0 is committed with one block the merge could not
+            // read (kept), hour 1 holds readable rows and keeps faulting in its merge.
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            var damaged = Put(Block(("b", [(Hour0.AddMinutes(2), 2.0, 2)]))).Sequence.Value;
+            _server.Blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == damaged)
+                    throw new Exception("Corruption: block checksum mismatch: 000005.ldb");
+            };
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            _server.Blocks.BeforeBlockGet = null;
+            Assert.Equal([damaged], _server.Batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(61), 3.0, 3)]))));
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "encoded")
+                    throw new IOException("the merge of hour 1 faults");
+            };
+            Assert.NotNull(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+            Assert.False(_server.Batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
+
+            // Before the week expires the period is lengthened to 52 weeks. Hours 0 and 1 are before the cut-off: the class
+            // that holds them stays P1, the sensor's period is P52.
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(364).Ticks) })).IsOk);
+            Pass(Hour0.AddHours(3));
+            var placement = _server.Batches.GetPlacement(_product, b.Id);
+            Assert.Equal((52, 1, 1), (placement.Target, placement.ClassOf(Hour0.Ticks), placement.ClassOf(Hour0.AddHours(1).Ticks)));
+
+            // P1's time for the week has passed when the merge of hour 1 gets through, and retention runs in the same pass.
+            _server.Job.Checkpoint = null;
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            var report = Pass(p1.AddHours(1));
+
+            // Nothing that the sensor's period protects is gone: the rows of hour 1 are merged, into the class that holds
+            // the hour, and not left out as expired; the block kept unreadable is still kept; the week database stays.
+            Assert.Null(report.Fault);
+            Assert.Equal(0, _server.Batches.MergeStatistics.RowsExpired);
+            Assert.Equal([1], _server.Batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal((0, 0), (report.ExpiredHoursDeleted, report.WeeksDropped));
+            Assert.Contains(_server.Blocks.GetBlocks(_product), e => e.Sequence == damaged);
+            Assert.Equal([1.0, 3.0], _server.Service.Read(b.Id, From, To).Value.Columns[1].DoubleValues.Take(2));
+            Assert.Equal(2, _server.Service.Read(b.Id, From, To).Value.RowCount);
+
+            // Still so a tick before the sensor's own period has passed for the week; at it, the week and the block go.
+            var p52 = new DateTime(WeekStart + 53 * Week, DateTimeKind.Utc);
+            report = Pass(p52.AddTicks(-1));
+            Assert.Equal((0, 0), (report.ExpiredHoursDeleted, report.WeeksDropped));
+            Assert.Contains(_server.Blocks.GetBlocks(_product), e => e.Sequence == damaged);
+            Assert.Equal(2, _server.Service.Read(b.Id, From, To).Value.RowCount);
+
+            report = Pass(p52);
+            Assert.Equal((1, 1), (report.ExpiredHoursDeleted, report.WeeksDropped));
+            Assert.Empty(_server.Blocks.GetBlocks(_product));
+            Assert.Equal(0, _server.Service.Read(b.Id, From, To).Value.RowCount);
+        }
+
+        [Fact]
+        public async Task A_period_shortened_deletes_nothing_before_the_class_that_holds_the_rows_has_passed()
+        {
+            // Kept for five weeks, then for one: an hour still to be merged and before the cut-off is held by P5.
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(61), 2.0, 2)]))));
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "encoded")
+                    throw new IOException("the merge of hour 1 faults");
+            };
+            Assert.NotNull(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+            Pass(Hour0.AddHours(3));
+            Assert.Equal((1, 5), (_server.Batches.GetPlacement(_product, b.Id).Target, _server.Batches.GetPlacement(_product, b.Id).ClassOf(Hour0.AddHours(1).Ticks)));
+
+            // The new period (one week) has passed for the week, the class that holds the hour (five weeks) has not: the
+            // rows are merged into the P5 database and kept, the blocks are not taken for expired.
+            _server.Job.Checkpoint = null;
+            var report = Pass(new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc).AddHours(1));
+            Assert.Null(report.Fault);
+            Assert.Equal(0, _server.Batches.MergeStatistics.RowsExpired);
+            Assert.Equal((0, 0), (report.ExpiredHoursDeleted, report.WeeksDropped));
+            Assert.Equal(2, _server.Service.Read(b.Id, From, To).Value.RowCount);
+
+            // The P5 database goes with its own period.
+            Assert.Equal(1, Pass(new DateTime(WeekStart + 6 * Week, DateTimeKind.Utc)).WeeksDropped);
+        }
+
+        [Fact]
+        public async Task Rows_whose_week_database_was_dropped_before_the_period_was_lengthened_are_left_out_and_the_hour_commits()
+        {
+            // Two sensors: b kept for one week, c for five. Hour 0 is merged; hour 1 holds rows of both and keeps faulting.
+            var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(7).Ticks));
+            var c = await RegisterAsync("c", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(1), 1.0, 1)]), ("c", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Pass(Hour0.AddHours(1).AddMinutes(3));
+
+            _now = Hour0.AddMinutes(70);
+            AssertStored(Put(Block(("b", [(Hour0.AddMinutes(61), 2.0, 2)]), ("c", [(Hour0.AddMinutes(61), 2.0, 2)]))));
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "encoded")
+                    throw new IOException("the merge of hour 1 faults");
+            };
+            Assert.NotNull(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+
+            // b's period passes for the week while it is still one week: its P1 database is dropped (c's P5 one stays, so
+            // the drop stays on the record). The block of hour 1 stays: c's rows in it have not expired.
+            var p1 = new DateTime(WeekStart + 2 * Week, DateTimeKind.Utc);
+            Assert.Equal(1, Pass(p1).WeeksDropped);
+            Assert.True(_server.Batches.IsWeekDropped(_product, new TableBatchWeek(WeekStart, 1)));
+            Assert.Single(_server.Blocks.GetBlocks(_product), e => e.ArrivalHourTicks == Hour0.AddHours(1).Ticks);
+
+            // Only then b's period is lengthened. Its rows of hour 1 would go into the dropped database: they are left
+            // out, counted as expired, and the hour commits with c's rows instead of faulting on the refused write for ever.
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(364).Ticks) })).IsOk);
+            _server.Job.Checkpoint = null;
+            var report = Pass(p1.AddHours(1));
+            Assert.Null(report.Fault);
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
+            Assert.Equal([5], _server.Batches.GetHour(_product, Hour0.AddHours(1).Ticks).Classes.Select(x => x.PeriodWeeks));
+            Assert.Equal(1, _server.Batches.MergeStatistics.RowsExpired);
+            Assert.Equal(2, _server.Service.Read(c.Id, From, To).Value.RowCount);
+            Assert.Equal(0, _server.Service.Read(b.Id, From, To).Value.RowCount);
+        }
+
+        [Fact]
         public async Task Retention_drops_a_week_by_its_class_when_the_period_was_shortened()
         {
             var b = await RegisterAsync("b", keep: new TimeIntervalModel(TimeSpan.FromDays(35).Ticks));

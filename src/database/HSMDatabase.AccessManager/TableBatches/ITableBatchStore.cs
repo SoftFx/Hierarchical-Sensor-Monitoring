@@ -246,6 +246,13 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableBatchWeek> GetWeeks(Guid productId);
 
         /// <summary>
+        /// Whether a week database was dropped by retention and its drop is still on the product's record: a write into it
+        /// is refused (<see cref="WriteHour"/>). The merge leaves out the rows of an hour that would go there: they went
+        /// with their week when the period they had then passed.
+        /// </summary>
+        bool IsWeekDropped(Guid productId, TableBatchWeek week);
+
+        /// <summary>
         /// The batches of one sensor in the given merge hours, from the database of each hour's week and of the period class
         /// given: the hour region, then the region of moved batches. In hour order, then by ordinal. A week without a
         /// database contributes nothing.
