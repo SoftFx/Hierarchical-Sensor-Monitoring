@@ -78,13 +78,19 @@ namespace HSMServer.Controllers
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITreeValuesCache _cache;
-        private readonly TreeViewModel _tree;
+        // Every id from the client is resolved through this: it answers "not found" for a sensor or node
+        // of a product the user has no role on. The controller holds no reference to the global tree.
+        private readonly UserTreeAccess _tree;
 
 
-        private HistoryTableViewModel SelectedTable => StoredUser.History.Table;
+        // The history table lives in per-user state that HomeController.SelectNode connects to a sensor.
+        // That state outlives a role change, so the table is handed out only while its sensor is still
+        // visible to the user.
+        private HistoryTableViewModel SelectedTable =>
+            StoredUser.History.Table is { } table && _tree.TryGetSensor(CurrentUser, table.SensorId.ToGuid(), out _) ? table : null;
 
 
-        public SensorHistoryController(ITreeValuesCache cache, TreeViewModel tree, IUserManager userManager) : base(userManager)
+        public SensorHistoryController(ITreeValuesCache cache, UserTreeAccess tree, IUserManager userManager) : base(userManager)
         {
             _cache = cache;
             _tree = tree;
@@ -103,7 +109,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryRequest model)
         {
-            if (model == null)
+            // The read below goes to the sensor connected in the user's state, not to model.EncodedId, so
+            // both have to be visible: the posted id (it names the request) and the connected sensor.
+            if (model == null || !TryGetSensor(model.EncodedId, out _) || SelectedTable is null)
                 return _emptyResult;
 
             await StoredUser.History.Reload(_cache, model);
@@ -119,8 +127,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetNextTablePage()
         {
-            var result = GetHistoryTable(await SelectedTable?.ToNextPage());
-            return result;
+            var table = SelectedTable;
+
+            return GetHistoryTable(table is null ? null : await table.ToNextPage());
         }
 
 
@@ -136,7 +145,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public ActionResult<SensorInfoViewModel> GetSensorPlotInfo([FromQuery] Guid id)
         {
-            if (_tree.Sensors.TryGetValue(id, out SensorNodeViewModel model))
+            if (_tree.TryGetSensor(CurrentUser, id, out SensorNodeViewModel model))
             {
                 string units = IsRateSensor(model)
                     ? model.DisplayUnit.GetDisplayName()
@@ -204,17 +213,13 @@ namespace HSMServer.Controllers
 
             var nodeId = request.NodeId.ToGuid();
 
-            if (!_tree.Nodes.TryGetValue(nodeId, out var node))
+            // The node id comes from the client: the lookup refuses a node of a product the caller has no
+            // role on. One id fans out to a whole subtree's history plus its structural metadata (group
+            // list, counts, relative paths).
+            if (!_tree.TryGetNode(CurrentUser, nodeId, out var node))
                 return _emptyJsonResult;
 
-            // The node id comes from the client and _tree is a global singleton, so resolving it proves
-            // nothing about access: gate the read on the caller's role for the owning product. Matters more
-            // here than for the per-sensor endpoints — one id fans out to a whole subtree's history plus its
-            // structural metadata (group list, counts, relative paths).
-            if (!CurrentUser.IsProductAvailable(node.RootProduct.Id))
-                return _emptyJsonResult;
-
-            var groups = _tree.GetComparableChildGroups(nodeId);
+            var groups = _tree.GetComparableChildGroups(node);
 
             if (groups.Count == 0)
                 return new JsonResult(new { error = false, series = Array.Empty<object>() }, _serializationsOptions);
@@ -233,8 +238,9 @@ namespace HSMServer.Controllers
             // hot intermittent series (the tree-order-first approach collapsed the chart to one line,
             // because the first ids by path are usually idle). Tradeoff: a child that peaked earlier in the
             // window but is idle now can fall outside the shortlist — acceptable for the recent-window case.
+            var user = CurrentUser;
             var candidates = group.SensorIds
-                .Select(id => _tree.Sensors.TryGetValue(id, out var s) ? s : null)
+                .Select(id => _tree.TryGetSensor(user, id, out var s) ? s : null)
                 .Where(s => s is not null)
                 .OrderByDescending(s => TryGetScalar(s.LastValue, out var v) ? v : double.NegativeInfinity)
                 .Take(MaxSensorsPerChart)
@@ -394,24 +400,22 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetBackgroundSensorInfo([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)
         {
-            if (TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out string path))
+            if (TryGetBackgroundSensor(currentId, isStatusService, out var background))
                 return Json(new
                 {
-                    id,
-                    path
+                    id = background.Id,
+                    path = background.FullPath
                 });
 
             return _emptyJsonResult;
         }
 
-        private bool TryGetBackgroundSensorInfo(Guid currentId, bool isStatusService, out Guid id, out string path)
+        private bool TryGetBackgroundSensor(Guid currentId, bool isStatusService, out SensorNodeViewModel background)
         {
-            id = _tree.Sensors.TryGetValue(currentId, out var sensor) ? _tree.GetBackgroundPlotId(sensor, isStatusService) : Guid.Empty;
+            background = null;
 
-            _tree.Sensors.TryGetValue(id, out var sensorNodeViewModel);
-            path = sensorNodeViewModel?.FullPath;
-
-            return id != Guid.Empty;
+            return _tree.TryGetSensor(CurrentUser, currentId, out var sensor) &&
+                   _tree.TryGetBackgroundSensor(CurrentUser, sensor, isStatusService, out background);
         }
 
         [HttpPost]
@@ -422,11 +426,11 @@ namespace HSMServer.Controllers
             var oldPath = $".module/Module Info/{(isStatusService ? "Service status" : "Service alive")}";
             var newPath = $".module/{(isStatusService ? "Service status" : "Service alive")}";
 
-            if (_tree.Sensors.TryGetValue(currentId, out var sensor) && (sensor.Path.EndsWith(oldPath) || sensor.Path.EndsWith(newPath)))
+            if (_tree.TryGetSensor(CurrentUser, currentId, out var sensor) && (sensor.Path.EndsWith(oldPath) || sensor.Path.EndsWith(newPath)))
                 return ChartHistory(model with { EncodedId = sensor.Id.ToString() });
 
-            return TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out _)
-                ? ChartHistory(model with { EncodedId = id.ToString() })
+            return TryGetBackgroundSensor(currentId, isStatusService, out var background)
+                ? ChartHistory(model with { EncodedId = background.Id.ToString() })
                 : Task.FromResult(_emptyJsonResult);
         }
 
@@ -464,7 +468,11 @@ namespace HSMServer.Controllers
                 await TableHistory(request);
             }
 
-            var values = await SelectedTable.GetAllValues();
+            // No table: nothing was selected, or the selected sensor is no longer visible to the user.
+            if (SelectedTable is not { } table)
+                return null;
+
+            var values = await table.GetAllValues();
 
 
             //case Default 300
@@ -528,8 +536,9 @@ namespace HSMServer.Controllers
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
 
+        // The one sensor lookup of this controller: unknown and not-visible ids answer the same "false".
         private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor) =>
-            _tree.Sensors.TryGetValue(encodedId.ToGuid(), out sensor);
+            _tree.TryGetSensor(CurrentUser, encodedId.ToGuid(), out sensor);
 
         private ExportOptions BuildExportOptions(string sensorId, bool addHiddenColumns)
         {
