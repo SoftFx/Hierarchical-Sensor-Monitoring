@@ -125,6 +125,29 @@ TypeScript 5.3 + Webpack 5:
   (`FoldersControllerUpdateChatsTests`). It validates no antiforgery token: the page replaces the
   form's content with the saved partial, which drops the token the form was rendered with.
 - Access keys authenticate DataCollector instances (no user session needed)
+- A role is checked on the entity that is written, not on an id the form carries next to it. The
+  access key dialog posts the key's id and a product id; `AccessKeysController.ModifyAccessKey`
+  (POST) looks the STORED key up by its id and requires admin or Manager of the root product of the
+  node that key was issued for. A master key belongs to no product and a key whose product is gone
+  has no Manager: both are the admins' alone. An unknown key id is answered 404 and a caller who
+  may not change the key 403, both before the form's validity is looked at; the posted product id is
+  replaced with the stored key's, so the answer (the key list of a product, or the dialog again) is
+  built for the key's own product (`AccessKeysControllerModifyTests`).
+- A folder's product list is a list of role grants: every user of a folder receives their folder
+  role on a product that enters it (unless they already hold a role on that product) and loses it
+  when the product leaves (`FolderManager.AddProductToFolder`, `RemoveProductFromFolder`). So the
+  save of the folder page's General tab (`FoldersController.EditFolder` POST) requires more than
+  Manager of the folder (or admin; an unknown folder id is 404): each product that enters or leaves
+  must be one the caller manages, as an admin or as a Manager of that product, and a product may
+  enter only as a root product that sits in no other folder. A request that names a product the
+  caller does not manage is answered 403, one with a product that cannot enter 400, and in both
+  cases nothing of the request is applied, the rename and the other products included; an id that
+  is not in the tree is left out, as before. The page follows the same rule: it offers to add only
+  the folderless products the caller manages and shows "Exclude from folder" only for the products
+  they manage. Creating a folder (`AddFolder`) is for admins only, 403 for everyone else, with the
+  same rule for the products it starts with (`FoldersControllerProductsTests`). These two test
+  classes run the role filter attributes declared on an action before the action
+  (`Infrastructure/DeclaredFilters`): a direct call of the method would skip them.
 
 ## Feature Folders To Add Here
 
