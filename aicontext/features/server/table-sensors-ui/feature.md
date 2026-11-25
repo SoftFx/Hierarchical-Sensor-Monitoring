@@ -9,7 +9,7 @@
 
 A table sensor can hold tens of thousands of rows an hour and years of them. A chart of a range does not send those rows to the browser: the server reads the range and reduces it to a minimum and a maximum per bucket of time and column, a few thousand numbers whatever the range holds. A short range (at most twice as many rows as buckets) is answered with its exact rows as well, so a zoom into a few seconds draws the real line.
 
-Part 1 is the reduction in Core; part 2 the web routes of the chart and the download (`TableSensorsController`, `TablePageService`); part 3 the page.
+Part 1 is the reduction in Core; part 2 the web routes of the chart and the download (`TableSensorsController`, `TablePageService`); part 3 the page of a table sensor (`_SensorTableChart.cshtml`).
 
 ## The chart reduction (`ITableChartReader.Reduce`)
 
@@ -110,6 +110,29 @@ The rows of `[from, to)` as CSV, in the form of the read route's CSV (`TableRows
 
 Every read takes a turn of the shared `TableReadGate`: the chart for its reduction, the download for each page (so a browser that downloads slowly holds no turn between pages). `HttpContext.RequestAborted` goes down to the read, which stops before its next block or merged hour: a client that goes away frees its turn, and one that goes away while it waits for a turn takes none. Its answer is empty.
 
+## The page (part 3)
+
+The sensor page of a table sensor (`_Sensor.cshtml`, branch `IsTableSensor`) shows the schema (`_SensorTableSchema.cshtml`) and under it the rows (`Views/Home/Sensor/History/_SensorTableChart.cshtml`: markup and an inline script, like the node Chart tab `_NodeChartTabContent.cshtml`; Plotly is the global the layout already loads, no webpack change). The page talks only to `POST /TableSensors/Chart` and `GET /TableSensors/Download`, with the cookie; no access key is in the page or its script.
+
+What it shows:
+
+- **The facts line** (`#tableFacts_<id>`): the row count of the shown range and its first and last row time, from the chart answer. In rows mode the times are exact (the first and the last of `times`); in buckets mode they are to the bucket (`20,000 rows, the first after <start of the first bucket with rows>, the last before <end of the last one> UTC (to a bucket of 9.9 s)`), since the answer carries no exact first and last time. No bytes per sensor.
+- **The retention** (`_CleanupSettings.cshtml`, the "Keep sensor history" row every sensor shows in the collapsed meta info) with two lines under it for a table sensor (`#tableRetentionNote`): the period is counted in whole weeks of rows; rows are not deleted by it yet (#1850, part 4). The second line is its own line in the view: when the deletion is applied, removing it is a one-line change.
+- **The chart** (`#tableGraph_<id>`):
+  - **Range**: last hour (default), 3 hours, day, week, or custom from/to (`datetime-local`, read as UTC). A preset ends at the moment it is chosen. A zoom on the plot (`plotly_relayout` with an x range) asks the server for the zoomed range and shows **Reset zoom**; Reset zoom, or a double click on the plot (autorange), asks for the selected range again (a preset again ends now). The x axis is fixed to the asked range, so an empty part of it shows as empty.
+  - **Requests**: debounced (250 ms: a zoom drag or several checkboxes send one request). Each request has a number; a newer one aborts the fetch of the older, and an answer that is not the newest is never drawn, so answers arriving out of order cannot overwrite a newer one. A request without an answer after 120 s is aborted and reported with a Retry link.
+  - **`buckets`** = the plot's width in pixels less its margins (the server clamps it to 100..2000).
+  - **Columns**: a checkbox per value column of the schema; double columns are on by default, int64 off; a change asks again for the same range (the zoom is kept). No column chosen: the facts line and "Choose a column to draw."
+  - **`mode: "buckets"`**: per column a band, a min trace and a max trace with `fill: 'tonexty'`, at the middle of each bucket; a bucket without a value is `null`, a gap (`connectgaps: false`). **`mode: "rows"`**: one line per column through the row values; a null is a gap. Markers are drawn when a trace has at most 300 points (in buckets mode: buckets with a value), so a lone point stays visible.
+  - **int64 beyond 2^53** (`approximate`, the values are strings): drawn as `Number(...)`, with a note that the axis of that column is approximate.
+- **The notes**: a warning line (`#tableWarning_<id>`, the colour of `nodeChartNote`) when it applies: the rows of N damaged blocks / batches are missing (`blocksFailed`, `batchesFailed`); drawn only up to T UTC, narrow the range (`completeTo`); N values of X were not finite and are not drawn (`nonFinite`); the axis of X is approximate. A muted line (`#tableNulls_<id>`) for columns with nulls: `N rows had no value in X.` (only when not zero). An answer with no rows: "No rows in the range" in place of the plot.
+- **Errors**: `404`: "This table sensor no longer exists or is not visible to you." (plot and facts cleared); `400`: the server's text; `503`: "The server is busy, trying again in N s (attempt k of 3)…" with N = `Retry-After` (bounded to 1..120 s), at most 3 more requests, then "The server is still busy: <text>" with a **Retry** link; any other status or a failed connection: the status and text with a Retry link. The spinner shows only while a request is in flight.
+- **Download CSV** (`#tableDownload_<id>`): the rows of the shown range (the zoom if any). The page first fetches the route itself: a refusal before the first byte (400 over the row limit or for a reversed range, 500 for damaged data, 503, 404) is shown as its text under the buttons (`#tableDownloadNote_<id>`) and the page stays. On a 200 the page aborts that fetch at once and points a hidden iframe at the same URL, so the browser saves the file itself, streamed to disk. **Why not a blob**: the alternative is holding the whole body in the browser's memory (up to `MaxDownloadRows` rows, about 0.5 GB); the price of the pre-check is that the server reads the first page (at most `MaxTextReadRows` rows) twice. If the second request is refused (the data changed between the two), its text lands in the iframe and is shown the same way. The button is disabled, with the reason in its title, when the chart answer's `rowCount` is above `TableSensors.MaxDownloadRows`, which the view reads from the server config (`data-max-download-rows`). A range without rows downloads the header line only.
+- **The feed link** (`#tableFeedLink_<id>`): selects the node `.tables/<the sensor's path>` of the sensor's product in the tree; rendered only when that node exists (the feed sensors are another part of the step).
+- **Not shown** for a table sensor (earlier steps; the spec checks the alerts list and the aggregation switch): alerts and TTL (`_MetaInfo.cshtml`), the history, graph and table tabs and the value editor (`_Sensor.cshtml`), aggregation (`_SensorGeneralInfo.cshtml`).
+
+**Time zone**: UTC, as the rest of the UI: the history page builds its dates with `getDateUTC`, the node Chart tab reads its `datetime-local` inputs as UTC and labels its hover "UTC". The page sends ISO times with `Z`, reads the answer's `Z` times, gives Plotly's date axis (which has no time zone) UTC wall times, reads a zoom's range as UTC, and labels the facts, the notes and the hover "UTC".
+
 ## Configuration
 
 | Key (`TableSensors`) | Default | Meaning |
@@ -147,6 +170,8 @@ Synthetic random-walk data (time, bid, ask, no nulls), two runs each; the first 
 | `src/server/HSMServer.Core/TableSensors/TableReadGate.cs` | The count of reads running at once |
 | `src/server/HSMServer/Controllers/TableSensorsController.cs` | The web routes |
 | `src/server/HSMServer/TablePages/TablePageService.cs` | Access, bounds, the chart's JSON, the paged CSV download |
+| `src/server/HSMServer/Views/Home/Sensor/History/_SensorTableChart.cshtml` | The page: range, zoom, columns, chart, notes, errors, download, feed link |
+| `src/server/HSMServer/Views/Home/_CleanupSettings.cshtml` | The retention line of a table sensor |
 
 ## Tests
 
