@@ -10,8 +10,9 @@ There are two ways to leave the CLR behind:
 1. **Relink the native wrapper DLL (drop-in, zero source change).** `src/wrapper/` is no longer
    C++/CLI — its implementation has been reimplemented over the native `hsm::collector` API while the
    public headers (`include/DataCollector.h`, `hsm_wrapper::DataCollectorProxy`, the sensor/options/
-   alert DSL) are **unchanged** (wrapper 2.0.0 added one method, `UseHttpTransport()`, and removed
-   nothing). The artifact is a pure-native `HSMCppWrapper.dll` (built by `src/wrapper/CMakeLists.txt`,
+   alert DSL) keep every declaration they had: wrapper 2.0.0 added one method, `UseHttpTransport()`,
+   and comments, and removed nothing, so the headers must be replaced and old code compiles against the
+   new ones unchanged. The artifact is a pure-native `HSMCppWrapper.dll` (built by `src/wrapper/CMakeLists.txt`,
    statically bundling the collector core; libcurl transport, the collector session by default).
    Consumers (e.g. tt-aggregator2) **relink against the new DLL and recompile nothing of their own** —
    no CLR is loaded. The behavioral table below is exactly what that native backend does (e.g. function
@@ -44,7 +45,7 @@ relinked DLL — no longer provides).
 | `HSMDefaultAlertsOptions` (`DisableTtl`/`DisableStatusChange`) on options | `SensorOptions` / `RateOptions` / `BarOptions::default_alert_options` (`DefaultAlertsOptions`) | shim — instant + rate + bar; the server attaches its default TTL + status-change alerts, these flags register them disabled |
 | `CreateIntRateSensor` / `CreateDoubleRateSensor` | `CreateRateSensor` (double) | **partial** — rate is double-only (matches .NET); the wrapper's int-rate is dropped |
 | `CreateNoParamsFuncSensor<T>` / `CreateParamsFuncSensor<T,U>` | `CreateFunctionSensor` / `CreateValuesFunctionSensor` (int) | **partial** — int / int-values only; no templated `T/U` (C ABI is int-only) |
-| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 10 MiB cap, UTF-8 text); `AddContent` publishes raw string content |
+| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 10 MiB cap, UTF-8 text; on the collector session a file must also fit one frame of the server, about 1 MiB with its default 4 MiB frame: see "Transport" below); `AddContent` publishes raw string content |
 | `AddServiceStateMonitoring(service_name)` | `EnableServiceStatusMonitoring(service_name, scan_period)` | shim — registers `.module/Service status` and starts a live SCM poller (Win32 `OpenService`/`QueryServiceStatus`, Windows only) that posts the service's `ServiceControllerStatus` on change; registration-only via `AddDefaultSensor(DefaultSensor::ServiceStatus)` |
 | `InitializeSystemMonitoring` / `…ProcessMonitoring` / `…DiskMonitoring` / `…OsMonitoring` / `…NetworkMonitoring` / `…QueueDiagnostic` / `…CollectorMonitoring` | `AddSystemMonitoringSensors` / `AddProcessMonitoringSensors` / `AddDiskMonitoringSensors` / `AddWindowsInfoMonitoringSensors` / `AddAllNetworkSensors` / `AddAllQueueDiagnosticSensors` / `AddCollectorMonitoringSensors` (or `AddAllComputerSensors` / `AddAllModuleSensors` / `AddAllDefaultSensors`) | shim — group helpers instead of boolean flags |
 | `InitializeProductVersion(version)` | `AddAllModuleSensors(product_version)` / `AddDefaultSensor(DefaultSensor::ProductVersion, …)` | shim |
@@ -87,7 +88,7 @@ GitLab). The bundle mirrors the aggregator's vendored layout so it unzips straig
 
 ```
 HSMCppWrapper-<ver>/
-  include/HSMCppWrapper/   public wrapper ABI headers (unchanged)
+  include/HSMCppWrapper/   public wrapper ABI headers (replace them: 2.0.0 adds UseHttpTransport)
   include/hsm_collector/   native headers (only for DataCollectorProxy::Native(); tables.hpp for table sensors)
   dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + z(d).dll + zstd.dll
   lib/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.lib
@@ -105,8 +106,9 @@ no source edits.
 ### Transport: the collector session by default (wrapper 2.0.0)
 
 From wrapper 2.0.0 the proxy talks to the server over the **collector session**: one WebSocket to
-`/api/sensors/session` carries registrations, values and files (ADR-0019, point 5 as amended on
-2026-11-25). Until 2.0.0 the wrapper forced HTTP.
+`/api/sensors/session` carries registrations, values and files, a file only up to about 1 MiB with a
+default server (see below) (ADR-0019, point 5 as amended on 2026-11-25). Until 2.0.0 the wrapper forced
+HTTP.
 
 - **Rollout: update the server first.** The session needs **HSMServer 3.43.0 or later** with sessions
   on (`CollectorSessions.MaxSessions` above zero). Against an older server a host on the default sends
@@ -115,9 +117,25 @@ From wrapper 2.0.0 the proxy talks to the server over the **collector session**:
 - **No fallback.** A proxy on the session never switches to HTTP by itself, and one on HTTP never tries
   the session (it sends no upgrade request).
 - **`UseHttpTransport()`** is the one new method. Call it before `Start` (or after `Stop`; the next
-  `Start` then uses HTTP). On a starting or running collector it throws `hsm::collector::Error` and the
-  transport stays as it is, as the native `Collector::UseHttpTransport` does. There is no call back to the
+  `Start` then uses HTTP). From `Start` or `StartAsync` until `Stop` it throws `hsm::collector::Error`
+  and the transport stays as it is, also right after a `StartAsync` whose thread has not begun the start
+  yet; after `StopAsync` it waits for that stop to finish and then applies. There is no call back to the
   session on the proxy.
+- **Files are limited by the server's frame on the session.** `SendFileAsync` sends a file as one
+  element of a `list` frame, in the wire JSON form where every byte of the file is a decimal number
+  followed by a comma (2 to 4 JSON bytes per file byte: 4 for every byte from 100 to 255, about 3.6 on
+  average for random binary). An element larger than the server's frame, less 64 bytes of envelope, is
+  not sent: the collector drops it, logs `Dropped a value of N bytes: it is larger than a collector
+  session frame (M bytes).` (to `.module/Collector errors` when collector monitoring is on) and counts
+  it in `Queue overflow` (queue diagnostics). With the server's default `CollectorSessions.MaxFrameBytes`
+  of 4 MiB (4,194,304; room 4,194,240) that is a file of about **1 MiB** (1.0 MiB in the worst case, about
+  1.1 MiB for random binary). The wrapper still accepts files up to its 10 MiB cap (`SendFile` refuses a
+  larger one); over HTTP (1.x, or after `UseHttpTransport()`) such files are posted, the server taking a
+  request body up to 50 MiB (Kestrel `MaxRequestBodySize` 52,428,800), which a 10 MiB file (at most
+  40 MiB of JSON) fits. Ways out today: raise the server's `CollectorSessions.MaxFrameBytes` (allowed up
+  to 64 MiB; 42 MiB covers every file of the 10 MiB cap), or call `UseHttpTransport()` on a host that
+  sends large files. Large files as a first-class feature are epic
+  [#1882](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/issues/1882).
 - **A proxy behind a proxy:** whatever sits between host and server must pass WebSocket upgrades (the
   shipped Caddy does).
 
@@ -207,9 +225,17 @@ Key points:
   quotes.AddRow(std::chrono::system_clock::now(), { 1.0841, 1.0843 });
   ```
 
-  They need the session: on the default transport they register and deliver over the session's table
-  connection; after `proxy.UseHttpTransport()` they are `Unavailable` (the reason names the session) and
-  their rows are dropped and counted. Behaviour: `aicontext/features/collector/table-sensors/feature.md`.
+  They need the session and a server that has table sensors: the first HSMServer release with the
+  table connection (#1845), which is later than the first one with sessions (3.43.0; neither 3.43.x nor
+  3.44.0 has it). On such a server and the default transport they register and deliver over the
+  session's table connection; after `proxy.UseHttpTransport()` they are `Unavailable` (the reason names
+  the session) and their rows are dropped and counted. Against a server with sessions but no table
+  connection, values and every other sensor flow as usual and table sensors deliver nothing: what the
+  server answers to the table registration decides the state (`Refused` for a 4xx or an error for the
+  path, with that answer as the reason; `Pending`, asked again, for a 5xx or no answer); one whose
+  registration is taken stays `Registered` while the server refuses the table connection's upgrade (3.44.0
+  answers `400`, the session route wanting the subprotocol `hsm.sensors.v1`), which is logged once and
+  asked again every 5 minutes, and its rows are dropped and counted once the backlog is full. Behaviour: `aicontext/features/collector/table-sensors/feature.md`.
 - **Endgame.** When the last wrapper sensor/lifecycle call is gone, the consumer already holds a real
   `hsm::collector::Collector` (just reached via `proxy.Native()`); swapping the proxy for a directly
   owned collector and dropping the wrapper is then a mechanical change, not a rewrite.
