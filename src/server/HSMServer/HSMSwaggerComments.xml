@@ -1877,6 +1877,13 @@
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
         </member>
+        <member name="M:HSMServer.Model.Folders.ViewModels.FolderInfoViewModel.#ctor(HSMServer.Model.Folders.FolderModel,HSMServer.Model.Authentication.User)">
+            <param name="folder">The folder.</param>
+            <param name="user">
+            The user the panel is rendered for: the product statistics count only the products this user has
+            a role on (an admin: all of them), so the panel says nothing about the others.
+            </param>
+        </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
             <summary>
             Request for the node-level overlay chart (issue #1235): one node id plus the operator-chosen
@@ -1926,6 +1933,13 @@
             <param name="isProductVisible">
             For a folder: which of its products the user can see. Records of the other products are not loaded
             (a folder role does not imply a role on every product in it). Null loads every product.
+            </param>
+        </member>
+        <member name="M:HSMServer.Model.History.Personal.Journal.SelectedJournalViewModel.GetPage(HSMServer.Controllers.DataTables.DataTableParameters,System.Func{System.Guid,System.Boolean})">
+            <param name="filter">Paging, order and search of the table.</param>
+            <param name="isVisible">
+            Which of the loaded sensors and nodes (by id) the user sees now; records of the others are left
+            out of the page and of both counts. Null: everything loaded.
             </param>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto">
