@@ -62,7 +62,15 @@ namespace HSMServer.Core.TableSensors
     /// </summary>
     public sealed class TableMergeJob
     {
-        internal const int BytesPerRowEstimate = 40;
+        /// <summary>
+        /// The bytes the merge holds per row of a table of <paramref name="columns"/> columns (the time column included) while
+        /// it merges the row's share: 8 per cell for the value arrays the block reader gives each column (<c>long[]</c> or
+        /// <c>double[]</c>), at most 1 bit per cell for its null maps (rounded up to a byte per 8 columns), and 20 for the arrays
+        /// <see cref="EncodeSensor"/> builds over the rows of the sensor it cuts (table 4, row 4, time 8, order 4). Not in it:
+        /// the copy of one batch being encoded (at most 4,096 rows, freed before the next), the tables of the block being read
+        /// that are not kept, and the encoded batches, held until the hour is written (5.4 bytes a row in the benchmark's hour).
+        /// </summary>
+        internal static long RowBytes(int columns) => 8L * columns + (columns + 7) / 8 + 20;
 
         private static readonly Logger _logger = LogManager.GetLogger("TableMerge");
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -102,7 +110,10 @@ namespace HSMServer.Core.TableSensors
         /// <summary>The memory budget in bytes; the option by default. Test seam.</summary>
         internal long? MemoryBudgetBytes { get; set; }
 
-        /// <summary>Passes over the blocks of the last product hour merged (1 within the budget). For tests.</summary>
+        /// <summary>
+        /// Passes over the blocks of the last product hour merged (1 within the budget; a single pass given up at the budget is
+        /// not counted). For tests.
+        /// </summary>
         internal int LastPasses { get; private set; }
 
         private ITableBlockStore Blocks => _database.TableBlocks;
@@ -330,13 +341,11 @@ namespace HSMServer.Core.TableSensors
             long dropped = 0, expired = 0;
             long weekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
 
-            // The shares of the tables, by path: one share (null: every table) within the budget, several otherwise.
-            List<HashSet<string>> shares;
-
-            if (rows * BytesPerRowEstimate <= budget)
-                shares = [null];
-            else
-                shares = Shares(product, entries, unreadable, resolved, budget / BytesPerRowEstimate, utcNow);
+            // The shares of the tables, by path: one share (null: every table) while the rows held fit the budget, several
+            // otherwise, each table weighed by its columns (RowBytes). The index gives the hour's rows but not their width, so
+            // one pass is tried when the rows fit at the narrowest weight; it weighs each table it keeps and gives up as soon
+            // as the budget is passed, before anything is encoded, and the tables are then split by their directories.
+            List<HashSet<string>> shares = rows * RowBytes(1) <= budget ? [null] : Shares(product, entries, unreadable, budget);
 
             LastPasses = shares.Count;
 
@@ -344,8 +353,10 @@ namespace HSMServer.Core.TableSensors
             var unreadableSet = new HashSet<long>(unreadable);
             var firstPass = true;
 
-            foreach (var share in shares)
+            for (int s = 0; s < shares.Count; s++)
             {
+                var share = shares[s];
+
                 if (token.IsCancellationRequested)
                 {
                     stopped = true;
@@ -353,6 +364,8 @@ namespace HSMServer.Core.TableSensors
                 }
 
                 var sensors = new Dictionary<Guid, SensorRows>();
+                long held = 0;
+                var overBudget = false;
 
                 foreach (var entry in entries)
                 {
@@ -404,12 +417,35 @@ namespace HSMServer.Core.TableSensors
                             continue;
                         }
 
+                        held += t.RowCount * RowBytes(t.Columns.Count);
+                        if (share is null && held > budget)
+                        {
+                            overBudget = true;
+                            break;
+                        }
+
                         if (!sensors.TryGetValue(sensor.Id, out var sensorRows))
                             sensors[sensor.Id] = sensorRows = new SensorRows(sensor, period);
 
                         sensorRows.Tables.Add(t);
                         sensorRows.Rows += t.RowCount;
                     }
+
+                    if (overBudget)
+                        break;
+                }
+
+                if (overBudget)
+                {
+                    // The tables are wider than the try assumed: split them by their directories, weighed the same way, and
+                    // start again. Nothing was encoded; the blocks found unreadable stay noted, the rows dropped are counted
+                    // again by the shares.
+                    dropped = expired = 0;
+                    shares = Shares(product, entries, unreadable, budget);
+                    unreadableSet.UnionWith(unreadable);
+                    LastPasses = shares.Count;
+                    s = -1;
+                    continue;
                 }
 
                 firstPass = false;
@@ -472,15 +508,18 @@ namespace HSMServer.Core.TableSensors
         }
 
         // The tables of the hour split into shares whose rows fit the budget, by path: a pass over the blocks' directories
-        // counts each path's rows; paths are given to shares largest first, each to the first share it fits (a path larger
-        // than the budget gets a share of its own). Blocks that cannot be read are noted.
-        private List<HashSet<string>> Shares(Guid product, List<TableBlockIndexEntry> entries, List<long> unreadable,
-            Dictionary<string, (TableSensorModel, int)> resolved, long rowsPerShare, DateTime utcNow)
+        // weighs each path's rows by its columns (RowBytes, as the pass that holds them); paths are given to shares heaviest
+        // first, each to the first share it fits (a path heavier than the budget gets a share of its own). Blocks that cannot
+        // be read are noted (a block noted already is not read again).
+        private List<HashSet<string>> Shares(Guid product, List<TableBlockIndexEntry> entries, List<long> unreadable, long budget)
         {
-            var rowsByPath = new Dictionary<string, long>();
+            var bytesByPath = new Dictionary<string, long>();
 
             foreach (var entry in entries)
             {
+                if (unreadable.Contains(entry.Sequence))
+                    continue;
+
                 var record = Blocks.ReadBlock(entry, readErrorIsFault: true);
                 TableBlockDirectory directory = null;
 
@@ -508,23 +547,24 @@ namespace HSMServer.Core.TableSensors
                     if (record.Envelope.IsRefused(i) || Path(directory.Entries[i].TableId) is not { } path)
                         continue;
 
-                    rowsByPath[path] = rowsByPath.GetValueOrDefault(path) + directory.Entries[i].RowCount;
+                    var e = directory.Entries[i];
+                    bytesByPath[path] = bytesByPath.GetValueOrDefault(path) + e.RowCount * RowBytes(e.ColumnTypes.Count);
                 }
             }
 
-            var shares = new List<(HashSet<string> Paths, long Rows)>();
+            var shares = new List<(HashSet<string> Paths, long Bytes)>();
 
-            foreach (var (path, count) in rowsByPath.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal))
+            foreach (var (path, bytes) in bytesByPath.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal))
             {
-                var index = shares.FindIndex(s => s.Rows + count <= rowsPerShare);
+                var index = shares.FindIndex(s => s.Bytes + bytes <= budget);
                 if (index < 0)
                 {
-                    shares.Add(([path], count));
+                    shares.Add(([path], bytes));
                     continue;
                 }
 
                 shares[index].Paths.Add(path);
-                shares[index] = (shares[index].Paths, shares[index].Rows + count);
+                shares[index] = (shares[index].Paths, shares[index].Bytes + bytes);
             }
 
             return shares.Count == 0 ? [new HashSet<string>()] : shares.Select(s => s.Paths).ToList();

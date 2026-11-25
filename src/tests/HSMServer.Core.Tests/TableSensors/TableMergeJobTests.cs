@@ -699,7 +699,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var hour = Hour0.AddHours(1).AddMinutes(3);
 
             // About a third of the hour's rows per share.
-            _server.Job.MemoryBudgetBytes = 1200L * TableMergeJob.BytesPerRowEstimate;
+            _server.Job.MemoryBudgetBytes = 1200L * TableMergeJob.RowBytes(Quotes.Columns.Count);
             Assert.Equal(1, Pass(hour).HoursMerged);
             Assert.True(_server.Job.LastPasses > 2, $"{_server.Job.LastPasses} passes");
             var several = Stored(sensors);
@@ -712,6 +712,50 @@ namespace HSMServer.Core.Tests.TableSensors
 
             Assert.Equal(several, Stored(sensors));
             Assert.Equal(before, sensors.Select(Rows).ToList());
+        }
+
+        [Fact]
+        public async Task A_wide_schema_is_split_where_a_narrow_one_with_as_many_rows_fits_one_pass()
+        {
+            const int RowsPerTable = 250;
+            var wideSchema = new TableSchema([new TableSchemaColumn("time", TableColumnType.Time),
+                .. Enumerable.Range(1, 39).Select(c => new TableSchemaColumn($"c{c}", TableColumnType.Double))]);
+
+            var wide = new List<BaseSensorModel>();
+            var narrow = new List<BaseSensorModel>();
+            for (int s = 0; s < 4; s++)
+            {
+                wide.Add(await RegisterAsync($"w{s}", schema: wideSchema));
+                narrow.Add(await RegisterAsync($"n{s}"));
+            }
+
+            var random = new Random(11);
+            (DateTime, double?, long?)[] NarrowRows() => Enumerable.Range(0, RowsPerTable)
+                .Select(i => (Hour0.AddSeconds(random.Next(3600)), (double?)random.Next(1000), (long?)i)).ToArray();
+
+            // Hour 0: the wide tables; hour 1: as many rows in narrow tables.
+            _now = Hour0.AddMinutes(5);
+            AssertStored(Put(WideBlock(wideSchema, Enumerable.Range(0, 4).Select(s => $"w{s}").ToArray(), RowsPerTable, random)));
+            _now = Hour0.AddMinutes(65);
+            AssertStored(Put(Block(Enumerable.Range(0, 4).Select(s => ($"n{s}", NarrowRows())).ToArray())));
+
+            // The hour's rows fit at 3 columns, so the narrow hour is one pass; the wide one is not and is split by table.
+            _server.Job.MemoryBudgetBytes = 4 * RowsPerTable * TableMergeJob.RowBytes(Quotes.Columns.Count);
+
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            Assert.Equal(4, _server.Job.LastPasses);
+            var split = Stored(wide);
+            Assert.Equal(4, split.Count);
+
+            Assert.Equal(1, Pass(Hour0.AddHours(2).AddMinutes(3)).HoursMerged);
+            Assert.Equal(1, _server.Job.LastPasses);
+
+            // The wide hour merged again in one pass (the default budget): the batch store removed, the blocks still there.
+            await RestartAsync(crash: false, beforeOpen: settings => Directory.Delete(Path.Combine(settings.PathToTableBlocks, TableBatchDatabase.FolderName), recursive: true));
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+            Assert.Equal(1, _server.Job.LastPasses);
+
+            Assert.Equal(split, Stored(wide));
         }
 
 
@@ -850,7 +894,7 @@ namespace HSMServer.Core.Tests.TableSensors
             return (a, b);
         }
 
-        private async Task<BaseSensorModel> RegisterAsync(string name, Guid? product = null)
+        private async Task<BaseSensorModel> RegisterAsync(string name, Guid? product = null, TableSchema schema = null)
         {
             var path = $"{_root}/{name}";
             var result = await _server.Cache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(product ?? _product, path)
@@ -858,7 +902,7 @@ namespace HSMServer.Core.Tests.TableSensors
                 Update = new SensorUpdate { Id = Guid.Empty },
                 Type = SensorType.Table,
                 TypeIsExplicit = true,
-                Schema = Quotes,
+                Schema = schema ?? Quotes,
             });
 
             Assert.True(result.IsOk, result.Error);
@@ -917,6 +961,34 @@ namespace HSMServer.Core.Tests.TableSensors
                 writer.AddTimeColumn(rows.Select(r => r.Time.Ticks).ToArray());
                 writer.AddDoubleColumn(rows.Select(r => r.Bid ?? -7.0).ToArray(), anyBid ? bidNulls : null);
                 writer.AddInt64Column(rows.Select(r => r.Size ?? -7L).ToArray(), anySize ? sizeNulls : null);
+            }
+
+            return writer.ToArray();
+        }
+
+        // One block of tables of a schema of a time column and double columns, random values, one in five null.
+        private byte[] WideBlock(TableSchema schema, string[] names, int rows, Random random)
+        {
+            using var writer = new TableBlockWriter();
+
+            foreach (var name in names)
+            {
+                writer.BeginTable(Encoding.UTF8.GetBytes($"{_root}/{name}"), schema.Id, rows);
+                writer.AddTimeColumn(Enumerable.Range(0, rows).Select(_ => Hour0.AddSeconds(random.Next(3600)).Ticks).ToArray());
+
+                for (int c = 1; c < schema.Columns.Count; c++)
+                {
+                    var nulls = new byte[TableNullMap.ByteLength(rows)];
+                    var values = new double[rows];
+
+                    for (int i = 0; i < rows; i++)
+                        if (random.Next(5) == 0)
+                            TableNullMap.SetNull(nulls, i);
+                        else
+                            values[i] = random.Next(100_000) / 100.0;
+
+                    writer.AddDoubleColumn(values, nulls);
+                }
             }
 
             return writer.ToArray();

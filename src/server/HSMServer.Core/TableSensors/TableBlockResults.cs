@@ -35,8 +35,9 @@ namespace HSMServer.Core.TableSensors
         public const int DefaultMergeMemoryBudgetMb = 256;
 
         /// <summary>
-        /// The memory the merge of one product's hour may take for its rows (#1850), estimated at 40 bytes a row: an hour above
-        /// it is merged in several passes over its blocks, each keeping a share of the tables.
+        /// The memory the merge of one product's hour may take for its rows (#1850), estimated per row by its table's columns
+        /// (<see cref="TableMergeJob.RowBytes"/>: 8 bytes and a null bit a cell, 20 a row: 45 for 3 columns, 280 for 32): an
+        /// hour above it is merged in several passes over its blocks, each keeping a share of the tables.
         /// </summary>
         public int MergeMemoryBudgetMb { get; init; } = DefaultMergeMemoryBudgetMb;
 
