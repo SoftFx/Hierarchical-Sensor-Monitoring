@@ -26,11 +26,13 @@ namespace TableSeeder
         private const string SessionSubprotocol = "hsm.sensors.v1";
         private const string TableSubprotocol = "hsm.tables.v1";
         private const string ClientName = "autotests-table-seeder";
+        private const string KeyVariable = "HSM_TABLE_SEEDER_KEY";
 
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
         private const string Usage =
-            "Usage: TableSeeder --url <https://host:port> --key <access key> --path <sensor path> --rows <count>\n" +
+            "Usage: TableSeeder --url <https://host:port> [--key <access key>] --path <sensor path> --rows <count>\n" +
+            "                   (without --key the key is read from " + KeyVariable + ", which keeps it off the command line)\n" +
             "                   [--from-minutes <minutes before now, default 30>] [--to-minutes <minutes before now, default 0>]\n" +
             "                   [--columns <double column names, default bid,ask>] [--null <column>:<row index>]...\n" +
             "                   [--insecure]   accept the server's certificate without checking it (a test server's self-signed one)\n" +
@@ -332,8 +334,11 @@ namespace TableSeeder
                     }
                 }
 
+                if (string.IsNullOrEmpty(options.Key))
+                    options.Key = Environment.GetEnvironmentVariable(KeyVariable);
+
                 if (options.Url is null || string.IsNullOrEmpty(options.Key) || string.IsNullOrEmpty(options.Path) || options.Rows < 1)
-                    throw new ArgumentException("--url, --key, --path and --rows (at least 1) are required.");
+                    throw new ArgumentException($"--url, --key (or {KeyVariable}), --path and --rows (at least 1) are required.");
 
                 if (options.Nulls.Any(n => !options.Columns.Contains(n.Column)))
                     throw new ArgumentException("--null names a column that is not in --columns.");

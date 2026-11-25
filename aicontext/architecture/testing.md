@@ -61,7 +61,8 @@ Browser-level tests using Playwright (TypeScript):
 - The page of a table sensor (`home/table_sensor_page.spec.ts`, #1847): the rows it draws are sent by
   `tools/TableSeeder`, a .NET 8 console client of the collector session's table connection built on the repo's
   `HSMTableBlocks` (one block, waits for the ack, exits non-zero with the reason on a refusal; `--insecure` accepts the
-  test server's self-signed certificate). The spec runs it with `dotnet run -c Release`, so the machine that runs the
+  test server's self-signed certificate; the access key comes from `--key` or, kept off the command line, from
+  `HSM_TABLE_SEEDER_KEY`, which is how the spec passes it). The spec runs it with `dotnet run -c Release`, so the machine that runs the
   suite needs the .NET 8 SDK; the e2e workflow (`tests.yml`) builds the tool once before the specs run.
 
 ## Running Tests
