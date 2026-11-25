@@ -690,6 +690,40 @@ namespace HSMDataCollector.Tests.Tables
         // ---- threads -------------------------------------------------------------------------------------------------
 
         [Fact]
+        public async Task A_discard_while_a_pack_holds_the_buffer_leaves_the_sensor_writable()
+        {
+            var sender = new FakeTableSender();
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+                var sensor = (TableSensor)table;
+                await collector.TickTablesAsync(); // registered
+
+                // A pack takes the rows and holds the buffer (the spare is away while it packs).
+                table.AddRow(T0, 1.0, 2.0);
+                var heldByPack = sensor.TakeRows();
+                Assert.NotNull(heldByPack);
+
+                // Meanwhile the delivery loop discards the sensor's rows (a refusal) and the
+                // application goes on adding rows.
+                table.AddRow(T0, 3.0, 4.0);
+                Assert.Equal(1, sensor.DiscardRows(TableDropReason.SensorRefused));
+                Assert.True(table.AddRow(T0, 5.0, 6.0));
+
+                // The pack gives its buffer back; the next take sees exactly the last row.
+                sensor.ReturnRows(heldByPack);
+                var next = sensor.TakeRows();
+                Assert.Equal(1, next.Count);
+                Assert.Equal(5.0, BitConverter.Int64BitsToDouble(next.Values(0)[0]));
+                sensor.ReturnRows(next);
+
+                Assert.True(table.AddRow(T0, 7.0, 8.0));
+            }
+        }
+
+
+        [Fact]
         public async Task Rows_added_from_many_threads_while_ticks_run_arrive_once_each()
         {
             var sender = new FakeTableSender();
