@@ -131,6 +131,8 @@ namespace HSMServer.BackgroundServices
                 "Blocks the merge could not read since the server started: kept in the block store and listed in their hour's record; their rows are not served once the hour is merged. Error in the sample in which it grew.", _batchCounters);
             Add("Rows of removed sensors dropped", () => Interlocked.Read(ref merge.RowsDropped), false,
                 "Rows the merge dropped since the server started because no table sensor is on their path any more, or the sensor there was created after their block.", _batchCounters);
+            Add("Rows expired before the merge", () => Interlocked.Read(ref merge.RowsExpired), false,
+                "Rows the merge left out since the server started because their sensor's period had already passed for the week of their hour (a catch-up after a long downtime).", _batchCounters);
             Add("Merged hours holding blocks", () => Interlocked.Read(ref merge.MergedHoursHoldingBlocks), false,
                 "Arrival hours merged for every product whose blocks are still in the block store, waiting for TableSensors.DeleteMergedBlocksAfterHours.", _batchCounters);
 

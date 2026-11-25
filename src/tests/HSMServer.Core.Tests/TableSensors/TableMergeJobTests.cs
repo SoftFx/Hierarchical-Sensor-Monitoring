@@ -414,6 +414,36 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_catch_up_merge_leaves_out_the_rows_whose_period_has_passed_and_commits_the_others()
+        {
+            var a = await RegisterAsync("a");
+            var b = await RegisterAsync("b");
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = a.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(49).Ticks) })).IsOk);
+            Assert.True((await _server.Cache.UpdateSensorAsync(new SensorUpdate { Id = b.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(7).Ticks) })).IsOk);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1), (Hour0.AddMinutes(2), 2.0, 2)]), ("b", [(Hour0.AddMinutes(3), 3.0, 3)]))));
+            var before = Rows(a);
+
+            // Merged 15 days later: the week of the hour plus one week (b) has passed, plus seven weeks (a) has not.
+            var week = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(Hour0.Ticks);
+            var late = Hour0.AddDays(15);
+            Assert.True(TableBatchRetention.IsExpired(week, 1, late));
+            Assert.False(TableBatchRetention.IsExpired(week, 7, late));
+
+            var report = Pass(late);
+            Assert.Null(report.Fault);
+            Assert.Equal(1, report.HoursMerged);
+
+            var hour = _server.Batches.GetHour(_product, Hour0.Ticks);
+            Assert.Equal([7], hour.Classes.Select(c => c.PeriodWeeks));
+            Assert.Equal(1, _server.Batches.MergeStatistics.RowsExpired);
+            Assert.Equal(2, _server.Batches.MergeStatistics.RowsMerged);
+            Assert.Equal(before, Rows(a));
+            Assert.Empty(Rows(b));
+        }
+
+        [Fact]
         public async Task A_product_whose_batches_cannot_be_opened_faults_its_own_puts_and_merges_only()
         {
             var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;

@@ -173,7 +173,7 @@ public sealed class TableBlockOperationsTests : IDisposable
 
         Assert.Equal(10, Single<int>("Rows merged").Value);
         Assert.Equal((0, SensorStatus.Ok), Single<int>("Verification mismatches") is var v ? (v.Value, v.Status) : default);
-        foreach (var name in new[] { "Arrival hours merged", "Merge lag", "Last merge duration", "Unreadable blocks kept", "Rows of removed sensors dropped", "Merged hours holding blocks" })
+        foreach (var name in new[] { "Arrival hours merged", "Merge lag", "Last merge duration", "Unreadable blocks kept", "Rows of removed sensors dropped", "Rows expired before the merge", "Merged hours holding blocks" })
             Assert.Equal(0, Single<int>(name).Value);
         Assert.Equal(0.0, Single<double>("Merged blocks size").Value);
         Assert.Equal(0.0, Single<double>("Merged batches size").Value);

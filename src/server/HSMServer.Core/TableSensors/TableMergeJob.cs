@@ -267,6 +267,12 @@ namespace HSMServer.Core.TableSensors
                         mismatches++;
                     }
                 }
+                catch (Exception ex) when (token.IsCancellationRequested)
+                {
+                    // Stopping: the store may have closed under the call ("closed" fault); the hour is untouched or committed.
+                    _logger.Info($"Table merge stopped during the hour {new DateTime(hour, DateTimeKind.Utc):yyyy-MM-dd HH:mm} of product {product}: {ex.Message}");
+                    return HourOutcome.Stopped;
+                }
                 catch (Exception ex)
                 {
                     faulted.Add(product);
@@ -321,7 +327,8 @@ namespace HSMServer.Core.TableSensors
             var rows = entries.Sum(e => (long)e.RowCount);
             var resolved = new Dictionary<string, (TableSensorModel Sensor, int Period)>();
             var unreadable = new List<long>();
-            long dropped = 0;
+            long dropped = 0, expired = 0;
+            long weekStart = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
 
             // The shares of the tables, by path: one share (null: every table) within the budget, several otherwise.
             List<HashSet<string>> shares;
@@ -388,6 +395,15 @@ namespace HSMServer.Core.TableSensors
                             continue;
                         }
 
+                        // The sensor's period has passed for the week of this hour (a catch-up after a long downtime): its rows
+                        // would go into a week database retention drops, or has dropped; they are left out and counted.
+                        if (TableBatchRetention.IsExpired(weekStart, period, utcNow))
+                        {
+                            if (share is not null || firstPass)
+                                expired += t.RowCount;
+                            continue;
+                        }
+
                         if (!sensors.TryGetValue(sensor.Id, out var sensorRows))
                             sensors[sensor.Id] = sensorRows = new SensorRows(sensor, period);
 
@@ -445,6 +461,7 @@ namespace HSMServer.Core.TableSensors
             Stats.Add(ref Stats.BatchBytesWritten, parts.Sum(p => p.Batches.Sum(b => (long)b.Batch.Length)));
             Stats.Add(ref Stats.BlockBytesMerged, entries.Where(e => !unreadableSorted.Contains(e.Sequence)).Sum(e => (long)e.StoredLength));
             Stats.Add(ref Stats.RowsDropped, dropped);
+            Stats.Add(ref Stats.RowsExpired, expired);
             Stats.Add(ref Stats.UnreadableBlocksKept, unreadable.Count);
 
             if (unreadable.Count > 0)

@@ -103,6 +103,8 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long UnreadableBlocksKept;
         /// <summary>Rows of tables without a table sensor on their path, or of blocks numbered below the sensor's first sequence.</summary>
         public long RowsDropped;
+        /// <summary>Rows left out by the merge because their period had passed for the week of their hour (a catch-up after a long downtime).</summary>
+        public long RowsExpired;
         /// <summary>Faults of the merge: a product's hour not merged, an hour's blocks not deleted, a pass stopped (each tried again by a later pass).</summary>
         public long Faults;
 
