@@ -29,7 +29,7 @@ namespace HSMDatabase.LevelDB.TableBatches
     /// it and lets it go before the next week.
     /// </para>
     /// </summary>
-    public sealed class TableBatchDatabase : ITableBatchStore, IDisposable
+    public sealed partial class TableBatchDatabase : ITableBatchStore, IDisposable
     {
         public const string FolderName = "BatchesV1";
         public const string HoursName = "Hours";
@@ -115,7 +115,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         /// under the cache lock), "dispose-product" (before a dispose takes a product's lock); "product-opening" (a product's
         /// open, under its slot's gate and outside the store-wide lock); "product-busy" (a call found the product's slot held,
         /// by an open or a dispose, right before it waits for it), "dispose-open-busy" (a dispose found a slot held by an
-        /// open, right before it waits for it).
+        /// open, right before it waits for it). The move's primitives (#1850 part 4c): "sensor-copied" and "sensor-deleted"
+        /// (right after the synced write, under the product's lock), "compacting" (a compaction holds its lease, before it
+        /// compacts), "compacted" (before the counter is lowered), "compact-listing" and "move-writing" (before a file is written).
         /// </summary>
         internal Action<string> Checkpoint { get; set; }
 
@@ -340,79 +342,8 @@ namespace HSMDatabase.LevelDB.TableBatches
         }
 
         /// <summary>
-        /// Writes batches of one sensor and merge hour into the region of moved batches of a week database (the move of a
-        /// sensor to another period class, #1850 PR 4, writes there: after every hour key, so it never overlaps ingest).
-        /// One synced write. Nothing is committed: the hour's commit is the merge's.
-        /// <para>
-        /// <paramref name="record"/> is the hour's mark as the database the batches come from holds it
-        /// (<see cref="ReadMark"/>): the committed record, byte for byte. When the destination has no mark of the hour, the
-        /// record is written as its mark in the same write, so moved batches of an hour never exist in a database without
-        /// the hour's mark, and a rebuild of the hours database sees the same bytes in every database of the hour.
-        /// </para>
-        /// </summary>
-        internal void WriteMoved(Guid productId, TableBatchWeek week, long hour, byte[] record, IReadOnlyList<TableBatchToWrite> batches)
-        {
-            ArgumentNullException.ThrowIfNull(record);
-            ArgumentNullException.ThrowIfNull(batches);
-
-            try
-            {
-                DecodeCommit(hour, record);
-            }
-            catch (FormatException ex)
-            {
-                throw new ArgumentException($"Not the record of the merged hour {new DateTime(hour, DateTimeKind.Utc):O}: {ex.Message}", nameof(record), ex);
-            }
-
-            var product = Product(productId, create: true);
-
-            lock (product.Lock)
-            {
-                RefuseDropped(product, [week]);
-                // Pinned as a part write is when it is the newest week: flushed when the next week starts, not only at its close.
-                var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: true, pin: week.WeekStartTicks >= product.PinnedWeek);
-
-                try
-                {
-                    product.Weeks.Add(week);
-                    product.Snapshot = null;
-
-                    // Only the generations of the sensors whose batches it writes change (#1850 part 4c): every batch key
-                    // written carries one of their ids. A week database it creates holds no row of another sensor (its rows
-                    // of the week could only have been written into a database that existed then, and a dropped one is
-                    // refused above), so a plan of another sensor that lists it, or the hours of its week, finds nothing of
-                    // that sensor more or less than before. Without any batch, the product's generation changes.
-                    var sensors = batches.Select(b => b.SensorId).Distinct().ToList();
-                    if (sensors.Count == 0)
-                        product.Generation++;
-                    foreach (var sensor in sensors)
-                        product.ChangeSensor(sensor);
-
-                    using var batch = new WriteBatch();
-                    for (int i = 0; i < batches.Count; i++)
-                    {
-                        var b = batches[i];
-                        batch.Put(MovedIndexKey(b.SensorId, hour, b.FirstTime, i), EncodeIndex(b));
-                        batch.Put(MovedBatchKey(b.SensorId, hour, i), b.Batch);
-                    }
-
-                    // A mark already there is the hour's own (a part of the hour in this class), the same bytes.
-                    if (handle.Db.Get(HourKey(hour, TagMark)) is null)
-                        batch.Put(HourKey(hour, TagMark), record);
-
-                    handle.Db.Write(batch, _syncWrite);
-                    handle.Dirty = true;
-                }
-                finally
-                {
-                    Release(handle);
-                }
-            }
-        }
-
-        /// <summary>
         /// The mark of a merge hour in a week database: the hour's record as its commit wrote it, or null when that
-        /// database holds none (or does not exist). What a move passes to <see cref="WriteMoved"/>.
+        /// database holds none (or does not exist). What <see cref="CopySensorHours"/> copies.
         /// </summary>
         internal byte[] ReadMark(Guid productId, TableBatchWeek week, long hour)
         {
@@ -1024,6 +955,8 @@ namespace HSMDatabase.LevelDB.TableBatches
             Directory.CreateDirectory(folder);
 
             product.Dropped = ReadDropped(productId, folder);
+            product.Compact = ReadCompact(productId, folder);
+            product.Move = ReadMove(productId, folder);
 
             foreach (var dir in Directory.GetDirectories(folder))
                 if (TryParseWeek(Path.GetFileName(dir), out var week))
@@ -1952,6 +1885,10 @@ namespace HSMDatabase.LevelDB.TableBatches
             public readonly SortedDictionary<long, TableBatchHour> Hours = [];
             public readonly HashSet<TableBatchWeek> Weeks = [];
             public HashSet<TableBatchWeek> Dropped = [];
+            // The durable compaction list (Compact) and the move's step in flight (Move), #1850 part 4c: files of the
+            // product's folder, loaded at its open, written under Lock.
+            public HashSet<TableBatchWeek> Compact = [];
+            public TableMoveInFlight Move;
             public DB HoursDb;
             public DB PlacementsDb;
             public readonly Dictionary<Guid, TablePlacement> Placements = [];

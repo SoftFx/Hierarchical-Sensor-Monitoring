@@ -936,11 +936,7 @@ namespace HSMServer.Core.Tests.TableSensors
             int from = placement.ClassOf(hour), to = placement.Target;
             Assert.NotEqual(from, to);
 
-            var batches = _batches.ReadSensor(_product, sensor.Id, from, [hour])
-                .Select(b => new TableBatchToWrite(b.SensorId, b.FirstTime, b.LastTime, b.RowCount, b.Batch)).ToList();
-            Assert.NotEmpty(batches);
-
-            _batches.WriteMoved(_product, new TableBatchWeek(week, to), hour, _batches.ReadMark(_product, new TableBatchWeek(week, from), hour), batches);
+            Assert.NotEqual(0, _batches.CopySensorHours(_product, sensor.Id, new TableBatchWeek(week, from), to, hour, hour + TimeSpan.TicksPerHour).Batches);
             _batches.SetPlacement(_product, sensor.Id, placement.WithoutHours(hour, hour + TimeSpan.TicksPerHour));
         }
 
