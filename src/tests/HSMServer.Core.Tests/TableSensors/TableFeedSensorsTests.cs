@@ -134,7 +134,7 @@ namespace HSMServer.Core.Tests.TableSensors
         // === The service ===
 
         [Fact]
-        public async Task The_sensors_are_created_under_the_tables_product_with_their_paths_types_units_descriptions_and_values_and_no_key()
+        public async Task The_sensors_are_created_under_the_tables_product_with_their_paths_types_units_descriptions_and_values()
         {
             var a = await RegisterAsync("a");
             var product = _valuesCache.GetProduct(_product);
@@ -192,13 +192,12 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.IsType<TableSensorModel>(_valuesCache.GetSensor(a.Id));
             Assert.Null(_valuesCache.GetSensor(a.Id).LastValue);
 
-            // No access key anywhere: the product's keys are what they were, no node under .tables has one, and the
-            // server holds no more keys than before; the nodes have no author.
+            // The nodes under .tables are ordinary nodes: each has the default key every node gets (as a start gives every
+            // node without one), the product's own keys are what they were.
             Assert.Equal(keysBefore, product.AccessKeys.Keys.OrderBy(k => k));
-            Assert.Equal(allKeysBefore, _valuesCache.GetAccessKeys().Count);
-            Assert.All(Nodes(node), n => Assert.Empty(n.AccessKeys));
-            Assert.All(Nodes(node), n => Assert.Equal(Guid.Empty, n.AuthorId));
             Assert.Equal(3, Nodes(node).Count); // .tables, .tables/<root>, .tables/<root>/a
+            Assert.All(Nodes(node), n => Assert.Single(n.AccessKeys));
+            Assert.Equal(allKeysBefore + 3, _valuesCache.GetAccessKeys().Count);
         }
 
         [Fact]
@@ -216,6 +215,36 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(2, Int(Sensor(".tables/Rows")));
             Assert.Equal(2, Int(Sensor($".tables/{_root}/a/Rows")));
             Assert.Empty(_valuesCache.GetProduct(_product).AccessKeys);
+
+            // No key to take an author from: the new nodes have none, and their default key as every node.
+            var node = Assert.Single(_valuesCache.GetProduct(_product).SubProducts.Values, p => p.DisplayName == ".tables");
+            Assert.All(Nodes(node), n => Assert.Equal(Guid.Empty, n.AuthorId));
+            Assert.All(Nodes(node), n => Assert.Single(n.AccessKeys));
+        }
+
+        [Fact]
+        public async Task A_0_owed_before_a_restart_is_posted_at_the_first_tick_after_it()
+        {
+            await RegisterAsync("a");
+
+            Put(Block(("a", 1, T0), ("unknown", 1, T0)));
+            _service.Feed.AddUnreadable(_product, 2);
+            await Feed().TickAsync(T0.AddMinutes(1));
+            Assert.Equal(1, Int(Sensor(".tables/Tables refused")));
+
+            // A new service is a restarted one: it knows nothing of the owed zeros but what the tree says.
+            var restarted = Feed();
+            await restarted.TickAsync(T0.AddMinutes(2));
+            AssertLast(".tables/Tables refused", 0, T0.AddMinutes(2));
+            AssertLast(".tables/Blocks the merge could not read", 0, T0.AddMinutes(2));
+
+            await restarted.TickAsync(T0.AddMinutes(3));
+            AssertLast(".tables/Tables refused", 0, T0.AddMinutes(2));
+
+            // A sensor whose last value is 0 owes nothing; a product without these sensors gets none.
+            await Feed().TickAsync(T0.AddMinutes(4));
+            AssertLast(".tables/Tables refused", 0, T0.AddMinutes(2));
+            Assert.Empty(_valuesCache.GetProducts().Where(p => p.Id != _product).SelectMany(p => p.SubProducts.Values).Where(n => n.DisplayName == ".tables"));
         }
 
         [Fact]

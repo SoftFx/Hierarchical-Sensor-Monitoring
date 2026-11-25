@@ -22,14 +22,14 @@ namespace HSMServer.Core.Cache
             var request = new ServerSensorValuesRequest(productId, values);
             var result = await ProcessRequestAsync(productId, request, token);
 
-            if (!result.IsOk)
-                request.Response[productId.ToString()] = result.Error;
-
-            return request.Response;
+            // The handler's answer is read only once the queue answered Ok, that is once the handler is done with it. A
+            // wait that ended otherwise (a fault, a cancellation at a stop) answers with its own dictionary: the handler may
+            // still be filling the request's.
+            return result.IsOk ? request.Response : new Dictionary<string, string> { [productId.ToString()] = result.Error };
         }
 
-        // On the product's queue: for each value one decision on the exact path, add, create and add, or refuse. The
-        // creation is under the tree's structure lock with the path checked again there, so a sensor or alias that a move
+        // On the product's queue: for each value one decision on the exact path, add, create and add, or refuse. New nodes
+        // on the path are ordinary nodes and get the default key every node gets. The creation is under the tree's structure lock with the path checked again there, so a sensor or alias that a move
         // puts on the path in between is found and left alone. Nothing of an existing sensor is ever updated here.
         private void AddServerValues(ServerSensorValuesRequest request)
         {
@@ -59,7 +59,9 @@ namespace HSMServer.Core.Cache
                                 continue;
                             }
 
-                            if (!TryAddSensorUnderLock(add, type, request.ProductId, DefaultAlertsOptions.None, checkStore: false, out sensor, out var error, out _, item))
+                            // Checked like a registration: a sensor whose row the store did not write is rolled back, not
+                            // answered as created (its values would stay under an id gone at the next start).
+                            if (!TryAddSensorUnderLock(add, type, request.ProductId, DefaultAlertsOptions.None, checkStore: true, out sensor, out var error, out _, item))
                             {
                                 request.Response[add.Path] = string.IsNullOrEmpty(error) ? "The sensor could not be created." : error;
                                 continue;

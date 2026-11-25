@@ -59,16 +59,25 @@
             past it the oldest period is dropped, with an Error once per stall.
             </summary>
         </member>
-        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.TickAsync(System.DateTime,System.Threading.CancellationToken)">
+        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.Tick(System.DateTime,System.Threading.CancellationToken)">
             <summary>
             Drains one period (the product counters, and the table counters when <paramref name="utcNow"/> is in a table
             period after the last one drained; the first tick drains both) and hands the values to the products' lanes. The
-            values carry <paramref name="utcNow"/> as their time. The task completes when the lanes of this tick's products
-            have posted everything they hold; the drain itself is done when the method returns.
+            values carry <paramref name="utcNow"/> as their time. Returns once the period is drained and handed over; it
+            attaches nothing to a lane (a lane whose queue never answers holds its bounded periods and nothing more).
             </summary>
         </member>
         <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.WhenPosted(System.Guid)">
             <summary>The posts of a product's lane: done when it holds nothing. For tests.</summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.TickAsync(System.DateTime,System.Threading.CancellationToken)">
+            <summary>For tests: a tick, then the wait for every lane to post what it holds.</summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.WhenIdle">
+            <summary>The posts of every lane: done when they hold nothing. For tests.</summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.TableFeedSensorsService.HeldPeriods(System.Guid)">
+            <summary>The periods a product's lane holds: the one being posted and those waiting behind it. For tests.</summary>
         </member>
         <member name="T:HSMServer.Controllers.AccessKeysApiController">
             <summary>

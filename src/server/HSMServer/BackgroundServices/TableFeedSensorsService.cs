@@ -63,6 +63,7 @@ namespace HSMServer.BackgroundServices
         private readonly HashSet<string> _clamped = [];
 
         private DateTime _lastTableSlot = DateTime.MinValue;
+        private bool _owedZerosLoaded;
 
 
         public override TimeSpan Delay => _productPeriod;
@@ -84,10 +85,10 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceActionAsync(CancellationToken token = default)
         {
-            // Not awaited: the period is drained now, its posts go on in their lanes, and the next tick is not held up.
+            // The period is drained now, its posts go on in their lanes, and the next tick is not held up.
             try
             {
-                _ = TickAsync(DateTime.UtcNow, token);
+                Tick(DateTime.UtcNow, token);
             }
             catch (Exception ex)
             {
@@ -100,11 +101,17 @@ namespace HSMServer.BackgroundServices
         /// <summary>
         /// Drains one period (the product counters, and the table counters when <paramref name="utcNow"/> is in a table
         /// period after the last one drained; the first tick drains both) and hands the values to the products' lanes. The
-        /// values carry <paramref name="utcNow"/> as their time. The task completes when the lanes of this tick's products
-        /// have posted everything they hold; the drain itself is done when the method returns.
+        /// values carry <paramref name="utcNow"/> as their time. Returns once the period is drained and handed over; it
+        /// attaches nothing to a lane (a lane whose queue never answers holds its bounded periods and nothing more).
         /// </summary>
-        internal Task TickAsync(DateTime utcNow, CancellationToken token = default)
+        internal void Tick(DateTime utcNow, CancellationToken token = default)
         {
+            if (!_owedZerosLoaded)
+            {
+                _owedZerosLoaded = true;
+                LoadOwedZeros();
+            }
+
             var tableSlot = utcNow.Floor(_tablePeriod);
             var drainTables = tableSlot > _lastTableSlot;
 
@@ -125,12 +132,8 @@ namespace HSMServer.BackgroundServices
                 foreach (var (sensorId, rows) in tables)
                     AddTableValue(posts, sensorId, rows, utcNow);
 
-            var lanes = new List<Task>(posts.Count);
-
             foreach (var (productId, values) in posts)
-                lanes.Add(Enqueue(productId, values, utcNow, token));
-
-            return Task.WhenAll(lanes);
+                Enqueue(productId, values, utcNow, token);
         }
 
         /// <summary>The posts of a product's lane: done when it holds nothing. For tests.</summary>
@@ -138,6 +141,44 @@ namespace HSMServer.BackgroundServices
         {
             lock (_lanesLock)
                 return _lanes.TryGetValue(productId, out var lane) ? lane.Running : Task.CompletedTask;
+        }
+
+        /// <summary>For tests: a tick, then the wait for every lane to post what it holds.</summary>
+        internal Task TickAsync(DateTime utcNow, CancellationToken token = default)
+        {
+            Tick(utcNow, token);
+            return WhenIdle();
+        }
+
+        /// <summary>The posts of every lane: done when they hold nothing. For tests.</summary>
+        internal Task WhenIdle()
+        {
+            lock (_lanesLock)
+                return Task.WhenAll(_lanes.Values.Select(l => l.Running).ToList());
+        }
+
+        /// <summary>The periods a product's lane holds: the one being posted and those waiting behind it. For tests.</summary>
+        internal int HeldPeriods(Guid productId)
+        {
+            lock (_lanesLock)
+                return _lanes.TryGetValue(productId, out var lane) ? lane.Pending.Count + (lane.Active ? 1 : 0) : 0;
+        }
+
+        // A 0 owed before a restart is owed after it: at the first tick, each failure sensor whose last value is not 0
+        // gets its 0 pending (the counts of the period before the stop are lost with the process; the 0 is not). Products
+        // without these sensors get nothing.
+        private void LoadOwedZeros()
+        {
+            foreach (var product in _cache.GetProducts() ?? [])
+                foreach (var name in new[] { RefusedName, UnreadableName })
+                {
+                    var path = $"{Node}/{name}";
+
+                    if (_cache.TryGetSensorByPath(product.Id, path, out var sensor) && sensor is not TableSensorModel &&
+                        sensor.LastValue is HSMCommon.Model.IntegerValue { Value: not 0 })
+                        lock (_stateLock)
+                            _failures[(product.Id, path)] = new FailureState();
+                }
         }
 
         private void AddProductValues(Dictionary<Guid, List<FeedValue>> posts, Guid productId, TableFeedProductPeriod period, DateTime time)
@@ -254,7 +295,7 @@ namespace HSMServer.BackgroundServices
 
         // === Lanes: one per product with values to post, alive while it holds any ===
 
-        private Task Enqueue(Guid productId, List<FeedValue> values, DateTime time, CancellationToken token)
+        private void Enqueue(Guid productId, List<FeedValue> values, DateTime time, CancellationToken token)
         {
             List<FeedValue> dropped = null;
             Lane lane;
@@ -293,10 +334,9 @@ namespace HSMServer.BackgroundServices
                 foreach (var item in dropped)
                     if (item.Tag is not null)
                         Settle(item.Tag, accepted: false);
-
-            return lane.Running;
         }
 
+        // One loop over the lane's own bounded queue; it ends when the queue is empty.
         private async Task RunLaneAsync(Guid productId, Lane lane, Period period, CancellationToken token)
         {
             while (true)

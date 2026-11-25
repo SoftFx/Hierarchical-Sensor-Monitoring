@@ -16,14 +16,15 @@ namespace HSMServer.Core.Cache
 
     /// <summary>
     /// Values the server derives itself for ordinary sensors of a user's product: the feed sensors of table sensors (#1847).
-    /// No access key is involved: none is needed, used or created. Not a member of <see cref="ITreeValuesCache"/>, which
+    /// No access key is needed or used; a product without any key gets its values too. Not a member of <see cref="ITreeValuesCache"/>, which
     /// controllers see; <see cref="ServerSensorValues"/> is the only implementation and only the server's own services are
     /// given it.
     /// <para>One operation per value, on the product's queue, for the exact path in the exact product:</para>
     /// <list type="bullet">
     /// <item>an ordinary sensor of the value's type on the path takes the value (nothing of the sensor is changed);</item>
-    /// <item>a free path gets its sensor, with the type, description and unit of the value, under nodes created without
-    /// access keys and without an author, and the sensor takes the value;</item>
+    /// <item>a free path gets its sensor, with the type, description and unit of the value (its row written and checked
+    /// as a registration's), and the sensor takes the value; new nodes on the path are ordinary nodes and get the default
+    /// key every node gets;</item>
     /// <item>a path held by a sensor of another type, by a table sensor, or by the alias of a moved sensor is refused and
     /// left exactly as it is: an alias is never followed and never displaced.</item>
     /// </list>

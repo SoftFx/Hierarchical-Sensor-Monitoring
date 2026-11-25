@@ -103,6 +103,24 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public void A_lane_that_never_answers_holds_the_bound_and_nothing_per_tick()
+        {
+            var feed = Feed();
+            _values.Gate(_a); // never opened
+
+            for (int minute = 1; minute <= 10 * TableFeedSensorsService.MaxPendingPeriods; minute++)
+            {
+                Block(_a, 1);
+                feed.Tick(T0.AddMinutes(minute));
+
+                // The one being posted and at most the bound behind it; a tick returns nothing to wait on.
+                Assert.InRange(feed.HeldPeriods(_a), 1, TableFeedSensorsService.MaxPendingPeriods + 1);
+            }
+
+            Assert.Equal(TableFeedSensorsService.MaxPendingPeriods + 1, feed.HeldPeriods(_a));
+        }
+
+        [Fact]
         public async Task A_failed_write_of_the_0_keeps_it_pending_for_both_failure_counters()
         {
             var feed = Feed();

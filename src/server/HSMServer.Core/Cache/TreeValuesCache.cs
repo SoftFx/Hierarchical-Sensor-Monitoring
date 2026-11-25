@@ -4171,12 +4171,13 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        // keyless (#1847): nodes the server creates for its own sensors in a user's product get no access key and no
-        // author (the server is not a user), and need no key on the parent to take an author from.
-        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseUpdateRequest request, bool keyless = false)
+        // A new node takes the author of the parent's first key; a parent without any key (all removed) gives no author
+        // (#1847) instead of failing the creation. Every new node gets the default key, as every node does at a start
+        // (ApplyAccessKeys).
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseUpdateRequest request)
         {
             var pathParts = request.PathParts;
-            var authorId = keyless ? null : parentProduct.AccessKeys.Values.FirstOrDefault().AuthorId;
+            var authorId = parentProduct.AccessKeys.Values.FirstOrDefault()?.AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -4196,7 +4197,7 @@ namespace HSMServer.Core.Cache
                             subProduct.Policies.AddTTLPolicy(childTtl);
                         }
 
-                    AddProduct(subProduct, defaultKey: !keyless);
+                    AddProduct(subProduct);
                     UpdateProduct(parentProduct);
                 }
 
@@ -4206,7 +4207,7 @@ namespace HSMServer.Core.Cache
             return parentProduct;
         }
 
-        private ProductModel AddProduct(ProductModel product, bool defaultKey = true)
+        private ProductModel AddProduct(ProductModel product)
         {
             if (_tree.TryAdd(product.Id, product))
             {
@@ -4236,7 +4237,7 @@ namespace HSMServer.Core.Cache
                 foreach (var (_, key) in product.AccessKeys)
                     AddAccessKey(key);
 
-                if (defaultKey && product.AccessKeys.IsEmpty)
+                if (product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
 
@@ -4295,7 +4296,7 @@ namespace HSMServer.Core.Cache
         }
 
         // server (#1847): a sensor the server creates for itself in a user's product (a feed sensor), with its description
-        // and unit, under nodes created without access keys; null for every other creation.
+        // and unit; null for every other creation.
         private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed,
             ServerSensorValue server = null)
         {
@@ -4332,7 +4333,7 @@ namespace HSMServer.Core.Cache
                     storing = false;
                 }
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request, keyless: server is not null);
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
 
                 var sensorName = request.SensorName;
 
