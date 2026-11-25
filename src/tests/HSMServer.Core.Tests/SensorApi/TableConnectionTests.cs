@@ -857,6 +857,43 @@ namespace HSMServer.Core.Tests.SensorApi
             await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
         }
 
+        // The waiter of a key that holds a reservation waits for its own key only: a large frame of
+        // another key, with room in the budget, is taken at once and stored while the first key's
+        // frame is still arriving.
+        [Fact]
+        public async Task AWaiterOfAKeyThatHoldsAReservation_DoesNotHoldBackAnotherKey()
+        {
+            await using var host = await StartHost(sessions => { sessions.MaxTableFrameBytes = BudgetFrameBytes; sessions.MaxTableBytesInFlight = 2 * BudgetReservation; });
+            await RegisterAsync("q");
+            var budget = host.Handler.TableBudget;
+
+            using var first = await OpenTableAsync(host);
+            using var second = await OpenTableAsync(host);
+            using var other = await OpenTableAsync(host, AddKey());
+
+            var frame = TableConnectionTestClient.Frame(1, 1, _producer, 1, LargeBlock("q", 1));
+
+            await first.Socket.SendAsync(frame.AsMemory(0, frame.Length - 1), WebSocketMessageType.Binary, endOfMessage: false, Deadline());
+            await TestWait.UntilAsync(() => budget.InUse == BudgetReservation, "the first frame to reserve its bytes");
+
+            var sending = second.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 2));
+            await TestWait.UntilAsync(() => budget.Waiting == 1, "the second large frame of the key to wait");
+
+            await other.SendBlockAsync(1, Guid.NewGuid(), 1, LargeBlock("q", 3));
+
+            await TestWait.UntilAsync(() => budget.InUse == 2 * BudgetReservation || _tables.Puts > 0, "the other key's frame to be taken at once");
+            Assert.Equal("stored", (await other.ReceiveAckAsync()).Outcome);
+            Assert.Equal(1, budget.Waiting);
+
+            await first.Socket.SendAsync(frame.AsMemory(frame.Length - 1), WebSocketMessageType.Binary, endOfMessage: true, Deadline());
+
+            Assert.Equal("stored", (await first.ReceiveAckAsync()).Outcome);
+            Assert.Equal("stored", (await second.ReceiveAckAsync()).Outcome);
+            await sending;
+
+            await TestWait.UntilAsync(() => budget.InUse == 0 && budget.Waiting == 0, "the budget to be whole again");
+        }
+
 
         // === The table frame budget ===
 
@@ -1162,11 +1199,15 @@ namespace HSMServer.Core.Tests.SensorApi
 
         // A session of its own and its table connection. The client keeps the session's socket: one
         // left to the garbage collector is closed by its finalizer, and its table connection with it.
-        private async Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host)
-        {
-            var (session, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, _key);
+        private Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host) => OpenTableAsync(host, _key);
 
-            var table = await TableConnectionTestClient.OpenAsync(host.SessionUri, _key, sessionId);
+        private Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host, Guid key) => OpenTableAsync(host, key.ToString());
+
+        private async Task<TableConnectionTestClient> OpenTableAsync(SensorApiTestHost host, string key)
+        {
+            var (session, sessionId) = await TableConnectionTestClient.OpenSessionAsync(host.SessionUri, key);
+
+            var table = await TableConnectionTestClient.OpenAsync(host.SessionUri, key, sessionId);
 
             table.Session = session;
             return table;

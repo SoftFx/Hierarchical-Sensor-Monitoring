@@ -66,12 +66,13 @@ namespace HSMServer.SensorApi.Sessions
         }
 
 
-        // True when the bytes were taken at once. Never ahead of a waiter, never a second take of a key.
+        // True when the bytes were taken at once. Never ahead of a waiter that waits for the bytes,
+        // never a second take of a key.
         public bool TryTake(long bytes, Guid key)
         {
             lock (_lock)
             {
-                if (_waiters.Count > 0 || _inUse + bytes > Capacity || _holders.Contains(key))
+                if (!CanTakeNow(bytes, key))
                     return false;
 
                 _inUse += bytes;
@@ -92,7 +93,7 @@ namespace HSMServer.SensorApi.Sessions
 
             lock (_lock)
             {
-                if (_waiters.Count == 0 && _inUse + bytes <= Capacity && !_holders.Contains(key))
+                if (CanTakeNow(bytes, key))
                 {
                     _inUse += bytes;
                     _holders.Add(key);
@@ -105,6 +106,14 @@ namespace HSMServer.SensorApi.Sessions
 
             using (token.Register(() => Cancel(node)))
                 await waiter.Granted.Task.ConfigureAwait(false);
+        }
+
+        // True when the key holds a take and there is room for these bytes: a waiter of this key is
+        // held back by its own key alone, not by the budget.
+        public bool IsHeldBackOnlyByItsKey(long bytes, Guid key)
+        {
+            lock (_lock)
+                return _holders.Contains(key) && _inUse + bytes <= Capacity;
         }
 
         public void Release(long bytes, Guid key)
@@ -136,6 +145,23 @@ namespace HSMServer.SensorApi.Sessions
 
             // The head may have been the one holding the others back.
             Wake();
+        }
+
+        // Under the lock. The bytes fit, the key holds no take, and no waiter that waits for the bytes
+        // is queued: a waiter whose key holds a take waits for its own key and does not hold a take of
+        // another key back (Wake passes it over the same way). A queued waiter of a free key waits
+        // for the bytes, for itself or behind one ahead of it (Wake has granted every other), so a
+        // new take never overtakes it.
+        private bool CanTakeNow(long bytes, Guid key)
+        {
+            if (_inUse + bytes > Capacity || _holders.Contains(key))
+                return false;
+
+            foreach (var waiter in _waiters)
+                if (!_holders.Contains(waiter.Key))
+                    return false;
+
+            return true;
         }
 
         // Grants the waiters that fit, in order: a large waiter is not overtaken by smaller ones behind
