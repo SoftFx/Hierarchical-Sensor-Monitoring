@@ -457,8 +457,8 @@ driver):
   the case's next tick, after `table_wait_connection_up`, sends it). A bound on a whole tick (the managed driver: one
   minute) only fails a case whose tick hangs.
 
-The large file verbs (`collector/large_file_contract.hsmtest`, #1888 managed, #1887 native; listed in its header) run
-in both drivers. The native driver takes them in the build with `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES`
+The large file verbs (`collector/native/large_file_contract.hsmtest` until #1888 implements them in the managed driver and
+moves the fixture back to `collector/`; listed in its header) run in the native driver. The native driver takes them in the build with `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES`
 (`HSM_COLLECTOR_LARGE_FILES`) and registers the fixture there (`conformance_large_file_contract`, run only where libcurl
 carries a WebSocket). In a fixture whose file name starts with `large_file_`, `create_collector_on_session` gives the
 scripted session server the side subprotocol `hsm.files.v1` instead of the table one and its file script

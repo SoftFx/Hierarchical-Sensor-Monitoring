@@ -19,8 +19,9 @@
 # back) passes however late it was set. A request the script leaves unanswered ends its ack wait when the server decides
 # so (the driver's ack-deadline seam), not by the request timeout.
 #
-# The managed collector implements it (4.2.0); the native collector gets large files with #1887: its driver marks every
-# verb below CONFORMANCE-UNSUPPORTED (#1887) and does not register this fixture until then.
+# The native collector implements it (0.16.0, #1887, which landed first). The managed collector gets the verbs with #1888,
+# which moves the fixture back to collector/; until then it sits under collector/native/, which the managed driver does
+# not discover.
 #
 # Verbs (sources and calls):
 # large_file_create|name|size|seed[|modified]      writes a source file into the case's folder

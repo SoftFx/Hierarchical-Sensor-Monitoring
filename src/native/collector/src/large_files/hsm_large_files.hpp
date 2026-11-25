@@ -25,6 +25,7 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -130,8 +131,16 @@ namespace hsm::collector::large_files
         std::string source;
         /// True once the sensor's ordinary registration was acknowledged on the session.
         std::function<bool()> registered;
-        /// Today's path (a `list` frame), when the file connection turns out to be missing.
-        std::function<void()> back_to_queue;
+        /// Today's path (a `list` frame), when the file connection turns out to be missing; the JSON of
+        /// the value is built from the file only then.
+        std::function<void(const RoutedFile&)> back_to_queue;
+        /// When it was routed (the real steady clock): a registration that is not acknowledged within a
+        /// minute sends it back to today's path.
+        std::chrono::steady_clock::time_point routed_at{};
+        /// The bounds of its retries, kept across attempts.
+        int discards = 0;
+        int checksum_mismatches = 0;
+        int protocol_closes = 0;
     };
 
 #if defined(HSM_COLLECTOR_LARGE_FILES)
@@ -180,7 +189,7 @@ namespace hsm::collector::large_files
         const std::shared_ptr<LargeFileShared>& Shared() const noexcept { return shared_; }
         std::uint64_t NextId() noexcept { return ++next_id_; }
         /// An equal pending file (the same path and sensor) to hand out again, or null.
-        std::shared_ptr<FileState> FindPendingFile(const std::string& path, const std::string& sensor);
+        std::shared_ptr<FileState> FindPendingFile(const std::string& path, const std::string& sensor, bool secure);
 
         /// Says why this collector cannot send large files at all (a build without them): every watch
         /// and file is UNAVAILABLE at once.

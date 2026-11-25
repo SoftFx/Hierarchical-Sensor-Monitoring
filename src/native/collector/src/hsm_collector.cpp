@@ -2794,8 +2794,13 @@ namespace
             // Directives the server pushes go where the X-Hsm-Directive headers go over HTTP.
             options.on_directive = [this](const std::string& directive) { DispatchServerDirective(directive); };
 
-            session_transport_ = std::make_unique<hsm::http::SessionTransport>(std::move(options));
-            session_transport_->Start();
+            auto made = std::make_shared<hsm::http::SessionTransport>(std::move(options));
+            {
+                // An application thread that routes a file reads the transport under this lock (#1887).
+                std::lock_guard<std::mutex> guard(session_ptr_mutex_);
+                session_transport_ = made;
+            }
+            made->Start();
         }
 
         // One request of the registration path, over whichever transport is installed, in the
@@ -5196,7 +5201,7 @@ namespace
             file->path = path_text;
 #endif
             auto* files = LargeFilesFor(true);
-            if (auto pending = files->FindPendingFile(file->path, file->sensor))
+            if (auto pending = files->FindPendingFile(file->path, file->sensor, file->options.secure))
             {
                 out = std::move(pending);
                 ClearError();
@@ -5273,9 +5278,17 @@ namespace
 #if defined(HSM_COLLECTOR_LARGE_FILES)
             try
             {
-                if (!use_session_ || !session_transport_ || !CanAcceptData())
+                if (!use_session_ || !CanAcceptData())
                     return false;
-                hsm::http::SessionTransport* session = session_transport_.get();
+                // The application's thread: the transport of this run, held for the call (a Start may
+                // replace it meanwhile).
+                std::shared_ptr<hsm::http::SessionTransport> session;
+                {
+                    std::lock_guard<std::mutex> guard(session_ptr_mutex_);
+                    session = session_transport_;
+                }
+                if (!session)
+                    return false;
                 const size_t body = session->MaxBodyBytes();
                 // Before the first hello the server's default frame limit (4 MiB) is assumed.
                 const size_t frame = body > 0 ? body + hsm::http::SessionTransport::kEnvelopeRoom : static_cast<size_t>(4 * 1024 * 1024);
@@ -5305,10 +5318,11 @@ namespace
                     return alive && !alive->RegistrationPostPending();
                 };
                 // Back to today's path when the file connection turns out to be missing: the value as
-                // it would have been queued (a value that does not fit a frame is then dropped and
-                // counted, as before).
-                const std::string json = OutgoingFileJson(path, content, name, extension, status, comment);
-                routed->back_to_queue = [this, json] { EnqueueFileIfRunning(json); };
+                // it would have been queued, built only then (a value that does not fit a frame is then
+                // dropped and counted, as before).
+                routed->back_to_queue = [this, path, name, extension](const large_files::RoutedFile& file) {
+                    EnqueueFileIfRunning(OutgoingFileJson(path, file.content, name, extension, static_cast<hsm_sensor_status_t>(file.status), file.comment));
+                };
                 return files->Route(std::move(routed));
             }
             catch (...)
@@ -7191,7 +7205,8 @@ namespace
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
         // The collector session, when it is the transport (UseSessionTransport). Created by Start
         // and stopped by Stop; the pointer itself changes only while no sending thread runs.
-        std::unique_ptr<hsm::http::SessionTransport> session_transport_;
+        std::shared_ptr<hsm::http::SessionTransport> session_transport_;
+        std::mutex session_ptr_mutex_; // guards the replacement of session_transport_ against TryRouteFile
         bool use_session_ = false;
         // Large file values (#1887): made with the first watch or file; the data folder the application set.
         mutable std::mutex large_files_mutex_;

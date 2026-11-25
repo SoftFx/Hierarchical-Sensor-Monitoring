@@ -87,6 +87,10 @@ namespace hsm::collector::large_files
         constexpr int kHeldOpenReportAfter = 10;
         // Restarts of one upload attempt that move nothing forward before it pauses.
         constexpr int kMaxNoProgress = 3;
+        // Routed sends held in memory at most; past it a send takes today's path.
+        constexpr std::int64_t kMaxRoutedBytes = 64LL * 1024 * 1024;
+        // How long a routed send waits for its sensor's registration before it takes today's path.
+        constexpr auto kRegistrationWait = std::chrono::seconds(60);
         // The owner of the cut while the stale upload records are discarded (no watch or file).
         constexpr std::uint64_t kStaleOwner = ~std::uint64_t{ 0 };
 
@@ -204,7 +208,9 @@ namespace hsm::collector::large_files
         std::vector<std::uint8_t> frame_;
         std::unique_ptr<tables::ZstdCompressor> zstd_;
         std::int64_t next_send_at_ = 0;
-        bool key_refused_ = false;
+        std::atomic<bool> key_refused_{ false };
+        // Bytes of the routed sends waiting (guarded by shared_.mutex), bounded by kMaxRoutedBytes.
+        std::int64_t routed_bytes_ = 0;
         std::map<std::uint64_t, int> changes_; // handed-over files that changed while sent
         std::map<std::uint64_t, int> busy_;    // handed-over files held open by another program
         std::int64_t stale_retry_at_ = 0;
@@ -407,6 +413,7 @@ namespace hsm::collector::large_files
             if (session.session_id.empty())
             {
                 Say("no-session-id", true, "Large files cannot be sent: the server's session has no id (a server before table and file connections).");
+                route_absent_generation_.store(session.generation);
                 outcome = Outcome{ Result::Later, "the server has no file connections", Now() + 1000 };
                 return false;
             }
@@ -943,11 +950,12 @@ namespace hsm::collector::large_files
         // True when a routed send is ready: it goes ahead of a large-file API file (after its piece in flight).
         bool RoutedReady()
         {
+            const std::int64_t now = Now();
             std::lock_guard<std::mutex> guard(shared_.mutex);
             for (const auto& routed : routed_)
             {
                 const auto not_before = file_not_before_.find(routed->id);
-                if ((not_before == file_not_before_.end() || not_before->second <= Now()) && routed->registered && routed->registered())
+                if ((not_before == file_not_before_.end() || not_before->second <= now) && routed->registered && routed->registered())
                     return true;
             }
             return false;
@@ -1240,12 +1248,24 @@ namespace hsm::collector::large_files
 
         // ---- A routed send (ADR-0022 point 20) ----
 
+        // Under shared_.mutex: takes `routed` out of the queue (false when it was not there).
+        bool TakeRoutedLocked(const std::shared_ptr<RoutedFile>& routed)
+        {
+            const auto found = std::find(routed_.begin(), routed_.end(), routed);
+            if (found == routed_.end())
+                return false;
+            routed_.erase(found);
+            routed_bytes_ -= static_cast<std::int64_t>(routed->content.size());
+            file_not_before_.erase(routed->id);
+            return true;
+        }
+
         void DropRouted(const std::shared_ptr<RoutedFile>& routed, const std::string& why)
         {
             {
                 std::lock_guard<std::mutex> guard(shared_.mutex);
-                routed_.erase(std::remove(routed_.begin(), routed_.end(), routed), routed_.end());
-                file_not_before_.erase(routed->id);
+                if (!TakeRoutedLocked(routed))
+                    return;
             }
             try
             {
@@ -1262,8 +1282,25 @@ namespace hsm::collector::large_files
         void Settled(const std::shared_ptr<RoutedFile>& routed)
         {
             std::lock_guard<std::mutex> guard(shared_.mutex);
-            routed_.erase(std::remove(routed_.begin(), routed_.end(), routed), routed_.end());
-            file_not_before_.erase(routed->id);
+            TakeRoutedLocked(routed);
+        }
+
+        // One routed send back to today's path (its registration never came, or there is no route).
+        void BackToQueue(const std::shared_ptr<RoutedFile>& routed)
+        {
+            {
+                std::lock_guard<std::mutex> guard(shared_.mutex);
+                if (!TakeRoutedLocked(routed))
+                    return;
+            }
+            try
+            {
+                if (routed->back_to_queue)
+                    routed->back_to_queue(*routed);
+            }
+            catch (...)
+            {
+            }
         }
 
         void RoutedLater(const std::shared_ptr<RoutedFile>& routed, std::int64_t not_before)
@@ -1279,6 +1316,7 @@ namespace hsm::collector::large_files
             {
                 std::lock_guard<std::mutex> guard(shared_.mutex);
                 back.swap(routed_);
+                routed_bytes_ = 0;
                 for (const auto& routed : back)
                     file_not_before_.erase(routed->id);
             }
@@ -1287,7 +1325,7 @@ namespace hsm::collector::large_files
                 try
                 {
                     if (routed->back_to_queue)
-                        routed->back_to_queue();
+                        routed->back_to_queue(*routed);
                 }
                 catch (...)
                 {
@@ -1305,7 +1343,10 @@ namespace hsm::collector::large_files
             }
             if (!routed->registered || !routed->registered())
             {
-                RoutedLater(routed, Now() + 1000);
+                if (std::chrono::steady_clock::now() - routed->routed_at >= kRegistrationWait)
+                    BackToQueue(routed); // the sensor's registration never came: today's path
+                else
+                    RoutedLater(routed, Now() + 1000);
                 return;
             }
             Outcome outcome;
@@ -1349,7 +1390,10 @@ namespace hsm::collector::large_files
                 ~Clear() { self->SetCut(0); }
             } clear{ this };
 
-            int discards = 0, mismatches = 0, in_a_row = 0, closes = 0, no_progress = 0;
+            int in_a_row = 0, no_progress = 0;
+            int& discards = routed->discards;
+            int& mismatches = routed->checksum_mismatches;
+            int& closes = routed->protocol_closes;
             const std::int64_t piece_bytes = hello.piece_bytes;
             for (;;)
             {
@@ -1450,7 +1494,7 @@ namespace hsm::collector::large_files
                             {
                                 in_a_row = 0;
                                 ResetConnection();
-                                RoutedLater(routed, Now());
+                                RoutedLater(routed, Now() + Backoff());
                                 return;
                             }
                             break;
@@ -1726,11 +1770,12 @@ namespace hsm::collector::large_files
                 return false;
             }
             {
+                const std::int64_t now_ms = Now();
                 std::lock_guard<std::mutex> guard(shared_.mutex);
                 for (const auto& routed : routed_)
                 {
                     const auto not_before = file_not_before_.find(routed->id);
-                    if (not_before != file_not_before_.end() && not_before->second > Now())
+                    if (not_before != file_not_before_.end() && not_before->second > now_ms)
                         continue;
                     item = Item{};
                     item.owner = routed->id;
@@ -2206,9 +2251,14 @@ namespace hsm::collector::large_files
         bool make_thread = false;
         {
             std::lock_guard<std::mutex> guard(shared_->mutex);
-            if (!impl_->running_ || !impl_->UnavailableReason().empty())
+            if (!impl_->running_ || !impl_->UnavailableReason().empty() || impl_->key_refused_.load())
                 return false;
+            const auto bytes = static_cast<std::int64_t>(file->content.size());
+            if (impl_->routed_bytes_ + bytes > kMaxRoutedBytes)
+                return false; // held in memory: bounded; past it, today's path
             file->id = NextId();
+            file->routed_at = std::chrono::steady_clock::now();
+            impl_->routed_bytes_ += bytes;
             impl_->routed_.push_back(std::move(file));
             make_thread = !impl_->thread_.joinable();
         }
@@ -2232,11 +2282,12 @@ namespace hsm::collector::large_files
 #endif
     }
 
-    std::shared_ptr<FileState> LargeFiles::FindPendingFile(const std::string& path, const std::string& sensor)
+    std::shared_ptr<FileState> LargeFiles::FindPendingFile(const std::string& path, const std::string& sensor, bool secure)
     {
         std::lock_guard<std::mutex> guard(shared_->mutex);
         for (const auto& file : impl_->files_)
-            if (file->path == path && file->sensor == sensor && !file->cancelled.load() && file->outcome.load() == HSM_LARGE_FILE_PENDING)
+            if (file->path == path && file->sensor == sensor && file->options.secure == secure && !file->cancelled.load() &&
+                file->outcome.load() == HSM_LARGE_FILE_PENDING)
                 return file;
         return nullptr;
     }
@@ -2317,7 +2368,10 @@ namespace hsm::collector::large_files
             impl_->counted_.clear();
             impl_->file_not_before_.clear();
             impl_->stale_checked_ = false;
-            impl_->key_refused_ = false;
+            impl_->key_refused_.store(false);
+            // A new transport numbers its sessions from 1 again: what the last run learned does not hold.
+            impl_->route_absent_generation_.store(0);
+            impl_->absent_generation_ = 0;
             impl_->thread_make_failed_ = false;
             impl_->connection_generation_ = 0;
             impl_->absent_until_ = 0;
@@ -2423,6 +2477,7 @@ namespace hsm::collector::large_files
         {
             std::lock_guard<std::mutex> guard(shared_->mutex);
             dropped.swap(impl_->routed_);
+            impl_->routed_bytes_ = 0;
         }
         for (const auto& routed : dropped)
         {
