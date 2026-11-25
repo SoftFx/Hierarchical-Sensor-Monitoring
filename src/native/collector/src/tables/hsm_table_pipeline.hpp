@@ -380,6 +380,9 @@ namespace hsm::collector::tables
         std::function<void()> before_thread_start_for_tests;
         /// For tests: runs in the stop's FinishDrain before what is left is counted (a test throws).
         std::function<void()> in_finish_drain_for_tests;
+        /// For tests with a manual tick (no delivery thread): what the delivery thread does when its
+        /// channel's ServiceDelayMs has passed, on the caller's thread.
+        void ServiceChannelNow();
 
     private:
         struct Taken;
