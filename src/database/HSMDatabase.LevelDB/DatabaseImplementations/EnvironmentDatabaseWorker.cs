@@ -1270,7 +1270,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // Key layout: "DumpPasswords_<productId>" rows hold a ProductDumpPasswordsEntity (ADR-0022 point 13). No other key of
         // this database starts with the prefix: ids are lowercase guid strings and the other list keys are distinct words.
         // Unlike PutProduct, the writes propagate storage failures: a password change that did not land must fail the action,
-        // not be logged and forgotten. Neither a log line nor an exception text here carries the entity or its value: the
+        // not be logged and forgotten. Both are synced writes: a version answered as saved is on the disk, so a power loss
+        // cannot take back a version an archive may already carry. Neither a log line nor an exception text here carries the entity or its value: the
         // product id names the row.
         //
         // Serialized with the parameterless JsonSerializer overload, as token rows are: the shared _options would omit
@@ -1310,10 +1311,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             ArgumentNullException.ThrowIfNull(entity);
 
-            _database.Put(GetDumpPasswordsKey(entity.ProductId), JsonSerializer.SerializeToUtf8Bytes(entity));
+            _database.PutSynced(GetDumpPasswordsKey(entity.ProductId), JsonSerializer.SerializeToUtf8Bytes(entity));
         }
 
-        public void RemoveDumpPasswords(Guid productId) => _database.Delete(GetDumpPasswordsKey(productId));
+        public void RemoveDumpPasswords(Guid productId) => _database.DeleteSynced(GetDumpPasswordsKey(productId));
 
         #endregion
 

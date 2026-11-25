@@ -71,7 +71,7 @@ A saved version writes one journal record after the durable write: kind `nodeSet
 
 - The configuration database (`EnvironmentData`), a collection of its own: key `DumpPasswords_<productId>`, value `ProductDumpPasswordsEntity { ProductId, Versions: [{ Version, Password, SetTicks, SetBy, RetiredTicks }] }` as JSON. The value is stored as it is: the server needs it to build an archive.
 - Loaded into memory at the start; a row that cannot be parsed is skipped and logged by its key, which names the product only.
-- Writes and removals throw on a storage failure (unlike product writes), so a change that did not land fails visibly.
+- Writes and removals throw on a storage failure (unlike product writes), so a change that did not land fails visibly. Both are synced LevelDB writes (`PutSynced` / `DeleteSynced`): a version answered as saved is on the disk before the answer.
 - The entities' `ToString` prints the product and the version count, never a value.
 - The configuration database's backups contain the rows, values included.
 
