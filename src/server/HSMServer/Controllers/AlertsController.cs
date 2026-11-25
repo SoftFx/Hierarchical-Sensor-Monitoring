@@ -153,13 +153,10 @@ namespace HSMServer.Controllers
         }
 
 
-        // targetNode is a node the user manages, or null when the import has no target.
+        // targetNode is a node the user manages; the callers resolve it through the Managed lookup.
         private void ImportAlertsToProduct(ProductNodeViewModel targetNode, AlertExportViewModel importGroup,
             CDict<List<PolicyUpdate>> newAlerts, Dictionary<Guid, string> sensorNames, ImportAlertsToastViewModel toast)
         {
-            if (targetNode is null)
-                return;
-
             var availableChats = targetNode.GetAvailableChats(_chats)
                 .ToDictionary(k => k.Value, v => v.Key);
             var productId = targetNode.RootProduct.Id;
@@ -174,7 +171,8 @@ namespace HSMServer.Controllers
                     var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
 
                     newAlerts[sensor.Id].Add(newAlert);
-                    sensorNames[sensor.Id] = sensor.DisplayName;
+                    // The path names the sensor in a rejected write's report: names repeat across nodes.
+                    sensorNames[sensor.Id] = sensor.FullPath;
                 }
                 else
                     toast.AddError("Sensor by path not found", $"{productId}/{fullSensorPath}");
