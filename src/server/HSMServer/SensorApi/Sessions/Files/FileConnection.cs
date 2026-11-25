@@ -316,6 +316,71 @@ namespace HSMServer.SensorApi.Sessions.Files
             AnswerCheck(_check, output, id);
         }
 
+        // `discard` (ADR-0022 point 3): the collector gives up the upload this connection holds, because its
+        // source file changed while it was sent. The part, its reservation and its slot go; the collector then
+        // begins the changed file as a new one. A store fault changes nothing and keeps the upload held, so the
+        // same request can be sent again.
+        public async Task HandleDiscardAsync(SessionRequest request, long id, ArrayBufferWriter<byte> output)
+        {
+            if (!request.HasBody || request.Body.ValueKind != JsonValueKind.Object)
+            {
+                Refuse(output, id, SessionProtocol.StatusBadRequest, "malformed body");
+                return;
+            }
+
+            if (!TryString(request.Body, "upload", out var text) || !FilePiece.TryParseUploadId(text, out var fileId))
+            {
+                Refuse(output, id, SessionProtocol.StatusBadRequest, "invalid discard: upload must be 32 hex digits");
+                return;
+            }
+
+            var upload = _upload;
+
+            if (upload is null || upload.FileId != fileId)
+            {
+                // After an end the check holds the upload: it settles it, and a begin then tells the result.
+                if (_check is { } check && check.FileId == fileId && !check.Task.IsCompleted)
+                {
+                    SessionProtocol.WriteFileAck(output, id, SessionProtocol.StatusConflict, body =>
+                    {
+                        body.WriteString("upload", FormatId(fileId));
+                        body.WriteString("state", "checking");
+                    }, error: "the end check of this upload is running", retryAfterSeconds: CheckRetryAfterSeconds);
+                    return;
+                }
+
+                Refuse(output, id, SessionProtocol.StatusNotFound, "no such upload on this connection: begin it first");
+                return;
+            }
+
+            const string reason = "the collector discarded it: its source file changed";
+
+            try
+            {
+                await _store.DiscardAsync(upload.Lease, reason, CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is FileUploadStoreException or OperationCanceledException)
+            {
+                _logger.Debug($"Collector file connection {_session.ShortId}: the store could not discard upload {FormatId(upload.FileId)}: {ex.Message}");
+                Refuse(output, id, SessionProtocol.StatusUnavailable, "the large file store could not discard the upload", FaultRetryAfterSeconds);
+                return;
+            }
+
+            ForgetUpload(upload);
+
+            // A discard ends the lease; Release is idempotent.
+            _store.Release(upload.Lease);
+
+            _session.CountUploadDiscarded();
+            _logger.Info($"Collector file connection {_session.ShortId}: upload {FormatId(upload.FileId)} of \"{upload.Name}\" is discarded: {reason}.");
+
+            SessionProtocol.WriteFileAck(output, id, SessionProtocol.StatusOk, body =>
+            {
+                body.WriteString("upload", FormatId(fileId));
+                body.WriteString("state", "discarded");
+            });
+        }
+
         // The connection has ended: its lease goes back, unless a running check holds it.
         public void End() => ReleaseUpload();
 

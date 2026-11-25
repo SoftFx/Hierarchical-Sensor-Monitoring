@@ -764,7 +764,7 @@ namespace HSMServer.SensorApi.Sessions
                 output.Clear();
 
                 // A table connection carries blocks only: every text request is an unknown op there. A file
-                // connection takes begin and end only.
+                // connection takes begin, end and discard only.
                 switch (request.Op)
                 {
                     case SessionProtocol.OpList when !session.IsPaired:
@@ -777,6 +777,10 @@ namespace HSMServer.SensorApi.Sessions
 
                     case SessionProtocol.OpBegin when session.IsFile:
                         await session.Files.HandleBeginAsync(caller, request, id, output, aborted);
+                        break;
+
+                    case SessionProtocol.OpDiscard when session.IsFile:
+                        await session.Files.HandleDiscardAsync(request, id, output);
                         break;
 
                     case SessionProtocol.OpEnd when session.IsFile:

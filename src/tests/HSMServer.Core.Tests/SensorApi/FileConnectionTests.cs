@@ -615,6 +615,100 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(WebSocketCloseStatus.ProtocolError, await file.ExpectCloseAsync());
         }
 
+        // === discard (ADR-0022 point 3: the source file changed while it was sent) ===
+
+        [Fact]
+        public async Task ADiscard_RemovesTheUploadThisConnectionHolds_AndTheFileBeginsAgainAtZero()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+            await file.SendPieceAsync(data.Piece(0), begun.Upload);
+
+            var discarded = await file.DiscardAsync(begun.Upload);
+
+            Assert.Equal(200, discarded.Status);
+            Assert.Equal("discarded", discarded.State);
+            Assert.Equal(begun.Upload, discarded.Upload);
+            Assert.Null(_store.Find("a.dmp"));
+            Assert.Equal(0, _store.LiveLeases);
+            Assert.Single(host.Log.Matching($"upload {begun.Upload}", "is discarded: the collector discarded it"));
+
+            // The connection holds no upload: a second discard is 404, and the file begins again from 0.
+            Assert.Equal(404, (await file.DiscardAsync(begun.Upload)).Status);
+
+            var again = await file.BeginAsync(data, _path);
+
+            Assert.Equal(0, again.Next);
+            Assert.NotEqual(begun.Upload, again.Upload);
+        }
+
+        [Fact]
+        public async Task ADiscardOfAnUploadThisConnectionDoesNotHold_Is404_AndAMalformedOne400()
+        {
+            await using var host = await StartHost();
+            using var other = await OpenFileAsync(host);
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await other.BeginAsync(data, _path);
+
+            Assert.Equal(404, (await file.DiscardAsync(begun.Upload)).Status);
+            Assert.NotNull(_store.Find("a.dmp"));
+
+            await file.SendTextAsync("{\"id\":5,\"op\":\"discard\",\"body\":{\"upload\":\"xyz\"}}");
+            Assert.Equal(400, (await file.ReceiveAckAsync()).Status);
+        }
+
+        [Fact]
+        public async Task ADiscardWhileItsEndCheckRuns_Is409Checking()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 100_000);
+            var gate = _store.FinishGate = new FakeFileUploadStore.Gate();
+
+            var begun = await file.BeginAsync(data, _path);
+
+            for (var i = 0; i < data.PieceCount; i++)
+                await file.SendPieceAsync(data.Piece(i), begun.Upload);
+
+            Assert.Equal(202, (await file.EndAsync(begun.Upload, data.Hash())).Status);
+            await gate.Entered.Task.WaitAsync(Patience);
+
+            var refused = await file.DiscardAsync(begun.Upload);
+
+            Assert.Equal(409, refused.Status);
+            Assert.Equal("checking", refused.State);
+            Assert.Equal(5, refused.RetryAfter);
+
+            gate.Release.SetResult();
+            Assert.Equal("stored", (await file.EndUntilSettledAsync(begun.Upload, data.Hash())).State);
+        }
+
+        [Fact]
+        public async Task ADiscardTheStoreCannotMake_Is503_AndTheUploadStaysHeldForAnother()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+
+            _store.DiscardFaults = true;
+            var fault = await file.DiscardAsync(begun.Upload);
+
+            Assert.Equal(503, fault.Status);
+            Assert.Equal(60, fault.RetryAfter);
+            Assert.Equal(1, _store.LiveLeases);
+
+            _store.DiscardFaults = false;
+            Assert.Equal("discarded", (await file.DiscardAsync(begun.Upload)).State);
+            Assert.Null(_store.Find("a.dmp"));
+        }
+
         // A discard that does not complete (cut short, faulted) still gives the lease back: a lease left
         // behind would hold an upload slot and make the file busy until the store's lease timeout.
         [Fact]

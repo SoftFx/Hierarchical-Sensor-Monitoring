@@ -52,6 +52,7 @@ namespace HSMServer.SensorApi.Sessions
         // The requests of a file connection (#1884); its pieces are binary frames.
         public const string OpBegin = "begin";
         public const string OpEnd = "end";
+        public const string OpDiscard = "discard";
 
         // The status of an ack is the HTTP status the same request would have got.
         public const int StatusOk = 200;

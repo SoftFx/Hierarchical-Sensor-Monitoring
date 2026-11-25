@@ -219,6 +219,13 @@ namespace HSMServer.Core.Tests.SensorApi
             return await ReceiveAckAsync();
         }
 
+        public async Task<FileAck> DiscardAsync(string upload)
+        {
+            await SendTextAsync(new JsonObject { ["id"] = NextId(), ["op"] = "discard", ["body"] = new JsonObject { ["upload"] = upload } }.ToJsonString());
+
+            return await ReceiveAckAsync();
+        }
+
         // Sends `end` until the check is no longer running; the waits between are the test's, not the
         // retryAfter of the answer.
         public async Task<FileAck> EndUntilSettledAsync(string upload, string hash)

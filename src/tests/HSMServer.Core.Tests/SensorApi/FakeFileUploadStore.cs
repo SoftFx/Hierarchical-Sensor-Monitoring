@@ -34,6 +34,9 @@ namespace HSMServer.Core.Tests.SensorApi
         // A discard that throws as a cancelled one would, before it ends the lease.
         public volatile bool DiscardThrows;
 
+        // A discard that faults as a failed write would: nothing removed.
+        public volatile bool DiscardFaults;
+
         // The next begin answers this, with a retry time of 7.5 s.
         public FileBeginOutcome? NextBeginOutcome { get; set; }
 
@@ -184,6 +187,9 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             if (DiscardThrows)
                 throw new OperationCanceledException("A discard cut short, made by the test.");
+
+            if (DiscardFaults)
+                throw new FileUploadStoreException("A discard fault made by the test.");
 
             lock (_lock)
             {

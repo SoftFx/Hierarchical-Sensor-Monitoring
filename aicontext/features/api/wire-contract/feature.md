@@ -308,7 +308,7 @@ A collector sends a large file (a dump, up to `fileLimits.maxFileBytes`, 64 GB b
 
 - **The pair.** As the table connection: no slot, one per session (a new one replaces the old; the old is closed with `1000`, reason `replaced by a new file connection of its session`, and gives its upload back **before the new one's hello**: a close the collector does not answer within 3 s is cut off), closed with `1000` `its session ended` when its session ends. A session holds at most three sockets (session, table connection, file connection), so a server holds at most three times `MaxSessions` sockets.
 - **Hello.** `{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"fileLimits":{"maxFileBytes":68719476736,"pieceBytes":4173824}}}`. `maxFrameBytes` is `CollectorSessions.MaxFileFrameBytes`. **`pieceBytes`** is the largest multiple of 4 KiB with `88 + ZSTD_compressBound(pieceBytes) ≤ maxFrameBytes`: a piece of that size always fits a frame, however badly it compresses (4,173,824 bytes at the default 4 MiB frame; 16,465 pieces for 64 GiB).
-- **Text frames** are those of the session: `ping` / `pong`, acks, `1007` for a frame that is not a JSON object, `1002` for a request without `id`. The requests are `begin` and `end`; any other `op` is `400 unknown op`.
+- **Text frames** are those of the session: `ping` / `pong`, acks, `1007` for a frame that is not a JSON object, `1002` for a request without `id`. The requests are `begin`, `end` and `discard`; any other `op` is `400 unknown op`.
 - **An answer with `retryAfter` is not final** (whole seconds, at least 1): the collector tries the same request again after it. Any other 4xx is final for that file until the collector restarts, except where a row below says what to do instead.
 
 **begin** (text): names the file and how it is cut.
@@ -397,6 +397,23 @@ The check reads every stored piece, checks its zstd frame again, decompresses it
 | `503` + `retryAfter` | The check could not read the part: nothing changed; begin again after `retryAfter` (`next == pieces`), then `end`. |
 
 After an `end` was answered, the connection holds no upload; a repeated `end` of it gets the same answer.
+
+**discard** (text): the collector gives up an upload because its source file changed while it was sent (ADR-0022 point 3: a changed file is not finished; it is sent again once it has settled, as a new file).
+
+```json
+{"id":12,"op":"discard","body":{"upload":"a3f0…32 hex"}}
+{"ack":12,"status":200,"body":{"upload":"a3f0…","state":"discarded"}}
+```
+
+It names the upload this connection holds. After a cut, the collector first sends `begin` with the file's **original** identity (name, size, `modified` and `source` as first begun) to hold it again; if that `begin` answers `stored`, the file was accepted before it changed and there is nothing to discard. Then it begins the changed file with its new identity: a new upload from piece 0.
+
+| Answer to `discard` | Meaning |
+|---|---|
+| `200 {"upload","state":"discarded"}` | The part, its reserved space and its upload slot are gone; the connection holds no upload. |
+| `409 {"upload","state":"checking"}` + `retryAfter` | `end` was sent and its check is running: the check settles the upload. Send `begin` after `retryAfter`: `stored`, or `next` after a failed check (then discard it). |
+| `404` | This connection holds no such upload: `begin` it first. |
+| `503` + `retryAfter` | The store could not remove it: nothing changed, the connection still holds it; send the same `discard` again. |
+| `400` | A malformed body. |
 
 - **Access** is checked again for every frame, as on the table connection: a key that can no longer send closes with `1008`, and the pieces stored so far stay for a continue. A piece counts as a use of the key, a probe does not. A check that has begun goes on after the key lost access: the file was sent whole while the key could send.
 - **Shutdown**: `1001`, after the answer of a piece being written; a piece still arriving is not stored. Running checks are cancelled and awaited; a cancelled check changes nothing.
