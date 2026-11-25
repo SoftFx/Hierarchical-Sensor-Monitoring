@@ -80,6 +80,10 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(provider => new HSMServer.Core.TableSensors.TableBlockService(
                 provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.TableSensors.ToOptions()));
             services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
+            // The chart of a table sensor (#1847), read by the web UI; and the count of table reads running at once, shared
+            // by the read route of the Sensor API and the web UI.
+            services.AddSingleton<HSMServer.Core.TableSensors.ITableChartReader>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
+            services.AddSingleton(_ => new HSMServer.Core.TableSensors.TableReadGate(config.TableSensors.MaxConcurrentReads));
 
             services.AddTableFeedSensors();
 

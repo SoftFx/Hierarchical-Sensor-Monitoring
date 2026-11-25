@@ -42,6 +42,9 @@ namespace HSMServer.Core.TableSensors
         /// a <see cref="DateTimeKind.Local"/> one is converted.</para>
         /// <para>Throws <see cref="TableBlockStoreException"/> when the store cannot be used: a fault, the caller answers
         /// 5xx. It is not turned into an error result, which says the request is wrong.</para>
+        /// <para>Throws <see cref="TableReadChangedException"/> when the store changed (an hour committed, a week dropped)
+        /// while each of <see cref="TableBlockService.MaxChartPlans"/> plans was taken: the same request later is answered,
+        /// the caller answers 503 (#1847).</para>
         /// <para>A truncated result ends at a time boundary and says where the next page starts
         /// (<see cref="TableRows.NextFromTicks"/>, #1845). <paramref name="token"/> is checked before every block: a
         /// cancelled read throws <see cref="OperationCanceledException"/>.</para>
@@ -61,7 +64,7 @@ namespace HSMServer.Core.TableSensors
     /// A sensor's removal happens before a new sensor on the same path is created, and a removed sensor is never read.
     /// </para>
     /// </summary>
-    public sealed class TableBlockService : ITableBlockService
+    public sealed class TableBlockService : ITableBlockService, ITableChartReader
     {
         private static readonly Logger _logger = LogManager.GetLogger("TableBlocks");
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -72,6 +75,9 @@ namespace HSMServer.Core.TableSensors
         private readonly TableBlockOptions _options;
 
         private readonly TableHourGate _gate = new();
+
+        // The gate, for tests.
+        internal TableHourGate HourGate => _gate;
 
         private readonly object _refusalLogLock = new();
         private readonly Dictionary<TableRefusalReason, long> _refusalsSinceLog = [];
@@ -117,6 +123,24 @@ namespace HSMServer.Core.TableSensors
 
         // Called before a read decompresses a block. Test seam for a read that is cancelled between blocks.
         internal Action<TableBlockIndexEntry> BeforeBlockRead { get; set; }
+
+        // Called when a chart finds an hour it planned from its blocks committed since the plan, before it plans again.
+        // Test seam.
+        internal Action<long> BeforeChartReplan { get; set; }
+
+        // Called after a chart planned its read (with the number of the plan, from 1), before the first source. Test seam for
+        // a commit between the plan and the read.
+        internal Action<int> AfterChartPlan { get; set; }
+
+        /// <summary>The plans one chart or one read makes at most before it gives up with <see cref="TableReadChangedException"/>.</summary>
+        internal const int MaxChartPlans = 3;
+
+        // Called inside a plan: "hours" after the merged hours were listed, "blocks" after the blocks were listed. Test seam
+        // for a merge between the steps of a plan.
+        internal Action<string> PlanStep { get; set; }
+
+        // Called at the end of every plan with whether it is stale. Test seam.
+        internal Action<bool> PlanTaken { get; set; }
 
 
         public TableBlockPutResult Put(Guid productId, Guid producerId, long producerSequence, byte[] block)
@@ -238,14 +262,122 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
+        public TaskResult<TableChart> Reduce(Guid sensorId, DateTime from, DateTime to, IReadOnlyList<int> columns, int buckets, CancellationToken token = default)
+        {
+            if (_cache.GetSensor(sensorId) is not { } sensor)
+                return TaskResult<TableChart>.FromError($"Sensor {sensorId} was not found.");
+
+            if (sensor is not TableSensorModel table)
+                return TaskResult<TableChart>.FromError($"Sensor '{sensor.FullPath}' is not a table sensor.");
+
+            var fromTicks = Utc(from).Ticks;
+            var toTicks = Utc(to).Ticks;
+
+            if (fromTicks >= toTicks)
+                return TaskResult<TableChart>.FromError("From must be before To: the range is [From, To).");
+
+            if (buckets < 1 || buckets > TableChartReducer.MaxBuckets)
+                return TaskResult<TableChart>.FromError($"The number of buckets must be 1..{TableChartReducer.MaxBuckets}; it is {buckets}.");
+
+            columns ??= [];
+            var schema = table.Schema.Columns;
+            var seen = new HashSet<int>();
+
+            foreach (var column in columns)
+            {
+                if (column < 1 || column >= schema.Count)
+                    return TaskResult<TableChart>.FromError($"Column {column} is not a value column of '{table.FullPath}': its value columns are 1..{schema.Count - 1}.");
+
+                if (!seen.Add(column))
+                    return TaskResult<TableChart>.FromError($"Column {column} is named twice.");
+            }
+
+            try
+            {
+                return TaskResult<TableChart>.FromValue(ReduceRows(table, fromTicks, toTicks, columns, buckets, token));
+            }
+            catch (TableBatchStoreException ex)
+            {
+                throw new TableBlockStoreException(ex.Message, ex);
+            }
+        }
+
+        // A chart reads for seconds, so it does not hold the gate for its whole range (a deletion waiting for the gate would
+        // stall every other read behind it): it holds it per source. The plan is taken outside the gate. Under the gate, a
+        // source of blocks whose hour has been committed since the plan is not read: its blocks may be gone, its batches
+        // may hold rows the plan did not know (earlier ones too, which would make the plan's order of sources wrong), and
+        // the commit's record may list blocks it could not read. The chart then drops what it has and plans again, so every
+        // answer comes from one plan whose hours are each read from the source the plan chose. An hour still not committed
+        // keeps its blocks while the gate is held (they are deleted only after the commit, under the write side). After
+        // MaxChartPlans plans that each met a commit it gives up: TableReadChangedException, never a partial answer.
+        private TableChart ReduceRows(TableSensorModel table, long fromTicks, long toTicks, IReadOnlyList<int> columns, int buckets, CancellationToken token)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                var plan = Plan(table, fromTicks, toTicks);
+                AfterChartPlan?.Invoke(attempt);
+
+                var reducer = new TableChartReducer(table.Schema, fromTicks, toTicks, columns, buckets, _options.MaxChartScanRows);
+
+                if (!plan.Stale && TryReduce(plan, reducer, fromTicks, toTicks, token))
+                    return reducer.Build();
+
+                // A chart cancelled meanwhile (while it waited for the gate, say) is cancelled, not a store that changed.
+                token.ThrowIfCancellationRequested();
+
+                if (attempt == MaxChartPlans)
+                    throw new TableReadChangedException($"The table store changed during the chart of '{table.FullPath}': {MaxChartPlans} plans each met an hour merged since. Ask again.");
+            }
+        }
+
+        private bool MergedSincePlan(ReadPlan plan, ReadSourceItem source)
+        {
+            if (source.Blocks is null || plan.Batches is null || !plan.Batches.IsHourMerged(plan.Product, source.Hour))
+                return false;
+
+            BeforeChartReplan?.Invoke(source.Hour);
+            return true;
+        }
+
+        // False when a source of blocks of the plan has been committed since: the plan is stale.
+        private bool TryReduce(ReadPlan plan, TableChartReducer reducer, long fromTicks, long toTicks, CancellationToken token)
+        {
+            for (int i = 0; i < plan.Sources.Count; i++)
+            {
+                var source = plan.Sources[i];
+
+                // A source the stop decision names must still be what the plan says: an hour of blocks merged since may hold
+                // rows earlier than the plan knew.
+                if (MergedSincePlan(plan, source))
+                    return false;
+
+                if (i > 0 && reducer.CanStopBefore(source.MinTime))
+                    break;
+
+                token.ThrowIfCancellationRequested();
+
+                using (_gate.Read())
+                {
+                    // Again under the gate: its blocks stay only while it is not merged. The read of a source checks the
+                    // token before every block and every merged hour, so a chart cancelled while it waited for the gate
+                    // reads nothing.
+                    if (MergedSincePlan(plan, source))
+                        return false;
+
+                    ReadSource(plan, source, reducer, fromTicks, toTicks, token);
+                }
+            }
+
+            return true;
+        }
+
         // Under the read side of the gate, so no hour's blocks are deleted meanwhile.
         //
         // The read rule (#1850): an arrival hour is read from its batches when it is committed for the product, otherwise from
-        // its blocks; never both, never neither. The blocks are listed first; whether each hour that has candidate blocks is
-        // committed is asked next; the committed hours with their row ranges are listed last. An hour found not committed is
-        // read from its blocks even when the list taken after it says committed (a commit in between): its blocks stay until
-        // the delay after the commit has passed, and the gate holds their deletion off. An hour found committed is read from
-        // its batches, which the later list has (commits are never taken back, except by retention of a whole week).
+        // its blocks; never both, never neither. The plan (Plan) is taken at one generation of the batch store, so its list of
+        // merged hours, its block listing and its answers to "is this hour committed" are of one moment; a plan during which
+        // the generation changed is stale and taken again. An hour of the plan's blocks committed after the plan keeps its
+        // blocks: they are deleted only after the commit, under the write side of the gate this read holds.
         //
         // Sources (the blocks of one arrival hour, or one merged hour) are visited in the order of their earliest row in the
         // range, and the read stops once it holds the limit, has dropped a row past it, and no source left can start before
@@ -255,12 +387,69 @@ namespace HSMServer.Core.TableSensors
         // decompressing.
         private TableRows ReadRows(TableSensorModel table, long fromTicks, long toTicks, int limit, CancellationToken token)
         {
+            // A stale plan (the store changed while it was taken) is taken again and never read: an hour committed during it
+            // could be in neither of its sources. The gate is held, so only a commit or a drop can come between the steps.
+            // After MaxChartPlans stale plans the read gives up with TableReadChangedException.
+            var plan = Plan(table, fromTicks, toTicks);
+            for (int attempt = 1; plan.Stale; attempt++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                if (attempt == MaxChartPlans)
+                    throw new TableReadChangedException($"The table store changed during the read of '{table.FullPath}': {MaxChartPlans} plans each met a change. Ask again.");
+
+                plan = Plan(table, fromTicks, toTicks);
+            }
+
+            var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
+
+            for (int i = 0; i < plan.Sources.Count; i++)
+            {
+                var source = plan.Sources[i];
+
+                if (i > 0 && collector.CanStopBefore(source.MinTime))
+                    break;
+
+                ReadSource(plan, source, collector, fromTicks, toTicks, token);
+            }
+
+            return collector.Build();
+        }
+
+        // One source of a read: the blocks of one arrival hour not merged, or one merged hour.
+        private readonly record struct ReadSourceItem(long MinTime, long Hour, List<TableBlockIndexEntry> Blocks);
+
+        // What a read of one table sensor visits, and in which order (the read rule above ReadRows).
+        // Stale: the store's generation changed while the plan was taken (an hour committed, a week dropped), so its block
+        // listing, its committed hours and its merged hours may not be of one moment.
+        private sealed record ReadPlan(Guid Product, ITableBlockStore Store, ITableBatchStore Batches, byte[] TableId, Guid SensorId,
+            int Period, List<ReadSourceItem> Sources, bool Stale);
+
+        // The product's generation is read first, then the merged hours, the blocks, whether each hour of a candidate block
+        // is committed, and the generation once more last. The batch store changes the generation under the product's lock
+        // with every commit (one without any batch class too, which no list of merged hours shows), every week dropped and
+        // every rebuild of its hours. When the two readings are equal, nothing changed while the plan was taken: an hour the
+        // plan reads from its batches was committed before the blocks were listed, so its batches hold nothing newer than
+        // that listing; an hour it reads from its blocks was not committed when it was asked; an hour found committed is in
+        // the list of merged hours. Otherwise the plan is stale: a commit between the steps could have made an hour's
+        // batches hold rows newer than the listing (earlier in time than the plan's sources, which would make its order and
+        // early stop wrong), or left an hour in neither source (committed after the list of merged hours and before it was
+        // asked about, or committed with no class while a row of the range arrived in a later hour after the listing).
+        private ReadPlan Plan(TableSensorModel table, long fromTicks, long toTicks)
+        {
             var product = table.Root.Id;
             var store = Store;
             var batches = _database.TableBatches;
             var tableId = Encoding.UTF8.GetBytes(table.Path);
 
+            var generation = batches?.GetGeneration(product) ?? 0;
+
+            IReadOnlyList<TableBatchHour> hours = batches?.GetHours(product) ?? [];
+            PlanStep?.Invoke("hours");
+
             var blocks = store.GetBlocks(product);
+            PlanStep?.Invoke("blocks");
+
             var committed = new Dictionary<long, bool>();
             var blockHours = new SortedDictionary<long, List<TableBlockIndexEntry>>();
 
@@ -282,7 +471,7 @@ namespace HSMServer.Core.TableSensors
                 list.Add(entry);
             }
 
-            var sources = new List<(long MinTime, long Hour, List<TableBlockIndexEntry> Blocks)>();
+            var sources = new List<ReadSourceItem>();
 
             foreach (var (hour, list) in blockHours)
             {
@@ -290,15 +479,16 @@ namespace HSMServer.Core.TableSensors
                 foreach (var entry in list)
                     min = Math.Min(min, entry.FirstTime);
 
-                sources.Add((Math.Max(min, fromTicks), hour, list));
+                sources.Add(new ReadSourceItem(Math.Max(min, fromTicks), hour, list));
             }
 
             int period = 0;
+
             if (batches is not null)
             {
                 period = TablePeriodClass.Of(table, DateTime.UtcNow);
 
-                foreach (var hour in batches.GetHours(product))
+                foreach (var hour in hours)
                 {
                     // Taken from its blocks above: it was not committed when that was decided.
                     if (committed.TryGetValue(hour.HourTicks, out var isCommitted) && !isCommitted)
@@ -310,42 +500,38 @@ namespace HSMServer.Core.TableSensors
 
                     foreach (var range in hour.Classes)
                         if (range.PeriodWeeks == period && range.Batches > 0 && range.MinTime < toTicks && range.MaxTime >= fromTicks)
-                            sources.Add((Math.Max(range.MinTime, fromTicks), hour.HourTicks, null));
+                            sources.Add(new ReadSourceItem(Math.Max(range.MinTime, fromTicks), hour.HourTicks, null));
                 }
             }
+
+            var stale = batches is not null && batches.GetGeneration(product) != generation;
+            PlanTaken?.Invoke(stale);
 
             sources.Sort((a, b) => a.MinTime != b.MinTime ? a.MinTime.CompareTo(b.MinTime) : a.Hour.CompareTo(b.Hour));
 
-            var collector = new TableRowCollector(table.Schema, fromTicks, toTicks, limit);
-
-            for (int i = 0; i < sources.Count; i++)
-            {
-                var source = sources[i];
-
-                if (i > 0 && collector.CanStopBefore(source.MinTime))
-                    break;
-
-                if (source.Blocks is not null)
-                {
-                    foreach (var entry in source.Blocks)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        BeforeBlockRead?.Invoke(entry);
-
-                        collector.AddBlock(store, entry, tableId);
-                    }
-                }
-                else
-                {
-                    token.ThrowIfCancellationRequested();
-                    ReadBatches(batches, collector, product, table.Id, period, source.Hour, fromTicks, toTicks);
-                }
-            }
-
-            return collector.Build();
+            return new ReadPlan(product, store, batches, tableId, table.Id, period, sources, stale);
         }
 
-        private static void ReadBatches(ITableBatchStore batches, TableRowCollector collector, Guid product, Guid sensorId, int period, long hour, long fromTicks, long toTicks)
+        private void ReadSource(ReadPlan plan, ReadSourceItem source, ITableRowSink sink, long fromTicks, long toTicks, CancellationToken token)
+        {
+            if (source.Blocks is not null)
+            {
+                foreach (var entry in source.Blocks)
+                {
+                    token.ThrowIfCancellationRequested();
+                    BeforeBlockRead?.Invoke(entry);
+
+                    sink.AddBlock(plan.Store, entry, plan.TableId);
+                }
+            }
+            else
+            {
+                token.ThrowIfCancellationRequested();
+                ReadBatches(plan.Batches, sink, plan.Product, plan.SensorId, plan.Period, source.Hour, fromTicks, toTicks);
+            }
+        }
+
+        private static void ReadBatches(ITableBatchStore batches, ITableRowSink collector, Guid product, Guid sensorId, int period, long hour, long fromTicks, long toTicks)
         {
             foreach (var read in batches.ReadSensor(product, sensorId, period, [hour]))
             {

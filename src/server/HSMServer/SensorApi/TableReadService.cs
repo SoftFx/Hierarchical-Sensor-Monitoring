@@ -28,7 +28,8 @@ namespace HSMServer.SensorApi
     //
     // A refusal is an HTTP status with a short text: 400 for a request that cannot be answered as it
     // is, 404 for a path with no sensor in the key's product, 406 for a key that may not read, 503
-    // (with Retry-After) when the block store cannot be read now or the key could not be looked up. A read is cut at a row limit and at
+    // (with Retry-After) when the block store cannot be read now, the store changed under every plan
+    // of the read, or the key could not be looked up. A read is cut at a row limit and at
     // a time boundary; the headers say whether it was cut and where the next page starts.
     public sealed class TableReadService
     {
@@ -44,6 +45,12 @@ namespace HSMServer.SensorApi
 
         public const string KeyLookupFault = "The access key cannot be checked now.";
 
+        public const string StoreChanged = "The table store changed during the read; the request can be sent again.";
+
+        // The Retry-After of the 503 of a read that met a change of the store on every plan (#1847): the next try is
+        // answered as soon as no hour is being committed.
+        public const int StoreChangedRetryAfterSeconds = 1;
+
         // The Retry-After of a 503: a store that cannot be read now, or a fault while the key was looked up.
         public const int RetryAfterSeconds = 60;
 
@@ -53,10 +60,17 @@ namespace HSMServer.SensorApi
         private readonly ITableBlockService _blocks;
         private readonly int _maxReadRows;
         private readonly int _maxTextReadRows;
-        private readonly SemaphoreSlim _reads;
+        private readonly TableReadGate _reads;
 
 
+        // Without a shared gate (a host that registers none): the route counts its own reads.
         public TableReadService(ITreeValuesCache cache, ITableBlockService blocks, IServerConfig config)
+            : this(cache, blocks, config, null)
+        {
+        }
+
+        // The server's gate is shared with the table pages of the web UI (#1847).
+        public TableReadService(ITreeValuesCache cache, ITableBlockService blocks, IServerConfig config, TableReadGate reads)
         {
             var tables = config.TableSensors ?? new TableSensorsConfig();
 
@@ -64,7 +78,7 @@ namespace HSMServer.SensorApi
             _blocks = blocks;
             _maxReadRows = tables.MaxReadRows;
             _maxTextReadRows = Math.Min(tables.MaxTextReadRows, tables.MaxReadRows);
-            _reads = new SemaphoreSlim(tables.MaxConcurrentReads, tables.MaxConcurrentReads);
+            _reads = reads ?? new TableReadGate(tables.MaxConcurrentReads);
         }
 
 
@@ -150,6 +164,13 @@ namespace HSMServer.SensorApi
 
                 context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
                 return Refuse(StatusCodes.Status503ServiceUnavailable, "The table block store cannot be read now.");
+            }
+            catch (TableReadChangedException ex)
+            {
+                _logger.Debug($"A table history read of \"{path}\" is answered 503: {ex.Message}");
+
+                context.Response.Headers.RetryAfter = StoreChangedRetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+                return Refuse(StatusCodes.Status503ServiceUnavailable, StoreChanged);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
