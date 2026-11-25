@@ -144,10 +144,10 @@ namespace HSMServer.Core.Cache
         public event Action<ProductModel, ActionType> ChangeProductEvent;
 
         /// <summary>
-        /// Raised after a root product took a new name, on the product's queue, with the
-        /// sensors of the product as the rename saw them.
+        /// Raised after a root product took a new name or a new folder, on the product's
+        /// queue, with the sensors of the product as the update saw them.
         /// </summary>
-        public event Action<ProductModel, IReadOnlyList<BaseSensorModel>> RootProductRenamedEvent;
+        public event Action<ProductModel, IReadOnlyList<BaseSensorModel>> RootProductNameOrFolderChangedEvent;
 
         public event Action<string, int, int> RequestProcessed;
 
@@ -424,6 +424,7 @@ namespace HSMServer.Core.Cache
                 throw new InvalidOperationException(refusal);
 
             var oldName = product.DisplayName;
+            var oldFolder = product.FolderId;
 
             // Whether the product takes the name is the model's decision: the
             // change-ownership rule of a node property (ProductModel.Update)
@@ -476,26 +477,30 @@ namespace HSMServer.Core.Cache
             finally
             {
                 // Required work, not a notification: a subscriber that throws
-                // above must not leave the sensors on the old name's templates.
-                if (requestedName is not null && product.DisplayName == requestedName)
-                    CompleteRootRename(product, oldName);
+                // above must not leave the sensors on the templates of the old
+                // name or the old folder.
+                if (product.IsRoot && (product.DisplayName != oldName || product.FolderId != oldFolder))
+                    FollowRootNameOrFolderChange(product, oldName, oldFolder);
             }
         }
 
-        // A root's name is the first segment of the full path of every sensor
-        // under it, and the full path is what alert templates and dashboard
-        // panel subscriptions match. The sensors are treated as a moved sensor
-        // is (#1718 decision 5): as if the product had always had this name.
+        // Alert templates and dashboard panel subscriptions match a sensor by
+        // its full path and by the folder of its root. A root's name is the
+        // first segment of the full path of every sensor under it, and its
+        // folder is the folder of all of them, so a product update that
+        // changes either changes the match for every sensor of the product at
+        // once. The sensors are treated as a moved sensor is (#1718 decision
+        // 5): as if the product had always had this name and this folder.
         // Otherwise the sensors already there keep the templates of the old
-        // name and miss those of the new one, next to sensors created after the
-        // rename that get the new name's, until somebody saves each template.
+        // name or folder and miss those of the new one, next to sensors
+        // created afterwards that get the new one's.
         //
-        // Runs inside the rename, on the product's own queue, which owns the
+        // Runs inside the update, on the product's own queue, which owns the
         // policies of every sensor here: no value of the product is evaluated
-        // between the rename and the re-evaluation, and the rename returns
+        // between the change and the re-evaluation, and the update returns
         // when it is over. The queue is held for as long as it takes (every
         // sensor of the product against every template).
-        private void CompleteRootRename(ProductModel root, string oldName)
+        private void FollowRootNameOrFolderChange(ProductModel root, string oldName, Guid? oldFolder)
         {
             List<BaseSensorModel> sensors;
 
@@ -514,16 +519,17 @@ namespace HSMServer.Core.Cache
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, $"Template re-evaluation of sensor {sensor.Id} failed after the rename of product {root.Id}");
+                        _logger.Error(ex, $"Template re-evaluation of sensor {sensor.Id} failed after the name or folder change of product {root.Id}");
                     }
                 }
             }
 
-            _logger.Info($"Root product renamed: Id = {root.Id}, '{oldName}' -> '{root.DisplayName}', Sensors = {sensors.Count}");
+            _logger.Info($"Root product name or folder changed: Id = {root.Id}, Name = '{oldName}' -> '{root.DisplayName}', " +
+                         $"Folder = {oldFolder} -> {root.FolderId}, Sensors = {sensors.Count}");
 
             // One subscriber (a dashboard) that fails does not cost the others
             // their turn. They get the sensors captured above, not the live tree.
-            foreach (var subscriber in RootProductRenamedEvent?.GetInvocationList() ?? [])
+            foreach (var subscriber in RootProductNameOrFolderChangedEvent?.GetInvocationList() ?? [])
             {
                 try
                 {
@@ -531,7 +537,7 @@ namespace HSMServer.Core.Cache
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex, $"A subscriber failed on the rename of product {root.Id}");
+                    _logger.Error(ex, $"A subscriber failed on the name or folder change of product {root.Id}");
                 }
             }
         }

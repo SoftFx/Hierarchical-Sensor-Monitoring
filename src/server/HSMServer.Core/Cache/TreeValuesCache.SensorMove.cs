@@ -949,8 +949,9 @@ namespace HSMServer.Core.Cache
         // whenever a new template's id sorted first. A detach that fails
         // leaves its template attached until the next re-evaluation.
         //
-        // Also run for every sensor of a root product that was renamed
-        // (CompleteRootRename): the full path changed there too.
+        // Also run for every sensor of a root product whose name or folder
+        // changed (FollowRootNameOrFolderChange): a template's match changed
+        // there too.
         private void ReevaluateTemplates(BaseSensorModel sensor)
         {
             var attached = sensor.Policies.Select(p => p.TemplateId)

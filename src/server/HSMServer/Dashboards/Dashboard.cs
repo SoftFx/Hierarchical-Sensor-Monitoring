@@ -26,7 +26,7 @@ namespace HSMServer.Dashboards
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.SensorMovedEvent += SensorMovedHandler;
-            _cache.RootProductRenamedEvent += RootProductRenamedHandler;
+            _cache.RootProductNameOrFolderChangedEvent += RootProductNameOrFolderChangedHandler;
 
             Panels = new RDict<Panel>(ThrowUpdateEvent);
         }
@@ -36,7 +36,7 @@ namespace HSMServer.Dashboards
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.SensorMovedEvent += SensorMovedHandler;
-            _cache.RootProductRenamedEvent += RootProductRenamedHandler;
+            _cache.RootProductNameOrFolderChangedEvent += RootProductNameOrFolderChangedHandler;
 
             Panels = new RDict<Panel>(ThrowUpdateEvent);
             DataPeriod = GetPeriod(entity.DataPeriod);
@@ -65,7 +65,7 @@ namespace HSMServer.Dashboards
         {
             _cache.ChangeSensorEvent -= ChangeSensorHandler;
             _cache.SensorMovedEvent -= SensorMovedHandler;
-            _cache.RootProductRenamedEvent -= RootProductRenamedHandler;
+            _cache.RootProductNameOrFolderChangedEvent -= RootProductNameOrFolderChangedHandler;
 
             base.Dispose();
 
@@ -135,9 +135,10 @@ namespace HSMServer.Dashboards
                 panel.AddMovedSensor(sensor);
         }
 
-        // A root rename changes the full path of every sensor of the product:
-        // the same rule as a move, for all of them at once.
-        private void RootProductRenamedHandler(ProductModel product, IReadOnlyList<BaseSensorModel> sensors)
+        // A root's new name changes the full path of every sensor of the
+        // product, a new folder changes the folder of all of them: the same
+        // rule as a move, for all of them at once.
+        private void RootProductNameOrFolderChangedHandler(ProductModel product, IReadOnlyList<BaseSensorModel> sensors)
         {
             foreach (var (_, panel) in Panels)
                 panel.AddMovedSensors(sensors);

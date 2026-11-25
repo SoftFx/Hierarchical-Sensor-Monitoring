@@ -173,7 +173,7 @@ namespace HSMServer.Dashboards
             AddSensor(sensor);
         }
 
-        // AddMovedSensor for many sensors at once (a renamed root product):
+        // AddMovedSensor for many sensors at once (a root product that changed its name or folder):
         // the sources are looked through once, not once per sensor, and the
         // panel is stored once if any source was added.
         public void AddMovedSensors(IReadOnlyCollection<BaseSensorModel> sensors)

@@ -31,7 +31,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// not (paths are root-relative, see <see cref="NodeRenameTests"/>), but the full
     /// path of every sensor of the product starts with it: alert templates and
     /// dashboard panel subscriptions match the full path, the by-name index is keyed
-    /// by it, and the server's own collector finds its product by it.
+    /// by it, and the server's own collector finds its product by it. The root's
+    /// FOLDER is the other thing templates and subscriptions match that a product
+    /// update changes for every sensor at once, and it is followed the same way.
     /// </summary>
     [Collection("Database collection")]
     public class RootRenameTests : MonitoringCoreTestsBase<RootRenameFixture>
@@ -200,6 +202,126 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(newName, product.DisplayName);
             Assert.False(HasTemplate(sensor, oldNameTemplate));
             Assert.True(HasTemplate(sensor, newNameTemplate));
+        }
+
+        // Templates are folder-scoped. Before the fix a product moved to another
+        // folder kept the template alerts of the old folder and did not get those of
+        // the new one, and a save of the old folder's template did not remove them
+        // (it looks for stale holders in its own folder only).
+        [Fact]
+        [Trait("Category", "Root folder change")]
+        public async Task FolderChange_ReEvaluatesTheTemplates_OfTheSensorsOfTheProduct()
+        {
+            var name = UniqueRoot();
+            var oldFolder = Guid.NewGuid();
+            var newFolder = Guid.NewGuid();
+
+            var (product, key) = await AddProductAsync(name, oldFolder);
+            await AddProductAsync(UniqueRoot(), newFolder); // a template needs a product in its folder to be saved
+
+            var oldFolderTemplate = BuildTtlTemplate(oldFolder, $"{name}/n/*");
+            var newFolderTemplate = BuildTtlTemplate(newFolder, $"{name}/n/*");
+
+            // Walked in id order: the new folder's first, so only detach-before-apply keeps them apart.
+            if (newFolderTemplate.Id.CompareTo(oldFolderTemplate.Id) > 0)
+                (newFolderTemplate.Id, oldFolderTemplate.Id) = (oldFolderTemplate.Id, newFolderTemplate.Id);
+
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(oldFolderTemplate)).Success);
+            Assert.True((await _valuesCache.AddAlertTemplateAsync(newFolderTemplate)).Success);
+
+            var sensor = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/s");
+            Assert.True(HasTemplate(sensor, oldFolderTemplate), "test premise: the old folder's template is attached");
+            Assert.False(HasTemplate(sensor, newFolderTemplate));
+
+            var bothAttached = 0;
+            void OnSensorChanged(BaseSensorModel changed, ActionType _)
+            {
+                if (HasTemplate(changed, oldFolderTemplate) && HasTemplate(changed, newFolderTemplate))
+                    Interlocked.Increment(ref bothAttached);
+            }
+
+            _valuesCache.ChangeSensorEvent += OnSensorChanged;
+
+            try
+            {
+                // An update that names the folder the product is in changes nothing.
+                var same = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = oldFolder }, default);
+                Assert.True(same.IsOk, same.Error);
+                var attached = sensor.Policies.TTLPolicies.Single(t => t.TemplateId == oldFolderTemplate.Id).Id;
+
+                var moved = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = newFolder }, default);
+                Assert.True(moved.IsOk, moved.Error);
+
+                Assert.Equal(newFolder, product.FolderId);
+                Assert.False(HasTemplate(sensor, oldFolderTemplate), "the old folder's template is detached");
+                Assert.True(HasTemplate(sensor, newFolderTemplate), "the new folder's template is applied");
+                Assert.Equal(0, Volatile.Read(ref bothAttached));
+
+                // A sensor created afterwards agrees.
+                var created = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/created");
+                Assert.False(HasTemplate(created, oldFolderTemplate));
+                Assert.True(HasTemplate(created, newFolderTemplate));
+
+                // Back: the old folder's template is applied anew, as to a sensor that just arrived.
+                var back = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = oldFolder }, default);
+                Assert.True(back.IsOk, back.Error);
+                Assert.True(HasTemplate(sensor, oldFolderTemplate));
+                Assert.False(HasTemplate(sensor, newFolderTemplate));
+                Assert.NotEqual(attached, sensor.Policies.TTLPolicies.Single(t => t.TemplateId == oldFolderTemplate.Id).Id);
+
+                // Out of every folder: no template is folder-less, so none stays.
+                var removed = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = Guid.Empty }, default);
+                Assert.True(removed.IsOk, removed.Error);
+                Assert.Null(product.FolderId);
+                Assert.DoesNotContain(sensor.Policies.TTLPolicies, t => t.TemplateId is not null);
+                Assert.DoesNotContain(created.Policies.TTLPolicies, t => t.TemplateId is not null);
+            }
+            finally
+            {
+                _valuesCache.ChangeSensorEvent -= OnSensorChanged;
+            }
+
+            await using var restarted = BuildCacheOverTheSameDatabase();
+
+            Assert.Null(restarted.GetProduct(product.Id).FolderId);
+            Assert.True(restarted.TryGetSensorByPath(product.Id, "n/s", out var reloaded));
+            Assert.DoesNotContain(reloaded.Policies.TTLPolicies, t => t.TemplateId is not null);
+        }
+
+        // A panel subscription may be limited to folders. A product that arrives
+        // in one of them is offered to it like a renamed one.
+        [Fact]
+        [Trait("Category", "Root folder change")]
+        public async Task FolderChange_OffersTheSensorsOfTheProduct_ToTheDashboardSubscriptions()
+        {
+            var name = UniqueRoot();
+            var oldFolder = Guid.NewGuid();
+            var newFolder = Guid.NewGuid();
+
+            var (product, key) = await AddProductAsync(name, oldFolder);
+            var covered = await CreateIntSensorAsync(_valuesCache, product.Id, key, "n/covered");
+
+            var panelEntity = BuildPanel($"{name}/n/*");
+            panelEntity.Subscriptions[0].Folders = [newFolder];
+
+            using var dashboard = new Dashboard(new DashboardEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.Empty.ToByteArray(),
+                Name = "Root folder change",
+                Panels = [panelEntity],
+            }, _valuesCache);
+
+            var panel = Assert.Single(dashboard.Panels.Values);
+
+            var stored = 0;
+            dashboard.UpdatedEvent += () => Interlocked.Increment(ref stored);
+
+            var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = product.Id, FolderId = newFolder }, default);
+            Assert.True(result.IsOk, result.Error);
+
+            Assert.Equal(covered.Id, Assert.Single(panel.Sources).Value.Sensor.Id);
+            Assert.Equal(1, Volatile.Read(ref stored));
         }
 
         // The change-ownership rule of a node property: a name a user set is not
