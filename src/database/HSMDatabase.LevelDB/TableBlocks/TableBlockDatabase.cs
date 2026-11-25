@@ -411,9 +411,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 BeforeBlockGet?.Invoke(entry.Sequence);
                 value = blocks.Get(Key(entry.ArrivalHourTicks, entry.Sequence));
             }
-            catch (Exception ex) when (ex is not TableBlockStoreException && readErrorIsFault)
+            catch (Exception ex) when (ex is not TableBlockStoreException && readErrorIsFault && IsTransientReadError(ex))
             {
-                // The merge (#1850): an error of the read itself is not damage of the block; a later pass reads it again.
+                // The merge (#1850): an IO error of the read is not damage of the block; a later pass reads it again.
                 throw new TableBlockStoreException($"Table block {entry.Sequence} could not be read: {ex.Message}", ex);
             }
             catch (Exception ex) when (ex is not TableBlockStoreException)
@@ -443,6 +443,13 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 return null;
             }
         }
+
+        // What an error of LevelDB's Get means for the merge (#1850), by the status kind the wrapper's message starts with, as
+        // LevelDbOpen tells a transient open error: "IO error: ..." is transient (the disk, a file that could not be read
+        // now), a fault the merge retries on a later pass; any other status ("Corruption: ...", "Not found: ...", "Not
+        // implemented: ...", "Invalid argument: ...") or an exception without one is permanent, damage of the block: retrying
+        // it would hold its hour, and every later hour of its product, back for ever.
+        internal static bool IsTransientReadError(Exception ex) => ex.Message?.StartsWith("IO error", StringComparison.Ordinal) == true;
 
         private TableBlockStoreException Closed()
         {

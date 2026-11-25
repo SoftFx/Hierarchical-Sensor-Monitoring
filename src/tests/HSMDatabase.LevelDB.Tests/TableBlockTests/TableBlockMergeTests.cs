@@ -178,18 +178,23 @@ namespace HSMDatabase.LevelDB.Tests.TableBlockTests
         }
 
         [Fact]
-        public void An_error_of_the_read_is_a_fault_for_the_merge_and_a_failure_counted_for_a_reader()
+        public void An_IO_error_of_the_read_is_a_fault_for_the_merge_and_a_corruption_is_damage_for_both()
         {
             var store = Open();
             Put(store, 1);
             var entry = store.GetBlocks(_product)[0];
-            store.BeforeBlockGet = _ => throw new IOException("the disk did not answer");
+            store.BeforeBlockGet = _ => throw new Exception("IO error: 000005.ldb: the disk did not answer");
 
             Assert.Throws<TableBlockStoreException>(() => store.ReadBlock(entry, readErrorIsFault: true));
             Assert.Equal(0, store.Statistics.ReadFailures);
 
             Assert.Null(store.ReadBlock(entry));
             Assert.Equal(1, store.Statistics.ReadFailures);
+
+            // Any other status is permanent: damage for the merge as for a reader.
+            store.BeforeBlockGet = _ => throw new Exception("Corruption: block checksum mismatch");
+            Assert.Null(store.ReadBlock(entry, readErrorIsFault: true));
+            Assert.Equal(2, store.Statistics.ReadFailures);
 
             // A block that is not there is damage for both.
             store.BeforeBlockGet = null;

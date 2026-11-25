@@ -400,7 +400,7 @@ namespace HSMServer.Core.Tests.TableSensors
             _server.Blocks.BeforeBlockGet = sequence =>
             {
                 if (sequence == failing && thrown++ == 0)
-                    throw new IOException("the disk did not answer");
+                    throw new Exception("IO error: 000005.ldb: the disk did not answer");
             };
 
             var faulted = Pass(Hour0.AddHours(1).AddMinutes(3));
@@ -441,6 +441,32 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(2, _server.Batches.MergeStatistics.RowsMerged);
             Assert.Equal(before, Rows(a));
             Assert.Empty(Rows(b));
+        }
+
+        [Fact]
+        public async Task A_corruption_error_while_the_merge_reads_a_block_is_damage_and_the_next_hour_merges_in_the_same_pass()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            var corrupt = Put(Block(("a", [(Hour0.AddMinutes(2), 2.0, 2)]))).Sequence.Value;
+            _now = Hour0.AddHours(1).AddMinutes(10);
+            AssertStored(Put(Block(("a", [(Hour0.AddHours(1).AddMinutes(1), 3.0, 3)]))));
+
+            // Every read of the block fails with a corruption status: permanent, so retrying it would hold the product back.
+            _server.Blocks.BeforeBlockGet = sequence =>
+            {
+                if (sequence == corrupt)
+                    throw new Exception("Corruption: block checksum mismatch: 000005.ldb");
+            };
+
+            var report = Pass(Hour0.AddHours(2).AddMinutes(3));
+            Assert.Null(report.Fault);
+            Assert.Equal(2, report.HoursMerged);
+            Assert.Equal([corrupt], _server.Batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+            Assert.True(_server.Batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
+            Assert.Equal(1, _server.Batches.MergeStatistics.UnreadableBlocksKept);
+            Assert.Equal([1.0, 3.0], _server.Service.Read(a.Id, From, To).Value.Columns[1].DoubleValues);
         }
 
         [Fact]
