@@ -325,7 +325,7 @@ A collector sends a large file (a dump, up to `fileLimits.maxFileBytes`, 64 GB b
 | `200 {"upload","next","pieces","pieceBytes"}` | A new upload (`next` 0) or a continue: send piece `next` onward. `pieceBytes` is the upload's own, kept from its first begin. `next == pieces`: every piece is in, send `end`. A begin with another `pieceBytes` than the upload was begun with starts it again from 0 (a collector whose hello now allows less does that; never a `400`). |
 | `200 {"upload","state":"stored"}` | This file was stored before (an answer that was lost): nothing to send; the collector may delete its source. |
 | `202 {"upload","state":"checking"}` + `retryAfter` | Its end check is running: ask again. |
-| `503` + `retryAfter` | No room on the server's disk; too many uploads in progress (`LargeFiles.MaxUploadsInProgress`, server-wide); a fault of the store. |
+| `503` + `retryAfter` | No room on the server's disk; too many uploads in progress (`LargeFiles.MaxUploadsInProgress`, server-wide); too many unfinished uploads of the product (`LargeFiles.MaxUploadingPartsPerProduct`); a fault of the store. |
 | `409` + `retryAfter` | Busy: another live connection holds this file. |
 | `413` | Larger than `maxFileBytes`. |
 | `422` | The sensor cannot take it: no File sensor at that path in the key's product, blocked, not a File sensor. |

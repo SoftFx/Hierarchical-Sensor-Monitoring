@@ -146,12 +146,22 @@ namespace HSMServer.SensorApi.Sessions.Files
                     Refuse(output, id, SessionProtocol.StatusTooLarge, $"the file is larger than the {_store.MaxFileBytes} bytes this server takes");
                     return;
 
+                case FileBeginOutcome.TooManyParts:
+                    Refuse(output, id, SessionProtocol.StatusUnavailable, "too many unfinished uploads of this product", Seconds(result.RetryAfter, FaultRetryAfterSeconds));
+                    return;
+
                 case FileBeginOutcome.BadPieceSize:
                     Refuse(output, id, SessionProtocol.StatusBadRequest, $"the piece size must be {FilePiece.MinPieceBytes}..{_maxPieceBytes}");
                     return;
 
-                default:
+                case FileBeginOutcome.SensorRefused:
                     Refuse(output, id, SessionProtocol.StatusUnprocessable, $"the sensor cannot take the file: {Short(result.Error)}");
+                    return;
+
+                default:
+                    // An outcome this server does not know is never taken as final.
+                    _logger.Error($"Collector file connection {_session.ShortId}: the store answered a begin with {result.Outcome}, which the connection does not know.");
+                    Refuse(output, id, SessionProtocol.StatusUnavailable, "the large file store cannot take files now", FaultRetryAfterSeconds);
                     return;
             }
         }
@@ -173,7 +183,7 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             if (header.Number < 0 || header.Number >= upload.Pieces)
             {
-                await DiscardAsync(upload, output, id, $"piece {header.Number} is outside 0..{upload.Pieces - 1}", token);
+                await DiscardAsync(upload, output, id, $"piece {header.Number} is outside 0..{upload.Pieces - 1}");
                 return;
             }
 
@@ -182,14 +192,14 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             if (header.DecompressedLength != length)
             {
-                await DiscardAsync(upload, output, id, $"piece {header.Number} says {header.DecompressedLength} bytes, it has {length}", token);
+                await DiscardAsync(upload, output, id, $"piece {header.Number} says {header.DecompressedLength} bytes, it has {length}");
                 return;
             }
 
             if (header.CompressedLength != payload.Length || header.CompressedLength > FilePiece.CompressBound((int)length))
             {
                 await DiscardAsync(upload, output, id, $"piece {header.Number} says {header.CompressedLength} compressed bytes, it brings {payload.Length} " +
-                                                       $"and may have at most {FilePiece.CompressBound((int)length)}", token);
+                                                       $"and may have at most {FilePiece.CompressBound((int)length)}");
                 return;
             }
 
@@ -207,7 +217,7 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             if (FilePiece.CheckFrame(payload.Span, length, FilePiece.MaxWindowLog(upload.PieceSize)) is { } frameError)
             {
-                await DiscardAsync(upload, output, id, $"piece {header.Number}: {frameError}", token);
+                await DiscardAsync(upload, output, id, $"piece {header.Number}: {frameError}");
                 return;
             }
 
@@ -256,7 +266,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                     return;
 
                 case FileAppendOutcome.TooMany:
-                    await DiscardAsync(upload, output, id, $"piece {header.Number} is past the last piece", token);
+                    await DiscardAsync(upload, output, id, $"piece {header.Number} is past the last piece");
                     return;
 
                 default:
@@ -429,24 +439,30 @@ namespace HSMServer.SensorApi.Sessions.Files
                     return;
 
                 default:
-                    Refuse(output, id, SessionProtocol.StatusUnavailable, $"{answer.Error}: begin again", FaultRetryAfterSeconds);
+                    Refuse(output, id, SessionProtocol.StatusUnavailable, $"{answer.Error}: begin again", answer.RetryAfterSeconds);
                     return;
             }
         }
 
-        private async Task DiscardAsync(Upload upload, ArrayBufferWriter<byte> output, long id, string reason, CancellationToken token)
+        private async Task DiscardAsync(Upload upload, ArrayBufferWriter<byte> output, long id, string reason)
         {
             _session.CountPieceRefused();
             ForgetUpload(upload);
 
             try
             {
-                await _store.DiscardAsync(upload.Lease, reason, token);
+                // Not cut short by the connection's end: a discard is short, and a lease it left would hold an
+                // upload slot and make the file busy until the store's lease timeout.
+                await _store.DiscardAsync(upload.Lease, reason, CancellationToken.None);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex)
             {
                 // The part stays until the store's own pass; the answer does not change.
                 _logger.Error($"Failed to discard upload {FormatId(upload.FileId)} of collector file connection {_session.ShortId}: {ex}");
+            }
+            finally
+            {
+                // A discard ends the lease; this is for the discard that failed (Release is idempotent).
                 _store.Release(upload.Lease);
             }
 
@@ -663,14 +679,16 @@ namespace HSMServer.SensorApi.Sessions.Files
         }
 
 
-        private sealed record CheckAnswer(CheckAnswerKind Kind, DateTime? ValueTimeUtc, long NextPiece, string Error)
+        private sealed record CheckAnswer(CheckAnswerKind Kind, DateTime? ValueTimeUtc, long NextPiece, string Error, int RetryAfterSeconds = FaultRetryAfterSeconds)
         {
             public static CheckAnswer Fault(string error) => new(CheckAnswerKind.Fault, null, 0, error);
 
+            // A finish that found the file being checked already (by another connection) is over for this one: a
+            // repeat of its answer must not say "checking" for ever. The collector asks the store again by begin.
             public static CheckAnswer From(FileFinishResult result) => result.Outcome switch
             {
                 FileFinishOutcome.Verified => new(CheckAnswerKind.Stored, result.ValueTimeUtc, 0, null),
-                FileFinishOutcome.Checking => new(CheckAnswerKind.Checking, null, 0, null),
+                FileFinishOutcome.Checking => new(CheckAnswerKind.Fault, null, 0, "the end check of this file runs elsewhere", CheckRetryAfterSeconds),
                 FileFinishOutcome.Incomplete => new(CheckAnswerKind.Missing, null, result.NextPiece, null),
                 FileFinishOutcome.Mismatch => new(CheckAnswerKind.Mismatch, null, 0, Short(result.Error)),
                 FileFinishOutcome.SensorGone => new(CheckAnswerKind.SensorGone, null, 0, Short(result.Error)),

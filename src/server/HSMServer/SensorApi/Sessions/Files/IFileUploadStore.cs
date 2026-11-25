@@ -57,6 +57,9 @@ namespace HSMServer.SensorApi.Sessions.Files
         TooManyUploads,
         Busy,
         SensorRefused,
+
+        // The product has as many unfinished uploads as the store keeps for one product (#1883); not final.
+        TooManyParts,
     }
 
 

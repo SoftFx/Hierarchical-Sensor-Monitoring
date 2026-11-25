@@ -31,6 +31,12 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public volatile bool FaultChecks;
 
+        // A discard that throws as a cancelled one would, before it ends the lease.
+        public volatile bool DiscardThrows;
+
+        // The next begin answers this, with a retry time of 7.5 s.
+        public FileBeginOutcome? NextBeginOutcome { get; set; }
+
         // Holds the next finish after it marked the file as being checked, until released.
         public Gate FinishGate { get; set; }
 
@@ -69,6 +75,12 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             if (string.IsNullOrEmpty(request.Name) || request.Name.Length > 1024 || request.SourceIdentity?.Length > 256)
                 throw new ArgumentException("broken contract");
+
+            if (NextBeginOutcome is { } forced)
+            {
+                NextBeginOutcome = null;
+                return Task.FromResult(Result(forced, retryAfter: TimeSpan.FromSeconds(7.5)));
+            }
 
             lock (_lock)
                 return Task.FromResult(Begin(request));
@@ -170,6 +182,9 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public Task DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct)
         {
+            if (DiscardThrows)
+                throw new OperationCanceledException("A discard cut short, made by the test.");
+
             lock (_lock)
             {
                 if (ById(lease.FileId) is { } entry && entry.LeaseId == lease.LeaseId)

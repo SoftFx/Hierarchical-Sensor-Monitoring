@@ -615,6 +615,25 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal(WebSocketCloseStatus.ProtocolError, await file.ExpectCloseAsync());
         }
 
+        // A discard that does not complete (cut short, faulted) still gives the lease back: a lease left
+        // behind would hold an upload slot and make the file busy until the store's lease timeout.
+        [Fact]
+        public async Task ADiscardThatDoesNotComplete_StillGivesTheLeaseBack()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+            var piece = data.Piece(0);
+            piece.DecompressedLength = 1;
+
+            _store.DiscardThrows = true;
+
+            Assert.Equal(400, (await file.SendPieceAsync(piece, begun.Upload)).Status);
+            Assert.Equal(0, _store.LiveLeases);
+        }
+
         // Stated content size, one frame, no window larger than the piece: everything the arrival can see.
         // A frame whose blocks hold fewer bytes than it states is found only by decompressing it, in the end
         // check: 400, and the upload is discarded.
@@ -829,6 +848,24 @@ namespace HSMServer.Core.Tests.SensorApi
 
             var tooBig = await file.BeginAsync(data, _path, pieceBytes: host.Handler.FilePieceBytes + 4096);
             Assert.Equal(400, tooBig.Status);
+        }
+
+        // Not final: a product with as many unfinished uploads as the store keeps, and an outcome the
+        // connection does not know, are 503 with a time, never a final refusal.
+        [Theory]
+        [InlineData(FileBeginOutcome.TooManyParts, "too many unfinished uploads of this product", 8)]
+        [InlineData((FileBeginOutcome)99, "the large file store cannot take files now", 60)]
+        public async Task ARefusalThatPasses_Is503WithATime(FileBeginOutcome outcome, string error, int retryAfter)
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+
+            _store.NextBeginOutcome = outcome;
+            var ack = await file.BeginAsync(TestFile.Random("a.dmp", 100_000), _path);
+
+            Assert.Equal(503, ack.Status);
+            Assert.Equal(error, ack.Error);
+            Assert.Equal(retryAfter, ack.RetryAfter);
         }
 
         [Fact]
