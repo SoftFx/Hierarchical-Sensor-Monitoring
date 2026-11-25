@@ -109,7 +109,7 @@ TypeScript 5.3 + Webpack 5:
 - `ingestion/` - receiving and validating collector data.
 - `alerts/` - alert conditions, templates, schedules, notification triggers. See `alerts/feature.md` for the canonical model: global alerts via `AlertTemplate` plus per-sensor editor; node-level alerting on Folders/Products was removed in #1142.
 - `notifications/` - Telegram/email delivery, retries, failure handling.
-- `dashboards/` - server-owned dashboard behavior and data shaping.
+- `dashboards/` - server-owned dashboard behavior and data shaping; today it documents the panel subscriptions: how a path template adds sources by a scan and for a new or moved sensor, and when the dashboard is stored.
 - `bar-stddev/` - per-bar standard deviation (#1509): storage (MemoryPack, appended field), exact compression of σ, Sensor API / Grafana / CSV output, the sensor page's Candlestick / Mean ± σ view and the dashboard `StdDev (σ)` property; also why the server builds against the in-repo DTO (`src/Directory.Build.targets`).
 - `authentication/` - authentication surfaces: the persisted Data Protection key ring behind cookie sessions and antiforgery tokens (#1633); bearer tokens live in `api-tokens/`.
 - `sso-login/` - the optional OpenID Connect sign-in of the web UI (#1782): `Oidc` settings with an environment-only client secret, provider username = HSM login, auto-created users without roles, `IsAdmin` from an optional provider group, absolute cookie lifetime, local logout.
