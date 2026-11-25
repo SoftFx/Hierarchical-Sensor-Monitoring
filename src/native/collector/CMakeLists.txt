@@ -410,6 +410,9 @@ if(HSM_COLLECTOR_LARGE_FILES)
             native_large_file_close_1008_is_final
             native_large_file_empty_file_is_stored
             native_large_file_cpp_wrapper
+            native_large_file_ordinary_send_above_the_threshold_is_routed
+            native_large_file_route_missing_takes_todays_path
+            native_large_file_secure_travels_in_begin
             native_large_file_unanswered_piece_is_sent_again
             native_large_file_corrupt_state_is_set_aside
             native_large_file_checksum_mismatch_sends_the_piece_again
@@ -1101,6 +1104,12 @@ if(HSM_COLLECTOR_TABLES)
     if(HSM_COLLECTOR_HTTP)
         add_conformance_test(conformance_table_connection_contract table_connection_contract.hsmtest)
     endif()
+endif()
+
+# Large file values (#1887): the uploader against the file connection of the scripted session server. Built with
+# both HSM_COLLECTOR_HTTP and HSM_COLLECTOR_TABLES (HSM_COLLECTOR_LARGE_FILES).
+if(HSM_COLLECTOR_LARGE_FILES)
+    add_conformance_test(conformance_large_file_contract large_file_contract.hsmtest)
 endif()
 
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads

@@ -23,11 +23,13 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace hsm::test
@@ -42,6 +44,12 @@ namespace hsm::test
             Silent,  // no answer; nothing changes
             Close,   // the connection closed with `code` and `reason`; nothing changes
             Drop,    // the TCP connection cut without a close frame; nothing changes
+            // A 400 "...: the upload is discarded" that removes the part the connection holds, as the real
+            // server does (a plain 400 when it holds none).
+            DiscardPart,
+            // The request is applied as the contract says (a piece stored, an end checked and stored), then the
+            // TCP connection is cut before the answer goes out: an answer lost on the way.
+            DropAfterStore,
         };
         Kind kind = Kind::Default;
         int status = 0;
@@ -82,6 +90,19 @@ namespace hsm::test
             answer.kind = Kind::Drop;
             return answer;
         }
+        static FileScriptAnswer Discarded()
+        {
+            FileScriptAnswer answer;
+            answer.kind = Kind::DiscardPart;
+            answer.status = 400;
+            return answer;
+        }
+        static FileScriptAnswer CutAfterStore()
+        {
+            FileScriptAnswer answer;
+            answer.kind = Kind::DropAfterStore;
+            return answer;
+        }
     };
 
     class FileServerScript : public FileSideHandler
@@ -107,6 +128,9 @@ namespace hsm::test
             std::int64_t piece_bytes = -1;
             std::string raw;
             int status = kNoAnswer;
+            bool path_ok = false;
+            bool name_ok = false;
+            bool modified_ok = false;
         };
         struct PieceRecord
         {
@@ -176,6 +200,14 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(mutex_);
             hello_override_ = std::move(text);
         }
+        // A hello whose pieceBytes is exactly `piece_bytes`: maxFrameBytes is 88 + ZSTD_compressBound(piece_bytes).
+        void SetLimits(std::int64_t piece_bytes, std::int64_t max_file_bytes)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            piece_bytes_ = piece_bytes;
+            max_frame_bytes_ = static_cast<std::int64_t>(kHeaderBytes + ZSTD_compressBound(static_cast<std::size_t>(piece_bytes)));
+            max_file_bytes_ = max_file_bytes;
+        }
         std::int64_t PieceBytes() const
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -219,20 +251,27 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(mutex_);
             const std::string key = KeyOf(path, name, size, modified, source);
             Part part = NewPart(name, size, piece_bytes);
-            for (std::int64_t n = 0; n < pieces_already && n < part.pieces; ++n)
-            {
-                const std::size_t offset = static_cast<std::size_t>(n * piece_bytes);
-                const std::size_t length = static_cast<std::size_t>(ExpectedLength(part, n));
-                const std::string bytes = content.substr(offset, length);
-                collector::large_files::Sha256Digest digest{};
-                collector::large_files::Sha256Of(bytes.data(), bytes.size(), digest);
-                part.data.push_back(bytes);
-                part.digests.push_back(digest);
-                part.next = n + 1;
-            }
+            Preload(part, content, pieces_already);
             const std::string upload = part.upload;
             parts_[key] = std::move(part);
             return upload;
+        }
+
+        // When a part of a file named `name` is made (its first begin, or a begin after it was removed), the
+        // server already has its first `pieces` pieces, taken from `content`.
+        void HoldNamed(const std::string& name, std::string content, std::int64_t pieces)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            held_named_[name] = std::make_pair(std::move(content), pieces);
+        }
+
+        // Called with the file's name (empty when no part has the frame's upload) and the number of every piece
+        // frame once its answer is decided, before it goes out. Called under the script's lock: it must not call
+        // the script.
+        void SetAfterPiece(std::function<void(const std::string& name, std::int64_t number)> hook)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            after_piece_ = std::move(hook);
         }
 
         // A restart of the server: no connection holds anything; the parts and stored files stay.
@@ -263,6 +302,15 @@ namespace hsm::test
         {
             std::lock_guard<std::mutex> guard(mutex_);
             return stored_files_;
+        }
+        // Stored parts of files of this name (a file stored again under other facts counts again).
+        int StoredCount(const std::string& name) const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            int count = 0;
+            for (const auto& part : parts_)
+                count += part.second.stored && part.second.name == name ? 1 : 0;
+            return count;
         }
         // Parts on the server, stored or not.
         std::size_t Parts() const
@@ -440,6 +488,23 @@ namespace hsm::test
             return part;
         }
 
+        // The first `pieces` pieces of `part`, taken from `content`.
+        static void Preload(Part& part, const std::string& content, std::int64_t pieces)
+        {
+            for (std::int64_t n = part.next; n < pieces && n < part.pieces; ++n)
+            {
+                const std::size_t offset = static_cast<std::size_t>(n * part.piece_bytes);
+                if (offset > content.size())
+                    break;
+                const std::string bytes = content.substr(offset, static_cast<std::size_t>(ExpectedLength(part, n)));
+                collector::large_files::Sha256Digest digest{};
+                collector::large_files::Sha256Of(bytes.data(), bytes.size(), digest);
+                part.data.push_back(bytes);
+                part.digests.push_back(digest);
+                part.next = n + 1;
+            }
+        }
+
         // The part the connection holds; null when it holds none.
         Part* HeldBy(int connection)
         {
@@ -472,12 +537,19 @@ namespace hsm::test
         }
 
         // A scripted answer that is not Default, applied; `status` is what was answered.
-        FileSideAction Scripted(const FileScriptAnswer& answer, std::int64_t id, int& status)
+        FileSideAction Scripted(const FileScriptAnswer& answer, std::int64_t id, int& status, int connection)
         {
             switch (answer.kind)
             {
             case FileScriptAnswer::Kind::Default:
+            case FileScriptAnswer::Kind::DropAfterStore:
                 break;
+            case FileScriptAnswer::Kind::DiscardPart:
+                status = 400;
+                if (HeldBy(connection) == nullptr)
+                    return FileSideAction::ReplyWith(Ack(id, 400, {}, "scripted"));
+                Remove(connection);
+                return FileSideAction::ReplyWith(Ack(id, 400, {}, "scripted: the upload is discarded"));
             case FileScriptAnswer::Kind::Status:
                 status = answer.status;
                 return FileSideAction::ReplyWith(Ack(id, answer.status, answer.body, answer.error, answer.retry_after));
@@ -490,6 +562,22 @@ namespace hsm::test
                 return FileSideAction::Cut();
             }
             return FileSideAction::Nothing();
+        }
+
+        // The next scripted answer of `queue`, or the real one (`real`); DropAfterStore runs the real one and cuts.
+        template <class Real>
+        FileSideAction Apply(std::deque<FileScriptAnswer>& queue, std::int64_t id, int& status, int connection, Real real)
+        {
+            const FileScriptAnswer scripted = Next(queue);
+            if (scripted.kind == FileScriptAnswer::Kind::Default)
+                return real();
+            if (scripted.kind == FileScriptAnswer::Kind::DropAfterStore)
+            {
+                real();
+                status = kNoAnswer;
+                return FileSideAction::Cut();
+            }
+            return Scripted(scripted, id, status, connection);
         }
 
         static std::string StringField(const nlohmann::json& body, const char* name, bool& present)
@@ -529,26 +617,26 @@ namespace hsm::test
             record.connection = connection;
             record.id = id;
             record.raw = raw;
-            bool path_ok = false, name_ok = false, modified_ok = false;
-            record.path = StringField(body, "path", path_ok);
-            record.name = StringField(body, "name", name_ok);
-            record.modified = StringField(body, "modified", modified_ok);
+            record.path = StringField(body, "path", record.path_ok);
+            record.name = StringField(body, "name", record.name_ok);
+            record.modified = StringField(body, "modified", record.modified_ok);
             record.source = StringField(body, "source", record.has_source);
             record.size = IntField(body, "size");
             record.piece_bytes = IntField(body, "pieceBytes");
             begins_.push_back(record);
             int& status = begins_.back().status;
+            return Apply(begin_answers_, id, status, connection, [&] { return BeginReal(connection, id, record, status); });
+        }
 
-            const FileScriptAnswer scripted = Next(begin_answers_);
-            if (scripted.kind != FileScriptAnswer::Kind::Default)
-                return Scripted(scripted, id, status);
-
+        FileSideAction BeginReal(int connection, std::int64_t id, const BeginRecord& record, int& status)
+        {
             const auto answer = [&](int code, const std::string& body_json, const std::string& error, int retry_after = -1) {
                 status = code;
                 return FileSideAction::ReplyWith(Ack(id, code, body_json, error, retry_after));
             };
             const bool source_ok = !record.has_source || (!record.source.empty() && record.source.size() <= 256);
-            if (!path_ok || record.path.empty() || !name_ok || record.name.empty() || record.name.size() > 1024 || !modified_ok || record.modified.empty() ||
+            if (!record.path_ok || record.path.empty() || !record.name_ok || record.name.empty() || record.name.size() > 1024 || !record.modified_ok ||
+                record.modified.empty() ||
                 record.size < 0 || !source_ok || record.piece_bytes < 65536 || record.piece_bytes > piece_bytes_)
                 return answer(400, {}, "a malformed begin");
             if (record.size > max_file_bytes_)
@@ -588,7 +676,12 @@ namespace hsm::test
                 }
             }
             if (found == parts_.end())
+            {
                 found = parts_.emplace(key, NewPart(record.name, record.size, record.piece_bytes)).first;
+                const auto held = held_named_.find(record.name);
+                if (held != held_named_.end())
+                    Preload(found->second, held->second.first, held->second.second);
+            }
             Part& part = found->second;
             part.holder = connection;
             held_[connection] = key;
@@ -690,11 +783,27 @@ namespace hsm::test
             const std::uint32_t crc = static_cast<std::uint32_t>(ReadLittleEndian(frame, 48, 4));
             pieces_.push_back(record);
             int& status = pieces_.back().status;
+            std::string name;
+            for (const auto& part : parts_)
+                if (part.second.upload == record.upload)
+                    name = part.second.name;
+            FileSideAction action = Apply(piece_answers_, id, status, connection, [&] { return PieceReal(connection, id, frame, header, record, crc, status); });
+            if (after_piece_)
+            {
+                try
+                {
+                    after_piece_(name, record.number);
+                }
+                catch (...)
+                {
+                }
+            }
+            return action;
+        }
 
-            const FileScriptAnswer scripted = Next(piece_answers_);
-            if (scripted.kind != FileScriptAnswer::Kind::Default)
-                return Scripted(scripted, id, status);
-
+        FileSideAction PieceReal(int connection, std::int64_t id, const std::string& frame, std::size_t header, const PieceRecord& record, std::uint32_t crc,
+                                 int& status)
+        {
             const auto answer = [&](int code, const std::string& body_json, const std::string& error, int retry_after = -1) {
                 status = code;
                 return FileSideAction::ReplyWith(Ack(id, code, body_json, error, retry_after));
@@ -748,11 +857,11 @@ namespace hsm::test
             record.hash = StringField(body, "hash", hash_ok);
             ends_.push_back(record);
             int& status = ends_.back().status;
+            return Apply(end_answers_, id, status, connection, [&] { return EndReal(connection, id, record, upload_ok, hash_ok, status); });
+        }
 
-            const FileScriptAnswer scripted = Next(end_answers_);
-            if (scripted.kind != FileScriptAnswer::Kind::Default)
-                return Scripted(scripted, id, status);
-
+        FileSideAction EndReal(int connection, std::int64_t id, const EndRecord& record, bool upload_ok, bool hash_ok, int& status)
+        {
             const auto answer = [&](int code, const std::string& body_json, const std::string& error, int retry_after = -1) {
                 status = code;
                 return FileSideAction::ReplyWith(Ack(id, code, body_json, error, retry_after));
@@ -847,10 +956,12 @@ namespace hsm::test
             };
             if (discard_unknown_)
                 return answer(400, {}, "unknown op");
-            const FileScriptAnswer scripted = Next(discard_answers_);
-            if (scripted.kind != FileScriptAnswer::Kind::Default)
-                return Scripted(scripted, id, status);
+            return Apply(discard_answers_, id, status, connection, [&] { return DiscardReal(connection, record, upload_ok, answer); });
+        }
 
+        template <class Answer>
+        FileSideAction DiscardReal(int connection, const DiscardRecord& record, bool upload_ok, const Answer& answer)
+        {
             if (!upload_ok || !IsHex(record.upload, 32))
                 return answer(400, {}, "a malformed discard");
             Part* part = HeldBy(connection);
@@ -877,6 +988,8 @@ namespace hsm::test
         bool discard_unknown_ = false;
         int corrupt_crcs_ = 0;
         std::uint64_t uploads_ = 0;
+        std::map<std::string, std::pair<std::string, std::int64_t>> held_named_; // name -> content, pieces
+        std::function<void(const std::string&, std::int64_t)> after_piece_;
 
         std::map<std::string, Part> parts_; // by KeyOf
         std::map<int, std::string> held_;   // connection -> the key of the part it holds

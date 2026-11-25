@@ -19,9 +19,11 @@
 #include <cstdlib>
 #include <functional>
 #include <limits>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -38,6 +40,19 @@
 #include "http_capture_server.hpp"
 #include "ws_test_server.hpp"
 #include <nlohmann/json.hpp>
+#endif
+
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_LARGE_FILES)
+// The large file verbs of the conformance driver (#1887): the scripted file side and the uploader's test seams.
+#include "../src/large_files/hsm_file_connection.hpp"
+#include "../src/large_files/hsm_large_file_test_seams.hpp"
+#include "file_server_script.hpp"
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#endif
 #endif
 
 // Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
@@ -675,8 +690,68 @@ namespace
         std::string comment_;
     };
 
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_LARGE_FILES)
+    // The large files of a case of large_file_contract.hsmtest (#1887): its own folders (removed at the end of the
+    // case), the file side of its scripted session server, and the handles of its hand-overs and watches (released
+    // after the collector is destroyed, or at large_file_restart).
+    struct LargeFileConformanceState
+    {
+        std::filesystem::path root;
+        std::shared_ptr<hsm::test::FileServerScript> script;
+        // The create_collector_on_session step of the case, repeated by large_file_restart.
+        std::vector<std::string> session_step;
+        // The latest hand-over of every file name, and every hand-over handle of the collector.
+        std::map<std::string, hsm_large_file_t*> handed;
+        std::vector<hsm_large_file_t*> handles;
+        // In creation order (index 0 = the first watch).
+        std::vector<hsm_large_file_watch_t*> watches;
+
+        LargeFileConformanceState() = default;
+        LargeFileConformanceState(const LargeFileConformanceState&) = delete;
+        LargeFileConformanceState& operator=(const LargeFileConformanceState&) = delete;
+
+        ~LargeFileConformanceState()
+        {
+            ReleaseHandles();
+            if (!root.empty())
+            {
+                std::error_code ignored;
+                std::filesystem::remove_all(root, ignored);
+            }
+        }
+
+        void ReleaseHandles()
+        {
+            for (auto* file : handles)
+                hsm_large_file_release(file);
+            handles.clear();
+            handed.clear();
+            for (auto* watch : watches)
+                hsm_large_file_watch_release(watch);
+            watches.clear();
+        }
+
+        void EnsureRoot()
+        {
+            if (!root.empty())
+                return;
+            std::random_device random;
+            root = std::filesystem::temp_directory_path() / ("hsm-conformance-large-" + std::to_string(random()) + "-" + std::to_string(random()));
+            std::filesystem::create_directories(Files());
+            std::filesystem::create_directories(Data());
+        }
+
+        std::filesystem::path Files() const { return root / "files"; }
+        std::filesystem::path Data() const { return root / "data"; }
+    };
+#endif
+
     struct ConformanceState
     {
+        // The fixture is large_file_*.hsmtest (#1887): its session server takes the file connection instead of
+        // the table connection. Set by RunConformanceContract.
+        bool large_file_fixture = false;
+
         std::vector<SensorHandle> sensors;
 
         struct MixedInstantSet
@@ -737,6 +812,12 @@ namespace
             std::vector<std::string> received;
         };
         std::unique_ptr<DirectiveLog> directives;
+#endif
+
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_LARGE_FILES)
+        // Declared before the collector: its handles are released and its folders removed after the collector is
+        // destroyed.
+        std::unique_ptr<LargeFileConformanceState> large_files;
 #endif
 
         // The table sensors of the case and the recording table channel (#1848). Declared before the
@@ -808,9 +889,20 @@ namespace
         {
             hsm::test::WebSocketTestServer::Options options;
             options.session = true;
-            // The table connection of the session (#1848 part 4) is a side connection of the same route.
-            options.side_subprotocol = "hsm.tables.v1";
+            // The table connection of the session (#1848 part 4) is a side connection of the same route; in a
+            // large file fixture the file connection (#1887) is, and the server gets the file script.
+            options.side_subprotocol = state.large_file_fixture ? "hsm.files.v1" : "hsm.tables.v1";
             state.session_server = std::make_unique<hsm::test::WebSocketTestServer>(options);
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+            if (state.large_file_fixture)
+            {
+                if (!state.large_files)
+                    state.large_files = std::make_unique<LargeFileConformanceState>();
+                state.large_files->script = std::make_shared<hsm::test::FileServerScript>();
+                state.large_files->script->SetLimits(65536, 68719476736LL);
+                state.session_server->EnableFileScript(state.large_files->script);
+            }
+#endif
         }
         return *state.session_server;
     }
@@ -1132,6 +1224,671 @@ namespace
             throw std::runtime_error("Unknown default sensor id name: " + name);
         return it->second;
     }
+
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_LARGE_FILES)
+    // ---- Large file values (#1887): the verbs of large_file_contract.hsmtest ----
+    // The collector of a case runs on a manual clock that only the case moves: every wait of the uploader but
+    // its idle one ("nothing to upload") advances it by what it waits for, so a server's retryAfter passes at
+    // once; large_file_clock_advance and every poll of a waiting expect_* verb move it a second at a time, with
+    // a scan of the watched folders after each second. A request the file script leaves unanswered ends its ack
+    // wait when the script has decided so (the connection's ack-deadline seam). A poll only fails a case when
+    // its timeout expires.
+
+    void ExecuteConformanceStep(ConformanceState& state, const std::vector<std::string>& step);
+
+    void RequireLarge(bool condition, const std::string& message)
+    {
+        if (!condition)
+            throw std::runtime_error(message);
+    }
+
+    LargeFileConformanceState& LargeFilesOf(ConformanceState& state)
+    {
+        if (!state.large_files)
+            state.large_files = std::make_unique<LargeFileConformanceState>();
+        return *state.large_files;
+    }
+
+    hsm::test::FileServerScript& FileScriptOf(ConformanceState& state, const std::string& verb)
+    {
+        RequireLarge(state.large_files && state.large_files->script, verb + " needs the scripted session server of a large file fixture (create_collector_on_session)");
+        return *state.large_files->script;
+    }
+
+    // The seeded content both drivers write: xorshift32 from the seed (1 for 0), the low byte of every new state.
+    std::string LargeFileContent(std::size_t size, std::uint32_t seed)
+    {
+        std::uint32_t x = seed == 0 ? 1 : seed;
+        std::string bytes(size, '\0');
+        for (auto& byte : bytes)
+        {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            byte = static_cast<char>(x & 0xFF);
+        }
+        return bytes;
+    }
+
+    // "2026-11-25T10:00:00Z" to seconds since 1970 (UTC).
+    std::int64_t LargeFileUnixSeconds(const std::string& text)
+    {
+        const auto number = [&text](std::size_t at, std::size_t count) {
+            int value = 0;
+            for (std::size_t i = at; i < at + count; ++i)
+            {
+                RequireLarge(i < text.size() && text[i] >= '0' && text[i] <= '9', "a time of the form 2026-11-25T10:00:00Z: " + text);
+                value = value * 10 + (text[i] - '0');
+            }
+            return value;
+        };
+        RequireLarge(text.size() == 20 && text[4] == '-' && text[7] == '-' && text[10] == 'T' && text[13] == ':' && text[16] == ':' && text[19] == 'Z',
+                     "a time of the form 2026-11-25T10:00:00Z: " + text);
+        const int year = number(0, 4), month = number(5, 2), day = number(8, 2), hour = number(11, 2), minute = number(14, 2), second = number(17, 2);
+        // Days since 1970-01-01 of a civil date (proleptic Gregorian, H. Hinnant's algorithm).
+        const std::int64_t y = year - (month <= 2 ? 1 : 0);
+        const std::int64_t era = (y >= 0 ? y : y - 399) / 400;
+        const std::int64_t yoe = y - era * 400;
+        const std::int64_t doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+        const std::int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        const std::int64_t days = era * 146097 + doe - 719468;
+        return days * 86400 + hour * 3600 + minute * 60 + second;
+    }
+
+    // The modification time of a file in 100 ns ticks since 1970, read and written through the file's
+    // attributes only: no conflict with the collector's open of the file, and nothing left open.
+    bool LargeFileModifiedTicks(const std::filesystem::path& path, std::int64_t& ticks)
+    {
+#if defined(_WIN32)
+        HANDLE handle = CreateFileW(path.wstring().c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                    FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return false;
+        FILETIME written{};
+        const bool ok = GetFileTime(handle, nullptr, nullptr, &written) != 0;
+        CloseHandle(handle);
+        const std::uint64_t value = (static_cast<std::uint64_t>(written.dwHighDateTime) << 32) | written.dwLowDateTime;
+        ticks = static_cast<std::int64_t>(value) - 116444736000000000LL;
+        return ok;
+#else
+        struct stat info{};
+        if (stat(path.c_str(), &info) != 0)
+            return false;
+        ticks = static_cast<std::int64_t>(info.st_mtim.tv_sec) * 10000000 + info.st_mtim.tv_nsec / 100;
+        return true;
+#endif
+    }
+
+    bool SetLargeFileModifiedTicks(const std::filesystem::path& path, std::int64_t ticks)
+    {
+#if defined(_WIN32)
+        HANDLE handle = CreateFileW(path.wstring().c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                    FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return false;
+        const std::uint64_t value = static_cast<std::uint64_t>(ticks + 116444736000000000LL);
+        FILETIME written{};
+        written.dwLowDateTime = static_cast<DWORD>(value & 0xFFFFFFFFu);
+        written.dwHighDateTime = static_cast<DWORD>(value >> 32);
+        const bool ok = SetFileTime(handle, nullptr, nullptr, &written) != 0;
+        CloseHandle(handle);
+        return ok;
+#else
+        struct timespec times[2]{};
+        times[0].tv_nsec = UTIME_OMIT;
+        times[1].tv_sec = static_cast<time_t>(ticks / 10000000);
+        times[1].tv_nsec = static_cast<long>((ticks % 10000000) * 100);
+        return utimensat(AT_FDCWD, path.c_str(), times, 0) == 0;
+#endif
+    }
+
+    // One second of the case: the clock a second forward, then a scan of the watched folders. The pause lets
+    // the uploader act on it; it decides nothing.
+    void LargeFileTick(ConformanceState& state)
+    {
+        if (state.collector.value != nullptr)
+        {
+            hsm_collector_test_advance_clock_ms(state.collector.value, 1000);
+            hsm::collector::large_files::test::ScanNow(state.collector.value);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+
+    // Polls `condition`, moving the case's clock a second between polls; false once `timeout_seconds` of wall
+    // time ran out (0: one check).
+    template <typename Condition>
+    bool PollLargeFiles(ConformanceState& state, Condition condition, const std::string& timeout_seconds)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(std::stoi(timeout_seconds));
+        while (!condition())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            LargeFileTick(state);
+        }
+        return true;
+    }
+
+    // What the file script saw, for the message of a failed expectation.
+    std::string LargeFileServerLog(ConformanceState& state)
+    {
+        if (!state.large_files || !state.large_files->script)
+            return "(no file server)";
+        const auto& script = *state.large_files->script;
+        std::string text = "begins:";
+        for (const auto& begin : script.Begins())
+            text += " " + begin.name + "=" + std::to_string(begin.status);
+        text += "; pieces:";
+        for (const auto& piece : script.Pieces())
+            text += " " + std::to_string(piece.number) + "=" + std::to_string(piece.status);
+        text += "; ends:";
+        for (const auto& end : script.Ends())
+            text += " " + std::to_string(end.status);
+        text += "; discards:";
+        for (const auto& discard : script.Discards())
+            text += " " + std::to_string(discard.status);
+        text += "; connections: " + std::to_string(script.Connections().size());
+        return text;
+    }
+
+    hsm_large_file_result_t LargeFileResultOf(hsm_large_file_t* file)
+    {
+        hsm_large_file_result_t result{};
+        result.struct_size = sizeof result;
+        hsm_large_file_get_result(file, &result);
+        return result;
+    }
+
+    std::string LargeFileReasonOf(hsm_large_file_t* file)
+    {
+        char buffer[1024] = {};
+        hsm_large_file_reason(file, buffer, sizeof buffer);
+        return buffer;
+    }
+
+    hsm_large_file_outcome_t ParseLargeFileOutcome(const std::string& text)
+    {
+        static const std::map<std::string, hsm_large_file_outcome_t> outcomes = {
+            { "stored", HSM_LARGE_FILE_STORED },
+            { "refused", HSM_LARGE_FILE_REFUSED },
+            { "given_up", HSM_LARGE_FILE_GIVEN_UP },
+            { "missing", HSM_LARGE_FILE_MISSING },
+            { "unavailable", HSM_LARGE_FILE_UNAVAILABLE },
+            { "cancelled", HSM_LARGE_FILE_CANCELLED },
+        };
+        const auto found = outcomes.find(text);
+        RequireLarge(found != outcomes.end(), "unknown large file outcome '" + text + "'");
+        return found->second;
+    }
+
+    hsm_large_file_watch_state_t ParseLargeFileWatchState(const std::string& text)
+    {
+        static const std::map<std::string, hsm_large_file_watch_state_t> states = {
+            { "active", HSM_LARGE_FILE_WATCH_ACTIVE },
+            { "unavailable", HSM_LARGE_FILE_WATCH_UNAVAILABLE },
+            { "refused", HSM_LARGE_FILE_WATCH_REFUSED },
+            { "disposed", HSM_LARGE_FILE_WATCH_STOPPED },
+        };
+        const auto found = states.find(text);
+        RequireLarge(found != states.end(), "unknown large file watch state '" + text + "'");
+        return found->second;
+    }
+
+    // An answer of a file_server_answer_*_next verb (the fixture's header lists them).
+    hsm::test::FileScriptAnswer ParseFileServerAnswer(const std::string& text)
+    {
+        using Answer = hsm::test::FileScriptAnswer;
+        const auto colon = text.find(':');
+        const std::string kind = text.substr(0, colon);
+        const std::string argument = colon == std::string::npos ? std::string() : text.substr(colon + 1);
+        const std::string zero_upload = "00000000000000000000000000000000";
+        if (kind == "real")
+            return Answer::Default();
+        if (kind == "stored")
+            return Answer::WithStatus(200, -1,
+                                      "{\"upload\":\"" + zero_upload + "\",\"state\":\"stored\",\"time\":\"" + hsm::test::FileServerScript::kStoredTime + "\"}");
+        if (kind == "checking")
+            return Answer::WithStatus(202, 1, "{\"upload\":\"" + zero_upload + "\",\"state\":\"checking\"}");
+        if (kind == "no_room" || kind == "fault")
+            return Answer::WithStatus(503, 1, {}, "scripted");
+        if (kind == "busy")
+            return Answer::WithStatus(409, 1, {}, "scripted");
+        if (kind == "too_large")
+            return Answer::WithStatus(413, -1, {}, "scripted");
+        if (kind == "cannot_take")
+            return Answer::WithStatus(422, -1, {}, "scripted");
+        if (kind == "invalid")
+            return Answer::WithStatus(400, -1, {}, "scripted");
+        if (kind == "checksum_mismatch")
+            return Answer::WithStatus(409, -1, "{\"next\":" + (argument.empty() ? std::string("0") : argument) + ",\"reason\":\"checksum mismatch\"}",
+                                      "checksum mismatch");
+        if (kind == "out_of_order")
+            return Answer::WithStatus(409, -1, "{\"next\":" + argument + ",\"reason\":\"out of order\"}", "out of order");
+        if (kind == "missing")
+            return Answer::WithStatus(409, -1, "{\"next\":" + argument + ",\"reason\":\"pieces are missing\"}", "pieces are missing");
+        if (kind == "discarded" || kind == "mismatch")
+            return Answer::Discarded();
+        if (kind == "drop")
+            return Answer::Cut();
+        if (kind == "drop_after_store")
+            return Answer::CutAfterStore();
+        if (kind == "silent")
+            return Answer::NoAnswer();
+        if (kind == "close")
+            return Answer::CloseWith(ToInt(argument), "scripted");
+        throw std::runtime_error("unknown file server answer '" + text + "'");
+    }
+
+    // A collector of a large file case: the case's data folder, the manual clock, the waits that move it, and
+    // the ack-deadline seam of the file connection.
+    void PrepareLargeFileCollector(ConformanceState& state)
+    {
+        auto& files = LargeFilesOf(state);
+        files.EnsureRoot();
+        hsm_collector_t* collector = state.collector.value;
+        RequireLarge(hsm_collector_set_data_folder(collector, files.Data().u8string().c_str()) == HSM_RESULT_OK, "the data folder of the case");
+        hsm_collector_test_install_manual_clock(collector, 1000000);
+        hsm::collector::large_files::test::OnWait(collector, [collector](const std::string& what, std::int64_t ms) {
+            if (what != "nothing to upload")
+                hsm_collector_test_advance_clock_ms(collector, ms);
+        });
+        if (files.script)
+        {
+            hsm::test::FileServerScript* script = files.script.get();
+            hsm::collector::large_files::test::AdjustConnection(collector, [script](hsm::collector::large_files::FileConnectionOptions& connection) {
+                connection.ack_abandoned_for_tests = [script](std::int64_t id) { return script->Unanswered(id); };
+            });
+        }
+    }
+
+    void PrepareLargeFileConformanceSession(ConformanceState& state, const std::vector<std::string>& step)
+    {
+        LargeFilesOf(state).session_step = step;
+        PrepareLargeFileCollector(state);
+    }
+
+    hsm_large_file_options_t LargeFileOptionsOf(const std::string& keep_or_delete)
+    {
+        RequireLarge(keep_or_delete == "keep" || keep_or_delete == "delete", "keep or delete, not '" + keep_or_delete + "'");
+        auto options = hsm_large_file_options_default();
+        options.keep_source = keep_or_delete == "keep" ? 1 : 0;
+        return options;
+    }
+
+    bool ExecuteLargeFileConformanceStep(ConformanceState& state, const std::vector<std::string>& step)
+    {
+        const auto& action = step[0];
+        const auto args = [&](std::size_t count) { RequireLarge(step.size() >= count + 1, action + " needs " + std::to_string(count) + " argument(s)"); };
+
+        // ---- sources and calls ----
+
+        if (action == "large_file_create")
+        {
+            // name|size|seed[|modified]: the seeded content, closed, then its modification time set exactly.
+            args(3);
+            auto& files = LargeFilesOf(state);
+            files.EnsureRoot();
+            const auto path = files.Files() / std::filesystem::u8path(step[1]);
+            const auto content = LargeFileContent(static_cast<std::size_t>(std::stoll(step[2])), static_cast<std::uint32_t>(std::stoul(step[3])));
+            {
+                std::ofstream out(path, std::ios::binary | std::ios::trunc);
+                out.write(content.data(), static_cast<std::streamsize>(content.size()));
+                RequireLarge(static_cast<bool>(out), "large_file_create: writing " + step[1] + " failed");
+            }
+            const std::int64_t seconds = LargeFileUnixSeconds(step.size() >= 5 && !step[4].empty() ? step[4] : "2026-11-25T10:00:00Z");
+            RequireLarge(SetLargeFileModifiedTicks(path, seconds * 10000000), "large_file_create: setting the modification time of " + step[1] + " failed");
+            return true;
+        }
+
+        if (action == "large_file_send")
+        {
+            // sensor|name|keep_or_delete
+            args(3);
+            auto& files = LargeFilesOf(state);
+            files.EnsureRoot();
+            const auto options = LargeFileOptionsOf(step[3]);
+            const auto path = (files.Files() / std::filesystem::u8path(step[2])).u8string();
+            hsm_large_file_t* file = nullptr;
+            const auto result = hsm_collector_send_large_file(state.collector.value, step[1].c_str(), path.c_str(), &options, &file);
+            RequireLarge(result == HSM_RESULT_OK && file != nullptr, "large_file_send: " + std::string(hsm_collector_last_error(state.collector.value)));
+            files.handles.push_back(file);
+            files.handed[step[2]] = file;
+            return true;
+        }
+
+        if (action == "large_file_watch")
+        {
+            // sensor|mask|settle_s|keep_or_delete, on the case's folder.
+            args(4);
+            auto& files = LargeFilesOf(state);
+            files.EnsureRoot();
+            auto options = LargeFileOptionsOf(step[4]);
+            options.settle_ms = static_cast<std::int64_t>(ToInt(step[3])) * 1000;
+            const auto folder = files.Files().u8string();
+            hsm_large_file_watch_t* watch = nullptr;
+            const auto result = hsm_collector_watch_large_files(state.collector.value, step[1].c_str(), folder.c_str(), step[2].c_str(), &options, &watch);
+            RequireLarge(result == HSM_RESULT_OK && watch != nullptr, "large_file_watch: " + std::string(hsm_collector_last_error(state.collector.value)));
+            files.watches.push_back(watch);
+            return true;
+        }
+
+        if (action == "large_file_change_after_piece")
+        {
+            // name|piece: once the server decided its answer to that piece of the file, before the answer goes out,
+            // the file's modification time is an hour later (once).
+            args(2);
+            auto& script = FileScriptOf(state, action);
+            const std::string name = step[1];
+            const std::int64_t piece = std::stoll(step[2]);
+            const auto path = LargeFilesOf(state).Files() / std::filesystem::u8path(name);
+            auto done = std::make_shared<std::atomic<bool>>(false);
+            script.SetAfterPiece([name, piece, path, done](const std::string& file, std::int64_t number) {
+                if (file != name || number != piece || done->exchange(true))
+                    return;
+                std::int64_t ticks = 0;
+                if (LargeFileModifiedTicks(path, ticks))
+                    SetLargeFileModifiedTicks(path, ticks + 3600LL * 10000000);
+            });
+            return true;
+        }
+
+        if (action == "large_file_clock_advance")
+        {
+            // seconds: a second at a time, a scan after each.
+            args(1);
+            const int seconds = ToInt(step[1]);
+            for (int i = 0; i < seconds; ++i)
+                LargeFileTick(state);
+            return true;
+        }
+
+        if (action == "large_file_restart")
+        {
+            // Stop and destroy the collector, release its handles, then a new one with the same options, server,
+            // data folder and hooks, started.
+            auto& files = LargeFilesOf(state);
+            RequireLarge(state.collector.value != nullptr && !files.session_step.empty(), "large_file_restart needs a collector on the session");
+            RequireLarge(hsm_collector_stop(state.collector.value) == HSM_RESULT_OK, "large_file_restart: stop");
+            state.collector = CollectorHandle{};
+            files.ReleaseHandles();
+            const auto session_step = files.session_step;
+            ExecuteConformanceStep(state, session_step);
+            RequireLarge(hsm_collector_start(state.collector.value) == HSM_RESULT_OK, "large_file_restart: start");
+            return true;
+        }
+
+        if (action == "create_collector_on_http")
+        {
+            // On the HTTP transport, to a port nothing listens on: large files are unavailable on it. Not started.
+            auto options = TestOptions();
+            options.access_key = "conformance-key";
+            options.server_address = "https://localhost";
+            options.port = 1;
+            state.collector = CreateCollector(options);
+            RequireLarge(hsm_collector_use_http_transport(state.collector.value) == HSM_RESULT_OK, "create_collector_on_http: the HTTP transport");
+            PrepareLargeFileCollector(state);
+            return true;
+        }
+
+        // ---- the server's script ----
+
+        if (action == "file_server_limits")
+        {
+            // piece_bytes|max_file_bytes: a hello whose pieceBytes is exactly piece_bytes.
+            args(2);
+            FileScriptOf(state, action).SetLimits(std::stoll(step[1]), std::stoll(step[2]));
+            return true;
+        }
+
+        if (action == "file_server_refuse_upgrades")
+        {
+            args(1);
+            FileScriptOf(state, action);
+            SessionServer(state).RefuseSideUpgradesWith(ToInt(step[1]));
+            return true;
+        }
+
+        if (action == "file_server_accept_upgrades")
+        {
+            FileScriptOf(state, action);
+            SessionServer(state).RefuseSideUpgradesWith(0);
+            return true;
+        }
+
+        if (action == "file_server_holds")
+        {
+            // name|pieces: the part of that file, when it is made at a begin of that name, has its first pieces
+            // from the file the driver wrote.
+            args(2);
+            auto& script = FileScriptOf(state, action);
+            const auto path = LargeFilesOf(state).Files() / std::filesystem::u8path(step[1]);
+            std::ifstream in(path, std::ios::binary);
+            RequireLarge(static_cast<bool>(in), "file_server_holds: " + step[1] + " was not created");
+            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            script.HoldNamed(step[1], std::move(content), std::stoll(step[2]));
+            return true;
+        }
+
+        if (action == "file_server_answer_begin_next" || action == "file_server_answer_piece_next" || action == "file_server_answer_end_next" ||
+            action == "file_server_answer_discard_next")
+        {
+            args(1);
+            auto& script = FileScriptOf(state, action);
+            auto answer = ParseFileServerAnswer(step[1]);
+            if (action == "file_server_answer_begin_next")
+                script.AnswerBeginNext(std::move(answer));
+            else if (action == "file_server_answer_piece_next")
+                script.AnswerPieceNext(std::move(answer));
+            else if (action == "file_server_answer_end_next")
+                script.AnswerEndNext(std::move(answer));
+            else
+                script.AnswerDiscardNext(std::move(answer));
+            return true;
+        }
+
+        // ---- expectations ----
+
+        if (action == "expect_large_file_result")
+        {
+            // name|outcome|timeout_s
+            args(3);
+            auto& files = LargeFilesOf(state);
+            const auto found = files.handed.find(step[1]);
+            RequireLarge(found != files.handed.end(), "expect_large_file_result: " + step[1] + " was not handed over");
+            hsm_large_file_t* file = found->second;
+            const auto expected = ParseLargeFileOutcome(step[2]);
+            const bool settled = PollLargeFiles(state, [&] { return LargeFileResultOf(file).outcome != HSM_LARGE_FILE_PENDING; }, step[3]);
+            const auto outcome = LargeFileResultOf(file).outcome;
+            RequireLarge(settled && outcome == expected, "expect_large_file_result: " + step[1] + " is " + std::to_string(static_cast<int>(outcome)) +
+                                                             ", expected " + step[2] + " (" + std::to_string(static_cast<int>(expected)) +
+                                                             "); reason: " + LargeFileReasonOf(file) + "; the server saw " + LargeFileServerLog(state));
+            return true;
+        }
+
+        if (action == "expect_large_file_pending")
+        {
+            // name: a second of the case, then the hand-over has not settled.
+            args(1);
+            auto& files = LargeFilesOf(state);
+            const auto found = files.handed.find(step[1]);
+            RequireLarge(found != files.handed.end(), "expect_large_file_pending: " + step[1] + " was not handed over");
+            LargeFileTick(state);
+            const auto outcome = LargeFileResultOf(found->second).outcome;
+            RequireLarge(outcome == HSM_LARGE_FILE_PENDING, "expect_large_file_pending: " + step[1] + " settled as " + std::to_string(static_cast<int>(outcome)) +
+                                                                ": " + LargeFileReasonOf(found->second));
+            return true;
+        }
+
+        if (action == "expect_large_file_watch_state")
+        {
+            // index|state
+            args(2);
+            auto& files = LargeFilesOf(state);
+            const auto index = static_cast<std::size_t>(ToInt(step[1]));
+            RequireLarge(index < files.watches.size(), "expect_large_file_watch_state: no watch " + step[1]);
+            hsm_large_file_watch_stats_t stats{};
+            stats.struct_size = sizeof stats;
+            RequireLarge(hsm_large_file_watch_get_stats(files.watches[index], &stats) == HSM_RESULT_OK, "expect_large_file_watch_state: stats");
+            RequireLarge(stats.state == ParseLargeFileWatchState(step[2]),
+                         "expect_large_file_watch_state: watch " + step[1] + " is " + std::to_string(static_cast<int>(stats.state)) + ", expected " + step[2]);
+            return true;
+        }
+
+        if (action == "expect_large_file_source")
+        {
+            // name|present_or_absent
+            args(2);
+            RequireLarge(step[2] == "present" || step[2] == "absent", "expect_large_file_source: present or absent");
+            std::error_code ignored;
+            const bool exists = std::filesystem::exists(LargeFilesOf(state).Files() / std::filesystem::u8path(step[1]), ignored);
+            RequireLarge(exists == (step[2] == "present"), "expect_large_file_source: " + step[1] + " is " + (exists ? "present" : "absent"));
+            return true;
+        }
+
+        if (action == "expect_large_files_not_sent")
+        {
+            // count: the watches' files_not_sent plus the hand-overs that ended refused, given up or missing.
+            args(1);
+            auto& files = LargeFilesOf(state);
+            std::uint64_t count = 0;
+            for (auto* watch : files.watches)
+            {
+                hsm_large_file_watch_stats_t stats{};
+                stats.struct_size = sizeof stats;
+                hsm_large_file_watch_get_stats(watch, &stats);
+                count += stats.files_not_sent;
+            }
+            for (const auto& handed : files.handed)
+            {
+                const auto outcome = LargeFileResultOf(handed.second).outcome;
+                count += outcome == HSM_LARGE_FILE_REFUSED || outcome == HSM_LARGE_FILE_GIVEN_UP || outcome == HSM_LARGE_FILE_MISSING ? 1 : 0;
+            }
+            RequireLarge(count == static_cast<std::uint64_t>(ToInt(step[1])), "expect_large_files_not_sent: " + std::to_string(count) + ", expected " + step[1]);
+            return true;
+        }
+
+        if (action == "expect_file_stored")
+        {
+            // name|seed|timeout_s: stored and checked by the server, its bytes the seeded content.
+            args(3);
+            auto& script = FileScriptOf(state, action);
+            RequireLarge(PollLargeFiles(state, [&] { return script.StoredCount(step[1]) > 0; }, step[3]), "expect_file_stored: " + step[1] + " was not stored; the server saw " + LargeFileServerLog(state));
+            const auto stored = script.StoredFiles();
+            const auto found = stored.find(step[1]);
+            RequireLarge(found != stored.end(), "expect_file_stored: no bytes of " + step[1]);
+            RequireLarge(found->second == LargeFileContent(found->second.size(), static_cast<std::uint32_t>(std::stoul(step[2]))),
+                         "expect_file_stored: the bytes of " + step[1] + " (" + std::to_string(found->second.size()) + ") are not the content of seed " + step[2]);
+            return true;
+        }
+
+        if (action == "expect_file_stored_count")
+        {
+            args(2);
+            const int count = FileScriptOf(state, action).StoredCount(step[1]);
+            RequireLarge(count == ToInt(step[2]), "expect_file_stored_count: " + step[1] + " stored " + std::to_string(count) + " time(s), expected " + step[2]);
+            return true;
+        }
+
+        if (action == "expect_file_begins")
+        {
+            // name|count|timeout_s: polled up to the count, then equal.
+            args(3);
+            auto& script = FileScriptOf(state, action);
+            const auto begins = [&] {
+                int count = 0;
+                for (const auto& begin : script.Begins())
+                    count += begin.name == step[1] ? 1 : 0;
+                return count;
+            };
+            const int expected = ToInt(step[2]);
+            PollLargeFiles(state, [&] { return begins() >= expected; }, step[3]);
+            RequireLarge(begins() == expected, "expect_file_begins: " + std::to_string(begins()) + " begin(s) of " + step[1] + ", expected " + step[2] +
+                                                   "; the server saw " + LargeFileServerLog(state));
+            return true;
+        }
+
+        if (action == "expect_file_begin_order")
+        {
+            // name,name,...: the first begin of every file, in order.
+            args(1);
+            std::vector<std::string> order;
+            for (const auto& begin : FileScriptOf(state, action).Begins())
+                if (std::find(order.begin(), order.end(), begin.name) == order.end())
+                    order.push_back(begin.name);
+            std::string text;
+            for (const auto& name : order)
+                text += (text.empty() ? "" : ",") + name;
+            RequireLarge(text == step[1], "expect_file_begin_order: " + text + ", expected " + step[1]);
+            return true;
+        }
+
+        if (action == "expect_file_begin_field")
+        {
+            // index|field|value: a string without its quotes, anything else as its JSON text.
+            args(3);
+            const auto begins = FileScriptOf(state, action).Begins();
+            const auto index = static_cast<std::size_t>(ToInt(step[1]));
+            RequireLarge(index < begins.size(), "expect_file_begin_field: only " + std::to_string(begins.size()) + " begin(s)");
+            const auto request = nlohmann::json::parse(begins[index].raw, nullptr, /*allow_exceptions=*/false);
+            RequireLarge(request.is_object() && request.contains("body") && request["body"].is_object() && request["body"].contains(step[2]),
+                         "expect_file_begin_field: begin " + step[1] + " has no field " + step[2] + ": " + begins[index].raw);
+            const auto& field = request["body"][step[2]];
+            const std::string value = field.is_string() ? field.get<std::string>() : field.dump();
+            RequireLarge(value == step[3], "expect_file_begin_field: " + step[2] + " of begin " + step[1] + " is " + value + ", expected " + step[3]);
+            return true;
+        }
+
+        if (action == "expect_file_pieces")
+        {
+            // n0,n1,...: the number of every piece frame received, in order.
+            args(1);
+            std::string text;
+            for (const auto& piece : FileScriptOf(state, action).Pieces())
+                text += (text.empty() ? "" : ",") + std::to_string(piece.number);
+            RequireLarge(text == step[1], "expect_file_pieces: " + text + ", expected " + step[1] + "; the server saw " + LargeFileServerLog(state));
+            return true;
+        }
+
+        if (action == "expect_file_discards")
+        {
+            // count|timeout_s: discards the server took (answered 200), polled up to the count, then equal.
+            args(2);
+            auto& script = FileScriptOf(state, action);
+            const auto taken = [&] {
+                int count = 0;
+                for (const auto& discard : script.Discards())
+                    count += discard.status == 200 ? 1 : 0;
+                return count;
+            };
+            const int expected = ToInt(step[1]);
+            PollLargeFiles(state, [&] { return taken() >= expected; }, step[2]);
+            RequireLarge(taken() == expected, "expect_file_discards: " + std::to_string(taken()) + ", expected " + step[1] + "; the server saw " +
+                                                  LargeFileServerLog(state));
+            return true;
+        }
+
+        if (action == "expect_file_connections_at_least")
+        {
+            args(2);
+            auto& script = FileScriptOf(state, action);
+            const auto expected = static_cast<std::size_t>(ToInt(step[1]));
+            RequireLarge(PollLargeFiles(state, [&] { return script.Connections().size() >= expected; }, step[2]), "expect_file_connections_at_least: " + std::to_string(script.Connections().size()) + " file connection(s)");
+            return true;
+        }
+
+        if (action == "expect_refused_file_upgrades_at_least")
+        {
+            args(2);
+            FileScriptOf(state, action);
+            auto& server = SessionServer(state);
+            const int expected = ToInt(step[1]);
+            RequireLarge(PollLargeFiles(state, [&] { return server.SideRefusedUpgrades() >= expected; }, step[2]), "expect_refused_file_upgrades_at_least: " + std::to_string(server.SideRefusedUpgrades()) + " refused");
+            return true;
+        }
+
+        return false;
+    }
+#endif
 
     void ExecuteConformanceStep(ConformanceState& state, const std::vector<std::string>& step)
     {
@@ -3441,6 +4198,14 @@ namespace
                             },
                             state.directives.get()) == HSM_RESULT_OK,
                         "the directive handler of a session case must install");
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+                // A large file fixture: the server takes the file connection, not the table connection.
+                if (state.large_file_fixture)
+                {
+                    PrepareLargeFileConformanceSession(state, step);
+                    return;
+                }
+#endif
                 // The table verbs on a session collector: the scripted server stands in for the recording
                 // channel and takes the table connection (table_connection_contract.hsmtest).
                 PrepareTableConformanceSession(*state.tables, state.collector.value, server);
@@ -3722,6 +4487,12 @@ namespace
         if (ExecuteTableConformanceStep(*state.tables, state.collector.value, step))
             return;
 
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_LARGE_FILES)
+        // Large file values (#1887, ADR-0022): tests/conformance/collector/large_file_contract.hsmtest.
+        if (ExecuteLargeFileConformanceStep(state, step))
+            return;
+#endif
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 
@@ -3729,10 +4500,12 @@ namespace
     {
         const auto cases = ReadConformanceFile(path);
         Require(!cases.empty(), "conformance fixture should contain cases");
+        const bool large_file_fixture = std::filesystem::path(path).filename().string().rfind("large_file_", 0) == 0;
 
         for (const auto& test_case : cases)
         {
             ConformanceState state;
+            state.large_file_fixture = large_file_fixture;
 
             try
             {
@@ -11561,6 +12334,14 @@ namespace
                   if (WsAvailable("conformance_table_connection_contract"))
                       RunConformanceContract(path);
               } },
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+            // Large file values (#1887): on the file connection of the session, the session scenarios' rule.
+            { "conformance_large_file_contract",
+              [](const std::string& path) {
+                  if (WsAvailable("conformance_large_file_contract"))
+                      RunConformanceContract(path);
+              } },
+#endif
 #endif
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },

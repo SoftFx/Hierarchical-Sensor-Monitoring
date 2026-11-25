@@ -457,6 +457,24 @@ driver):
   the case's next tick, after `table_wait_connection_up`, sends it). A bound on a whole tick (the managed driver: one
   minute) only fails a case whose tick hangs.
 
+The large file verbs (`collector/large_file_contract.hsmtest`, #1888 managed, #1887 native; listed in its header) run
+in both drivers. The native driver takes them in the build with `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES`
+(`HSM_COLLECTOR_LARGE_FILES`) and registers the fixture there (`conformance_large_file_contract`, run only where libcurl
+carries a WebSocket). In a fixture whose file name starts with `large_file_`, `create_collector_on_session` gives the
+scripted session server the side subprotocol `hsm.files.v1` instead of the table one and its file script
+(`src/native/collector/tests/file_server_script.hpp`, enabled with `EnableFileScript`; hello pieceBytes 65536, maxFileBytes
+68719476736), and gives the collector the case's data folder (`hsm_collector_set_data_folder`), a manual clock, the
+uploader's wait hook and the file connection's ack-deadline seam (internal test seams,
+`src/native/collector/src/large_files/hsm_large_file_test_seams.hpp`). Every wait of the uploader but its idle one moves
+the clock by what it waits for, so a `retryAfter` passes at once; `large_file_clock_advance` and every poll of a waiting
+`expect_*` verb move it a second and then ask for a scan (`ScanNow`). A request the script leaves unanswered ends its ack
+wait when the script has decided so (`Unanswered`), never by the request timeout. `large_file_change_after_piece` changes
+the file's modification time through its attributes only (Windows: an open with `FILE_WRITE_ATTRIBUTES` and
+`SetFileTime`; elsewhere `utimensat`) once the script has decided its answer to that piece and before the answer goes
+out, so the collector's own open of the file is not disturbed. `large_file_restart` stops and destroys the collector,
+releases its handles and makes a new one with the same options, server, data folder and hooks; the case's folders are
+removed at its end.
+
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced
 in CI by [`scripts/conformance-unsupported-triage.ps1`](../../scripts/conformance-unsupported-triage.ps1)
