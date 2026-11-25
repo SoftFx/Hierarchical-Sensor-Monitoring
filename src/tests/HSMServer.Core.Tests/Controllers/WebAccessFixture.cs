@@ -35,9 +35,9 @@ using User = HSMServer.Model.Authentication.User;
 namespace HSMServer.Core.Tests.Controllers
 {
     /// <summary>
-    /// The tree the web access tests share, and the three users every action is asked by: a member of
-    /// the product (Viewer of <c>own</c>, no folder role), an outsider (Viewer of ANOTHER product) and an
-    /// admin.
+    /// The tree the web access tests share, and the users every action is asked by: a member of the
+    /// product (Viewer of <c>own</c>, no folder role), its manager (Manager of <c>own</c> and of the
+    /// folder, no role on <c>sibling</c>), an outsider (Viewer of ANOTHER product) and an admin.
     /// <code>
     /// shared (folder)
     ///   own      .module/Service alive (bool), cpu, mem (integer), report (file)
@@ -96,6 +96,9 @@ namespace HSMServer.Core.Tests.Controllers
 
         /// <summary>Viewer of <see cref="Own"/>.</summary>
         public User Member { get; } = new("member");
+
+        /// <summary>Manager of <see cref="Own"/> and of <see cref="Folder"/>; no role on <see cref="Sibling"/>.</summary>
+        public User Manager { get; } = new("manager");
 
         /// <summary>Viewer of <see cref="Foreign"/> only: logged in, but with no role on <see cref="Own"/>.</summary>
         public User Outsider { get; } = new("outsider");
@@ -159,16 +162,18 @@ namespace HSMServer.Core.Tests.Controllers
             Folders.Setup(f => f.GetUserFolders(It.IsAny<User>())).Returns([Folder]);
 
             Member.ProductsRoles.Add((Own.Id, ProductRoleEnum.ProductViewer));
+            Manager.ProductsRoles.Add((Own.Id, ProductRoleEnum.ProductManager));
+            Manager.FoldersRoles.Add(Folder.Id, ProductRoleEnum.ProductManager);
             Outsider.ProductsRoles.Add((Foreign.Id, ProductRoleEnum.ProductViewer));
 
-            foreach (var user in new[] { Member, Outsider, Admin })
+            foreach (var user in new[] { Member, Manager, Outsider, Admin })
             {
                 var captured = user;
                 Users.Setup(u => u[captured.Id]).Returns(captured);
             }
 
             // The tree hooks each user's own (visible) tree to itself when it is built.
-            Users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns([Member, Outsider, Admin]);
+            Users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns([Member, Manager, Outsider, Admin]);
             Schedules.Setup(p => p.GetAllSchedules()).Returns([]);
             Chats.Setup(s => s.GetValues()).Returns([]);
 

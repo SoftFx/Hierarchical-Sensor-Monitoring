@@ -25,13 +25,17 @@ namespace HSMServer.Core.Tests.Controllers
 {
     // Every HomeController action that takes a sensor, node or folder id from the client resolves it
     // through UserTreeAccess: a user with no role on the product (or folder) gets the answer of an unknown
-    // id and changes nothing; a member of the product and an admin are served. The table below is one row
-    // per action and kind of id.
+    // id and changes nothing; a member of the product and an admin are served. An action that CHANGES what
+    // it addresses (a row marked Manages) serves the product's Manager and the admin; a Viewer of the
+    // product gets the answer of an unknown id there too. The table below is one row per action and kind
+    // of id.
     public class HomeControllerAccessTests
     {
         private delegate Task<object> Call(HomeController home, WebAccessFixture tree, Guid id);
 
-        private sealed record Case(Func<WebAccessFixture, Guid> Target, Call Call);
+        private sealed record Case(Func<WebAccessFixture, Guid> Target, Call Call, bool Manages = false);
+
+        private const bool Manages = true;
 
         private static Guid Sensor(WebAccessFixture tree) => tree.Cpu.Id;
 
@@ -59,46 +63,46 @@ namespace HSMServer.Core.Tests.Controllers
             ["GetSensorInfo"] = new(Sensor, (home, _, id) => Sync(home.GetSensorInfo(id.ToString()))),
             ["GetNodePath(sensor)"] = new(Sensor, (home, _, id) => Sync(home.GetNodePath(id.ToString()))),
             ["RefreshHistoryInfo(sensor)"] = new(Sensor, (home, _, id) => Sync(home.RefreshHistoryInfo(id))),
-            ["GetSensorEditModal"] = new(Sensor, (home, _, id) => Sync(home.GetSensorEditModal(id))),
+            ["GetSensorEditModal"] = new(Sensor, (home, _, id) => Sync(home.GetSensorEditModal(id)), Manages),
             ["GetTestToastMessage"] = new(Sensor, (home, _, id) => Sync(home.GetTestToastMessage(
                 new AlertMessageViewModel { EntityId = id, Comment = "test", Property = AlertProperty.Value, Operation = PolicyOperation.GreaterThan, Target = "1" }))),
             ["AddDataPolicy(sensor)"] = new(Sensor, (home, _, id) => Sync(AlertBlock(home.AddDataPolicy((byte)SensorType.Integer, id)))),
-            ["MuteSensors(sensor) modal"] = new(Sensor, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()])))),
+            ["MuteSensors(sensor) modal"] = new(Sensor, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()]))), Manages),
             ["RemoveNode(sensor)"] = new(Sensor, async (home, _, id) => await home.RemoveNode([id.ToString()])),
             ["EditAlerts(sensor)"] = new(Sensor, async (home, _, id) => await home.EditAlerts(new EditAlertsViewModel { NodeIds = id.ToString() })),
             ["UpdateSensorInfo(sensor), invalid form"] = new(Sensor, async (home, _, id) =>
             {
                 home.ModelState.AddModelError("Description", "invalid");
                 return await home.UpdateSensorInfo(new SensorInfoViewModel { EncodedId = id.ToString() });
-            }),
+            }, Manages),
             ["SetMutedStateToSensorFromModal(sensor)"] = new(Sensor, async (home, _, id) =>
             {
                 await home.SetMutedStateToSensorFromModal(new IgnoreNotificationsViewModel { Ids = [id.ToString()], IgnorePeriod = new TimeIntervalViewModel() });
                 return null;
-            }),
+            }, Manages),
             ["RemoveMutedStateToSensor(sensor)"] = new(Sensor, async (home, _, id) =>
             {
                 await home.RemoveMutedStateToSensor([id.ToString()]);
                 return null;
-            }),
+            }, Manages),
             ["ClearHistoryNode(sensor)"] = new(Sensor, async (home, _, id) =>
             {
                 await home.ClearHistoryNode(id.ToString());
                 return null;
-            }),
+            }, Manages),
             ["EnableGrafana(sensor)"] = new(Sensor, async (home, _, id) =>
             {
                 await home.EnableGrafana(id.ToString());
                 return null;
-            }),
+            }, Manages),
             ["DisableGrafana(sensor)"] = new(Sensor, async (home, _, id) =>
             {
                 await home.DisableGrafana(id.ToString());
                 return null;
-            }),
-            ["UpdateSensorDisplayUnit"] = new(Sensor, async (home, _, id) => await home.UpdateSensorDisplayUnit(id.ToString(), RateDisplayUnit.PerMinute)),
+            }, Manages),
+            ["UpdateSensorDisplayUnit"] = new(Sensor, async (home, _, id) => await home.UpdateSensorDisplayUnit(id.ToString(), RateDisplayUnit.PerMinute), Manages),
             ["UpdateSensorTableSettings"] = new(Sensor, async (home, _, id) =>
-                await home.UpdateSensorTableSettings(id, new TableSettingsUpdateDto { IsHideEnabled = true, MaxCommentHideSize = 10 })),
+                await home.UpdateSensorTableSettings(id, new TableSettingsUpdateDto { IsHideEnabled = true, MaxCommentHideSize = 10 }), Manages),
             ["UpdateSensorStatus"] = new(Sensor, async (home, tree, id) => await home.UpdateSensorStatus(new EditSensorStatusViewModal
             {
                 SensorId = id,
@@ -107,7 +111,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Path = "own/cpu",
                 NewStatus = HSMServer.Model.TreeViewModel.SensorStatus.Error,
                 Comment = "set by hand",
-            })),
+            }), Manages),
 
             // ---- a file sensor id
             ["GetFile"] = new(FileSensor, async (home, _, id) => await home.GetFile(id.ToString())),
@@ -130,60 +134,66 @@ namespace HSMServer.Core.Tests.Controllers
             ["RefreshHistoryInfo(node)"] = new(Node, (home, _, id) => Sync(home.RefreshHistoryInfo(id))),
             ["ExportNode"] = new(Node, (home, _, id) => Sync(home.ExportNode(id.ToString()))),
             ["SaveHistoryInfo"] = new(Node, (home, _, id) => Sync(home.SaveHistoryInfo(id))),
-            ["MuteSensors(node) modal"] = new(Node, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()])))),
+            ["MuteSensors(node) modal"] = new(Node, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()]))), Manages),
             ["RemoveNode(node)"] = new(Node, async (home, _, id) => await home.RemoveNode([id.ToString()])),
             ["EditAlerts(node)"] = new(Node, async (home, _, id) => await home.EditAlerts(new EditAlertsViewModel { NodeIds = id.ToString() })),
             ["UpdateProductInfo(node), invalid form"] = new(Node, async (home, _, id) =>
             {
                 home.ModelState.AddModelError("Description", "invalid");
                 return await home.UpdateProductInfo(new ProductInfoViewModel { EncodedId = id.ToString() });
-            }),
+            }, Manages),
             ["SetMutedStateToSensorFromModal(node)"] = new(Node, async (home, _, id) =>
             {
                 await home.SetMutedStateToSensorFromModal(new IgnoreNotificationsViewModel { Ids = [id.ToString()], IgnorePeriod = new TimeIntervalViewModel() });
                 return null;
-            }),
+            }, Manages),
             ["RemoveMutedStateToSensor(node)"] = new(Node, async (home, _, id) =>
             {
                 await home.RemoveMutedStateToSensor([id.ToString()]);
                 return null;
-            }),
+            }, Manages),
             ["ClearHistoryNode(node)"] = new(Node, async (home, _, id) =>
             {
                 await home.ClearHistoryNode(id.ToString());
                 return null;
-            }),
+            }, Manages),
             ["EnableGrafana(node)"] = new(Node, async (home, _, id) =>
             {
                 await home.EnableGrafana(id.ToString());
                 return null;
-            }),
+            }, Manages),
 
             // ---- a folder id
             ["SelectNode(folder)"] = new(Folder, async (home, _, id) => await home.SelectNode(id.ToString())),
             ["GetGeneralInfo(folder)"] = new(Folder, (home, _, id) => Sync(home.GetGeneralInfo(id.ToString()))),
             ["GetFolderInfo"] = new(Folder, (home, _, id) => Sync(home.GetFolderInfo(id.ToString()))),
-            ["MuteSensors(folder) modal"] = new(Folder, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()])))),
+            ["MuteSensors(folder) modal"] = new(Folder, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()]))), Manages),
             ["RemoveNode(folder)"] = new(Folder, async (home, _, id) => await home.RemoveNode([id.ToString()])),
             ["AddDataPolicy(template, folder)"] = new(Folder, (home, _, id) => Sync(AlertBlock(home.AddDataPolicy((byte)SensorType.Integer, Guid.Empty, id)))),
             ["EnableGrafana(folder)"] = new(Folder, async (home, _, id) =>
             {
                 await home.EnableGrafana(id.ToString());
                 return null;
-            }),
+            }, Manages),
         };
 
-        public static TheoryData<string> Actions
-        {
-            get
-            {
-                var data = new TheoryData<string>();
+        public static TheoryData<string> Actions => Names(_ => true);
 
-                foreach (var name in Cases.Keys)
+        /// <summary>The actions that only show what they address: any role on the product serves them.</summary>
+        public static TheoryData<string> ViewerActions => Names(c => !c.Manages);
+
+        /// <summary>The actions that change what they address: the Manager role serves them.</summary>
+        public static TheoryData<string> ManagerActions => Names(c => c.Manages);
+
+        private static TheoryData<string> Names(Func<Case, bool> filter)
+        {
+            var data = new TheoryData<string>();
+
+            foreach (var (name, @case) in Cases)
+                if (filter(@case))
                     data.Add(name);
 
-                return data;
-            }
+            return data;
         }
 
 
@@ -205,7 +215,7 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Theory]
-        [MemberData(nameof(Actions))]
+        [MemberData(nameof(ViewerActions))]
         public async Task Member_IsServed(string action)
         {
             var tree = new WebAccessFixture();
@@ -213,6 +223,35 @@ namespace HSMServer.Core.Tests.Controllers
 
             var unknown = await Ask(tree, tree.Member, action, Guid.NewGuid());
             var served = await Ask(tree, tree.Member, action, target);
+
+            Assert.NotEqual(unknown, served);
+            Assert.DoesNotContain("throws:", served.Answer);
+        }
+
+        [Theory]
+        [MemberData(nameof(ManagerActions))]
+        public async Task Member_WhoIsNotManager_GetsTheAnswerOfAnUnknownId_AndChangesNothing(string action)
+        {
+            // The member sees the product (Viewer): that is not enough to change it.
+            var tree = new WebAccessFixture();
+            var target = Cases[action].Target(tree);
+
+            var refused = await Ask(tree, tree.Member, action, target);
+            var unknown = await Ask(tree, tree.Member, action, Guid.NewGuid());
+
+            Assert.Equal(unknown.Answer, refused.Answer);
+            Assert.Equal(0, refused.Writes);
+        }
+
+        [Theory]
+        [MemberData(nameof(Actions))]
+        public async Task Manager_IsServed(string action)
+        {
+            var tree = new WebAccessFixture();
+            var target = Cases[action].Target(tree);
+
+            var unknown = await Ask(tree, tree.Manager, action, Guid.NewGuid());
+            var served = await Ask(tree, tree.Manager, action, target);
 
             Assert.NotEqual(unknown, served);
             Assert.DoesNotContain("throws:", served.Answer);
@@ -303,20 +342,85 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
-        public async Task Folder_GrafanaSwitch_TouchesOnlyTheProductsTheUserSees()
+        public async Task Folder_GrafanaSwitch_TouchesOnlyTheProductsTheUserManages()
         {
+            // The folder's Manager manages one of its two products.
             var tree = new WebAccessFixture();
 
-            await tree.Home(tree.Member).EnableGrafana(tree.Folder.Id.ToString());
+            await tree.Home(tree.Manager).EnableGrafana(tree.Folder.Id.ToString());
 
-            var touched = tree.Cache.Invocations
-                .Where(i => i.Method.Name == nameof(HSMServer.Core.Cache.ITreeValuesCache.UpdateSensorAsync))
-                .Select(i => ((HSMServer.Core.Cache.UpdateEntities.SensorUpdate)i.Arguments[0]).Id)
-                .ToHashSet();
+            var touched = SensorUpdates(tree);
 
             Assert.Contains(tree.Cpu.Id, touched);
             Assert.Contains(tree.ServiceAlive.Id, touched);
             Assert.DoesNotContain(tree.SiblingCpu.Id, touched);
+        }
+
+        [Fact]
+        public async Task Folder_GrafanaSwitch_NeedsTheFolderManagerRole_AndTheProductManagerRole()
+        {
+            var tree = new WebAccessFixture();
+
+            // Manager of a product in the folder, no role on the folder itself.
+            var productManager = new User("product manager");
+            productManager.ProductsRoles.Add((tree.Own.Id, ProductRoleEnum.ProductManager));
+            tree.Users.Setup(u => u[productManager.Id]).Returns(productManager);
+
+            // Manager of the folder who is a Viewer of its products.
+            var folderManager = new User("folder manager");
+            folderManager.FoldersRoles.Add(tree.Folder.Id, ProductRoleEnum.ProductManager);
+            folderManager.ProductsRoles.Add((tree.Own.Id, ProductRoleEnum.ProductViewer));
+            folderManager.ProductsRoles.Add((tree.Sibling.Id, ProductRoleEnum.ProductViewer));
+            tree.Users.Setup(u => u[folderManager.Id]).Returns(folderManager);
+
+            await tree.Home(productManager).EnableGrafana(tree.Folder.Id.ToString());
+            await tree.Home(folderManager).EnableGrafana(tree.Folder.Id.ToString());
+
+            Assert.Empty(SensorUpdates(tree));
+
+            // The product itself is the product Manager's to switch.
+            await tree.Home(productManager).EnableGrafana(tree.Own.Id.ToString());
+
+            Assert.Contains(tree.Cpu.Id, SensorUpdates(tree));
+        }
+
+        [Fact]
+        public async Task NestedNode_IsManagedThroughItsRootProduct()
+        {
+            // Roles are held per root product: a role entry on a nested node's own id counts for nothing.
+            var tree = new WebAccessFixture();
+            var module = tree.ServiceAlive.Parent;
+
+            var onNodeOnly = new User("role on the node id");
+            onNodeOnly.ProductsRoles.Add((module.Id, ProductRoleEnum.ProductManager));
+            onNodeOnly.ProductsRoles.Add((tree.Own.Id, ProductRoleEnum.ProductViewer));
+            tree.Users.Setup(u => u[onNodeOnly.Id]).Returns(onNodeOnly);
+
+            await tree.Home(onNodeOnly).EnableGrafana(module.Id.ToString());
+            await tree.Home(onNodeOnly).ClearHistoryNode(module.Id.ToString());
+
+            Assert.Equal(0, tree.Writes());
+
+            await tree.Home(tree.Manager).EnableGrafana(module.Id.ToString());
+
+            Assert.Equal([tree.ServiceAlive.Id], SensorUpdates(tree));
+        }
+
+        [Fact]
+        public async Task ProductSettings_AreTheManagersToChange()
+        {
+            var tree = new WebAccessFixture();
+
+            ProductInfoViewModel Form() => new(tree.Tree.Nodes[tree.Own.Id]) { Description = "changed" };
+
+            foreach (var refused in new[] { tree.Outsider, tree.Member })
+                Assert.IsType<EmptyResult>(await tree.Home(refused).UpdateProductInfo(Form()));
+
+            Assert.Equal(0, tree.Writes());
+
+            Assert.IsType<PartialViewResult>(await tree.Home(tree.Manager).UpdateProductInfo(Form()));
+            Assert.IsType<PartialViewResult>(await tree.Home(tree.Admin).UpdateProductInfo(Form()));
+            Assert.Equal(2, tree.Writes());
         }
 
         [Fact]
@@ -485,6 +589,12 @@ namespace HSMServer.Core.Tests.Controllers
 
             return $"{alert.EntityId}:{alert.Actions.Sum(a => a.AvailableChats.Count)}";
         }
+
+        private static List<Guid> SensorUpdates(WebAccessFixture tree) =>
+            tree.Cache.Invocations
+                .Where(i => i.Method.Name == nameof(HSMServer.Core.Cache.ITreeValuesCache.UpdateSensorAsync))
+                .Select(i => ((HSMServer.Core.Cache.UpdateEntities.SensorUpdate)i.Arguments[0]).Id)
+                .ToList();
 
         private static List<Guid> Products(IActionResult grid) =>
             Assert.IsAssignableFrom<INodeChildrenViewModel>(Assert.IsType<PartialViewResult>(grid).Model).VisibleItems.Select(p => p.Id).ToList();

@@ -19,8 +19,12 @@ namespace HSMServer.Model.TreeViewModel
     /// The rule is the one the tree itself is built by (<see cref="TreeViewModel.GetUserProducts"/>): a
     /// sensor or node is visible when the user is an admin or holds any role on its ROOT product; a folder
     /// is visible when the user is an admin, holds a role on the folder, or sees one of its products.
-    /// Whether the user may CHANGE what they see (Manager role) is a separate question this class does
-    /// not answer.
+    /// </para>
+    /// <para>
+    /// Whether the user may CHANGE what they see is the second rule, answered by the <c>Managed</c>
+    /// lookups: a sensor or node is managed by an admin and by a Manager of its ROOT product, a folder by
+    /// an admin and by a Manager of the folder. An entity the user sees but does not manage is "not
+    /// found" for these lookups, like an unknown id.
     /// </para>
     /// </summary>
     public sealed class UserTreeAccess
@@ -67,7 +71,13 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsVisible(User user, Guid id) =>
             TryGetSensor(user, id, out _) || TryGetNode(user, id, out _) || TryGetFolder(user, id, out _);
 
-        public bool IsVisible(User user, NodeViewModel node) =>
+        public bool IsVisible(User user, NodeViewModel node) => IsVisibleTo(user, node);
+
+        /// <summary>
+        /// The visibility rule for a node or sensor the caller already holds. Static for the controllers
+        /// outside the tree page that keep the tree itself (the product and access key pages).
+        /// </summary>
+        public static bool IsVisibleTo(User user, NodeViewModel node) =>
             user is not null && RootOf(node) is { } root && HasProduct(user, root.Id);
 
         public bool IsVisible(User user, FolderModel folder) =>
@@ -81,19 +91,63 @@ namespace HSMServer.Model.TreeViewModel
         public Dictionary<Guid, ProductNodeViewModel> GetVisibleProducts(User user, FolderModel folder) =>
             folder.Products.Where(p => IsVisible(user, p.Value)).ToDictionary(p => p.Key, p => p.Value);
 
-        /// <summary>
-        /// Ids of the sensors under <paramref name="id"/> (a sensor itself, a node subtree, or the visible
-        /// products of a folder). Empty for an unknown id and for one the user cannot see.
-        /// </summary>
-        public List<Guid> GetSensorIds(User user, Guid id)
+        // ---- the Manager rule: what the user may change
+
+        public bool TryGetManagedSensor(User user, Guid id, out SensorNodeViewModel sensor)
         {
-            if (TryGetSensor(user, id, out _) || TryGetNode(user, id, out _))
+            if (_tree.Sensors.TryGetValue(id, out sensor) && CanManage(user, sensor))
+                return true;
+
+            sensor = null;
+            return false;
+        }
+
+        public bool TryGetManagedNode(User user, Guid id, out ProductNodeViewModel node)
+        {
+            if (_tree.Nodes.TryGetValue(id, out node) && CanManage(user, node))
+                return true;
+
+            node = null;
+            return false;
+        }
+
+        public bool TryGetManagedFolder(User user, Guid id, out FolderModel folder)
+        {
+            if (_folders.TryGetValue(id, out folder) && CanManage(user, folder))
+                return true;
+
+            folder = null;
+            return false;
+        }
+
+        public bool CanManage(User user, NodeViewModel node) =>
+            user is not null && RootOf(node) is { } root && ManagesProduct(user, root.Id);
+
+        public bool CanManage(User user, FolderModel folder) =>
+            user is not null && folder is not null && user.IsFolderManager(folder.Id);
+
+        /// <summary>
+        /// The products of a folder the user manages. The folder Manager role does not imply the Manager
+        /// role on every product in it: a user who already held a role on a product keeps that role when
+        /// the product enters the folder, and a product role can be changed afterwards.
+        /// </summary>
+        public Dictionary<Guid, ProductNodeViewModel> GetManagedProducts(User user, FolderModel folder) =>
+            folder.Products.Where(p => CanManage(user, p.Value)).ToDictionary(p => p.Key, p => p.Value);
+
+        /// <summary>
+        /// Ids of the sensors under <paramref name="id"/> that the user may change: a managed sensor
+        /// itself, the subtree of a managed node, or the managed products of a managed folder. Empty for
+        /// an unknown id and for one the user does not manage.
+        /// </summary>
+        public List<Guid> GetManagedSensorIds(User user, Guid id)
+        {
+            if (TryGetManagedSensor(user, id, out _) || TryGetManagedNode(user, id, out _))
                 return _tree.GetAllNodeSensors(id);
 
             var sensors = new List<Guid>();
 
-            if (TryGetFolder(user, id, out var folder))
-                foreach (var productId in GetVisibleProducts(user, folder).Keys)
+            if (TryGetManagedFolder(user, id, out var folder))
+                foreach (var productId in GetManagedProducts(user, folder).Keys)
                     sensors.AddRange(_tree.GetAllNodeSensors(productId));
 
             return sensors;
@@ -101,6 +155,9 @@ namespace HSMServer.Model.TreeViewModel
 
         private static bool HasProduct(User user, Guid productId) =>
             user.IsAdmin || (user.ProductsRoles is not null && user.IsProductAvailable(productId));
+
+        private static bool ManagesProduct(User user, Guid productId) =>
+            user.IsAdmin || (user.ProductsRoles is not null && user.IsManager(productId));
 
         // NodeViewModel.RootProduct casts on its way up and throws for an entry that is not attached to a
         // product (yet, or any more); this walk answers null for it, so such an entry is simply not found.

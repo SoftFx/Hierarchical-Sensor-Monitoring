@@ -59,7 +59,8 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         // Every sensor, node or folder id from the client is resolved through this: it answers "not
         // found" for an entity of a product (or folder) the user has no role on. The controller holds no
-        // reference to the global tree, so an action cannot look an id up past the check.
+        // reference to the global tree, so an action cannot look an id up past the check. An action that
+        // changes what it addresses uses the Managed lookups: seeing a product is not enough to change it.
         private readonly UserTreeAccess _tree;
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
@@ -216,12 +217,12 @@ namespace HSMServer.Controllers
             foreach (var id in model.Ids)
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
-                if (_tree.TryGetNode(CurrentUser, decodedId, out _))
+                if (_tree.TryGetManagedNode(CurrentUser, decodedId, out _))
                 {
-                    foreach (var sensorId in GetNodeSensors(decodedId))
+                    foreach (var sensorId in GetManagedSensors(decodedId))
                         await _treeValuesCache.UpdateMutedSensorStateAsync(sensorId, CurrentInitiator, newMutingPeriod);
                 }
-                else if (_tree.TryGetSensor(CurrentUser, decodedId, out var sensor))
+                else if (_tree.TryGetManagedSensor(CurrentUser, decodedId, out var sensor))
                     await _treeValuesCache.UpdateMutedSensorStateAsync(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
         }
@@ -233,12 +234,12 @@ namespace HSMServer.Controllers
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
 
-                if (_tree.TryGetNode(CurrentUser, decodedId, out _))
+                if (_tree.TryGetManagedNode(CurrentUser, decodedId, out _))
                 {
-                    foreach (var sensorId in GetNodeSensors(decodedId))
+                    foreach (var sensorId in GetManagedSensors(decodedId))
                         await _treeValuesCache.UpdateMutedSensorStateAsync(sensorId, CurrentInitiator);
                 }
-                else if (_tree.TryGetSensor(CurrentUser, decodedId, out var sensor))
+                else if (_tree.TryGetManagedSensor(CurrentUser, decodedId, out var sensor))
                     await _treeValuesCache.UpdateMutedSensorStateAsync(sensor.Id, CurrentInitiator);
             }
         }
@@ -462,12 +463,13 @@ namespace HSMServer.Controllers
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
-            if (_tree.TryGetNode(CurrentUser, decodedId, out var node))
+            if (_tree.TryGetManagedNode(CurrentUser, decodedId, out var node))
                 await _treeValuesCache.ClearNodeHistoryAsync(GetRequest(node.Id));
-            else if (_tree.TryGetSensor(CurrentUser, decodedId, out var sensor))
+            else if (_tree.TryGetManagedSensor(CurrentUser, decodedId, out var sensor))
                 await _treeValuesCache.ClearSensorHistoryAsync(GetRequest(sensor.Id));
         }
 
+        // The mute dialog names what its save will mute, so it lists the items the user manages.
         [HttpPost]
         public IActionResult MuteSensors([FromBody] string[] ids)
         {
@@ -477,11 +479,11 @@ namespace HSMServer.Controllers
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
 
-                if (_tree.TryGetNode(CurrentUser, decodedId, out var node))
+                if (_tree.TryGetManagedNode(CurrentUser, decodedId, out var node))
                     result.Add(node);
-                else if (_tree.TryGetSensor(CurrentUser, decodedId, out var sensor))
+                else if (_tree.TryGetManagedSensor(CurrentUser, decodedId, out var sensor))
                     result.Add(sensor);
-                else if (_tree.TryGetFolder(CurrentUser, decodedId, out var folder))
+                else if (_tree.TryGetManagedFolder(CurrentUser, decodedId, out var folder))
                     result.Add(folder);
             }
 
@@ -552,7 +554,7 @@ namespace HSMServer.Controllers
 
         private async ValueTask ChangeSensorsIntegrationAsync(string selectedNode, Integration integration)
         {
-            foreach (var sensorId in GetNodeSensors(SensorPathHelper.DecodeGuid(selectedNode)))
+            foreach (var sensorId in GetManagedSensors(SensorPathHelper.DecodeGuid(selectedNode)))
             {
                 var update = new SensorUpdate()
                 {
@@ -565,8 +567,9 @@ namespace HSMServer.Controllers
             }
         }
 
-        // Sensors under a sensor, node or folder id from the client; empty when the user cannot see it.
-        private List<Guid> GetNodeSensors(Guid id) => _tree.GetSensorIds(CurrentUser, id);
+        // Sensors under a sensor, node or folder id from the client that the user may change; empty when
+        // the user does not manage it.
+        private List<Guid> GetManagedSensors(Guid id) => _tree.GetManagedSensorIds(CurrentUser, id);
 
         #region Update
 
@@ -795,7 +798,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async ValueTask<IActionResult> UpdateSensorInfo(SensorInfoViewModel newModel)
         {
-            if (!_tree.TryGetSensor(CurrentUser, SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
+            if (!_tree.TryGetManagedSensor(CurrentUser, SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
                 return _emptyResult;
 
             if (!ModelState.IsValid)
@@ -872,8 +875,8 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async ValueTask<IActionResult> UpdateSensorDisplayUnit(string encodedId, RateDisplayUnit displayUnit)
         {
-            // An unknown id was a silent no-op answered with 200; a not-visible id answers the same.
-            if (!_tree.TryGetSensor(CurrentUser, SensorPathHelper.DecodeGuid(encodedId), out var sensor))
+            // An unknown id was a silent no-op answered with 200; an id the user does not manage answers the same.
+            if (!_tree.TryGetManagedSensor(CurrentUser, SensorPathHelper.DecodeGuid(encodedId), out var sensor))
                 return Ok();
 
             var update = new SensorUpdate
@@ -979,8 +982,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
-            // Unknown and not-visible ids answer the same empty result (the unchecked version threw on an unknown id).
-            if (!_tree.TryGetSensor(CurrentUser, sensorId, out var sensorNodeViewModel))
+            // The form of a Manager's write ("Edit last value"). An unknown id and one the user does not
+            // manage answer the same empty result.
+            if (!_tree.TryGetManagedSensor(CurrentUser, sensorId, out var sensorNodeViewModel))
                 return _emptyResult;
 
             var isAccessKeyExist =
@@ -998,9 +1002,9 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // The sensor comes from the tree, not from the posted form: a sensor the user cannot see is not
-            // found, and the product whose key allows the write is the sensor's own.
-            if (!_tree.TryGetSensor(CurrentUser, modal.SensorId, out var sensor))
+            // The sensor comes from the tree, not from the posted form: a sensor the user does not manage is
+            // not found, and the product whose key allows the write is the sensor's own.
+            if (!_tree.TryGetManagedSensor(CurrentUser, modal.SensorId, out var sensor))
                 return NotFound();
 
             var key = GetKeyOrDefaultWithPermissions(sensor.RootProduct.Id, KeyPermissions.CanSendSensorData)?.Id;
@@ -1032,7 +1036,7 @@ namespace HSMServer.Controllers
         [HttpPost("Home/{sensorId:guid}")]
         public async Task<IActionResult> UpdateSensorTableSettings(Guid sensorId, [FromBody] TableSettingsUpdateDto tableSettingsUpdateDto)
         {
-            if (!_tree.TryGetSensor(CurrentUser, sensorId, out var sensor))
+            if (!_tree.TryGetManagedSensor(CurrentUser, sensorId, out var sensor))
                 return BadRequest("No sensor found");
 
             if (tableSettingsUpdateDto.MaxCommentHideSize is not null &&
@@ -1069,7 +1073,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> UpdateProductInfo(ProductInfoViewModel newModel)
         {
-            if (!_tree.TryGetNode(CurrentUser, SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
+            if (!_tree.TryGetManagedNode(CurrentUser, SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
 
             if (!ModelState.IsValid)
@@ -1111,7 +1115,7 @@ namespace HSMServer.Controllers
             // A folder's settings are inherited by every product in it, so they are the folder Manager's to
             // change (the rule EditAlerts applies to a folder): seeing the folder through one of its
             // products is not enough, and the answer is the one of an unknown id.
-            if (!_tree.TryGetFolder(CurrentUser, newModel.EncodedId.ToGuid(), out var folder) || !CurrentUser.IsFolderManager(folder.Id))
+            if (!_tree.TryGetManagedFolder(CurrentUser, newModel.EncodedId.ToGuid(), out var folder))
                 return _emptyResult;
 
             if (!ModelState.IsValid)
