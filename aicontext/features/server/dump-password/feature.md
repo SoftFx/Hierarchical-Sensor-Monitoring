@@ -1,17 +1,17 @@
 # Feature: Dump password
 
 > Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
-> Scope: the password of a root product under which its large file values are given out (#1885, ADR-0022 point 13): who sets and sees it, how it is generated and checked, its versions and their retention, where it is stored, and what it does and does not protect. The archives built under it and the download are `../large-file-download/feature.md`.
+> Scope: the password of a root product under which its secure large file values are given out (#1885, ADR-0022 point 13): who sets and sees it, how it is generated and checked, its versions and their retention, where it is stored, and what it does and does not protect. The archives built under it and the download are `../large-file-download/feature.md`.
 
 ---
 
 ## Overview
 
-Every large file value leaves the server as a zip encrypted with AES-256 under the dump password of the file's root product. The password is set and seen on the product's settings page by a Manager of that product and by an admin; no API, MCP tool, journal record or log line carries its value. HSM offers a generated password; one typed by a person has to pass rules of its own.
+The password applies to **secure** files only (glossary "Secure file"): every secure large file value leaves the server as a zip encrypted with AES-256 under the dump password of the file's root product. A file that is not secure (the application decides at the send) leaves as the same zip without encryption, to everyone who may see the product, whether or not the product has a password; a password change does not rewrite it and password versions do not apply to it. The password is set and seen on the product's settings page by a Manager of that product and by an admin; no API, MCP tool, journal record or log line carries its value. HSM offers a generated password; one typed by a person has to pass rules of its own.
 
-A change of the password makes a new version. The archives of the product are re-encrypted with it in the background; each archive records the version it opens with, and a download names it in `X-Hsm-Password-Version`. A replaced version stays readable to Managers and admins until 30 days after its last archive was re-encrypted, so a copy downloaded earlier can still be opened.
+A change of the password makes a new version. The secure archives of the product are re-encrypted with it in the background; each archive records the version it opens with, and a download names it in `X-Hsm-Password-Version`. A replaced version stays readable to Managers and admins until 30 days after its last archive was re-encrypted, so a copy downloaded earlier can still be opened.
 
-While a product has no password, its large files are accepted and kept verified, and cannot be downloaded.
+While a product has no password, its secure large files are accepted and kept verified, and cannot be downloaded; its files that are not secure are packed and downloadable as usual.
 
 ## Invariants
 
@@ -37,7 +37,7 @@ While a product has no password, its large files are accepted and kept verified,
 
 The product settings page (`EditProduct`) carries a **Dump password** section (`Views/Product/_DumpPassword.cshtml`) for everyone who may see the root product (`User.IsProductAvailable`):
 
-- **Everyone:** "Set" or "Not set" (with "the product's large files are kept and cannot be downloaded" when not set), and a short text: every large file is given out only as an AES-256 zip under this password; it opens in 7-Zip or WinRAR and usually not in the archiver built into Windows; the password does not hide the name of the file inside, its sizes or its time; a new password re-encrypts the kept archives in the background, and until then an archive opens with the version it was made with, which the download names.
+- **Everyone:** "Set" or "Not set" (with "the product's secure large files are kept and cannot be downloaded" when not set), and a short text: the password applies to secure large files only; every secure large file is given out only as an AES-256 zip under this password; a large file that is not secure (the sending application decides) is given out as the same zip without encryption to everyone who may see the product, whether or not a password is set, and a new password does not change it; it opens in 7-Zip or WinRAR and usually not in the archiver built into Windows; the password does not hide the name of the file inside, its sizes or its time; a new password re-encrypts the kept secure archives in the background, and until then an archive opens with the version it was made with, which the download names.
 - **A Manager of the root product or an admin, additionally:** the table of kept versions (version, set at, set by, state: current; replaced, archives being re-encrypted; replaced, kept until a date) without values; **Show**, which fetches the values; a field with **Generate** and **Save**.
 
 The page model never holds a value. The three actions of `DumpPasswordController` are POSTs with a JSON body, cookie-authenticated, `[ValidateAntiForgeryToken]` (the token travels in the `RequestVerificationToken` header) and `Cache-Control: no-store`:
@@ -59,8 +59,8 @@ An unknown product, and a product the caller cannot see (`User.IsProductAvailabl
 ## Versions and their retention
 
 - A version holds the value, the time it was set, who set it (the initiator) and, once retired, the time it was retired.
-- The current version is the highest. New archives are built under it; archives under older versions are re-encrypted one at a time by the archive builder, which takes the (password, version) pair once at the start of each build.
-- After a commit, and at the end of each pass, the builder retires every replaced version that no archive carries and no build in flight uses. A retired version stays readable on the page with "kept until" for `LargeFileArchives.PasswordRetentionDays` (30 by default, 0–3650) and is then removed by the builder's pass. A version that can no longer be read cannot be used to re-encrypt, so a version an archive still carries is never retired.
+- The current version is the highest. New secure archives are built under it; secure archives under older versions are re-encrypted one at a time by the archive builder, which takes the (password, version) pair once at the start of each build.
+- At the end of each pass, the builder retires every replaced version that no secure archive carries and no build in flight uses (an archive that is not secure carries no version and keeps none alive). A retired version stays readable on the page with "kept until" for `LargeFileArchives.PasswordRetentionDays` (30 by default, 0–3650) and is then removed by the builder's pass. A version that can no longer be read cannot be used to re-encrypt, so a version an archive still carries is never retired.
 - After a restart the builder also looks at products that have a password but no file seen since the start.
 
 ## Journal
@@ -80,8 +80,8 @@ A saved version writes one journal record after the durable write: kind `nodeSet
 | Contract | Location | Notes |
 |---|---|---|
 | `POST /DumpPassword/Show`, `/Generate`, `/Set` | `src/server/HSMServer/Controllers/DumpPasswordController.cs` | Web UI only; antiforgery; no-store |
-| `X-Hsm-Password-Version` | `Model/ManagementApi/LargeFiles/LargeFileDownloadResult.cs` | The version on every archive answer; the value is never sent |
-| `passwordVersion`, `passwordSetUtc` | `Model/ManagementApi/LargeFiles/LargeFileDtos.cs` | In the description of a packed file (REST and MCP); no value |
+| `X-Hsm-Password-Version` | `Model/ManagementApi/LargeFiles/LargeFileDownloadResult.cs` | The version on every answer for a secure archive, absent for one that is not secure; the value is never sent |
+| `secure`, `passwordVersion`, `passwordSetUtc` | `Model/ManagementApi/LargeFiles/LargeFileDtos.cs` | In the description of a file (REST and MCP); the version and its time are null for a file that is not secure; no value |
 
 There is no API or MCP route to read or set a dump password. An AI agent gets it from its operator.
 
