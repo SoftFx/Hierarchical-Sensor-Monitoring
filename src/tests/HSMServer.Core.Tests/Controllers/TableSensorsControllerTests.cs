@@ -558,6 +558,31 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task A_download_whose_user_lost_the_product_after_the_first_page_is_cut_off_before_the_next_page()
+        {
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5 };
+            var table = await SeedAsync(12);
+            var viewer = Viewer(_product);
+
+            // While the second page is read, the user's role in the product is taken away.
+            var blocks = new StubBlocks(_service)
+            {
+                OnRead = (rows, call) =>
+                {
+                    if (call == 2)
+                        viewer.ProductsRoles.Clear();
+                    return rows;
+                },
+            };
+
+            var (status, csv, context) = await CallFullAsync("download", viewer, table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal(200, status);
+            Assert.True(Aborted(context));
+            Assert.Equal(6, csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length); // the header and the first page only
+        }
+
+        [Fact]
         public void The_file_name_is_the_history_exports_with_unsafe_characters_replaced()
         {
             var name = TablePageService.FileName("prod/quotes/EUR:USD*", Hour0, Hour0.AddHours(1));

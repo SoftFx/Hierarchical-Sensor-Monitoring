@@ -4110,6 +4110,12 @@
             </summary>
             <param name="bound">False when the binding of the query reported an error (a time that is not one).</param>
         </member>
+        <member name="M:HSMServer.TablePages.TablePageService.AccessLost(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>
+            Why a download may not go on (the access check of the first page, made again for a later one): the sensor is
+            gone, is not a table sensor, or is in a product the user may not see now; null when it may.
+            </summary>
+        </member>
         <member name="M:HSMServer.TablePages.TablePageService.ReadPageAsync(System.Guid,System.DateTime,System.DateTime,System.Threading.CancellationToken)">
             <summary>
             One page of a download from <paramref name="from"/>: at most the text page of the read route, read again at
@@ -4120,17 +4126,19 @@
         <member name="T:HSMServer.TablePages.TableDownloadResult">
             <summary>
             The CSV of a download, page by page: the first page was read before the headers, the next ones are read as the
-            previous is written, one page in memory at a time, the header line once. A finding past the first byte (failed
-            blocks or batches, more rows than allowed, one time with more rows than a read returns, a store fault, the sensor
-            gone) aborts the connection and is logged.
+            previous is written, one page in memory at a time, the header line once. Each later page is written only after the
+            user's access to the sensor's product is checked again. A finding past the first byte (failed blocks or batches,
+            more rows than allowed, one time with more rows than a read returns, a store fault, the sensor gone, the access
+            lost) aborts the connection and is logged.
             </summary>
         </member>
-        <member name="M:HSMServer.TablePages.TableDownloadResult.#ctor(HSMServer.TablePages.TablePageService,System.Guid,System.DateTime,HSMServer.Core.TableSensors.TableRows,System.String)">
+        <member name="M:HSMServer.TablePages.TableDownloadResult.#ctor(HSMServer.TablePages.TablePageService,HSMServer.Model.Authentication.User,System.Guid,System.DateTime,HSMServer.Core.TableSensors.TableRows,System.String)">
             <summary>
             The CSV of a download, page by page: the first page was read before the headers, the next ones are read as the
-            previous is written, one page in memory at a time, the header line once. A finding past the first byte (failed
-            blocks or batches, more rows than allowed, one time with more rows than a read returns, a store fault, the sensor
-            gone) aborts the connection and is logged.
+            previous is written, one page in memory at a time, the header line once. Each later page is written only after the
+            user's access to the sensor's product is checked again. A finding past the first byte (failed blocks or batches,
+            more rows than allowed, one time with more rows than a read returns, a store fault, the sensor gone, the access
+            lost) aborts the connection and is logged.
             </summary>
         </member>
         <member name="T:HSMServer.Validation.TextFieldValidator">

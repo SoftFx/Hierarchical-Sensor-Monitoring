@@ -359,10 +359,22 @@ namespace HSMServer.TablePages
             if (first.RowCount > _maxDownloadRows)
                 return Refuse(StatusCodes.Status400BadRequest, TooMany());
 
-            return new TableDownloadResult(this, table.Id, toUtc, first, FileName(table.FullPath, fromUtc, toUtc));
+            return new TableDownloadResult(this, user, table.Id, toUtc, first, FileName(table.FullPath, fromUtc, toUtc));
         }
 
         internal long MaxDownloadRows => _maxDownloadRows;
+
+        /// <summary>
+        /// Why a download may not go on (the access check of the first page, made again for a later one): the sensor is
+        /// gone, is not a table sensor, or is in a product the user may not see now; null when it may.
+        /// </summary>
+        internal string AccessLost(User user, Guid sensorId) => _cache.GetSensor(sensorId) switch
+        {
+            null => "the sensor was removed",
+            not TableSensorModel => "the sensor is not a table sensor",
+            var sensor when user is null || !user.IsProductAvailable(sensor.Root.Id) => "the user may not see the sensor's product any more",
+            _ => null,
+        };
 
         /// <summary>
         /// One page of a download from <paramref name="from"/>: at most the text page of the read route, read again at
@@ -482,11 +494,12 @@ namespace HSMServer.TablePages
 
     /// <summary>
     /// The CSV of a download, page by page: the first page was read before the headers, the next ones are read as the
-    /// previous is written, one page in memory at a time, the header line once. A finding past the first byte (failed
-    /// blocks or batches, more rows than allowed, one time with more rows than a read returns, a store fault, the sensor
-    /// gone) aborts the connection and is logged.
+    /// previous is written, one page in memory at a time, the header line once. Each later page is written only after the
+    /// user's access to the sensor's product is checked again. A finding past the first byte (failed blocks or batches,
+    /// more rows than allowed, one time with more rows than a read returns, a store fault, the sensor gone, the access
+    /// lost) aborts the connection and is logged.
     /// </summary>
-    internal sealed class TableDownloadResult(TablePageService service, Guid sensorId, DateTime to, TableRows first, string fileName) : IActionResult
+    internal sealed class TableDownloadResult(TablePageService service, User user, Guid sensorId, DateTime to, TableRows first, string fileName) : IActionResult
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -525,6 +538,14 @@ namespace HSMServer.TablePages
                     if (error is not null)
                     {
                         Abort(http, $"the read refused the next page: {error}", written);
+                        return;
+                    }
+
+                    // The check made before the first page holds for the first page only: the user's roles, or the
+                    // sensor's product, may have changed since.
+                    if (service.AccessLost(user, sensorId) is { } lost)
+                    {
+                        Abort(http, lost, written);
                         return;
                     }
 
