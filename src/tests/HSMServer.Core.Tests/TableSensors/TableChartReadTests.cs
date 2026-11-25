@@ -524,7 +524,7 @@ namespace HSMServer.Core.Tests.TableSensors
 
 
         [Fact]
-        public async Task A_merged_hour_is_selected_by_the_range_of_the_class_that_holds_the_sensors_rows_not_through_the_gap_between_two_classes()
+        public async Task An_hour_selected_through_the_gap_between_two_classes_returns_no_row_and_reports_no_failed_batch()
         {
             // The review's sequence: one hour with rows of a (kept one week, P1) only at minute 1 and rows of c (kept five
             // weeks, P5) only at minute 30.
@@ -542,7 +542,9 @@ namespace HSMServer.Core.Tests.TableSensors
             // Every index record of the hour survives without its bytes.
             _batches.BatchMissing = (hour, _) => hour == Hour0.Ticks;
 
-            // A range between the two classes' rows can hold no row of a: the hour is not read for it, and nothing failed.
+            // A range between the two classes' rows can hold no row of a. The union of the hour's class ranges meets it, so
+            // the hour is selected and its batches are read (#1850 part 4c); the store skips a's record, out of the range,
+            // before its batch: no row and nothing failed.
             var (from, to) = (Hour0.AddMinutes(10), Hour0.AddMinutes(11));
             var read = _service.Read(a.Id, from, to).Value;
             var chart = _service.Reduce(a.Id, from, to, Columns, 10).Value;
@@ -555,6 +557,93 @@ namespace HSMServer.Core.Tests.TableSensors
             _batches.BatchMissing = null;
             Assert.Equal((0, 1), (read.RowCount, read.BatchesFailed));
             Assert.Equal((0L, 1, true), (chart.RowCount, chart.BatchesFailed, chart.IsIncomplete));
+        }
+
+
+        // === Reads during a move between period classes (#1850 part 4c: the read side) ===
+
+        [Fact]
+        public async Task Rows_moved_into_a_class_the_hours_record_names_are_read_outside_that_classs_own_range()
+        {
+            // s's row at minute 1 in P1, r's at minute 30 in P5: the record of hour 0 names both. s is then moved into P5,
+            // whose own range in the record is minute 30 only, and the source is dropped: the copy alone serves it.
+            var (s, _) = await SeedMoveAsync(1);
+            MoveHour(s, Hour0.Ticks);
+            _batches.DropWeek(_product, new TableBatchWeek(HSMDatabase.AccessManager.StorageWeek.GetStartTicks(Hour0.Ticks), 1));
+
+            var (from, to) = (Hour0, Hour0.AddMinutes(20));
+            var read = _service.Read(s.Id, from, to).Value;
+            var chart = _service.Reduce(s.Id, from, to, Columns, 10).Value;
+
+            Assert.Equal(Expected((Hour0.AddMinutes(1).Ticks, 0.0, 0L)), Snapshot(read));
+            Assert.Equal((1, 0), (read.BatchesRead, read.BatchesFailed));
+            Assert.Equal((1L, 1, 0, false), (chart.RowCount, chart.BatchesRead, chart.BatchesFailed, chart.IsIncomplete));
+        }
+
+        [Fact]
+        public async Task A_move_step_of_one_sensor_plans_no_chart_of_another_again_and_a_chart_of_the_moved_sensor_plans_again_once()
+        {
+            var (s, r) = await SeedMoveAsync(4);
+            var replans = new List<long>();
+            var plans = new List<int>();
+            var stale = new List<bool>();
+            _service.BeforeChartReplan = replans.Add;
+            _service.PlanTaken = stale.Add;
+
+            // r's chart, s's step of hour 0 after r's plan: the chart answers from its first plan.
+            _service.AfterChartPlan = plan =>
+            {
+                plans.Add(plan);
+                if (plan == 1)
+                    MoveHour(s, Hour0.Ticks);
+            };
+
+            var chart = Reduce(r, 100);
+            Assert.Equal([1], plans);
+            Assert.Empty(replans);
+            Assert.Equal((4L, false), (chart.RowCount, chart.IsIncomplete));
+
+            // r's chart, s's step of hour 1 between the steps of r's plan: the plan is not stale.
+            (_service.AfterChartPlan, stale) = (null, []);
+            _service.PlanTaken = stale.Add;
+            _service.PlanStep = Once("blocks", () => MoveHour(s, Hour0.AddHours(1).Ticks));
+
+            chart = Reduce(r, 100);
+            Assert.Equal([false], stale);
+            Assert.Empty(replans);
+            Assert.Equal((4L, false), (chart.RowCount, chart.IsIncomplete));
+
+            // s's read planned before the switch of hour 2 and reading after it: the plan's class still holds the rows (the
+            // source is deleted only after the switch, under the write side of the gate the read holds), so it is complete.
+            (_service.PlanStep, stale) = (null, []);
+            _service.PlanTaken = isStale =>
+            {
+                stale.Add(isStale);
+                if (stale.Count == 1)
+                    MoveHour(s, Hour0.AddHours(2).Ticks);
+            };
+
+            var rows = _service.Read(s.Id, From, To).Value;
+            Assert.Equal([false], stale);
+            Assert.Equal(Expected([.. Enumerable.Range(0, 4).Select(h => (Hour0.AddHours(h).AddMinutes(1).Ticks, (double?)h, (long?)h))]), Snapshot(rows));
+            Assert.Equal(0, rows.BatchesFailed);
+
+            // s's chart across the step of hour 3, over a range that holds s's row of the hour only: it plans again once and
+            // answers the moved row, outside the own range of the class it was moved into.
+            _service.PlanTaken = null;
+            plans.Clear();
+            _service.AfterChartPlan = plan =>
+            {
+                plans.Add(plan);
+                if (plan == 1)
+                    MoveHour(s, Hour0.AddHours(3).Ticks);
+            };
+
+            chart = _service.Reduce(s.Id, Hour0.AddHours(3), Hour0.AddHours(3).AddMinutes(20), Columns, 10).Value;
+            Assert.Equal([1, 2], plans);
+            Assert.Equal([Hour0.AddHours(3).Ticks], replans);
+            Assert.Equal((1L, 1, false), (chart.RowCount, chart.BatchesRead, chart.IsIncomplete));
+            Assert.Empty(_batches.GetPlacement(_product, s.Id).Segments);
         }
 
 
@@ -801,6 +890,59 @@ namespace HSMServer.Core.Tests.TableSensors
 
 
         // === Helpers ===
+
+        private async Task KeepAsync(BaseSensorModel sensor, int days) =>
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = new TimeIntervalModel(TimeSpan.FromDays(days).Ticks) })).IsOk);
+
+        // Sensors s (kept one week, P1) and r (five weeks, P5); in each of the given hours from hour 0 on, a row of s at minute
+        // 1 (bid and size the hour's number) and one of r at minute 30, all merged. Then s is kept five weeks too and a pass
+        // records the change: the hours merged so far stay in P1 (a segment of s's placement), owed to the move.
+        private async Task<(BaseSensorModel S, BaseSensorModel R)> SeedMoveAsync(int hours)
+        {
+            var s = await RegisterAsync("s");
+            var r = await RegisterAsync("r");
+            await KeepAsync(s, 7);
+            await KeepAsync(r, 35);
+
+            for (int h = 0; h < hours; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(40);
+                Put(Block(("s", [Row(Hour0.AddHours(h).AddMinutes(1).Ticks, h, h)]), ("r", [Row(Hour0.AddHours(h).AddMinutes(30).Ticks, 100 + h, 100 + h)])));
+            }
+
+            Assert.Null(Pass(Hour0.AddHours(hours).AddMinutes(3)).Fault);
+            await KeepAsync(s, 35);
+            Assert.Null(Pass(Hour0.AddHours(hours).AddMinutes(4)).Fault);
+
+            var placement = _batches.GetPlacement(_product, s.Id);
+            Assert.Equal(5, placement.Target);
+            for (int h = 0; h < hours; h++)
+            {
+                Assert.Equal(1, placement.ClassOf(Hour0.AddHours(h).Ticks));
+                Assert.Equal([1, 5], _batches.GetHour(_product, Hour0.AddHours(h).Ticks).Classes.Select(c => c.PeriodWeeks));
+            }
+
+            return (s, r);
+        }
+
+        // A step of the move as the move will make it (#1850 part 4c), its copy and its switch, through the store's seams: the
+        // sensor's batches of the hour copied from its class (P1) into the region of moved batches of P5 with the hour's mark,
+        // then its placement switched to P5 for the hour. The source stays: the placement is the only authority, and the
+        // delete of the source comes with the move.
+        private void MoveHour(BaseSensorModel sensor, long hour)
+        {
+            var week = HSMDatabase.AccessManager.StorageWeek.GetStartTicks(hour);
+            var placement = _batches.GetPlacement(_product, sensor.Id);
+            int from = placement.ClassOf(hour), to = placement.Target;
+            Assert.NotEqual(from, to);
+
+            var batches = _batches.ReadSensor(_product, sensor.Id, from, [hour])
+                .Select(b => new TableBatchToWrite(b.SensorId, b.FirstTime, b.LastTime, b.RowCount, b.Batch)).ToList();
+            Assert.NotEmpty(batches);
+
+            _batches.WriteMoved(_product, new TableBatchWeek(week, to), hour, _batches.ReadMark(_product, new TableBatchWeek(week, from), hour), batches);
+            _batches.SetPlacement(_product, sensor.Id, placement.WithoutHours(hour, hour + TimeSpan.TicksPerHour));
+        }
 
         private static Action<string> Once(string step, Action action)
         {

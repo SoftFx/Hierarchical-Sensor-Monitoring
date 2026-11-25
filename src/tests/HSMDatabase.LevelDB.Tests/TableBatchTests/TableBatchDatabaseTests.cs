@@ -893,6 +893,107 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(2, store.Statistics.ReadFailures);
         }
 
+        [Fact]
+        public void A_read_with_a_range_skips_a_record_out_of_it_before_its_batch_so_only_a_missing_batch_in_the_range_fails()
+        {
+            // A's batches of hour 0 in P4: [+0, +9], [+10, +19], [+20, +29]; and a moved batch of hour 1, [+5, +14].
+            var store = Open();
+            long hour1 = Week0 + Hour;
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 3))]);
+            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), hour1, Mark(hour1), [Batch(_sensorA, hour1 + 5, 0)]);
+
+            // Every batch survives as its index record only. A range that meets three of the four records counts those three
+            // (#1850 part 4c): the first, out of it, is skipped before its batch is fetched.
+            store.BatchMissing = (_, _) => true;
+            var read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 10, hour1 + 6, out var failed);
+            Assert.Empty(read);
+            Assert.Equal((3, 3L), (failed, store.Statistics.ReadFailures));
+
+            // [from, to): a record whose last time is the first tick of the range meets it; one that starts at its end does not.
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 29, hour1 + 5, out failed);
+            Assert.Equal((0, 1), (read.Count, failed));
+            store.BatchMissing = null;
+
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 19, hour1 + 5, out failed);
+            Assert.Equal([(Week0, 1, false), (Week0, 2, false)], read.Select(r => (r.HourTicks, r.Ordinal, r.Moved)));
+            Assert.Equal(0, failed);
+
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], hour1 + 14, hour1 + 15, out failed);
+            Assert.Equal([(hour1, 0, true)], read.Select(r => (r.HourTicks, r.Ordinal, r.Moved)));
+
+            // Without a range, every record.
+            Assert.Equal(4, store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], out failed).Count);
+            Assert.Equal(4L, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_sensors_generation_changes_with_its_own_placement_and_moved_batches_and_with_every_write_of_its_product()
+        {
+            var store = Open();
+            var sensorC = Guid.NewGuid();
+            var (p1, p4) = (new TableBatchWeek(Week0, 1), new TableBatchWeek(Week0, 4));
+            store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 1), (_sensorB, 0, 1))]);
+
+            var readings = new List<(long Product, long A, long B, long C)>();
+            (long Product, long A, long B, long C) Read()
+            {
+                var reading = (store.GetGeneration(_product), store.GetGeneration(_product, _sensorA), store.GetGeneration(_product, _sensorB),
+                    store.GetGeneration(_product, sensorC));
+                readings.Add(reading);
+                return reading;
+            }
+
+            // A write of one sensor changes that sensor's generation and the product's, and no other sensor's (#1850 part 4c).
+            void OnlyA(Action write)
+            {
+                var before = Read();
+                write();
+                var after = Read();
+                Assert.True(after.A != before.A && after.Product != before.Product, "the sensor's and the product's generation change");
+                Assert.Equal((before.B, before.C), (after.B, after.C));
+            }
+
+            // A write of the product changes every sensor's generation, one never named included.
+            void Everyone(Action write)
+            {
+                var before = Read();
+                write();
+                var after = Read();
+                Assert.True(after.Product != before.Product && after.A != before.A && after.B != before.B && after.C != before.C,
+                    $"every generation changes: {before} -> {after}");
+            }
+
+            OnlyA(() => store.SetPlacement(_product, _sensorA, new TablePlacement(4, Week0, [new TablePlacementSegment(Week0, Week0 + Hour, 1)])));
+            // Moved batches of A, into a week database the write creates.
+            OnlyA(() => store.WriteMoved(_product, p4, Week0, store.ReadMark(_product, p1, Week0), [Batch(_sensorA, Week0, 0)]));
+            Assert.Contains(p4, store.GetWeeks(_product));
+            OnlyA(() => store.SetPlacement(_product, _sensorA, new TablePlacement(4, Week0)));
+            OnlyA(() => store.SetPlacement(_product, _sensorA, null));
+
+            // A commit; a week database created by the write of an hour that does not reach its commit; a drop; hours forgotten.
+            Everyone(() => store.WriteHour(_product, Commit(Week0 + Hour, 2), [Part(1, (_sensorB, Hour, 1))]));
+            store.Checkpoint = point =>
+            {
+                if (point == "part-written")
+                    throw new CheckpointException(point);
+            };
+            Everyone(() => Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0 + 2 * Hour, 3), [Part(5, (_sensorB, 2 * Hour, 1))])));
+            store.Checkpoint = null;
+            Assert.False(store.IsHourMerged(_product, Week0 + 2 * Hour));
+            Everyone(() => store.WriteHour(_product, Commit(Week0 + Week, 4), [Part(1, (_sensorB, Week, 1))]));
+            Everyone(() => store.DropWeek(_product, p4));
+            store.DropWeek(_product, new TableBatchWeek(Week0 + Week, 1));
+            Everyone(() => store.ForgetHours(_product, [Week0 + Week]));
+
+            // Never back, for any reader (the readings are in the order taken).
+            for (int i = 1; i < readings.Count; i++)
+                Assert.True(readings[i].Product >= readings[i - 1].Product && readings[i].A >= readings[i - 1].A &&
+                            readings[i].B >= readings[i - 1].B && readings[i].C >= readings[i - 1].C, $"reading {i} went back");
+
+            // A product without a folder: 0.
+            Assert.Equal(0, store.GetGeneration(Guid.NewGuid(), _sensorA));
+        }
+
         // === Placements (#1850 part 4b) ===
 
         [Fact]
