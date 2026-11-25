@@ -28,10 +28,10 @@ namespace HSMServer.TablePages
         /// <summary>The sensor's id, as the tree's encoded id.</summary>
         public string Id { get; set; }
 
-        /// <summary>The range <c>[From, To)</c>; a time without a kind is UTC.</summary>
-        public DateTime From { get; set; }
+        /// <summary>The range <c>[From, To)</c>; a time without a kind is UTC. Both are required.</summary>
+        public DateTime? From { get; set; }
 
-        public DateTime To { get; set; }
+        public DateTime? To { get; set; }
 
         /// <summary>Ordinals of value columns; null for every double column, empty for the row counts only.</summary>
         public int[] Columns { get; set; }
@@ -56,6 +56,19 @@ namespace HSMServer.TablePages
         public const int MaxBuckets = 2000;
 
         public const string NotFoundText = "No table sensor with this id.";
+
+        public const string RangeRequiredText = "From and To are required, as times: the range is [From, To).";
+
+        // The most bytes of a chart request's body: an id, two times, a short list of column ordinals and a number need a
+        // few hundred; the list is at most a schema's columns.
+        public const int MaxChartBodyBytes = 8 * 1024;
+
+        // The most column ordinals a chart request may name: a schema holds at most this many columns.
+        public const int MaxChartColumns = TableBlockLimits.FormatMaxColumnsPerTable;
+
+        // No error body names the sensor: between the access check and the answer it could have moved to a product the
+        // user cannot see.
+        public const string NotATableText = "This sensor is not a table sensor.";
 
         // Retry-After of a 503: the block store cannot be read now (the read route's value).
         public const int RetryAfterSeconds = TableReadService.RetryAfterSeconds;
@@ -92,16 +105,28 @@ namespace HSMServer.TablePages
 
         // === The chart ===
 
-        public async Task<IActionResult> ChartAsync(User user, TableChartRequest request, CancellationToken token)
+        /// <param name="bound">False when the binding of the request reported an error (a value of the wrong type).</param>
+        public async Task<IActionResult> ChartAsync(HttpContext context, User user, TableChartRequest request, bool bound)
         {
+            var token = context.RequestAborted;
+            NoStore(context);
+
+            // No id to resolve: the same answer whatever sensor was meant.
             if (request is null)
                 return Refuse(StatusCodes.Status400BadRequest, "The body cannot be read as a chart request.");
 
             if (Resolve(user, request.Id, out var table) is { } refused)
                 return refused;
 
-            var from = Utc(request.From);
-            var to = Utc(request.To);
+            // After the access check, so an outsider gets the same 404 for every id.
+            if (!bound || request.From is not { } fromTime || request.To is not { } toTime)
+                return Refuse(StatusCodes.Status400BadRequest, RangeRequiredText);
+
+            if (request.Columns is { Length: > MaxChartColumns })
+                return Refuse(StatusCodes.Status400BadRequest, $"At most {MaxChartColumns} columns can be named.");
+
+            var from = Utc(fromTime);
+            var to = Utc(toTime);
 
             if (from >= to)
                 return Refuse(StatusCodes.Status400BadRequest, "From must be before To: the range is [From, To).");
@@ -169,6 +194,9 @@ namespace HSMServer.TablePages
                 times = times.ToArray(),
                 bucketRows = isRows ? null : chart.BucketRows,
                 rowCount = chart.RowCount,
+                // The first and the last row counted (the page's facts line); null without rows.
+                firstTime = chart.FirstRowTicks is { } firstRow ? Time(firstRow) : (DateTime?)null,
+                lastTime = chart.LastRowTicks is { } lastRow ? Time(lastRow) : (DateTime?)null,
                 completeTo = chart.CompleteToTicks is { } complete ? Time(complete) : (DateTime?)null,
                 blocksFailed = chart.BlocksFailed,
                 batchesFailed = chart.BatchesFailed,
@@ -271,15 +299,21 @@ namespace HSMServer.TablePages
         /// the same findings cut the connection off, so the browser shows a failed download and never a file that looks
         /// complete without being so.
         /// </summary>
-        public async Task<IActionResult> DownloadAsync(HttpContext context, User user, string id, DateTime from, DateTime to)
+        /// <param name="bound">False when the binding of the query reported an error (a time that is not one).</param>
+        public async Task<IActionResult> DownloadAsync(HttpContext context, User user, string id, DateTime? from, DateTime? to, bool bound)
         {
             var token = context.RequestAborted;
+            NoStore(context);
 
             if (Resolve(user, id, out var table) is { } refused)
                 return refused;
 
-            var fromUtc = Utc(from);
-            var toUtc = Utc(to);
+            // After the access check, so an outsider gets the same 404 for every id.
+            if (!bound || from is not { } fromTime || to is not { } toTime)
+                return Refuse(StatusCodes.Status400BadRequest, RangeRequiredText);
+
+            var fromUtc = Utc(fromTime);
+            var toUtc = Utc(toTime);
 
             if (fromUtc >= toUtc)
                 return Refuse(StatusCodes.Status400BadRequest, "From must be before To: the range is [From, To).");
@@ -289,8 +323,14 @@ namespace HSMServer.TablePages
             try
             {
                 var (rows, error) = await ReadPageAsync(table.Id, fromUtc, toUtc, token);
+
+                // The sensor was removed since it was resolved: answered as an unknown id. The read's text names the
+                // sensor's path, which may by now be in a product the user cannot see; it is logged, never answered.
                 if (error is not null)
-                    return Refuse(StatusCodes.Status400BadRequest, error);
+                {
+                    _logger.Debug($"A download of table sensor {table.Id} is answered 404: {error}");
+                    return Refuse(StatusCodes.Status404NotFound, NotFoundText);
+                }
 
                 first = rows;
             }
@@ -298,6 +338,12 @@ namespace HSMServer.TablePages
             {
                 _logger.Debug($"A download of table sensor {table.Id} is answered 503: {ex.Message}");
                 return StoreFault();
+            }
+            catch (TableReadChangedException ex)
+            {
+                // The merge committed hours under each plan of the read: the same request soon is answered.
+                _logger.Info(ex.Message);
+                return new StoreChangedResult();
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -310,13 +356,26 @@ namespace HSMServer.TablePages
             if (first.RowsAtTimeOmitted)
                 return Refuse(StatusCodes.Status400BadRequest, TooManyAtOneTime(first));
 
-            if (first.RowCount > _maxDownloadRows)
+            // A first page at the limit that was cut (a row was left out) already shows a row past the limit.
+            if (first.RowCount > _maxDownloadRows || (first.RowCount >= _maxDownloadRows && first.Truncated))
                 return Refuse(StatusCodes.Status400BadRequest, TooMany());
 
-            return new TableDownloadResult(this, table.Id, toUtc, first, FileName(table.FullPath, fromUtc, toUtc));
+            return new TableDownloadResult(this, user, table.Id, toUtc, first, FileName(table.FullPath, fromUtc, toUtc));
         }
 
         internal long MaxDownloadRows => _maxDownloadRows;
+
+        /// <summary>
+        /// Why a download may not go on (the access check of the first page, made again for a later one): the sensor is
+        /// gone, is not a table sensor, or is in a product the user may not see now; null when it may.
+        /// </summary>
+        internal string AccessLost(User user, Guid sensorId) => _cache.GetSensor(sensorId) switch
+        {
+            null => "the sensor was removed",
+            not TableSensorModel => "the sensor is not a table sensor",
+            var sensor when user is null || !user.IsProductAvailable(sensor.Root.Id) => "the user may not see the sensor's product any more",
+            _ => null,
+        };
 
         /// <summary>
         /// One page of a download from <paramref name="from"/>: at most the text page of the read route, read again at
@@ -386,13 +445,17 @@ namespace HSMServer.TablePages
                 return Refuse(StatusCodes.Status404NotFound, NotFoundText);
 
             if (sensor is not TableSensorModel model)
-                return Refuse(StatusCodes.Status400BadRequest, $"Sensor \"{sensor.FullPath}\" is not a table sensor.");
+                return Refuse(StatusCodes.Status400BadRequest, NotATableText);
 
             table = model;
             return null;
         }
 
         private static IActionResult StoreFault() => new StoreFaultResult();
+
+        // Every answer of both routes holds a product's data or says whether a sensor exists: no cache between the browser
+        // and the server may keep one and hand it to another user.
+        private static void NoStore(HttpContext context) => context.Response.Headers.CacheControl = "no-store";
 
         private static ContentResult Refuse(int status, string text) => new() { StatusCode = status, Content = text, ContentType = "text/plain; charset=utf-8" };
 
@@ -403,7 +466,8 @@ namespace HSMServer.TablePages
         };
 
 
-        // 503 with Retry-After of a second: the store changed under every plan of a chart (TableReadChangedException).
+        // 503 with Retry-After of a second: the store changed under every plan of a chart or of the first page of a download
+        // (TableReadChangedException).
         internal sealed class StoreChangedResult : IActionResult
         {
             public const string Text = "The table store changed during the read (hours were merged meanwhile); try again.";
@@ -431,13 +495,17 @@ namespace HSMServer.TablePages
 
     /// <summary>
     /// The CSV of a download, page by page: the first page was read before the headers, the next ones are read as the
-    /// previous is written, one page in memory at a time, the header line once. A finding past the first byte (failed
-    /// blocks or batches, more rows than allowed, one time with more rows than a read returns, a store fault, the sensor
-    /// gone) aborts the connection and is logged.
+    /// previous is written, one page in memory at a time, the header line once. Each later page is written only after the
+    /// user's access to the sensor's product is checked again. A finding past the first byte (failed blocks or batches,
+    /// more rows than allowed, one time with more rows than a read returns, a store fault, the sensor gone, the access
+    /// lost) aborts the connection and is logged.
     /// </summary>
-    internal sealed class TableDownloadResult(TablePageService service, Guid sensorId, DateTime to, TableRows first, string fileName) : IActionResult
+    internal sealed class TableDownloadResult(TablePageService service, User user, Guid sensorId, DateTime to, TableRows first, string fileName) : IActionResult
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+        // Taken (and cleared) by the execution: no page outlives its writing, the first one included.
+        private TableRows _first = first;
 
         internal string FileName => fileName;
 
@@ -454,7 +522,8 @@ namespace HSMServer.TablePages
             response.ContentType = "text/csv; charset=utf-8";
             response.Headers.ContentDisposition = disposition.ToString();
 
-            var page = first;
+            var page = _first;
+            _first = null;
             var header = true;
             long written = 0;
 
@@ -469,11 +538,22 @@ namespace HSMServer.TablePages
                     if (page.NextFromTicks is not { } next)
                         break;
 
+                    // Written: let it go before the next page is read, which can be as large.
+                    page = null;
+
                     var (rows, error) = await service.ReadPageAsync(sensorId, new DateTime(next, DateTimeKind.Utc), to, token);
 
                     if (error is not null)
                     {
                         Abort(http, $"the read refused the next page: {error}", written);
+                        return;
+                    }
+
+                    // The check made before the first page holds for the first page only: the user's roles, or the
+                    // sensor's product, may have changed since.
+                    if (service.AccessLost(user, sensorId) is { } lost)
+                    {
+                        Abort(http, lost, written);
                         return;
                     }
 
@@ -505,6 +585,10 @@ namespace HSMServer.TablePages
             catch (TableBlockStoreException ex)
             {
                 Abort(http, $"the block store cannot be read now: {ex.Message}", written);
+            }
+            catch (TableReadChangedException ex)
+            {
+                Abort(http, $"the table store changed under every plan of the read: {ex.Message}", written);
             }
         }
 

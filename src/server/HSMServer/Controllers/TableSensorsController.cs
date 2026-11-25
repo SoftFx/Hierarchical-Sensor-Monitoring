@@ -25,14 +25,15 @@ namespace HSMServer.Controllers
         }
 
 
-        /// <summary>POST /TableSensors/Chart: the chart of a range of one table sensor.</summary>
+        /// <summary>POST /TableSensors/Chart: the chart of a range of one table sensor. Its body is a few hundred bytes.</summary>
         [HttpPost]
+        [RequestSizeLimit(TablePageService.MaxChartBodyBytes)]
         public Task<IActionResult> Chart([FromBody] TableChartRequest request) =>
-            _pages.ChartAsync(CurrentUser, request, HttpContext.RequestAborted);
+            _pages.ChartAsync(HttpContext, CurrentUser, request, ModelState.IsValid);
 
         /// <summary>GET /TableSensors/Download?id=&amp;from=&amp;to=: the rows of a range as CSV.</summary>
         [HttpGet]
-        public Task<IActionResult> Download([FromQuery] string id, [FromQuery] DateTime from, [FromQuery] DateTime to) =>
-            _pages.DownloadAsync(HttpContext, CurrentUser, id, from, to);
+        public Task<IActionResult> Download([FromQuery] string id, [FromQuery] DateTime? from, [FromQuery] DateTime? to) =>
+            _pages.DownloadAsync(HttpContext, CurrentUser, id, from, to, ModelState.IsValid);
     }
 }

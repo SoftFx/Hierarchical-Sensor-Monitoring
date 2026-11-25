@@ -124,6 +124,20 @@ namespace HSMServer.Core.Tests.Controllers
 
         [Theory]
         [MemberData(nameof(Actions))]
+        public async Task Every_answer_tells_caches_not_to_store_it(string action)
+        {
+            var table = await SeedAsync(3);
+
+            var (status, _, read) = await CallFullAsync(action, Viewer(_product), table.Id.ToString());
+            var (hiddenStatus, _, hidden) = await CallFullAsync(action, Viewer(Guid.NewGuid()), table.Id.ToString());
+
+            Assert.Equal((200, 404), (status, hiddenStatus));
+            Assert.Equal("no-store", read.Response.Headers.CacheControl.ToString());
+            Assert.Equal("no-store", hidden.Response.Headers.CacheControl.ToString());
+        }
+
+        [Theory]
+        [MemberData(nameof(Actions))]
         public async Task A_sensor_that_is_not_a_table_sensor_is_a_400(string action)
         {
             var result = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, $"{_root}/plain")
@@ -137,8 +151,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             var (status, text) = await CallAsync(action, Viewer(_product), plain.Id.ToString());
 
-            Assert.Equal(400, status);
-            Assert.Contains("is not a table sensor", text);
+            // Neither the path nor the name of the sensor: it could have moved to a product the user cannot see.
+            Assert.Equal((400, TablePageService.NotATableText), (status, text));
+            Assert.DoesNotContain(_root, text);
         }
 
         [Theory]
@@ -191,6 +206,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal("2026-11-24T09:00:00Z", json.GetProperty("from").GetString());
             Assert.Equal("2026-11-24T09:00:36Z", json.GetProperty("times")[1].GetString());
             Assert.Equal(300, json.GetProperty("rowCount").GetInt64());
+            Assert.Equal(("2026-11-24T09:00:00Z", "2026-11-24T09:29:54Z"), (json.GetProperty("firstTime").GetString(), json.GetProperty("lastTime").GetString()));
             Assert.Equal(JsonValueKind.Null, json.GetProperty("completeTo").ValueKind);
             Assert.Equal((0, 0), (json.GetProperty("blocksFailed").GetInt32(), json.GetProperty("batchesFailed").GetInt32()));
 
@@ -228,6 +244,7 @@ namespace HSMServer.Core.Tests.Controllers
             var json = await ChartJsonAsync(a, Viewer(_product), new TableChartRequest { From = From, To = To, Buckets = 100 });
 
             Assert.Equal("rows", json.GetProperty("mode").GetString());
+            Assert.Equal(("2026-11-24T09:01:00Z", "2026-11-24T09:02:00Z"), (json.GetProperty("firstTime").GetString(), json.GetProperty("lastTime").GetString()));
             Assert.Equal(new[] { "2026-11-24T09:01:00Z", "2026-11-24T09:02:00Z" }, json.GetProperty("times").EnumerateArray().Select(t => t.GetString()));
 
             // Columns not named: every double column.
@@ -251,6 +268,7 @@ namespace HSMServer.Core.Tests.Controllers
             var json = await ChartJsonAsync(a, Viewer(_product), new TableChartRequest { From = From, To = To, Columns = [], Buckets = asked });
 
             Assert.Equal(expected, json.GetProperty("bucketCount").GetInt32());
+            Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (json.GetProperty("firstTime").ValueKind, json.GetProperty("lastTime").ValueKind));
         }
 
         [Fact]
@@ -263,7 +281,107 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(400, status);
             Assert.Contains("is not a value column", text);
+            Assert.DoesNotContain(_root, text);
             Assert.Equal(400, rangeStatus);
+        }
+
+        [Theory]
+        [InlineData(10)] // rows mode
+        [InlineData(500)] // buckets mode
+        public async Task A_second_time_column_is_refused_as_not_a_value_column_and_is_not_charted_by_default(int rows)
+        {
+            var schema = new TableSchema([new TableSchemaColumn("time", TableColumnType.Time), new TableSchemaColumn("completed", TableColumnType.Time)]);
+            var path = $"{_root}/orders";
+            var registered = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, path)
+            {
+                Update = new SensorUpdate { Id = Guid.Empty },
+                Type = SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = schema,
+            });
+            Assert.True(registered.IsOk, registered.Error);
+            Assert.True(_valuesCache.TryGetSensorByPath(_product, path, out var orders));
+
+            using (var writer = new TableBlockWriter())
+            {
+                var times = Enumerable.Range(0, rows).Select(i => Hour0.AddSeconds(i).Ticks).ToArray();
+                writer.BeginTable(Encoding.UTF8.GetBytes(path), schema.Id, rows);
+                writer.AddTimeColumn(times);
+                writer.AddTimeColumn(times.Select(t => t + TimeSpan.TicksPerMinute).ToArray());
+                Assert.Equal(TableBlockPutOutcome.Stored, _service.Put(_product, _producer, ++_producerSequence, writer.ToArray()).Outcome);
+            }
+
+            var (status, text) = await CallAsync("chart", Viewer(_product), orders.Id.ToString(), request: new TableChartRequest { Id = orders.Id.ToString(), From = From, To = To, Columns = [1], Buckets = 100 });
+
+            Assert.Equal((400, "Column 1 is not a value column: it is a time column."), (status, text));
+
+            // Not asked for: the default columns are the double columns, so none here, and the row counts are answered.
+            var json = await ChartJsonAsync(orders, Viewer(_product), new TableChartRequest { From = From, To = To, Buckets = 100 });
+            Assert.Empty(json.GetProperty("columns").EnumerateArray());
+            Assert.Equal(rows, json.GetProperty("rowCount").GetInt64());
+        }
+
+        // === Binding and the size of a request ===
+
+        [Fact]
+        public async Task A_download_whose_time_does_not_bind_is_a_400_after_the_access_check()
+        {
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+            Task<IActionResult> Bogus(TableSensorsController c) => c.Download(id, null, To);
+
+            var visible = await CallFullAsync("download", Viewer(_product), id, invoke: Bogus, bindingError: true);
+            var outsider = await CallFullAsync("download", Viewer(Guid.NewGuid()), id, invoke: Bogus, bindingError: true);
+            var unknown = await CallFullAsync("download", Viewer(Guid.NewGuid()), Guid.NewGuid().ToString(), invoke: c => c.Download(Guid.NewGuid().ToString(), null, To), bindingError: true);
+
+            Assert.Equal((400, TablePageService.RangeRequiredText), (visible.Status, visible.Text));
+            Assert.Equal((404, TablePageService.NotFoundText), (outsider.Status, outsider.Text));
+            Assert.Equal((unknown.Status, unknown.Text), (outsider.Status, outsider.Text));
+        }
+
+        [Fact]
+        public async Task A_download_without_from_is_a_400()
+        {
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+
+            var (status, text, _) = await CallFullAsync("download", Viewer(_product), id, invoke: c => c.Download(id, null, To));
+            var (toStatus, _, _) = await CallFullAsync("download", Viewer(_product), id, invoke: c => c.Download(id, From, null));
+
+            Assert.Equal((400, TablePageService.RangeRequiredText), (status, text));
+            Assert.Equal(400, toStatus);
+        }
+
+        [Fact]
+        public async Task A_chart_without_from_or_with_a_binding_error_is_a_400_after_the_access_check()
+        {
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+
+            var missing = await CallAsync("chart", Viewer(_product), id, request: new TableChartRequest { Id = id, To = To, Buckets = 100 });
+            var (bogus, bogusText, _) = await CallFullAsync("chart", Viewer(_product), id, request: new TableChartRequest { Id = id, From = From, To = To, Buckets = 100 }, bindingError: true);
+            var outsider = await CallAsync("chart", Viewer(Guid.NewGuid()), id, request: new TableChartRequest { Id = id, To = To, Buckets = 100 });
+
+            Assert.Equal((400, TablePageService.RangeRequiredText), missing);
+            Assert.Equal((400, TablePageService.RangeRequiredText), (bogus, bogusText));
+            Assert.Equal((404, TablePageService.NotFoundText), outsider);
+        }
+
+        [Fact]
+        public async Task The_chart_body_is_limited_to_a_few_KiB_and_its_columns_to_a_schemas_count()
+        {
+            var limit = typeof(TableSensorsController).GetMethod(nameof(TableSensorsController.Chart))!
+                .GetCustomAttributes(true).OfType<Microsoft.AspNetCore.Http.Metadata.IRequestSizeLimitMetadata>().Single();
+            Assert.Equal(TablePageService.MaxChartBodyBytes, limit.MaxRequestBodySize);
+            Assert.True(TablePageService.MaxChartBodyBytes <= 16 * 1024);
+
+            var table = await SeedAsync(3);
+            var id = table.Id.ToString();
+            var columns = Enumerable.Repeat(1, TablePageService.MaxChartColumns + 1).ToArray();
+
+            var (status, text) = await CallAsync("chart", Viewer(_product), id, request: new TableChartRequest { Id = id, From = From, To = To, Columns = columns, Buckets = 100 });
+
+            Assert.Equal((400, $"At most {TablePageService.MaxChartColumns} columns can be named."), (status, text));
         }
 
         // === The shared read gate ===
@@ -360,6 +478,19 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task A_first_page_at_the_limit_that_shows_one_more_row_is_refused_before_the_first_byte()
+        {
+            // The first page holds two rows and was cut before the third: the range holds more than the limit.
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 2, MaxDownloadRows = 2 };
+            var table = await SeedAsync(3);
+
+            var (status, text, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString());
+
+            Assert.Equal((400, Pages().TooMany()), (status, text));
+            Assert.False(Aborted(context));
+        }
+
+        [Fact]
         public async Task More_rows_than_the_download_limit_found_while_writing_abort_the_connection()
         {
             _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5, MaxDownloadRows = 7 };
@@ -411,6 +542,96 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task A_store_that_changed_under_every_plan_of_the_first_page_is_a_503_to_try_again()
+        {
+            var table = await SeedAsync(3);
+            var blocks = new StubBlocks(_service) { OnRead = (_, _) => throw new TableReadChangedException("changed") };
+
+            var (status, text, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal((503, TablePageService.StoreChangedResult.Text), (status, text));
+            Assert.Equal("1", context.Response.Headers.RetryAfter.ToString());
+            Assert.False(Aborted(context));
+            Assert.Equal(1, _gate.FreeTurns);
+        }
+
+        [Fact]
+        public async Task A_store_that_changed_under_every_plan_of_a_later_page_aborts_the_connection()
+        {
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5 };
+            var table = await SeedAsync(12);
+            var blocks = new StubBlocks(_service) { OnRead = (rows, call) => call == 2 ? throw new TableReadChangedException("changed") : rows };
+
+            var (status, csv, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal(200, status);
+            Assert.True(Aborted(context));
+            Assert.Equal(6, csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
+            Assert.Equal(1, _gate.FreeTurns);
+        }
+
+        [Fact]
+        public async Task A_download_whose_user_lost_the_product_after_the_first_page_is_cut_off_before_the_next_page()
+        {
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5 };
+            var table = await SeedAsync(12);
+            var viewer = Viewer(_product);
+
+            // While the second page is read, the user's role in the product is taken away.
+            var blocks = new StubBlocks(_service)
+            {
+                OnRead = (rows, call) =>
+                {
+                    if (call == 2)
+                        viewer.ProductsRoles.Clear();
+                    return rows;
+                },
+            };
+
+            var (status, csv, context) = await CallFullAsync("download", viewer, table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal(200, status);
+            Assert.True(Aborted(context));
+            Assert.Equal(6, csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length); // the header and the first page only
+        }
+
+        [Fact]
+        public async Task A_page_of_a_download_is_let_go_once_it_is_written()
+        {
+            _config = new TableSensorsConfig { MinFreeDiskMb = 0, MaxTextReadRows = 5 };
+            var table = await SeedAsync(12);
+            WeakReference firstPage = null;
+            bool? firstAliveAtThird = null;
+
+            // The first page is the one the result held for its whole life; by the third read two pages were written.
+            var blocks = new StubBlocks(_service)
+            {
+                OnRead = (rows, call) =>
+                {
+                    if (call == 1)
+                        firstPage = new WeakReference(rows);
+
+                    if (call == 3)
+                    {
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect();
+                        firstAliveAtThird = firstPage.IsAlive;
+                    }
+
+                    return rows;
+                },
+            };
+
+            var (status, csv, context) = await CallFullAsync("download", Viewer(_product), table.Id.ToString(), Pages(blocks));
+
+            Assert.Equal(200, status);
+            Assert.False(Aborted(context));
+            Assert.Equal(13, csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
+            Assert.False(firstAliveAtThird);
+        }
+
+        [Fact]
         public void The_file_name_is_the_history_exports_with_unsafe_characters_replaced()
         {
             var name = TablePageService.FileName("prod/quotes/EUR:USD*", Hour0, Hour0.AddHours(1));
@@ -451,7 +672,7 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         private async Task<(int Status, string Text, HttpContext Context)> CallFullAsync(string action, User user, string id, TablePageService pages = null,
-            CancellationToken token = default, TableChartRequest request = null)
+            CancellationToken token = default, TableChartRequest request = null, Func<TableSensorsController, Task<IActionResult>> invoke = null, bool bindingError = false)
         {
             var lifetime = new Lifetime(token);
             var context = new DefaultHttpContext { User = user };
@@ -464,9 +685,15 @@ namespace HSMServer.Core.Tests.Controllers
                 ControllerContext = new ControllerContext { HttpContext = context },
             };
 
-            var result = action == "chart"
-                ? await controller.Chart(request ?? new TableChartRequest { Id = id, From = From, To = To, Buckets = 100 })
-                : await controller.Download(id, From, To);
+            // A value the model binding could not convert, as MVC records it.
+            if (bindingError)
+                controller.ModelState.AddModelError("from", "The value 'bogus' is not valid.");
+
+            var result = invoke is not null
+                ? await invoke(controller)
+                : action == "chart"
+                    ? await controller.Chart(request ?? new TableChartRequest { Id = id, From = From, To = To, Buckets = 100 })
+                    : await controller.Download(id, From, To);
 
             await result.ExecuteResultAsync(new ActionContext(context, new RouteData(), new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor()));
             await context.Response.BodyWriter.FlushAsync();

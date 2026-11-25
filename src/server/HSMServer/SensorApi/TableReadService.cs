@@ -28,7 +28,8 @@ namespace HSMServer.SensorApi
     //
     // A refusal is an HTTP status with a short text: 400 for a request that cannot be answered as it
     // is, 404 for a path with no sensor in the key's product, 406 for a key that may not read, 503
-    // (with Retry-After) when the block store cannot be read now or the key could not be looked up. A read is cut at a row limit and at
+    // (with Retry-After) when the block store cannot be read now, the store changed under every plan
+    // of the read, or the key could not be looked up. A read is cut at a row limit and at
     // a time boundary; the headers say whether it was cut and where the next page starts.
     public sealed class TableReadService
     {
@@ -43,6 +44,12 @@ namespace HSMServer.SensorApi
         public const string BlocksContentType = "application/vnd.hsm.table-blocks";
 
         public const string KeyLookupFault = "The access key cannot be checked now.";
+
+        public const string StoreChanged = "The table store changed during the read; the request can be sent again.";
+
+        // The Retry-After of the 503 of a read that met a change of the store on every plan (#1847): the next try is
+        // answered as soon as no hour is being committed.
+        public const int StoreChangedRetryAfterSeconds = 1;
 
         // The Retry-After of a 503: a store that cannot be read now, or a fault while the key was looked up.
         public const int RetryAfterSeconds = 60;
@@ -157,6 +164,13 @@ namespace HSMServer.SensorApi
 
                 context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
                 return Refuse(StatusCodes.Status503ServiceUnavailable, "The table block store cannot be read now.");
+            }
+            catch (TableReadChangedException ex)
+            {
+                _logger.Debug($"A table history read of \"{path}\" is answered 503: {ex.Message}");
+
+                context.Response.Headers.RetryAfter = StoreChangedRetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+                return Refuse(StatusCodes.Status503ServiceUnavailable, StoreChanged);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {

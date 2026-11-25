@@ -56,6 +56,15 @@ namespace HSMServer.Core.TableSensors
         public long RowCount { get; init; }
 
         /// <summary>
+        /// The time of the earliest and of the latest row the answer counts (in <see cref="RowCount"/>), UTC ticks; null
+        /// when it counts none. Independent of the order the rows were read in. After a stop at the scan limit they are of
+        /// the rows before <see cref="CompleteToTicks"/>, the rows counted, not of the whole range.
+        /// </summary>
+        public long? FirstRowTicks { get; init; }
+
+        public long? LastRowTicks { get; init; }
+
+        /// <summary>
         /// Null when every row of the range was read. Otherwise the read stopped at its scan limit: every bucket before this
         /// time holds all of its rows, the buckets from it on are empty. Always the start of a bucket.
         /// </summary>
