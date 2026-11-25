@@ -89,10 +89,13 @@ namespace HSMServer.Core.Tests.TableSensors
             Build(new TableBlockOptions { MinFreeDiskMb = 0, DeleteMergedBlocksAfterHours = 0 });
             var (a, rows) = await SeedAsync(new Random(18));
 
-            var switched = new List<long>();
-            _service.BeforeMergedSwitch = switched.Add;
-            _service.AfterChartPlan = () =>
+            var replanned = new List<long>();
+            _service.BeforeChartReplan = replanned.Add;
+            _service.AfterChartPlan = plan =>
             {
+                if (plan != 1)
+                    return;
+
                 // The merge commits hour 0 and, with no delay, deletes its blocks: the chart holds no gate between its plan
                 // and its first source, so the deletion is not blocked.
                 Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
@@ -102,9 +105,146 @@ namespace HSMServer.Core.Tests.TableSensors
 
             var chart = Reduce(a, 120);
 
-            Assert.Equal(new[] { Hour0.Ticks }, switched);
+            // Planned once more, and hour 0 read from its batches by the second plan.
+            Assert.Equal(new[] { Hour0.Ticks }, replanned);
             AssertMatchesReference(chart, rows, From.Ticks, To.Ticks, Columns);
+            Assert.True(chart.BatchesRead > 0);
             Assert.Equal(0, chart.BlocksFailed);
+        }
+
+        [Fact]
+        public async Task Rows_that_reach_an_hour_after_the_plan_never_let_the_answer_certify_past_them()
+        {
+            // The review's sequence: range [T, T + 100 min), scan limit 1. The plan sees hour 0 open with its earliest row at
+            // T + 80; then a row at T + 10 reaches hour 0 and a row at T + 0 reaches hour 1, and both hours commit.
+            Build(new TableBlockOptions { MinFreeDiskMb = 0, MaxChartScanRows = 1 });
+            var a = await RegisterAsync("a");
+            var t = Hour0.AddHours(-4);
+            var (from, to) = (t, t.AddMinutes(100));
+
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(t.AddMinutes(80).Ticks, 80, 80)])));
+
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan != 1)
+                    return;
+
+                _now = Hour0.AddMinutes(20);
+                Put(Block(("a", [Row(t.AddMinutes(10).Ticks, 10, 10)])));
+                _now = Hour0.AddMinutes(70);
+                Put(Block(("a", [Row(t.Ticks, 0, 0)])));
+                Assert.Null(Pass(Hour0.AddHours(2).AddMinutes(3)).Fault);
+                Assert.True(_batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
+            };
+
+            var result = _service.Reduce(a.Id, from, to, Columns, 100);
+            Assert.True(result.IsOk, result.Error);
+            var chart = result.Value;
+
+            // Either the row at T + 10 is counted, or the answer is not certified past it.
+            var counted = chart.BucketRows[10] == 1;
+            Assert.True(counted || chart.CompleteToTicks <= t.AddMinutes(10).Ticks,
+                $"complete to {chart.CompleteToTicks}, row at T + 10 counted: {counted}");
+            Assert.Equal(1, chart.BucketRows[0]);
+        }
+
+        [Fact]
+        public async Task An_hour_committed_with_a_block_kept_unreadable_after_the_plan_is_answered_as_a_chart_planned_after_the_commit()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+            var damaged = _producerSequence + 1;
+            Put(Block(("a", [Row(Hour0.AddMinutes(2).Ticks, 2, 2)])));
+            Put(Block(("a", [Row(Hour0.AddMinutes(3).Ticks, 3, 3)])));
+            var damagedSequence = _blocks.GetBlocks(_product).Single(e => e.ProducerSequence == damaged).Sequence;
+
+            _service.AfterChartPlan = plan =>
+            {
+                if (plan != 1)
+                    return;
+
+                // The merge cannot read one block of hour 0: it keeps it, lists it in the hour's record and commits the rest.
+                _blocks.BeforeBlockGet = sequence =>
+                {
+                    if (sequence == damagedSequence)
+                        throw new Exception("Corruption: block checksum mismatch: 000005.ldb");
+                };
+                Assert.Null(Pass(Hour0.AddHours(1).AddMinutes(3)).Fault);
+                _blocks.BeforeBlockGet = null;
+                Assert.Equal(new[] { damagedSequence }, _batches.GetHour(_product, Hour0.Ticks).UnreadableBlocks);
+            };
+
+            var during = Reduce(a, 100);
+
+            _service.AfterChartPlan = null;
+            var after = Reduce(a, 100);
+
+            // Both read hour 0 from its batches: the rows of the two readable blocks, and no failure counted (the record of
+            // the commit lists the block it kept; the read of a merged hour does not count it, as Read does not).
+            Assert.Equal(after.BucketRows, during.BucketRows);
+            Assert.Equal((after.RowCount, after.BlocksFailed, after.BatchesFailed, after.IsIncomplete),
+                (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
+            Assert.Equal((2L, 0, 0, false), (during.RowCount, during.BlocksFailed, during.BatchesFailed, during.IsIncomplete));
+        }
+
+        [Fact]
+        public async Task A_commit_under_each_of_three_plans_ends_in_the_store_changed_fault()
+        {
+            var a = await RegisterAsync("a");
+
+            // Blocks in arrival hours 0, 1 and 2; each plan meets the commit of the next of them.
+            for (int h = 0; h < 3; h++)
+            {
+                _now = Hour0.AddHours(h).AddMinutes(10);
+                Put(Block(("a", [Row(Hour0.AddHours(h).AddMinutes(1).Ticks, h, h)])));
+            }
+
+            var replans = 0;
+            _service.BeforeChartReplan = _ => replans++;
+            _service.AfterChartPlan = plan => Assert.Null(Pass(Hour0.AddHours(plan).AddMinutes(3)).Fault);
+
+            Assert.Throws<TableReadChangedException>(() => _service.Reduce(a.Id, From, To, Columns, 100));
+            Assert.Equal(TableBlockService.MaxChartPlans, replans);
+        }
+
+        [Fact]
+        public async Task A_chart_cancelled_while_it_waited_for_the_gate_does_not_read_the_source()
+        {
+            var a = await RegisterAsync("a");
+            _now = Hour0.AddMinutes(10);
+            Put(Block(("a", [Row(Hour0.AddMinutes(1).Ticks, 1, 1)])));
+
+            using var cancel = new CancellationTokenSource();
+            using var release = new ManualResetEventSlim();
+            using var held = new ManualResetEventSlim();
+            var gate = _service.HourGate;
+            var read = 0;
+            _service.BeforeBlockRead = _ => read++;
+
+            // A deletion holds the gate (on a thread of its own: the lock is released by the thread that took it).
+            var deletion = Task.Run(() =>
+            {
+                using (gate.Delete())
+                {
+                    held.Set();
+                    release.Wait();
+                }
+            });
+            held.Wait();
+
+            // Once the chart waits for the gate, it is cancelled, and then the deletion ends.
+            _service.AfterChartPlan = _ => Task.Run(() =>
+            {
+                SpinWait.SpinUntil(() => gate.WaitingReads > 0);
+                cancel.Cancel();
+                release.Set();
+            });
+
+            Assert.Throws<OperationCanceledException>(() => _service.Reduce(a.Id, From, To, Columns, 100, cancel.Token));
+            Assert.Equal(0, read);
+            await deletion;
         }
 
         [Fact]

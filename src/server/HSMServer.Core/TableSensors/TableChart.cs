@@ -26,7 +26,9 @@ namespace HSMServer.Core.TableSensors
         /// empty.</para>
         /// <para>An error for an unknown id, a sensor that is not a table sensor, an empty range, a bucket count outside
         /// 1..<see cref="TableChartReducer.MaxBuckets"/>, or a column that is not a value column of the sensor (or is named
-        /// twice). Throws <see cref="TableBlockStoreException"/> when the store cannot be used, and
+        /// twice). Throws <see cref="TableBlockStoreException"/> when the store cannot be used,
+        /// <see cref="TableReadChangedException"/> when the merge committed an hour under the read on each of its plans
+        /// (each time the read starts over from a new plan; the same request later is answered), and
         /// <see cref="OperationCanceledException"/> when <paramref name="token"/> is cancelled (checked before every block
         /// and every merged hour). Times are UTC as in <see cref="ITableBlockService.Read"/>.</para>
         /// </summary>
@@ -75,8 +77,8 @@ namespace HSMServer.Core.TableSensors
         public IReadOnlyList<TableChartColumn> Columns { get; init; } = [];
 
         /// <summary>
-        /// The rows of the range, as <see cref="ITableBlockService.Read"/> returns them, when the read was complete and the
-        /// range holds at most twice as many rows as buckets; null otherwise.
+        /// The rows of the range, as <see cref="ITableBlockService.Read"/> returns them, when the answer is complete (not
+        /// <see cref="IsIncomplete"/>) and the range holds at most twice as many rows as buckets; null otherwise.
         /// </summary>
         public TableRows Rows { get; init; }
 
@@ -121,4 +123,11 @@ namespace HSMServer.Core.TableSensors
         /// <summary>NaN and infinite values of the column in the answer.</summary>
         public long TotalNonFinite { get; init; }
     }
+
+
+    /// <summary>
+    /// A chart whose read met an hour merged since its plan on every one of its plans: the store changed under it. Not a
+    /// fault of the store and not a wrong request; the same request later is answered.
+    /// </summary>
+    public sealed class TableReadChangedException(string message) : Exception(message);
 }

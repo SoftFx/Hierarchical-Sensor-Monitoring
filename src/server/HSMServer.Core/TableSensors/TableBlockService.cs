@@ -73,6 +73,9 @@ namespace HSMServer.Core.TableSensors
 
         private readonly TableHourGate _gate = new();
 
+        // The gate, for tests.
+        internal TableHourGate HourGate => _gate;
+
         private readonly object _refusalLogLock = new();
         private readonly Dictionary<TableRefusalReason, long> _refusalsSinceLog = [];
         private DateTime _lastRefusalLog = DateTime.MinValue;
@@ -114,12 +117,16 @@ namespace HSMServer.Core.TableSensors
         // Called before a read decompresses a block. Test seam for a read that is cancelled between blocks.
         internal Action<TableBlockIndexEntry> BeforeBlockRead { get; set; }
 
-        // Called when a chart reads an hour from its batches that was planned from its blocks (committed since the plan).
+        // Called when a chart finds an hour it planned from its blocks committed since the plan, before it plans again.
         // Test seam.
-        internal Action<long> BeforeMergedSwitch { get; set; }
+        internal Action<long> BeforeChartReplan { get; set; }
 
-        // Called after a chart planned its read, before the first source. Test seam for a commit between the plan and the read.
-        internal Action AfterChartPlan { get; set; }
+        // Called after a chart planned its read (with the number of the plan, from 1), before the first source. Test seam for
+        // a commit between the plan and the read.
+        internal Action<int> AfterChartPlan { get; set; }
+
+        /// <summary>The plans one chart makes at most before it gives up with <see cref="TableReadChangedException"/>.</summary>
+        internal const int MaxChartPlans = 3;
 
 
         public TableBlockPutResult Put(Guid productId, Guid producerId, long producerSequence, byte[] block)
@@ -280,17 +287,33 @@ namespace HSMServer.Core.TableSensors
         }
 
         // A chart reads for seconds, so it does not hold the gate for its whole range (a deletion waiting for the gate would
-        // stall every other read behind it): it holds it per source. The plan is taken outside the gate; under the gate each
-        // source of blocks is decided again: when its hour has been committed since the plan, it is read from its batches
-        // instead. Its blocks can be deleted only after the commit, so an hour still not committed keeps its blocks for as long
-        // as this hold lasts, and an hour that is committed has every row of those blocks in its batches: an hour is read from
-        // exactly one source either way. A minimum and a maximum do not depend on which of the two the rows came from.
+        // stall every other read behind it): it holds it per source. The plan is taken outside the gate. Under the gate, a
+        // source of blocks whose hour has been committed since the plan is not read: its blocks may be gone, its batches
+        // may hold rows the plan did not know (earlier ones too, which would make the plan's order of sources wrong), and
+        // the commit's record may list blocks it could not read. The chart then drops what it has and plans again, so every
+        // answer comes from one plan whose hours are each read from the source the plan chose. An hour still not committed
+        // keeps its blocks while the gate is held (they are deleted only after the commit, under the write side). After
+        // MaxChartPlans plans that each met a commit it gives up: TableReadChangedException, never a partial answer.
         private TableChart ReduceRows(TableSensorModel table, long fromTicks, long toTicks, IReadOnlyList<int> columns, int buckets, CancellationToken token)
         {
-            var plan = Plan(table, fromTicks, toTicks);
-            AfterChartPlan?.Invoke();
-            var reducer = new TableChartReducer(table.Schema, fromTicks, toTicks, columns, buckets, _options.MaxChartScanRows);
+            for (int attempt = 1; ; attempt++)
+            {
+                var plan = Plan(table, fromTicks, toTicks);
+                AfterChartPlan?.Invoke(attempt);
 
+                var reducer = new TableChartReducer(table.Schema, fromTicks, toTicks, columns, buckets, _options.MaxChartScanRows);
+
+                if (TryReduce(plan, reducer, fromTicks, toTicks, token))
+                    return reducer.Build();
+
+                if (attempt == MaxChartPlans)
+                    throw new TableReadChangedException($"The table store changed during the chart of '{table.FullPath}': {MaxChartPlans} plans each met an hour merged since. Ask again.");
+            }
+        }
+
+        // False when a source of blocks of the plan has been committed since: the plan is stale.
+        private bool TryReduce(ReadPlan plan, TableChartReducer reducer, long fromTicks, long toTicks, CancellationToken token)
+        {
             for (int i = 0; i < plan.Sources.Count; i++)
             {
                 var source = plan.Sources[i];
@@ -302,19 +325,20 @@ namespace HSMServer.Core.TableSensors
 
                 using (_gate.Read())
                 {
+                    // The wait for the gate may have been long (a deletion ahead of it).
+                    token.ThrowIfCancellationRequested();
+
                     if (source.Blocks is not null && plan.Batches is not null && plan.Batches.IsHourMerged(plan.Product, source.Hour))
                     {
-                        BeforeMergedSwitch?.Invoke(source.Hour);
-                        ReadBatches(plan.Batches, reducer, plan.Product, plan.SensorId, plan.Period, source.Hour, fromTicks, toTicks);
+                        BeforeChartReplan?.Invoke(source.Hour);
+                        return false;
                     }
-                    else
-                    {
-                        ReadSource(plan, source, reducer, fromTicks, toTicks, token);
-                    }
+
+                    ReadSource(plan, source, reducer, fromTicks, toTicks, token);
                 }
             }
 
-            return reducer.Build();
+            return true;
         }
 
         // Under the read side of the gate, so no hour's blocks are deleted meanwhile.
