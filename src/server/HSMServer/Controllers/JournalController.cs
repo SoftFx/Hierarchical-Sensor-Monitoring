@@ -50,12 +50,15 @@ public class JournalController : BaseController
         var rows = new List<List<string>>(parameters.Length);
 
         // The feed reads per-user state that HomeController.SelectNode connected to a sensor, node or
-        // folder. That state outlives a role change, so the selection is checked again on every page: no
-        // selection, or one the user can no longer see, answers an empty table.
-        if (StoredUser.Journal.ConnectedId is not { } connectedId || !_tree.IsVisible(CurrentUser, connectedId))
+        // folder. That state outlives a role change, so it is checked again on every page: no selection,
+        // or one the user can no longer see, answers an empty table, and of a folder's loaded records only
+        // those of the sensors and nodes the user sees now are paged and counted.
+        var user = CurrentUser;
+
+        if (StoredUser.Journal.ConnectedId is not { } connectedId || !_tree.IsVisible(user, connectedId))
             return Json(new DataTableResultSet(draw, 0, 0, rows));
 
-        var (recordsFromDb, filteredRecords) = StoredUser.Journal.GetPage(parameters);
+        var (recordsFromDb, filteredRecords, totalRecords) = StoredUser.Journal.GetPage(parameters, id => _tree.IsVisible(user, id));
         foreach (var recordFromDb in recordsFromDb)
         {
             var cells = new List<string>(parameters.Columns.Count);
@@ -89,7 +92,7 @@ public class JournalController : BaseController
             rows.Add(cells);
         }
 
-        return Json(new DataTableResultSet(draw, filteredRecords, StoredUser.Journal.TotalSize, rows));
+        return Json(new DataTableResultSet(draw, filteredRecords, totalRecords, rows));
     }
 
 

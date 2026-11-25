@@ -68,11 +68,11 @@ namespace HSMServer.Model.TreeViewModel
             TryGetSensor(user, id, out _) || TryGetNode(user, id, out _) || TryGetFolder(user, id, out _);
 
         public bool IsVisible(User user, NodeViewModel node) =>
-            user is not null && node?.RootProduct is { } root && user.IsProductAvailable(root.Id);
+            user is not null && RootOf(node) is { } root && HasProduct(user, root.Id);
 
         public bool IsVisible(User user, FolderModel folder) =>
             user is not null && folder is not null &&
-            (user.IsFolderAvailable(folder.Id) || folder.Products.Keys.Any(user.IsProductAvailable));
+            (user.IsFolderAvailable(folder.Id) || folder.Products.Keys.Any(id => HasProduct(user, id)));
 
         /// <summary>
         /// The products of a folder the user can see. A folder role does not imply a role on every product
@@ -97,6 +97,20 @@ namespace HSMServer.Model.TreeViewModel
                     sensors.AddRange(_tree.GetAllNodeSensors(productId));
 
             return sensors;
+        }
+
+        private static bool HasProduct(User user, Guid productId) =>
+            user.IsAdmin || (user.ProductsRoles is not null && user.IsProductAvailable(productId));
+
+        // NodeViewModel.RootProduct casts on its way up and throws for an entry that is not attached to a
+        // product (yet, or any more); this walk answers null for it, so such an entry is simply not found.
+        private static ProductNodeViewModel RootOf(NodeViewModel node)
+        {
+            for (var current = node; current is not null; current = current.Parent as NodeViewModel)
+                if (current is ProductNodeViewModel product && product.Parent is null or FolderModel)
+                    return product;
+
+            return null;
         }
 
         // The methods below take an entity this class has already handed out, never a raw id.

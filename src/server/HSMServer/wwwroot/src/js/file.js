@@ -17,6 +17,9 @@ window.openFileInBrowser = function (path, fileName, viewFileAction, time = unde
         url: url,
         cache: false,
         contentType: "application/json",
+        // The response is the file itself, and its content type follows the file's extension. It is taken
+        // as text, whatever it claims to be: jQuery must never guess a type and evaluate it.
+        dataType: "text",
         success: function (response) {
             if (fileType === undefined || fileType === "application/csv") {
                 fileType = "text/html";
@@ -91,6 +94,7 @@ window.previewFile = function(url, id, extension, time = null, fileNumber = null
         url: url,
         cache: false,
         contentType: "application/json",
+        dataType: "text",
         success: function (file) {
             if (extension === 'csv') {
                 let dataSet = csvStringToArray(file);

@@ -109,9 +109,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryRequest model)
         {
-            // The read below goes to the sensor connected in the user's state, not to model.EncodedId, so
-            // both have to be visible: the posted id (it names the request) and the connected sensor.
-            if (model == null || !TryGetSensor(model.EncodedId, out _) || SelectedTable is null)
+            if (model == null || !TryConnectTable(model.EncodedId, out _))
                 return _emptyResult;
 
             await StoredUser.History.Reload(_cache, model);
@@ -121,15 +119,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetPreviousTablePage()
         {
-            return GetHistoryTable(SelectedTable?.ToPreviousPage());
+            return SelectedTable is { } table ? GetHistoryTable(table.ToPreviousPage()) : _emptyResult;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetNextTablePage()
         {
-            var table = SelectedTable;
-
-            return GetHistoryTable(table is null ? null : await table.ToNextPage());
+            return SelectedTable is { } table ? GetHistoryTable(await table.ToNextPage()) : _emptyResult;
         }
 
 
@@ -436,11 +432,13 @@ namespace HSMServer.Controllers
 
         
 
-        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
+        public async Task<IActionResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery] bool addHiddenColumns, [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            if (!TryGetSensor(encodedId, out var sensor))
-                return null;
+            // Unknown and not-visible ids answer the same 404. The export is the table of the sensor the
+            // request names: the user's state is connected to it first.
+            if (!TryConnectTable(encodedId, out var sensor))
+                return NotFound();
 
             //doesn't match with visivle table values
             //var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
@@ -468,9 +466,8 @@ namespace HSMServer.Controllers
                 await TableHistory(request);
             }
 
-            // No table: nothing was selected, or the selected sensor is no longer visible to the user.
             if (SelectedTable is not { } table)
-                return null;
+                return NotFound();
 
             var values = await table.GetAllValues();
 
@@ -539,6 +536,19 @@ namespace HSMServer.Controllers
         // The one sensor lookup of this controller: unknown and not-visible ids answer the same "false".
         private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor) =>
             _tree.TryGetSensor(CurrentUser, encodedId.ToGuid(), out sensor);
+
+        // The history table in the user's state belongs to ONE sensor: the last one selected, in any
+        // browser tab. A table request names its sensor; after the lookup the state is connected to that
+        // sensor (a no-op when it already is), so the rows served are the rows of the sensor asked for.
+        private bool TryConnectTable(string encodedId, out SensorNodeViewModel sensor)
+        {
+            if (!TryGetSensor(encodedId, out sensor) || _cache.GetSensor(sensor.Id) is not { } model)
+                return false;
+
+            StoredUser.History.ConnectSensor(model);
+
+            return SelectedTable is not null;
+        }
 
         private ExportOptions BuildExportOptions(string sensorId, bool addHiddenColumns)
         {

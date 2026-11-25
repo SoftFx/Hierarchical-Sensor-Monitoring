@@ -43,6 +43,7 @@ namespace HSMServer.Core.Tests.Views
         private readonly ProductModel _product;
         private readonly BaseSensorModel _sensor;
         private readonly BaseSensorModel _file;
+        private readonly BaseSensorModel _quoted;
         private readonly TreeViewModel _tree;
 
 
@@ -58,6 +59,7 @@ namespace HSMServer.Core.Tests.Views
 
             _sensor = AddSensor(Markup, SensorType.Integer);
             _file = AddSensor("report", SensorType.File);
+            _quoted = AddSensor("say \"hi\"", SensorType.Integer);
 
             var key = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(name: Markup, productId: _product.Id.ToString()));
             _product.AccessKeys.TryAdd(key.Id, key);
@@ -81,6 +83,18 @@ namespace HSMServer.Core.Tests.Views
             var html = await Render("~/Views/Tree/_TreeSensor.cshtml", new SensorShallowModel(_tree.Sensors[_sensor.Id], _admin));
 
             AssertEncoded(html);
+        }
+
+        [Fact]
+        public void TreeMetadata_CarriesANameWithQuotesAsOneJsonString()
+        {
+            // data-jstree is JSON the tree script parses: the title is written as a JSON string, so a
+            // quote in a name stays part of the name.
+            var json = new SensorShallowModel(_tree.Sensors[_quoted.Id], _admin).ToJSTree();
+
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+
+            Assert.Equal("say \"hi\"", document.RootElement.GetProperty("title").GetString());
         }
 
         [Fact]
@@ -182,6 +196,9 @@ namespace HSMServer.Core.Tests.Views
         {
             Assert.Contains(Encoded, html);
             Assert.DoesNotContain("<img src=x", html);
+
+            // Encoded once: a second pass would show the entities themselves.
+            Assert.DoesNotContain("&amp;lt;img", html);
         }
 
         private Task<string> Render(string view, object model) =>

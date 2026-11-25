@@ -56,6 +56,8 @@ namespace HSMServer.Core.Tests.Controllers
             nameof(IFolderManager.TryUpdate),
         ];
 
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, List<BaseValue>> _history = new();
+
         public Mock<ITreeValuesCache> Cache { get; } = new();
 
         public Mock<IFolderManager> Folders { get; } = new();
@@ -154,6 +156,7 @@ namespace HSMServer.Core.Tests.Controllers
                 .Callback(new TryGetFolderById((Guid? _, out FolderModel found) => found = folder));
             Folders.Setup(f => f[Folder.Id]).Returns(Folder);
             Folders.Setup(f => f.TryUpdate(It.IsAny<FolderUpdate>())).ReturnsAsync(true);
+            Folders.Setup(f => f.GetUserFolders(It.IsAny<User>())).Returns([Folder]);
 
             Member.ProductsRoles.Add((Own.Id, ProductRoleEnum.ProductViewer));
             Outsider.ProductsRoles.Add((Foreign.Id, ProductRoleEnum.ProductViewer));
@@ -164,7 +167,8 @@ namespace HSMServer.Core.Tests.Controllers
                 Users.Setup(u => u[captured.Id]).Returns(captured);
             }
 
-            Users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns([]);
+            // The tree hooks each user's own (visible) tree to itself when it is built.
+            Users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns([Member, Outsider, Admin]);
             Schedules.Setup(p => p.GetAllSchedules()).Returns([]);
             Chats.Setup(s => s.GetValues()).Returns([]);
 
@@ -277,12 +281,10 @@ namespace HSMServer.Core.Tests.Controllers
         {
             await Task.Yield();
 
-            var sensor = Cache.Object.GetSensor(sensorId);
-
-            if (sensor?.Type == SensorType.File)
-                yield return new List<BaseValue> { SensorValuesFactory.BuildFileValue(), SensorValuesFactory.BuildFileValue() };
-            else
-                yield return new List<BaseValue> { SensorValuesFactory.BuildIntegerValue(), SensorValuesFactory.BuildIntegerValue() };
+            // The stored history of a sensor: the same values on every read.
+            yield return _history.GetOrAdd(sensorId, id => Cache.Object.GetSensor(id)?.Type == SensorType.File
+                ? [SensorValuesFactory.BuildFileValue(), SensorValuesFactory.BuildFileValue()]
+                : [SensorValuesFactory.BuildIntegerValue(), SensorValuesFactory.BuildIntegerValue()]).ToList();
         }
 
 

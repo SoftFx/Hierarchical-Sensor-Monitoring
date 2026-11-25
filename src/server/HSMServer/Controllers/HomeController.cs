@@ -597,7 +597,7 @@ namespace HSMServer.Controllers
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
 
             if (_tree.TryGetFolder(CurrentUser, id, out var folder))
-                return PartialView("_GeneralInfo", new FolderInfoViewModel(folder));
+                return PartialView("_GeneralInfo", new FolderInfoViewModel(folder, CurrentUser));
 
             if (_tree.TryGetSensor(CurrentUser, id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
@@ -686,13 +686,15 @@ namespace HSMServer.Controllers
                 : (await GetFileHistory(sensor))?.Pages.FirstOrDefault()?.Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             ?.DecompressContent();
 
-        // The table is the one of the sensor connected in the user's state (SelectNode), whatever id the
-        // request names: it is read only when it IS the table of the sensor asked for, otherwise the
-        // request would be answered with another sensor's files.
+        // The history table in the user's state belongs to ONE sensor (the last one selected, in any
+        // browser tab). The request names its sensor, already resolved for this user: the state is connected
+        // to that sensor first, so the files served are the files of the sensor asked for.
         private async Task<HistoryTableViewModel> GetFileHistory(SensorNodeViewModel sensor)
         {
-            if (StoredUser.History.Table is not { } table || table.SensorId.ToGuid() != sensor.Id)
+            if (sensor.Type is not SensorType.File || _treeValuesCache.GetSensor(sensor.Id) is not { } model)
                 return null;
+
+            StoredUser.History.ConnectSensor(model);
 
             var request = new GetSensorHistoryRequest()
             {
@@ -1099,18 +1101,21 @@ namespace HSMServer.Controllers
         public IActionResult GetFolderInfo(string id)
         {
             return _tree.TryGetFolder(CurrentUser, SensorPathHelper.DecodeGuid(id), out var folder)
-                ? PartialView("_MetaInfo", new FolderInfoViewModel(folder))
+                ? PartialView("_MetaInfo", new FolderInfoViewModel(folder, CurrentUser))
                 : _emptyResult;
         }
 
         [HttpPost]
         public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
         {
-            if (!_tree.TryGetFolder(CurrentUser, newModel.EncodedId.ToGuid(), out var folder))
+            // A folder's settings are inherited by every product in it, so they are the folder Manager's to
+            // change (the rule EditAlerts applies to a folder): seeing the folder through one of its
+            // products is not enough, and the answer is the one of an unknown id.
+            if (!_tree.TryGetFolder(CurrentUser, newModel.EncodedId.ToGuid(), out var folder) || !CurrentUser.IsFolderManager(folder.Id))
                 return _emptyResult;
 
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new FolderInfoViewModel(folder));
+                return PartialView("_MetaInfo", new FolderInfoViewModel(folder, CurrentUser));
 
             var update = new FolderUpdate
             {
@@ -1124,7 +1129,7 @@ namespace HSMServer.Controllers
             };
 
             return await _folderManager.TryUpdate(update)
-                ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
+                ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id], CurrentUser))
                 : _emptyResult;
         }
 
@@ -1167,9 +1172,23 @@ namespace HSMServer.Controllers
             _tree.TryGetSensor(CurrentUser, SensorPathHelper.DecodeGuid(encodedId), out sensor);
 
         // GetGrid and GetList page through the node or folder connected in the user's state by SelectNode.
-        // That state outlives a role change, so the selection is checked again on every page request.
-        private bool IsSelectedNodeVisible() =>
-            StoredUser.SelectedNode.Id is { } selectedId && _tree.IsVisible(CurrentUser, selectedId.ToGuid());
+        // That state outlives a role change, so the selection is checked again on every page request, and a
+        // folder's product list is taken anew: it holds the products the user sees NOW.
+        private bool IsSelectedNodeVisible()
+        {
+            if (StoredUser.SelectedNode.Id is not { } selected)
+                return false;
+
+            var selectedId = selected.ToGuid();
+
+            if (_tree.TryGetFolder(CurrentUser, selectedId, out var folder))
+            {
+                StoredUser.SelectedNode.ConnectFolder(folder, _tree.GetVisibleProducts(CurrentUser, folder));
+                return true;
+            }
+
+            return _tree.IsVisible(CurrentUser, selectedId);
+        }
 
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions)
         {

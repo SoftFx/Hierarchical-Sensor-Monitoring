@@ -151,7 +151,32 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.IsType<EmptyResult>(await history.TableHistory(Request(tree.Cpu.Id)));
             Assert.IsType<EmptyResult>(await history.TabelHistoryLatest(Request(tree.Cpu.Id)));
-            Assert.Null(await history.ExportHistory(tree.Cpu.Id.ToString(), 0, false, default, default));
+            Assert.IsType<NotFoundResult>(await history.ExportHistory(tree.Cpu.Id.ToString(), 0, false, default, default));
+
+            // The refused request left the user's own table where it was.
+            Assert.Equal(tree.ForeignCpu.Id.ToString(), tree.Outsider.History.Table.SensorId);
+        }
+
+        [Fact]
+        public async Task Table_FollowsTheSensorTheRequestNames()
+        {
+            // The table in the user's state is the last selected sensor's, in any browser tab. A request
+            // that names another sensor the user sees is answered with THAT sensor's rows.
+            var tree = new WebAccessFixture();
+            var history = tree.History(tree.Member);
+
+            await tree.Home(tree.Member).SelectNode(tree.Mem.Id.ToString());
+
+            var table = Assert.IsType<HistoryTableViewModel>(Table(await history.TableHistory(Request(tree.Cpu.Id))));
+
+            Assert.Equal(tree.Cpu.Id.ToString(), table.SensorId);
+
+            await tree.Home(tree.Member).SelectNode(tree.Mem.Id.ToString());
+
+            var export = Assert.IsType<FileContentResult>(await history.ExportHistory(tree.Cpu.Id.ToString(), 0, false, default, default));
+
+            Assert.StartsWith("own_cpu_", export.FileDownloadName);
+            Assert.Equal(tree.Cpu.Id.ToString(), tree.Member.History.Table.SensorId);
         }
 
 
@@ -159,9 +184,9 @@ namespace HSMServer.Core.Tests.Controllers
         {
             Assert.IsType<EmptyResult>(await history.TableHistory(Request(sensorId)));
             Assert.IsType<EmptyResult>(await history.TabelHistoryLatest(Request(sensorId)));
-            Assert.Null(Table(history.GetPreviousTablePage()));
-            Assert.Null(Table(await history.GetNextTablePage()));
-            Assert.Null(await history.ExportHistory(sensorId.ToString(), 0, false, default, default));
+            Assert.IsType<EmptyResult>(history.GetPreviousTablePage());
+            Assert.IsType<EmptyResult>(await history.GetNextTablePage());
+            Assert.IsType<NotFoundResult>(await history.ExportHistory(sensorId.ToString(), 0, false, default, default));
         }
 
         private static object Table(IActionResult result) => Assert.IsType<PartialViewResult>(result).Model;

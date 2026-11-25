@@ -1,8 +1,10 @@
 ﻿using HSMCommon.Extensions;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
@@ -18,11 +20,20 @@ namespace HSMServer.Model.Folders.ViewModels
         // public constructor without parameters for action Home/UpdateFolderInfo
         public FolderInfoViewModel() : base() { }
 
-        internal FolderInfoViewModel(FolderModel folder) : base(folder)
+        /// <param name="folder">The folder.</param>
+        /// <param name="user">
+        /// The user the panel is rendered for: the product statistics count only the products this user has
+        /// a role on (an admin: all of them), so the panel says nothing about the others.
+        /// </param>
+        internal FolderInfoViewModel(FolderModel folder, User user) : base(folder)
         {
-            ProductStatuses = folder.Products.Values.ToGroupedList(x => x.Status);
+            var products = folder.Products.Values
+                .Where(p => user is not null && (user.IsAdmin || (user.ProductsRoles is not null && user.IsProductAvailable(p.Id))))
+                .ToList();
 
-            TotalProducts = folder.Products.Count;
+            ProductStatuses = products.ToGroupedList(x => x.Status);
+
+            TotalProducts = products.Count;
             Id = folder.Id;
         }
     }

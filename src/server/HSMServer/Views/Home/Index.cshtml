@@ -158,8 +158,9 @@
         var id = dataObject.id;
         let isFile = dataObject.sensorType === 6;
 
-        // value, fileNameString and a file's comment are plain text (the same strings the server
-        // renders HTML-encoded on the first load): they are set as text, never parsed as HTML.
+        // value and fileNameString are plain text (a file's name and extension are whatever the
+        // collector sent): they are set as text, never parsed as HTML. A comment is stored sanitized
+        // (HTML with its text already encoded), so it is inserted as HTML, through the sanitizer.
         $('#value_' + id).text(dataObject.value ?? '');
         $('#validation_' + id).empty();
 
@@ -167,7 +168,7 @@
             $(`#last_file_name_${id}`).text(dataObject.fileNameString ?? '');
 
             if (dataObject.comment !== null)
-                $('#validation_' + id).append($('<span class="d-flex text-break"></span>').text(`Comment: ${dataObject.comment}`));
+                $('#validation_' + id).append($('<span class="d-flex text-break"></span>').html(sanitizeHtml(`Comment: ${dataObject.comment}`)));
         }
 
         if (dataObject.isValidationErrorVisible) {

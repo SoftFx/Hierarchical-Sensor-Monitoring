@@ -8,12 +8,14 @@ using HSMServer.Controllers.DataTables;
 using HSMServer.Core.Model.Policies;
 using HSMServer.DTOs.Sensors;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.UserTreeShallowCopy;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
@@ -114,7 +116,12 @@ namespace HSMServer.Core.Tests.Controllers
 
             // ---- a node id
             ["SelectNode(node)"] = new(Node, async (home, _, id) => await home.SelectNode(id.ToString())),
-            ["GetNode"] = new(Node, (home, _, id) => Sync(home.GetNode(id.ToString()))),
+            ["GetNode"] = new(Node, (home, _, id) =>
+            {
+                home.RefreshTree(new SearchPattern());
+
+                return Sync(home.GetNode(id.ToString()) is PartialViewResult { Model: NodeShallowModel node } ? $"node:{node.Id}" : "nothing");
+            }),
             ["UpdateSelectedNode(node)"] = new(Node, (home, _, id) => Sync(home.UpdateSelectedNode(id.ToString()))),
             ["GetGeneralInfo(node)"] = new(Node, (home, _, id) => Sync(home.GetGeneralInfo(id.ToString()))),
             ["GetAlertIcons(node)"] = new(Node, (home, _, id) => Sync(home.GetAlertIcons(id.ToString()))),
@@ -159,7 +166,6 @@ namespace HSMServer.Core.Tests.Controllers
             ["MuteSensors(folder) modal"] = new(Folder, (home, _, id) => Sync(MutedPaths(home.MuteSensors([id.ToString()])))),
             ["RemoveNode(folder)"] = new(Folder, async (home, _, id) => await home.RemoveNode([id.ToString()])),
             ["AddDataPolicy(template, folder)"] = new(Folder, (home, _, id) => Sync(AlertBlock(home.AddDataPolicy((byte)SensorType.Integer, Guid.Empty, id)))),
-            ["UpdateFolderInfo"] = new(Folder, async (home, _, id) => await home.UpdateFolderInfo(new FolderInfoViewModel { EncodedId = id.ToString() })),
             ["EnableGrafana(folder)"] = new(Folder, async (home, _, id) =>
             {
                 await home.EnableGrafana(id.ToString());
@@ -334,23 +340,103 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
-        public async Task FilesOfAnotherSensor_AreNotServedFromTheSelectedOne()
+        public async Task RecentFiles_AreTheFilesOfTheSensorAsked_AndStopWhenTheRoleIsGone()
         {
             var tree = new WebAccessFixture();
             var home = tree.Home(tree.Member);
 
-            await home.SelectNode(tree.Report.Id.ToString());
+            // Another sensor is selected (another browser tab): the request names the file sensor and gets
+            // the file sensor's files.
+            await home.SelectNode(tree.Cpu.Id.ToString());
 
-            Assert.IsType<PartialViewResult>(await home.GetRecentFilesView(tree.Report.Id.ToString()));
+            var recent = Assert.IsType<PartialViewResult>(await home.GetRecentFilesView(tree.Report.Id.ToString()));
+            var table = Assert.IsType<HistoryTableViewModel>(recent.Model);
 
-            // The history table belongs to the selected sensor: a request that names another sensor is not
-            // answered from it, and a role taken away ends the access.
+            Assert.Equal(tree.Report.Id.ToString(), table.SensorId);
+
+            // One of the listed files, by its receiving time, is downloadable.
+            var ticks = table.Pages[0].Cast<FileValue>().First().ReceivingTime.Ticks;
+
+            Assert.IsType<FileContentResult>(await home.GetFile(tree.Report.Id.ToString(), ticks));
+
+            // A sensor that is not a file sensor has no files.
             Assert.IsType<EmptyResult>(await home.GetRecentFilesView(tree.Cpu.Id.ToString()));
 
             tree.Member.ProductsRoles.Clear();
 
             Assert.IsType<EmptyResult>(await home.GetRecentFilesView(tree.Report.Id.ToString()));
-            Assert.IsType<NotFoundResult>(await home.GetFile(tree.Report.Id.ToString(), dateTime: 1));
+            Assert.IsType<NotFoundResult>(await home.GetFile(tree.Report.Id.ToString(), ticks));
+        }
+
+        [Fact]
+        public async Task Folder_FollowsARoleTakenFromOneOfItsProducts()
+        {
+            var tree = new WebAccessFixture();
+            var user = new User("both");
+
+            user.ProductsRoles.Add((tree.Own.Id, ProductRoleEnum.ProductViewer));
+            user.ProductsRoles.Add((tree.Sibling.Id, ProductRoleEnum.ProductViewer));
+            tree.Users.Setup(u => u[user.Id]).Returns(user);
+
+            var home = tree.Home(user);
+            var page = new ChildrenPageRequest("Products", 0, 10);
+
+            await home.SelectNode(tree.Folder.Id.ToString());
+
+            Assert.Equal(2, Products(home.GetGrid(page)).Count);
+            Assert.Equal(2, ((FolderInfoViewModel)((PartialViewResult)home.GetFolderInfo(tree.Folder.Id.ToString())).Model).TotalProducts);
+
+            var rowsWithBoth = Rows(tree.JournalFeed(user).GetPage(Parameters()));
+
+            // The folder stays selected and visible (through the other product); what it shows follows.
+            user.ProductsRoles.RemoveAll(role => role.Item1 == tree.Sibling.Id);
+
+            Assert.Equal([tree.Own.Id], Products(home.GetGrid(page)));
+            Assert.Equal([tree.Own.Id], Products(home.GetList(page)));
+            Assert.Equal(1, ((FolderInfoViewModel)((PartialViewResult)home.GetFolderInfo(tree.Folder.Id.ToString())).Model).TotalProducts);
+
+            var feed = (DataTableResultSet)tree.JournalFeed(user).GetPage(Parameters()).Value;
+
+            // One record per loaded id (the fake journal): the sibling product and its sensor are gone
+            // from the rows and from both counts.
+            Assert.Equal(rowsWithBoth - 2, feed.Data.Length);
+            Assert.Equal(rowsWithBoth - 2, feed.RecordsTotal);
+            Assert.Equal(rowsWithBoth - 2, feed.RecordsFiltered);
+        }
+
+        [Fact]
+        public void Folder_PanelCountsOnlyTheProductsTheUserSees()
+        {
+            var tree = new WebAccessFixture();
+
+            var member = (FolderInfoViewModel)((PartialViewResult)tree.Home(tree.Member).GetFolderInfo(tree.Folder.Id.ToString())).Model;
+            var admin = (FolderInfoViewModel)((PartialViewResult)tree.Home(tree.Admin).GetFolderInfo(tree.Folder.Id.ToString())).Model;
+
+            Assert.Equal(1, member.TotalProducts);
+            Assert.Equal(2, admin.TotalProducts);
+        }
+
+        [Fact]
+        public async Task FolderSettings_AreTheFolderManagersToChange()
+        {
+            // A folder's settings are inherited by every product in it: seeing the folder through one of
+            // its products is not enough to change them.
+            var tree = new WebAccessFixture();
+            var manager = new User("folder manager");
+
+            manager.FoldersRoles.Add(tree.Folder.Id, ProductRoleEnum.ProductManager);
+            tree.Users.Setup(u => u[manager.Id]).Returns(manager);
+
+            FolderInfoViewModel Form() => new() { EncodedId = tree.Folder.Id.ToString(), Description = "changed" };
+
+            foreach (var refused in new[] { tree.Outsider, tree.Member })
+                Assert.IsType<EmptyResult>(await tree.Home(refused).UpdateFolderInfo(Form()));
+
+            Assert.Equal(0, tree.Writes());
+
+            Assert.IsType<PartialViewResult>(await tree.Home(manager).UpdateFolderInfo(Form()));
+            Assert.IsType<PartialViewResult>(await tree.Home(tree.Admin).UpdateFolderInfo(Form()));
+            Assert.Equal(2, tree.Writes());
         }
 
 
@@ -384,6 +470,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             return $"{alert.EntityId}:{alert.Actions.Sum(a => a.AvailableChats.Count)}";
         }
+
+        private static List<Guid> Products(IActionResult grid) =>
+            Assert.IsAssignableFrom<INodeChildrenViewModel>(Assert.IsType<PartialViewResult>(grid).Model).VisibleItems.Select(p => p.Id).ToList();
 
         private static DataTableParameters Parameters() => new(
             Columns: [new DataTableColumn(0, nameof(ColumnName.Record), false, false, new Search(false, string.Empty))],

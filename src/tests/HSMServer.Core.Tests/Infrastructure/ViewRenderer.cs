@@ -34,7 +34,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var services = new ServiceCollection();
             var environment = new TestEnvironment();
-            var listener = new DiagnosticListener("HSMServer.Core.Tests.Views");
+            using var listener = new DiagnosticListener("HSMServer.Core.Tests.Views");
 
             services.AddSingleton<IWebHostEnvironment>(environment);
             services.AddSingleton<IHostEnvironment>(environment);
