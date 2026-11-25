@@ -5,8 +5,10 @@
 
 @{
     var file = Model.LastValue as FileValue;
+    // A large file value (#1886) has no content here: no preview and no download above the list, which shows its state.
+    var isLarge = file is not null && HSMServer.Core.Extensions.FileValueNameExtensions.IsLargeFile(file);
     bool isEnabledPreview = false;
-    if (file is not null)
+    if (file is not null && !isLarge)
         isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
                            (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
 
@@ -85,7 +87,11 @@
                     </h2>
                     <div id='file_collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
                         <div class='accordion-body p-3'>
-                            @if (Model.LastValue != null)
+                            @if (isLarge)
+                            {
+                                <div class="text-muted" style="font-size: smaller">A large file: its state and its download are in the list below.</div>
+                            }
+                            else if (Model.LastValue != null)
                             {
                                 <div class="row">
                                     <div class="d-flex col-6">

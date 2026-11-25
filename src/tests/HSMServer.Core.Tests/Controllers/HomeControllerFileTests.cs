@@ -50,6 +50,8 @@ namespace HSMServer.Core.Tests.Controllers
 
         private readonly Dictionary<Guid, List<FileValue>> _rows = [];
 
+        private readonly FakeLargeFiles _largeFiles = new();
+
         private readonly BaseSensorModel _sensor;
         private readonly BaseSensorModel _hidden;
 
@@ -184,6 +186,104 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+
+        [Theory]
+        [InlineData("verified", "none", true, LargeFileRowState.Packing, "being packed")]
+        [InlineData("verified", "queued", true, LargeFileRowState.Packing, "being packed")]
+        [InlineData("verified", "building", true, LargeFileRowState.Packing, "being packed")]
+        [InlineData("verified", "waitingForRoom", true, LargeFileRowState.WaitingForRoom, "being packed (waiting for disk space)")]
+        [InlineData("verified", "failed", true, LargeFileRowState.PackingFailed, "packing failed")]
+        [InlineData("verified", "waitingForPassword", true, LargeFileRowState.WaitingForPassword, "waiting for the product's password")]
+        // The product's password is asked before the builder: after a restart the builder may not know the file yet.
+        [InlineData("verified", "none", false, LargeFileRowState.WaitingForPassword, "waiting for the product's password")]
+        [InlineData("verified", "failed", false, LargeFileRowState.WaitingForPassword, "waiting for the product's password")]
+        [InlineData("packed", "none", true, LargeFileRowState.Ready, "ready")]
+        [InlineData("packed", "building", true, LargeFileRowState.Ready, "ready (being re-encrypted under the new password)")]
+        public void AStoredFile_HasOneStateOnThePage(string state, string buildState, bool hasPassword, LargeFileRowState expected, string text)
+        {
+            var facts = new LargeFileStoredFacts
+            {
+                FileId = Guid.NewGuid(),
+                State = state,
+                BuildState = buildState,
+                DownloadUrl = state == "packed" ? "/LargeFiles/Download/a/b" : null,
+            };
+
+            Assert.Equal((expected, text), FileSensorPageService.Decide(facts, hasPassword));
+        }
+
+        [Fact]
+        public void AValueWithoutItsFile_IsMissing()
+        {
+            Assert.Equal((LargeFileRowState.Missing, "file is missing"), FileSensorPageService.Decide((LargeFileStoredFacts)null, true));
+        }
+
+        [Theory]
+        [InlineData(0, 10, false, LargeFileRowState.Uploading, "uploading, 0%", 0)]
+        [InlineData(3, 10, false, LargeFileRowState.Uploading, "uploading, 30%", 30)]
+        [InlineData(10, 10, false, LargeFileRowState.Checking, "being checked", 100)]
+        [InlineData(4, 10, true, LargeFileRowState.Checking, "being checked", 100)]
+        public void AnUpload_ShowsItsPercent_UntilEveryPieceIsIn(long received, long total, bool checking, LargeFileRowState expected, string text, int percent)
+        {
+            var upload = new LargeFileUploadFacts { PiecesReceived = received, PiecesTotal = total, IsChecking = checking };
+
+            Assert.Equal((expected, text, percent), FileSensorPageService.Decide(upload));
+        }
+
+        [Fact]
+        public async Task Uploads_AreOnTheFirstPageOnly_WithApplicationAndHostOrADash()
+        {
+            AddValues(_sensor, 30);
+
+            _largeFiles.Uploads[_sensor.Id] =
+            [
+                new LargeFileUploadFacts { FileId = Guid.NewGuid(), Name = "app.dmp", Size = 1L << 30, PiecesReceived = 1, PiecesTotal = 4, Application = "TTS", Host = "10.0.0.7" },
+                new LargeFileUploadFacts { FileId = Guid.NewGuid(), Name = "old.dmp", Size = 10, PiecesReceived = 0, PiecesTotal = 1 },
+            ];
+
+            var first = PageOf(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor)));
+            var second = PageOf(await Controller(Viewer()).GetFilesPage(Encode(_sensor), first.OlderThanTicks));
+
+            Assert.Equal(["app.dmp", "old.dmp"], first.Uploads.Select(u => u.Name));
+            Assert.Equal(("TTS", "10.0.0.7"), (first.Uploads[0].Application, first.Uploads[0].Host));
+            Assert.Equal((FileValueRowViewModel.Unknown, FileValueRowViewModel.Unknown), (first.Uploads[1].Application, first.Uploads[1].Host));
+            Assert.Equal("uploading, 25%", first.Uploads[0].StateText);
+            Assert.Empty(second.Uploads);
+        }
+
+        [Fact]
+        public async Task AProductWithoutAPassword_SaysWhatIsMissing_AndLinksTheSettings_ToWhoCanSetIt()
+        {
+            _largeFiles.HasPassword = false;
+            _largeFiles.Uploads[_sensor.Id] = [new LargeFileUploadFacts { FileId = Guid.NewGuid(), Name = "a.dmp", PiecesTotal = 2 }];
+
+            var viewer = PageOf(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor)));
+            var manager = PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor)));
+            var admin = PageOf(await Controller(Admin()).GetRecentFilesView(Encode(_sensor)));
+
+            Assert.True(viewer.ShowPasswordMissing);
+            Assert.Null(viewer.PasswordSettingsUrl);
+
+            Assert.True(manager.ShowPasswordMissing);
+            Assert.Equal(FileSensorPageService.ProductSettingsPath(_product.Id), manager.PasswordSettingsUrl);
+
+            Assert.True(admin.ShowPasswordMissing);
+            Assert.Equal(FileSensorPageService.ProductSettingsPath(_product.Id), admin.PasswordSettingsUrl);
+        }
+
+        [Fact]
+        public async Task ThePasswordNotice_IsNotShown_WithAPassword_OrWithoutLargeFiles()
+        {
+            AddValues(_sensor, 3);
+
+            _largeFiles.HasPassword = false;
+            Assert.False(PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor))).ShowPasswordMissing);
+
+            _largeFiles.HasPassword = true;
+            _largeFiles.Uploads[_sensor.Id] = [new LargeFileUploadFacts { FileId = Guid.NewGuid(), Name = "a.dmp", PiecesTotal = 2 }];
+            Assert.False(PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor))).ShowPasswordMissing);
+        }
+
         private static FileValuesPageViewModel PageOf(IActionResult result) =>
             Assert.IsType<FileValuesPageViewModel>(Assert.IsType<PartialViewResult>(result).Model);
 
@@ -240,6 +340,13 @@ namespace HSMServer.Core.Tests.Controllers
 
         private static User Admin() => new("admin") { IsAdmin = true };
 
+        private User Manager()
+        {
+            var user = new User("manager");
+            user.ProductsRoles.Add((_product.Id, ProductRoleEnum.ProductManager));
+            return user;
+        }
+
         private HomeController Controller(User user)
         {
             var recorder = new HSMServer.Model.ManagementApi.ChangeSets.ChangeSetRecorder(
@@ -256,7 +363,7 @@ namespace HSMServer.Core.Tests.Controllers
                 _users.Object, new Mock<IJournalService>().Object, _chats.Object, new Mock<IDatabaseCore>().Object,
                 _schedules.Object, policyWriter,
                 new SensorMoveAdministrationService(_cache.Object, _tokenAuthorization.Object, _users.Object),
-                new FileSensorPageService(_cache.Object))
+                new FileSensorPageService(_cache.Object, _largeFiles))
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = user } },
             };
@@ -275,5 +382,27 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         private static string Encode(BaseSensorModel sensor) => SensorPathHelper.EncodeGuid(sensor.Id);
+
+
+        private sealed class FakeLargeFiles : ILargeFilePageSource
+        {
+            public Dictionary<Guid, List<LargeFileUploadFacts>> Uploads { get; } = [];
+
+            public Dictionary<Guid, LargeFileStoredFacts> Files { get; } = [];
+
+            public Dictionary<Guid, List<LargeFileDownloadFacts>> Downloads { get; } = [];
+
+            public bool HasPassword { get; set; } = true;
+
+
+            public IReadOnlyList<LargeFileUploadFacts> GetUploads(Guid sensorId) => Uploads.TryGetValue(sensorId, out var list) ? list : [];
+
+            public LargeFileStoredFacts Describe(Guid fileId) => Files.GetValueOrDefault(fileId);
+
+            public bool HasDumpPassword(Guid productId) => HasPassword;
+
+            public IReadOnlyList<LargeFileDownloadFacts> GetDownloads(Guid productId, Guid fileId, int limit) =>
+                Downloads.TryGetValue(fileId, out var list) ? list.Take(limit).ToList() : [];
+        }
     }
 }

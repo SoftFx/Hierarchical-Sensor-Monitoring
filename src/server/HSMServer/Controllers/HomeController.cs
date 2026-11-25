@@ -678,7 +678,7 @@ namespace HSMServer.Controllers
             if (!TryGetSensor(fileId, out var sensor) || sensor.Type is not SensorType.File)
                 return NotFound();
 
-            return PartialView("_FileAccordions", await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan));
+            return PartialView("_FileAccordions", await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan, CurrentUser));
         }
 
         // Folds into the shared helper of the web UI access-check work when it reaches this branch: the sensor exists and

@@ -7,6 +7,7 @@ using HSMCommon.Model;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
+using HSMServer.Model.Authentication;
 
 namespace HSMServer.Model.FileSensors
 {
@@ -20,15 +21,22 @@ namespace HSMServer.Model.FileSensors
         /// <summary>Values per page of the list.</summary>
         public const int PageSize = 20;
 
+        /// <summary>The downloads of one file the page lists.</summary>
+        public const int MaxDownloadsShown = 20;
+
         private const long CsvPreviewLimit = 5 * 1024 * 1024;
         private const long TxtPreviewLimit = 1024 * 1024;
 
         private readonly ITreeValuesCache _cache;
+        private readonly ILargeFilePageSource _largeFiles;
 
 
-        public FileSensorPageService(ITreeValuesCache cache)
+        internal FileSensorPageService(ITreeValuesCache cache) : this(cache, new NoLargeFilePageSource()) { }
+
+        public FileSensorPageService(ITreeValuesCache cache, ILargeFilePageSource largeFiles)
         {
             _cache = cache;
+            _largeFiles = largeFiles ?? new NoLargeFilePageSource();
         }
 
 
@@ -62,44 +70,145 @@ namespace HSMServer.Model.FileSensors
         }
 
         /// <summary>
-        /// A page of the sensor's file values, newest first: the newest <see cref="PageSize"/> without the last value
+        /// A page of the sensor's file values, newest first: the newest <see cref="PageSize"/> without an ordinary last value
         /// (the page shows it on its own above the list), or the <see cref="PageSize"/> values older than
-        /// <paramref name="olderThanTicks"/>. No limit on how far back the pages go.
+        /// <paramref name="olderThanTicks"/>. No limit on how far back the pages go. The first page carries the uploads in
+        /// progress; a large value carries its state, its download and, for a Manager of the product or an admin, its
+        /// downloads.
         /// </summary>
-        public async Task<FileValuesPageViewModel> GetPageAsync(Guid sensorId, string encodedId, long? olderThanTicks)
+        public async Task<FileValuesPageViewModel> GetPageAsync(Guid sensorId, string encodedId, long? olderThanTicks, User user)
         {
             var sensor = _cache.GetSensor(sensorId);
 
-            if (sensor is null)
-                return new FileValuesPageViewModel { EncodedId = encodedId };
-
-            if (olderThanTicks <= DateTime.MinValue.Ticks)
+            if (sensor is null || olderThanTicks <= DateTime.MinValue.Ticks)
                 return new FileValuesPageViewModel { EncodedId = encodedId };
 
             var to = olderThanTicks is { } older
                 ? new DateTime(Math.Min(older - 1, DateTime.MaxValue.Ticks), DateTimeKind.Utc)
                 : DateTime.MaxValue;
 
-            var skipLast = olderThanTicks is null;
-            var lastTicks = (sensor.LastValue as FileValue)?.Time.Ticks;
+            var firstPage = olderThanTicks is null;
 
             // One more than a page tells whether an older page exists; one more again for the last value skipped.
             var read = await _cache.GetSensorValuesPage(sensorId, DateTime.MinValue, to, PageSize + 2).Flatten();
             var files = read.OfType<FileValue>().ToList();
 
-            if (skipLast && files.Count > 0 && files[0].Time.Ticks == lastTicks)
+            // An ordinary last value is shown above the list with its preview; a large one has no preview and stays in it.
+            if (firstPage && files.Count > 0 && sensor.LastValue is FileValue last && !IsLarge(last) && files[0].Time.Ticks == last.Time.Ticks)
                 files.RemoveAt(0);
 
             var page = files.Take(PageSize).ToList();
+            var productId = sensor.Root?.Id ?? Guid.Empty;
+            var canManage = user is not null && user.IsManager(productId);
+            var uploads = firstPage ? _largeFiles.GetUploads(sensorId).Select(ToUploadRow).ToList() : [];
+            var rows = page.Select(file => ToRow(file, productId, canManage)).ToList();
+
+            var listsLarge = uploads.Count > 0 || rows.Any(row => row.IsLarge) || (sensor.LastValue is FileValue lastFile && IsLarge(lastFile));
+            var passwordMissing = firstPage && listsLarge && !_largeFiles.HasDumpPassword(productId);
 
             return new FileValuesPageViewModel
             {
                 EncodedId = encodedId,
-                Rows = page.Select(FileValueRowViewModel.From).ToList(),
+                Uploads = uploads,
+                Rows = rows,
                 OlderThanTicks = files.Count > PageSize ? page[^1].Time.Ticks : null,
+                ShowPasswordMissing = passwordMissing,
+                PasswordSettingsUrl = passwordMissing && canManage ? ProductSettingsPath(productId) : null,
             };
         }
 
+
+        /// <summary>The settings page of a product, where its dump password is set.</summary>
+        public static string ProductSettingsPath(Guid productId) => $"/Product/EditProduct?Product={productId}";
+
+        /// <summary>
+        /// The state of a large value's file: its record and archive first, then, for a file not packed, the product's
+        /// password before the builder's state (a product without one waits whatever the builder last said).
+        /// </summary>
+        internal static (LargeFileRowState State, string Text) Decide(LargeFileStoredFacts facts, bool hasPassword)
+        {
+            if (facts is null)
+                return (LargeFileRowState.Missing, "file is missing");
+
+            if (facts.State == "packed" && facts.DownloadUrl is not null)
+                return facts.BuildState is "queued" or "building"
+                    ? (LargeFileRowState.Ready, "ready (being re-encrypted under the new password)")
+                    : (LargeFileRowState.Ready, "ready");
+
+            if (!hasPassword)
+                return (LargeFileRowState.WaitingForPassword, "waiting for the product's password");
+
+            return facts.BuildState switch
+            {
+                "waitingForPassword" => (LargeFileRowState.WaitingForPassword, "waiting for the product's password"),
+                "waitingForRoom" => (LargeFileRowState.WaitingForRoom, "being packed (waiting for disk space)"),
+                "failed" => (LargeFileRowState.PackingFailed, "packing failed"),
+                _ => (LargeFileRowState.Packing, "being packed"),
+            };
+        }
+
+        internal static (LargeFileRowState State, string Text, int Percent) Decide(LargeFileUploadFacts upload)
+        {
+            var percent = upload.PiecesTotal <= 0 ? 0 : (int)Math.Min(100, upload.PiecesReceived * 100 / upload.PiecesTotal);
+            var allIn = upload.PiecesTotal > 0 && upload.PiecesReceived >= upload.PiecesTotal;
+
+            return upload.IsChecking || allIn
+                ? (LargeFileRowState.Checking, "being checked", 100)
+                : (LargeFileRowState.Uploading, $"uploading, {percent}%", percent);
+        }
+
+
+        private FileValueRowViewModel ToRow(FileValue file, Guid productId, bool canManage)
+        {
+            var row = FileValueRowViewModel.From(file);
+
+            if (!row.IsLarge || file.LargeFileIdOrDefault() is not { } fileId)
+                return row;
+
+            var facts = _largeFiles.Describe(fileId);
+            var (state, text) = Decide(facts, _largeFiles.HasDumpPassword(productId));
+
+            return new FileValueRowViewModel
+            {
+                TimeTicks = row.TimeTicks,
+                Time = row.Time,
+                Name = row.Name,
+                Extension = row.Extension,
+                Size = row.Size,
+                Status = row.Status,
+                Comment = row.Comment,
+                IsLarge = true,
+                LargeState = state,
+                StateText = text,
+                Reason = state == LargeFileRowState.Ready ? null : facts?.NotReadyReason,
+                DownloadUrl = state == LargeFileRowState.Ready ? facts.DownloadUrl : null,
+                SourceModified = file.LargeFileSourceModifiedOrDefault(),
+                Application = Shown(facts?.Application),
+                Host = Shown(facts?.Host),
+                Downloads = canManage ? _largeFiles.GetDownloads(productId, fileId, MaxDownloadsShown) : null,
+            };
+        }
+
+        private static LargeFileUploadRowViewModel ToUploadRow(LargeFileUploadFacts upload)
+        {
+            var (state, text, percent) = Decide(upload);
+
+            return new LargeFileUploadRowViewModel
+            {
+                FileId = upload.FileId,
+                Name = upload.Name,
+                Size = upload.Size.ToReadableMemoryFormat(),
+                State = state,
+                StateText = text,
+                Percent = percent,
+                StartedUtc = upload.StartedUtc,
+                SourceModified = upload.SourceModifiedUtc,
+                Application = Shown(upload.Application),
+                Host = Shown(upload.Host),
+            };
+        }
+
+        private static string Shown(string value) => string.IsNullOrWhiteSpace(value) ? FileValueRowViewModel.Unknown : value;
 
         private FileValue GetLastValue(Guid sensorId) => _cache.GetSensor(sensorId)?.LastValue as FileValue;
     }

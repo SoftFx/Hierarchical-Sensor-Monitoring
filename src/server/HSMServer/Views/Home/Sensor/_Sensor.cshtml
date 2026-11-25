@@ -163,6 +163,13 @@
                 if (previousReceivedTime === response.time)
                     return;
 
+                // A large file value has no preview: the list shows its state and its download.
+                if (response.isLarge) {
+                    loadFiles();
+                    previousReceivedTime = response.time;
+                    return;
+                }
+
                 if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
                     (response.originalSize < 1024 * 1024 && response.extension === 'txt')) // 1MB
                     previewFile(viewFileAction, encodedId, response.extension);

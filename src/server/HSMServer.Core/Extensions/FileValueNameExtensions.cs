@@ -8,6 +8,12 @@ namespace HSMServer.Core.Extensions
         /// <summary>True for a large file value (ADR-0022): its content is in the large file store, not in the value.</summary>
         public static bool IsLargeFile(this FileValue file) => false;
 
+        /// <summary>The id of a large value's file in the large file store; null for an ordinary file value.</summary>
+        public static System.Guid? LargeFileIdOrDefault(this FileValue file) => null;
+
+        /// <summary>The modification time of a large value's source file; null for an ordinary file value.</summary>
+        public static System.DateTime? LargeFileSourceModifiedOrDefault(this FileValue file) => null;
+
         /// <summary>
         /// The name a file value is shown under (the sensor page, the alert variable <c>$fileName</c>, the management API).
         /// An ordinary file value usually carries its name without the extension and the extension apart; a large file value

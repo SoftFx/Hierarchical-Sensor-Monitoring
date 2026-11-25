@@ -4,15 +4,54 @@
 @model FileValuesPageViewModel
 
 @*
-    One page of the file values of a File sensor (#1886), newest first. Nothing a client sent (a name, an extension, a
-    comment) goes into a script or an event attribute: it is HTML-encoded into text and data-* attributes, and the
-    handlers in _SensorFileContent read the attributes. Element ids are made of the value's time only.
+    One page of the file values of a File sensor (#1886), newest first; the first page starts with the uploads that are not
+    values yet. Nothing a client sent (a name, an extension, a comment, an application, a host) goes into a script or an
+    event attribute: it is HTML-encoded into text and data-* attributes, and the handlers in _SensorFileContent read the
+    attributes. Element ids are made of the value's time only.
 *@
+
+@if (Model.ShowPasswordMissing)
+{
+    <div class="alert alert-warning py-2 my-2 large-file-password-missing" role="alert">
+        Large files of this product are kept and cannot be downloaded: the product has no dump password yet.
+        A Manager of the product or an admin sets it in the product settings.
+        @if (Model.PasswordSettingsUrl is not null)
+        {
+            <a class="alert-link ms-1" href="@Model.PasswordSettingsUrl">Set the dump password</a>
+        }
+    </div>
+}
+
+@foreach (var upload in Model.Uploads)
+{
+    <div class="card my-1 large-file-upload" data-state="@upload.State">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between flex-wrap">
+                <div class="text-break">
+                    <i class="fas fa-cloud-upload-alt me-1"></i>
+                    <span class="large-file-name">@upload.Name</span>
+                    <span class="badge bg-secondary ms-2 large-file-state">@upload.StateText</span>
+                </div>
+                <div class="d-flex flex-md-column align-items-end" style="font-size: smaller">
+                    <span>Size: @upload.Size</span>
+                    <span>Started: @upload.StartedUtc.ToDefaultFormat()</span>
+                </div>
+            </div>
+            <div class="progress mt-1" style="height: 4px">
+                <div class="progress-bar" role="progressbar" style="width: @(upload.Percent)%" aria-valuenow="@upload.Percent" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="text-muted mt-1" style="font-size: smaller">
+                File time: @upload.SourceModified.ToDefaultFormat() · Application: <span class="large-file-application">@upload.Application</span> · Host: <span class="large-file-host">@upload.Host</span>
+            </div>
+        </div>
+    </div>
+}
 
 @foreach (var row in Model.Rows)
 {
     <div class='accordion my-1 file-row' id='@row.RowId' data-time='@row.TimeTicks' data-extension='@row.Extension'
-         data-preview='@(row.IsPreviewEnabled ? "true" : "false")'>
+         data-preview='@(row.IsPreviewEnabled ? "true" : "false")' data-large='@(row.IsLarge ? "true" : "false")'
+         data-state='@(row.IsLarge ? row.LargeState.ToString() : string.Empty)'>
         <div class='accordion-item'>
             <h2 class='accordion-header'>
                 <button class='accordion-button collapsed pt-2 pb-1 file-row-toggle' type='button' data-bs-toggle='collapse'
@@ -23,6 +62,10 @@
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li class='@row.Status.ToClient().ToIcon() sensor-icon-with-margin' title='Status: @row.Status'></li>
                                     <span class="file-row-name">@row.Name</span>
+                                    @if (row.IsLarge)
+                                    {
+                                        <span class="badge bg-secondary ms-2 large-file-state">@row.StateText</span>
+                                    }
                                     <div class="d-flex text-break pt-2">
                                         @if (!string.IsNullOrEmpty(row.Comment))
                                         {
@@ -43,33 +86,75 @@
             </h2>
             <div id='@(row.RowId)_collapse' class='accordion-collapse collapse text-break'>
                 <div class='accordion-body p-3'>
-                    <div class="row">
-                        <div class="d-flex col-6">
-                            <div class="align-self-center text-end">
-                                @if (row.IsPreviewEnabled)
+                    @if (row.IsLarge)
+                    {
+                        <div class="row">
+                            <div class="col-md-8" style="font-size: smaller">
+                                <div>File time: @(row.SourceModified?.ToDefaultFormat() ?? FileValueRowViewModel.Unknown)</div>
+                                <div>Accepted: @row.Time.ToDefaultFormat()</div>
+                                <div>Application: <span class="large-file-application">@row.Application</span></div>
+                                <div>Host: <span class="large-file-host">@row.Host</span></div>
+                                @if (row.Reason is not null)
                                 {
-                                    <h5 class="mb-0">Content:</h5>
+                                    <div class="text-muted pt-1 large-file-reason">@row.Reason</div>
                                 }
                             </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="row justify-content-end">
-                                <div class="d-flex flex-row-reverse">
-                                    <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static ms-1 file-row-download' title='Download'>
+                            <div class="col-md-4 d-flex justify-content-end align-items-start">
+                                @if (row.DownloadUrl is not null)
+                                {
+                                    <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static large-file-download'
+                                       href='@row.DownloadUrl' title='Download the archive'>
                                         <i class='fas fa-file-download small-icon pe-1'></i>
                                         <span style="font-size: smaller">Download</span>
                                     </a>
-                                    <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static me-1 file-row-view' title='Preview'>
-                                        <i class='fas fa-eye small-icon pe-1'></i>
-                                        <span style="font-size: smaller"> Preview</span>
-                                    </a>
+                                }
+                            </div>
+                        </div>
+                        @if (row.Downloads is not null)
+                        {
+                            <div class="pt-2 large-file-downloads" style="font-size: smaller">
+                                <div class="fw-bold">Downloads</div>
+                                @if (row.Downloads.Count == 0)
+                                {
+                                    <div class="text-muted">Nobody has downloaded this file.</div>
+                                }
+                                @foreach (var download in row.Downloads)
+                                {
+                                    <div>@download.TimeUtc.ToDefaultFormat() · @download.Who · @download.Channel</div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <div class="d-flex col-6">
+                                <div class="align-self-center text-end">
+                                    @if (row.IsPreviewEnabled)
+                                    {
+                                        <h5 class="mb-0">Content:</h5>
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="row justify-content-end">
+                                    <div class="d-flex flex-row-reverse">
+                                        <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static ms-1 file-row-download' title='Download'>
+                                            <i class='fas fa-file-download small-icon pe-1'></i>
+                                            <span style="font-size: smaller">Download</span>
+                                        </a>
+                                        <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static me-1 file-row-view' title='Preview'>
+                                            <i class='fas fa-eye small-icon pe-1'></i>
+                                            <span style="font-size: smaller"> Preview</span>
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="d-grid d-none pt-3" id="preview_@row.RowId">
-                        <div style="overflow-x: auto" id="preview-content_@row.RowId"></div>
-                    </div>
+                        <div class="d-grid d-none pt-3" id="preview_@row.RowId">
+                            <div style="overflow-x: auto" id="preview-content_@row.RowId"></div>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
