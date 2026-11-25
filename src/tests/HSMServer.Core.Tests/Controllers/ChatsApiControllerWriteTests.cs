@@ -133,6 +133,19 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public async Task UpdateChat_NegativeDelay_Is422_AndTheErrorNamesTheField()
+        {
+            var chat = _world.AddChat("Ops alerts");
+
+            var result = await CreateController().UpdateChat(chat.Id, new UpdateChatRequestDto { MessagesAggregationTimeSec = -1 });
+
+            Assert.Equal(422, StatusCodeOf(result));
+            var body = ErrorBodyOf(result);
+            Assert.Equal(ManagementApiErrors.UnprocessableEntityCode, body.Error);
+            Assert.Equal(["Messages delay must be between 0 and 86400 seconds."], Assert.IsType<string[]>(body.Details["messagesAggregationTimeSec"]));
+        }
+
+        [Fact]
         public async Task UpdateChat_VisibleChatTheCallerMayNotChange_Is403_WithTheAreasSingleMessage()
         {
             var chat = _world.AddChat("Ops alerts", global: false);

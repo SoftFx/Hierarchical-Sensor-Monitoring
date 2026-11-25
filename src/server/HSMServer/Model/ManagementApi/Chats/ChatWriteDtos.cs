@@ -24,8 +24,8 @@ namespace HSMServer.Model.ManagementApi.Chats
         [Description("Whether the chat receives messages; true when omitted.")]
         public bool? SendMessages { get; init; }
 
-        /// <summary>Delay (seconds) that messages of one sensor are aggregated for before sending; 60 when omitted.</summary>
-        [Description("Delay in seconds that messages of one sensor are aggregated for before sending; 60 when omitted.")]
+        /// <summary>Delay (seconds) that messages of one sensor are aggregated for before sending: 0 sends every message at once, 86400 (a day) at most; 60 when omitted.</summary>
+        [Description("Delay in seconds that messages of one sensor are aggregated for before sending: 0 sends every message at once, at most 86400 (a day); 60 when omitted.")]
         public int? MessagesAggregationTimeSec { get; init; }
 
         /// <summary>Slack incoming-webhook URL: an absolute http or https URL. The URL is a secret — it is written, never echoed.</summary>
@@ -60,8 +60,8 @@ namespace HSMServer.Model.ManagementApi.Chats
         [Description("Whether the chat receives messages.")]
         public bool? SendMessages { get; init; }
 
-        /// <summary>Delay (seconds) that messages of one sensor are aggregated for before sending.</summary>
-        [Description("Delay in seconds that messages of one sensor are aggregated for before sending.")]
+        /// <summary>New delay (seconds) that messages of one sensor are aggregated for before sending: 0 sends every message at once, 86400 (a day) at most.</summary>
+        [Description("New delay in seconds that messages of one sensor are aggregated for before sending: 0 sends every message at once, at most 86400 (a day).")]
         public int? MessagesAggregationTimeSec { get; init; }
 
         /// <summary>New Slack incoming-webhook URL: an absolute http or https URL, written and never echoed. An empty value changes nothing.</summary>

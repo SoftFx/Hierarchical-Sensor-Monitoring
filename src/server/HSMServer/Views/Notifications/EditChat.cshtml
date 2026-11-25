@@ -117,6 +117,9 @@
                             <input type="number" class="form-control" asp-for="MessagesDelay">
                             <span class="input-group-text">sec</span>
                         </div>
+                        @* The range rule (0..a day — a negative delay never flushes the chat's
+                           alerts) renders here; the engine holds the same rule for the API. *@
+                        <span class="text-danger small d-block mt-1" asp-validation-for="MessagesDelay"></span>
                     </div>
                 </div>
             </div>

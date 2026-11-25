@@ -124,14 +124,17 @@ namespace HSMServer.Model.ManagementApi.Chats
 
         // The write rules of both surfaces: the chat name (#1829 — required on a creation,
         // at most 100 characters, unique per server ignoring case; an omitted name, a
-        // partial update, is not checked, and a row keeping its own name breaks nothing)
-        // and the webhook URL-shape rule the web form enforced
-        // (NotificationsController's ValidateWebhooks, #1329): a non-null webhook field of
-        // a write must be an absolute http/https URL. Null means "no change" and passes.
-        // Every problem answers in one body; field keys match the form's property names, so
-        // the web re-render finds its spans. Internal: the management surface runs the same
-        // validation first, to answer a request's every problem in one body before the
-        // engine applies anything — it passes the row's current name as the engine does.
+        // partial update, is not checked, and a row keeping its own name breaks nothing),
+        // the aggregation delay (0..a day — a negative delay never flushes a channel's
+        // accumulator, so a chat holding one drops its alerts in silence), and the webhook
+        // URL-shape rule the web form enforced (NotificationsController's
+        // ValidateWebhooks, #1329): a non-null webhook field of a write must be an absolute
+        // http/https URL. Null means "no change" and passes. Every problem answers in one
+        // body, keyed by the update's property names — the API's wire names in camelCase,
+        // and the web form's own where they coincide (the form carries the delay rule as a
+        // Range attribute under its own field name). Internal: the management surface runs
+        // the same validation first, to answer a request's every problem in one body before
+        // the engine applies anything — it passes the row's current name as the engine does.
         internal PolicyWriteResult Validate(ChatUpdate update, bool nameRequired = false, string currentName = null)
         {
             Dictionary<string, string[]> errors = null;
@@ -139,6 +142,12 @@ namespace HSMServer.Model.ManagementApi.Chats
 
             if (name is not null && ChatNameValidator.FindError(name, update.Id, _chats.GetValues() ?? [], currentName) is { } nameError)
                 (errors ??= []).Add(nameof(ChatUpdate.Name), [nameError]);
+
+            if (update.MessagesAggregationTimeSec is { } delay
+                && (delay < Chat.MinMessagesAggregationTimeSec || delay > Chat.MaxMessagesAggregationTimeSec))
+            {
+                (errors ??= []).Add(nameof(ChatUpdate.MessagesAggregationTimeSec), [Chat.AggregationTimeRangeText]);
+            }
 
             ValidateWebhook(update.SlackWebhookUrl, nameof(ChatUpdate.SlackWebhookUrl));
             ValidateWebhook(update.MattermostWebhookUrl, nameof(ChatUpdate.MattermostWebhookUrl));

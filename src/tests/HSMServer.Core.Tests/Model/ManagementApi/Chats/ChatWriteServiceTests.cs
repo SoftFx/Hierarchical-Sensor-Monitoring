@@ -179,6 +179,46 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Single(_world.Store);
         }
 
+        // A negative aggregation delay never flushes a channel's accumulator: stored, the
+        // chat would drop its alerts in silence. The engine's range rule reaches the wire
+        // under the DTO's own name.
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(86_401)]
+        public async Task UpdateChat_DelayOutsideTheRange_IsRejectedUnderItsField_AndChangesNothing(int delay)
+        {
+            var chat = AddChat("Ops alerts");
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { MessagesAggregationTimeSec = delay }, Token);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Messages delay must be between 0 and 86400 seconds."], result.Failure.Errors["messagesAggregationTimeSec"]);
+            Assert.Equal(60, _world.Store.Single().MessagesAggregationTimeSec);
+        }
+
+        [Fact]
+        public async Task CreateChat_NegativeDelay_IsRejectedUnderItsField_AndStoresNothing()
+        {
+            var result = await Service.CreateChat(new CreateChatRequestDto { Name = "Ops alerts", MessagesAggregationTimeSec = -1 }, Token);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Messages delay must be between 0 and 86400 seconds."], result.Failure.Errors["messagesAggregationTimeSec"]);
+            Assert.Empty(_world.Store);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(86_400)]
+        public async Task UpdateChat_DelayAtTheEdgesOfTheRange_IsAccepted_AndEchoed(int delay)
+        {
+            var chat = AddChat("Ops alerts");
+
+            var result = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { MessagesAggregationTimeSec = delay }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal(delay, result.Value.MessagesAggregationTimeSec);
+        }
+
         // ---- update: a partial write on a chat the caller may change ----------------
 
 

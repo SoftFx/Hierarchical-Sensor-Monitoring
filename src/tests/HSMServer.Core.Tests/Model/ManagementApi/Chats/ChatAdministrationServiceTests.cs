@@ -498,11 +498,13 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
         [Fact]
-        public async Task UpdateChat_OverlongNameOfAnOldRow_IsEditableUntilRenamed()
+        public async Task UpdateChat_OverlongNameOfAnOldRow_IsEditableThroughTheEngineUntilRenamed()
         {
             // Telegram allows group titles far beyond 100 characters: a row named after
-            // one keeps working while it keeps its name, and meets the length rule only
-            // when someone renames it.
+            // one before the /start flow cut them keeps working through the engine — the
+            // management API — while it keeps its name, and meets the length rule only
+            // when someone renames it. (The web form asks for a shorter name first: its
+            // own length check runs before the engine, as it always did.)
             var chatId = Guid.NewGuid();
             var longTitle = new string('t', 120);
             SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: longTitle)));
@@ -516,6 +518,67 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.True(kept.Success);
             Assert.Equal(PolicyWriteOutcome.Invalid, renamed.Failure.Outcome);
             Assert.Equal([ChatNameValidator.NameLengthMessage], renamed.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        // A negative aggregation delay never flushes a channel's accumulator (the channels
+        // send at once only for 0): stored, it would drop the chat's alerts in silence. The
+        // rule is the engine's, so the web form and the management API share it.
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(86_401)]
+        public async Task CreateChat_DelayOutsideTheRange_AnswersInvalid_AndStoresNothing(int delay)
+        {
+            SetupNoChatAnywhere();
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "Ops", MessagesAggregationTimeSec = delay },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Messages delay must be between 0 and 86400 seconds."],
+                result.Failure.Errors[nameof(ChatUpdate.MessagesAggregationTimeSec)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateChat_NegativeDelay_AnswersInvalid_AndChangesNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId)));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, MessagesAggregationTimeSec = -1 },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(86_400)]
+        public async Task UpdateChat_DelayAtTheEdgesOfTheRange_IsAccepted(int delay)
+        {
+            // 0 sends every alert at once; a day is the ceiling.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId)));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, MessagesAggregationTimeSec = delay },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+        // One rule, one text, for the delay too: the form's Range attribute formats the
+        // engine's message template from the same bounds.
+        [Fact]
+        public void TheWebFormAndTheEngine_SayTheSameAboutTheDelay()
+        {
+            var range = typeof(ChatViewModel).GetProperty(nameof(ChatViewModel.MessagesDelay))?.GetCustomAttribute<RangeAttribute>();
+
+            Assert.Equal(Chat.MinMessagesAggregationTimeSec, Convert.ToInt32(range.Minimum));
+            Assert.Equal(Chat.MaxMessagesAggregationTimeSec, Convert.ToInt32(range.Maximum));
+            Assert.Equal(Chat.AggregationTimeRangeText, range.FormatErrorMessage("Messages delay"));
         }
 
         // One rule, one text: the form formats its length message from the attribute's

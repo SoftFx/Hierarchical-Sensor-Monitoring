@@ -357,6 +357,8 @@ namespace HSMServer.Core.Tests.Mcp
             var createChat = Descriptions(tools["create_chat"]);
             Assert.Contains("write-only, never echoed", createChat);
             Assert.Contains("each must be a folder the token's owner manages", createChat);
+            // The delay's range reaches the agent (a negative delay would drop the chat's alerts).
+            Assert.Contains("0 sends every message at once, at most 86400 (a day)", createChat);
 
             Assert.Contains("an empty webhook value changes nothing", tools["update_chat"].Description);
             Assert.Contains("the manager of a folder the chat is bound to", tools["update_chat"].Description);
@@ -364,6 +366,7 @@ namespace HSMServer.Core.Tests.Mcp
             var updateChat = Descriptions(tools["update_chat"]);
             Assert.Contains("Remove the Telegram binding", updateChat);
             Assert.Contains("omitted: unchanged", updateChat);
+            Assert.Contains("0 sends every message at once, at most 86400 (a day)", updateChat);
 
             Assert.Contains("Use dryRun first", tools["delete_chat"].Description);
             Assert.Contains("WITHOUT removing anything", Descriptions(tools["delete_chat"]));

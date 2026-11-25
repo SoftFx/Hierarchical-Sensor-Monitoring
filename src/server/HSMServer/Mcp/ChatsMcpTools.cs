@@ -94,7 +94,7 @@ namespace HSMServer.Mcp
             [Description("Display name: 1..100 characters, unique per server ignoring case, without control or bidirectional-override characters.")] string name,
             [Description("Optional free-form description.")] string description = null,
             [Description("Whether the chat receives messages; true when omitted.")] bool? sendMessages = null,
-            [Description("Delay in seconds that messages of one sensor are aggregated for before sending; 60 when omitted.")] int? messagesAggregationTimeSec = null,
+            [Description("Delay in seconds that messages of one sensor are aggregated for before sending: 0 sends every message at once, at most 86400 (a day); 60 when omitted.")] int? messagesAggregationTimeSec = null,
             [Description("Optional Slack incoming-webhook URL (absolute http or https) — write-only, never echoed.")] string slackWebhookUrl = null,
             [Description("Optional Mattermost incoming-webhook URL (absolute http or https) — write-only, never echoed.")] string mattermostWebhookUrl = null,
             [Description("Optional ids of the folders to bind the chat to; each must be a folder the token's owner manages. Omitted: a global chat, usable from every folder.")] Guid[] folders = null) =>
@@ -118,7 +118,7 @@ namespace HSMServer.Mcp
             [Description("Optional new display name (the rules of create_chat apply; the chat's own name in another letter case is allowed).")] string name = null,
             [Description("Optional new description; an empty string clears it.")] string description = null,
             [Description("Whether the chat receives messages.")] bool? sendMessages = null,
-            [Description("Delay in seconds that messages of one sensor are aggregated for before sending.")] int? messagesAggregationTimeSec = null,
+            [Description("Delay in seconds that messages of one sensor are aggregated for before sending: 0 sends every message at once, at most 86400 (a day).")] int? messagesAggregationTimeSec = null,
             [Description("Optional new Slack incoming-webhook URL (absolute http or https) — write-only, never echoed.")] string slackWebhookUrl = null,
             [Description("Optional new Mattermost incoming-webhook URL (absolute http or https) — write-only, never echoed.")] string mattermostWebhookUrl = null,
             [Description("Remove the Slack webhook.")] bool? clearSlackWebhook = null,

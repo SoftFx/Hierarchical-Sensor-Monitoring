@@ -136,6 +136,20 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal(ManagementApiErrors.NotFoundMessage, error.Message);
         }
 
+        [Fact]
+        public async Task UpdateChat_NegativeDelay_IsAToolError_NamingTheField()
+        {
+            // A negative delay never flushes the chat's alerts: the engine's range rule
+            // reaches the agent under the argument's own name.
+            var chat = _world.AddChat("Ops alerts");
+
+            var error = await Assert.ThrowsAsync<McpException>(
+                () => CreateTools().UpdateChat(chat.Id, messagesAggregationTimeSec: -1));
+
+            Assert.Equal("messagesAggregationTimeSec: Messages delay must be between 0 and 86400 seconds.", error.Message);
+            Assert.Equal(60, _world.Store.Single().MessagesAggregationTimeSec);
+        }
+
         [Theory]
         [InlineData("update_chat")]
         [InlineData("delete_chat")]

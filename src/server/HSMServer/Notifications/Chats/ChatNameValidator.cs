@@ -26,9 +26,12 @@ namespace HSMServer.Notifications.Chats
         /// <summary>
         /// The message of the first rule the name breaks, or null when the name is valid.
         /// The name arrives trimmed (the write engine trims it). A row that KEEPS its own
-        /// name breaks nothing: the rule guards changes, not history — chats duplicated
-        /// before the rule existed, or named by the Telegram flow under one long group
-        /// title, stay editable until someone renames them.
+        /// name breaks nothing: the rule guards changes, not history. Chats duplicated
+        /// before the rule existed stay editable on both surfaces until someone renames
+        /// them; a row whose name is longer than the rule allows (a Telegram group title,
+        /// from before the /start flow cut them to the maximum) keeps it editable through
+        /// the engine — the management API — while the web form's own length check asks
+        /// for a shorter name first, as it always did.
         /// </summary>
         public static string FindError(string name, Guid chatId, IEnumerable<Chat> existing, string currentName = null)
         {
@@ -51,13 +54,20 @@ namespace HSMServer.Notifications.Chats
         /// <summary>
         /// A name no stored chat holds yet: the proposed one, or it with " (2)", " (3)"…
         /// appended — for the rows the Telegram /start flow creates, named after the chat
-        /// title or the username, where nobody is there to pick another name. A proposal
-        /// the rule could not have written (blank, or longer than the rule allows) is
-        /// left as it is.
+        /// title or the username, where nobody is there to pick another name. A title
+        /// longer than the rule allows (Telegram permits 128 characters) is cut to the
+        /// maximum, so the flow never creates a row the web form cannot save; a blank
+        /// proposal is left as it is.
         /// </summary>
         public static string UniqueIn(string proposed, IEnumerable<Chat> existing)
         {
-            if (string.IsNullOrEmpty(proposed) || proposed.Length > NameMaxLength || !IsTaken(proposed, Guid.Empty, existing))
+            if (string.IsNullOrEmpty(proposed))
+                return proposed;
+
+            if (proposed.Length > NameMaxLength)
+                proposed = proposed[..NameMaxLength];
+
+            if (!IsTaken(proposed, Guid.Empty, existing))
                 return proposed;
 
             for (var attempt = 2; ; attempt++)

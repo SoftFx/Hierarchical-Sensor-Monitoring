@@ -61,8 +61,13 @@ namespace HSMServer.Model.Notifications
         public string MattermostWebhookUrl { get; set; }
 
 
+        // The range rule is the write engine's too (Chat.MinMessagesAggregationTimeSec):
+        // the form carries it so the error renders at the field, the engine enforces it for
+        // the management API — a negative delay would never flush a channel's accumulator.
         [Display(Name = "Messages delay")]
-        public int MessagesDelay { get; set; } = 60;
+        [Range(Chat.MinMessagesAggregationTimeSec, Chat.MaxMessagesAggregationTimeSec,
+            ErrorMessage = Chat.MessagesAggregationTimeRangeMessage)]
+        public int MessagesDelay { get; set; } = Chat.DefaultMessagesAggregationTimeSec;
 
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; } = true;

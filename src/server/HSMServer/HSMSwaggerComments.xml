@@ -3262,7 +3262,7 @@
             <summary>Whether this chat currently receives messages (the admin enable/disable switch). Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.MessagesAggregationTimeSec">
-            <summary>Delay (seconds) messages of one sensor are aggregated for before sending. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+            <summary>Delay (seconds) messages of one sensor are aggregated for before sending; 0 sends every message at once. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.TelegramChatId">
             <summary>Telegram chat id (for a direct chat, the person's Telegram user id). Detail field: null unless the owner is an admin or a manager of a bound folder — the web UI shows it in the clear only to admins/PMs.</summary>
@@ -3388,7 +3388,7 @@
             <summary>Whether the chat receives messages; true when omitted.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.CreateChatRequestDto.MessagesAggregationTimeSec">
-            <summary>Delay (seconds) that messages of one sensor are aggregated for before sending; 60 when omitted.</summary>
+            <summary>Delay (seconds) that messages of one sensor are aggregated for before sending: 0 sends every message at once, 86400 (a day) at most; 60 when omitted.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.CreateChatRequestDto.SlackWebhookUrl">
             <summary>Slack incoming-webhook URL: an absolute http or https URL. The URL is a secret — it is written, never echoed.</summary>
@@ -3415,7 +3415,7 @@
             <summary>Whether the chat receives messages.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.UpdateChatRequestDto.MessagesAggregationTimeSec">
-            <summary>Delay (seconds) that messages of one sensor are aggregated for before sending.</summary>
+            <summary>New delay (seconds) that messages of one sensor are aggregated for before sending: 0 sends every message at once, 86400 (a day) at most.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.UpdateChatRequestDto.SlackWebhookUrl">
             <summary>New Slack incoming-webhook URL: an absolute http or https URL, written and never echoed. An empty value changes nothing.</summary>
@@ -4475,9 +4475,12 @@
             <summary>
             The message of the first rule the name breaks, or null when the name is valid.
             The name arrives trimmed (the write engine trims it). A row that KEEPS its own
-            name breaks nothing: the rule guards changes, not history — chats duplicated
-            before the rule existed, or named by the Telegram flow under one long group
-            title, stay editable until someone renames them.
+            name breaks nothing: the rule guards changes, not history. Chats duplicated
+            before the rule existed stay editable on both surfaces until someone renames
+            them; a row whose name is longer than the rule allows (a Telegram group title,
+            from before the /start flow cut them to the maximum) keeps it editable through
+            the engine — the management API — while the web form's own length check asks
+            for a shorter name first, as it always did.
             </summary>
         </member>
         <member name="M:HSMServer.Notifications.Chats.ChatNameValidator.IsTaken(System.String,System.Guid,System.Collections.Generic.IEnumerable{HSMServer.Notifications.Chats.Chat})">
@@ -4487,9 +4490,10 @@
             <summary>
             A name no stored chat holds yet: the proposed one, or it with " (2)", " (3)"…
             appended — for the rows the Telegram /start flow creates, named after the chat
-            title or the username, where nobody is there to pick another name. A proposal
-            the rule could not have written (blank, or longer than the rule allows) is
-            left as it is.
+            title or the username, where nobody is there to pick another name. A title
+            longer than the rule allows (Telegram permits 128 characters) is cut to the
+            maximum, so the flow never creates a row the web form cannot save; a blank
+            proposal is left as it is.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">
