@@ -56,6 +56,8 @@ env:
     conanfile*
     vcpkg*.json
     scripts/conformance-*
+    src/api/HSMTableBlocks/**
+    src/tests/HSMTableBlocks.Tests/**
     .gitattributes
     .github/workflows/native-collector-conformance.yml
 
@@ -170,7 +172,9 @@ jobs:
   http-transport:
     # Builds the optional libcurl HTTP transport (HSM_COLLECTOR_HTTP=ON) and runs the
     # transport-only tests: the in-proc capture-server E2E, the endpoint route table, and the
-    # retry policy. curl comes from vcpkg manifest mode (src/native/collector/vcpkg.json), so
+    # retry policy. Table sensors (HSM_COLLECTOR_TABLES=ON, #1848) are built here too: zstd and
+    # zlib come from the same vcpkg manifest, and the managed HSMTableBlocks reader reads the
+    # blocks the native writer wrote (the cross-language check of the block format). curl comes from vcpkg manifest mode (src/native/collector/vcpkg.json), so
     # the baseline there must stay an upstream microsoft/vcpkg commit. Feature set ssl +
     # websockets → Schannel on Windows / OpenSSL on Linux, no heavyweight TLS build.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -216,6 +220,7 @@ jobs:
           cmake -S src/native/collector -B build/native-http
           -DHSM_COLLECTOR_WERROR=ON
           -DHSM_COLLECTOR_HTTP=ON
+          -DHSM_COLLECTOR_TABLES=ON
           -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
@@ -234,11 +239,30 @@ jobs:
       # this build too: the native collector sends a registration over the HTTP transport only. So do
       # the order of a sensor's registrations and the must-fail fixture of its assertion
       # (conformance_registration_order_contract, meta_last_delivered_registration_*, #1750).
+      # The table block tests (native_table_*, #1848) exist only in the tables build; one of them,
+      # native_table_write_vectors, writes the blocks the next step reads with the managed reader.
       - name: Test (HTTP lane)
         if: steps.changes.outputs.run == 'true'
         env:
           HSM_REQUIRE_WEBSOCKET: '1'
-        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws|native_session|conformance_session|meta_session|conformance_stop_drain_registration|meta_sends_wrong_order|conformance_registration_order|meta_last_delivered_registration"
+        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http|native_ws|native_session|conformance_session|meta_session|conformance_stop_drain_registration|meta_sends_wrong_order|conformance_registration_order|meta_last_delivered_registration|native_table"
+
+      # The cross-language check of the table block format (#1848): every block the native writer
+      # wrote above is read by the managed TableBlockReader in full and compared, rows and payload,
+      # with the managed writer's (NativeBlockVectorTests; it does nothing without the variable).
+      - uses: actions/setup-dotnet@v4
+        if: steps.changes.outputs.run == 'true'
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Native table blocks read by the managed reader
+        if: steps.changes.outputs.run == 'true'
+        shell: bash
+        env:
+          HSM_NATIVE_TABLE_BLOCKS_DIR: ${{ github.workspace }}/build/native-http/table-block-vectors
+        run: >
+          dotnet test src/tests/HSMTableBlocks.Tests/HSMTableBlocks.Tests.csproj -c Release -f net8.0
+          --filter "FullyQualifiedName~NativeBlockVectorTests" --logger "console;verbosity=normal"
 
       - name: Upload HTTP transport logs on failure
         if: failure()
@@ -361,7 +385,8 @@ jobs:
 
   sanitizers:
     # ASan+UBSan and TSan on Linux clang. These exercise the multi-threaded
-    # scheduler/worker that the single-threaded corpus run cannot stress.
+    # scheduler/worker that the single-threaded corpus run cannot stress. The asan/tsan presets
+    # build table sensors (HSM_COLLECTOR_TABLES=ON, #1848) against the distribution's zstd and zlib.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
@@ -379,6 +404,9 @@ jobs:
         uses: ./.github/actions/detect-lane-changes
         with:
           paths: ${{ env.LANE_PATHS }}
+      - name: Install zstd and zlib for the table block writer
+        if: steps.changes.outputs.run == 'true'
+        run: sudo apt-get update && sudo apt-get install -y libzstd-dev zlib1g-dev pkg-config
       - name: Configure
         if: steps.changes.outputs.run == 'true'
         run: cmake --preset ${{ matrix.preset }}

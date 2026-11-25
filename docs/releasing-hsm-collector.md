@@ -82,6 +82,11 @@ vcpkg x-update-baseline    # moves their registry baseline to your newest commit
 vcpkg install hsm-collector[http]
 ```
 
+The port has the features `http` (libcurl transport and session) and, from 0.14.1, `tables` (table
+sensors: zstd and zlib; it brings `http` along). The publish workflow copies the overlay port, features
+included. Table sensors deliver nothing yet (#1848): the feature only builds the block writer until the
+table pipeline and connection land, so there is no reason to publish a registry version for it alone.
+
 ---
 
 ## Doing it manually (if the automation is unavailable)
