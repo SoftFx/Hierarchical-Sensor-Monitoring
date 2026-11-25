@@ -15,6 +15,7 @@
 
 #include "http_capture_server.hpp" // socket_t, platform socket headers
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
