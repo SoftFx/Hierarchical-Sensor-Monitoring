@@ -21,7 +21,20 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 {
     public class HsmServerFixture : IAsyncLifetime
     {
-        private const string HsmImage = "hsmonitoring/hierarchical_sensor_monitoring:latest";
+        private const string DefaultHsmImage = "hsmonitoring/hierarchical_sensor_monitoring:latest";
+
+        // The server image the suite runs against. CI builds it from the branch under the default name
+        // (collector-integration-tests.yml). HSM_INTEGRATION_SERVER_IMAGE names another local image, so a run on a
+        // developer machine does not have to retag `:latest`, which a docker compose of that machine may be using.
+        private static readonly string HsmImage = Environment.GetEnvironmentVariable("HSM_INTEGRATION_SERVER_IMAGE") is { Length: > 0 } named
+            ? named
+            : DefaultHsmImage;
+
+        // The image built on top of it (the test configuration); one name per base image, so two runs against
+        // different servers on one machine do not overwrite each other's.
+        private static readonly string TestImage = HsmImage == DefaultHsmImage
+            ? "hsm-integration-test:latest"
+            : $"hsm-integration-test-{Regex.Replace(HsmImage.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-')}:latest";
         private const string ToxiproxyImage = "ghcr.io/shopify/toxiproxy:latest";
         // The server's single HTTPS port (#1590): Web UI and Sensor API share it. The
         // container runs as root, so binding 443 is fine.
@@ -55,7 +68,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
             _tempConfigDir = PrepareConfigDirectory();
 
             var testImage = new ImageFromDockerfileBuilder()
-                .WithName("hsm-integration-test:latest")
+                .WithName(TestImage)
                 .WithDockerfileDirectory(_tempConfigDir)
                 .WithDockerfile("Dockerfile")
                 .WithImageBuildPolicy(_ => true)
@@ -317,7 +330,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
                 File.Copy(Path.Combine(tempDir, "appsettings.Development.json"), targetSettings);
 
             File.WriteAllText(Path.Combine(tempDir, "Dockerfile"),
-                "FROM hsmonitoring/hierarchical_sensor_monitoring:latest\n" +
+                $"FROM {HsmImage}\n" +
                 "USER root\n" +
                 "COPY appsettings*.json /app/Config/\n");
 

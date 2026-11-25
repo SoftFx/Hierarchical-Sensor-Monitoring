@@ -27,7 +27,8 @@
 // Wire (aicontext/features/api/wire-contract/feature.md, Collector session):
 //   -> {"id":17,"op":"list","body":[...]}      <- {"ack":17,"status":200,"body":{...}}
 //   -> {"op":"ping"}                           <- {"op":"pong"}
-//   <- {"op":"hello","body":{"maxFrameBytes":N,"heartbeatSeconds":S}}   first frame of a session
+//   <- {"op":"hello","body":{"maxFrameBytes":N,"heartbeatSeconds":S,"sessionId":"32 hex"}}
+//                                                                      first frame of a session
 //   <- {"op":"directive","body":"name:argument"}                       a push (#1660 step 5)
 namespace hsm::http
 {
@@ -42,6 +43,9 @@ namespace hsm::http
         long status = 0;
         // Why there is no ack, or the server's `error` text of a failure ack.
         std::string error;
+        // The ack's `body` as JSON text when it carried one that is not empty (the per-path errors
+        // of a `commands` ack, which the table registrations read, #1848); empty otherwise.
+        std::string body;
 
         bool IsSuccess() const { return acked && status >= 200 && status < 300; }
     };
@@ -72,10 +76,27 @@ namespace hsm::http
         std::function<void(const std::string&)> on_directive;
     };
 
+    // Which session is up, for a second connection that must belong to it (the table connection of
+    // #1848 names the session in its upgrade and is closed by the server when the session ends).
+    struct SessionIdentity
+    {
+        // Changes at every session that comes up: 1 for the first one of the transport, then 2, 3,
+        // ... never reused, across Stop and Start included. 0 while no session is up. A connection
+        // opened for generation N belongs to a session that is gone once this reads anything else.
+        uint64_t generation = 0;
+        // The hello's `sessionId` (#1845), 32 hex digits as the server wrote them. Empty while no
+        // session is up, and when the server sent none or one of another form (a server before
+        // #1845): the session itself works without it, a connection tied to it cannot be opened.
+        std::string session_id;
+    };
+
     class SessionTransport
     {
     public:
         static constexpr const char* kSubprotocol = "hsm.sensors.v1";
+        // The upgrade header in which a second connection names the session it belongs to (the
+        // value is SessionIdentity::session_id).
+        static constexpr const char* kSessionIdHeader = "X-Hsm-Session";
         // Bytes kept free in a frame for the envelope around a body.
         static constexpr size_t kEnvelopeRoom = 64;
 
@@ -101,6 +122,15 @@ namespace hsm::http
         // request's), which then reconnects.
         SessionResult Request(const char* op, const std::string& body, int64_t timeout_ms);
 
+        // The same, and the wait also ends (with the error "cancelled") once `abandon` reads true
+        // after a Wake. Only this request gives up: the session and the other requests go on, and
+        // an ack that comes later finds no one waiting. For a caller that must be cancellable on
+        // its own (the table channel's registrations, #1848).
+        SessionResult Request(const char* op, const std::string& body, int64_t timeout_ms, const std::atomic<bool>& abandon);
+
+        // Wakes every waiting request so that it reads its `abandon` flag again. Any thread.
+        void Wake();
+
         // Makes waiting and later requests fail at once, until ResetCancel. The session stays up.
         void Cancel();
         void ResetCancel();
@@ -110,6 +140,14 @@ namespace hsm::http
         // The largest body a request may carry on the current session: the server's frame limit
         // less the envelope. 0 while no session is up.
         size_t MaxBodyBytes() const;
+
+        // The session that is up now (generation 0 and no id when none is). Thread-safe.
+        SessionIdentity CurrentSession() const;
+
+        // What the transport was built with: the URL, the upgrade headers (Key, ClientName, ...)
+        // and the certificate check, which a second connection to the same endpoint repeats.
+        // Never changes after construction, so it may be read from any thread.
+        const SessionOptions& Options() const { return options_; }
 
     private:
         struct Pending
@@ -159,6 +197,8 @@ namespace hsm::http
         std::atomic<uint64_t> next_id_{ 1 };
         size_t max_frame_bytes_ = 0;
         int64_t heartbeat_ms_ = 30000;
+        std::string session_id_;  // the hello's sessionId of the session being opened or served
+        uint64_t generation_ = 0; // sessions that came up so far (SessionIdentity::generation)
         int64_t linger_ms_ = 0;
         bool up_ = false;
         bool stop_ = false;

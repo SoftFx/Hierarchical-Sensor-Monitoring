@@ -566,6 +566,8 @@ namespace HSMServer.Core.Tests.SensorApi
             var hour = new DateTime(2025, 1, 6, 0, 0, 0, DateTimeKind.Utc).AddHours(Interlocked.Increment(ref _damagedHours)).Ticks;
             var period = TablePeriodClass.Of(sensor, DateTime.UtcNow);
 
+            // As the merge does: the sensor's placement before its first batch (#1850 part 4b).
+            _databaseCoreManager.DatabaseCore.TableBatches.SetPlacement(TestProductsManager.ProductId, sensor.Id, new TablePlacement(period, hour));
             _databaseCoreManager.DatabaseCore.TableBatches.WriteHour(TestProductsManager.ProductId,
                 new TableBatchHourCommit { HourTicks = hour, FirstBlockSequence = sensor.FirstSequence, LastBlockSequence = sensor.FirstSequence, BlocksMerged = 1 },
                 [new TableBatchHourPart(period, [new TableBatchToWrite(sensor.Id, first.Ticks, last.Ticks, 2, [9, 9, 9])])]);

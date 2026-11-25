@@ -5,6 +5,16 @@ supplement the root [`CLAUDE.md`](../../../CLAUDE.md); where a rule here refines
 specific rule wins. Sibling: [`../../agent/CLAUDE.md`](../../agent/CLAUDE.md) (the agent that embeds this
 collector).
 
+## Building with table sensors
+
+`HSM_COLLECTOR_TABLES` (OFF by default) builds the table block writer and needs zstd and zlib. With the
+vcpkg toolchain they are the manifest feature `tables` of `vcpkg.json`: `-DHSM_COLLECTOR_TABLES=ON`
+turns that feature on by itself (it is declared before `project()`), so
+`cmake -S src/native/collector -B <build> -DHSM_COLLECTOR_HTTP=ON -DHSM_COLLECTOR_TABLES=ON
+-DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake` is enough (CI also passes
+`-DVCPKG_MANIFEST_FEATURES=tables`). Without vcpkg, install the distribution packages (`libzstd-dev
+zlib1g-dev pkg-config` on Debian/Ubuntu); the asan/tsan presets build with tables ON.
+
 ## Versioning — the native collector's own version
 
 The native collector has **one** version: `HSM_COLLECTOR_VERSION_{MAJOR,MINOR,PATCH}` in

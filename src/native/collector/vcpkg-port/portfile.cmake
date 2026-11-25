@@ -8,6 +8,7 @@ set(SOURCE_PATH "${CMAKE_CURRENT_LIST_DIR}/..")
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
         http HSM_COLLECTOR_HTTP
+        tables HSM_COLLECTOR_TABLES
 )
 
 vcpkg_cmake_configure(

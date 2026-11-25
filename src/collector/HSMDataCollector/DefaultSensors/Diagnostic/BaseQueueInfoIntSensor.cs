@@ -49,6 +49,12 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
             AddValue(value);
         }
 
+        /// <summary>
+        /// <see cref="AddValue(string, TData)"/> while the sensor takes values: false, and nothing is added, once it has
+        /// published its last bar of the run (or was disposed). A caller that must not lose the value keeps it then.
+        /// </summary>
+        internal bool TryAddValue(string queueName, TData value) => TryWhileBarOpen(() => AddValue(queueName, value));
+
 
         protected override string GetComment() => GetQueueStats();
 

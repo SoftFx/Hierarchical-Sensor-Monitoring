@@ -15,6 +15,7 @@
 
 #include "hsm_collector/hsm_collector.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -39,6 +40,11 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+
+		// For a server too old to have collector sessions: this collector sends over HTTP instead.
+		// Before Start (or after Stop); throws hsm::collector::Error while the collector is not stopped
+		// or a StartAsync/StopAsync task has not finished.
+		void UseHttpTransport();
 
 		// The underlying native collector — lets a consumer create new sensors directly against
 		// hsm::collector while existing sensors still go through the wrapper (same collector, same
@@ -134,12 +140,23 @@ namespace hsm_wrapper
 		}
 
 	private:
+		// Applies the transport choice if none is in place yet (see transport_chosen_).
+		void EnsureTransport();
+
 		hsm::collector::Collector collector_;
+		// True once collector_ has a transport: the session, chosen by the constructor, or HTTP,
+		// chosen by UseHttpTransport. False only in a build without the network transport
+		// (HSM_COLLECTOR_HTTP=OFF), where Start then fails exactly as it did before.
+		std::atomic<bool> transport_chosen_{ false };
 		// Hold the async lifecycle futures so the caller isn't blocked: a discarded std::future from
 		// StartAsync/StopAsync blocks in its destructor until the task completes, which would make the
 		// call effectively synchronous (managed StartAsync/StopAsync are fire-and-forget). Expected
 		// usage is one-shot (a single StartAsync, a single StopAsync); calling StartAsync again while a
-		// prior start is still pending blocks on the move-assignment until the prior task finishes.
+		// prior start is still pending blocks until the prior task finishes (its handle is released).
+		// UseHttpTransport reads them: a task not finished yet refuses it. futures_mutex_ guards only
+		// reading and replacing the two handles, never a wait and never a native call. Declared after
+		// collector_, so they are destroyed (and a pending task waited for) before it.
+		std::mutex futures_mutex_;
 		std::future<void> start_future_;
 		std::future<void> stop_future_;
 		std::mutex file_sensors_mutex_;

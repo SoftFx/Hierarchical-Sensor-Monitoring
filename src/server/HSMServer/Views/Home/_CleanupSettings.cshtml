@@ -25,6 +25,15 @@
     <span asp-validation-for="SavedHistoryPeriod"></span>
 </div>
 
+@if (Model is SensorInfoViewModel { SensorType: HSMCommon.Model.SensorType.Table })
+{
+    @* A table sensor keeps its rows by whole weeks (#1850, ADR-0021 point 12): the period is rounded up to weeks. *@
+    <div id="tableRetentionNote" class="ms-3 mt-1 text-muted small">
+        Rows of a table sensor are kept by whole weeks: the period is rounded up to whole weeks (10 days are kept as 2 weeks),
+        and rows are deleted a week at a time, so they may stay up to a week longer than the period.
+    </div>
+}
+
 <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
     <span class="meta-info-label">Remove @entity after inactivity</span>
 
