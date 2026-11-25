@@ -24,6 +24,9 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
         public string Root { get; }
 
+        /// <summary>An exception the open of an archive throws instead of opening it; null: none.</summary>
+        public Func<Guid, Exception> OpenFault { get; set; }
+
         public event Action<LargeArchiveFile> FileVerified;
 
 
@@ -84,6 +87,9 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
         public Stream OpenArchive(Guid fileId)
         {
+            if (OpenFault?.Invoke(fileId) is { } fault)
+                throw fault;
+
             var file = TryGetFile(fileId) ?? throw new FileNotFoundException("unknown file");
 
             return new FileStream(ArchivePath(file), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);

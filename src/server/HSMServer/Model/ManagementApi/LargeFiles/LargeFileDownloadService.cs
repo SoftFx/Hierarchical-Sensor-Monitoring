@@ -222,6 +222,14 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
                 _logger.LogInformation("The archive {ArchiveId} of the large file {FileId} could not be opened: {Error}", download.ArchiveId, download.FileId, ex.Message);
                 return null;
             }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Access denied or a fault of the store: the surface answers its NotFound, never a 500. The open involves no
+                // password, so the text is logged as it is.
+                _logger.LogWarning("The archive {ArchiveId} of the large file {FileId} could not be opened: {ErrorType}: {Error}",
+                    download.ArchiveId, download.FileId, ex.GetType().Name, ex.Message);
+                return null;
+            }
 
             if (_store.TryGetFile(download.FileId) is { State: LargeArchiveFileState.Packed } file && file.ArchiveId == download.ArchiveId)
                 return stream;

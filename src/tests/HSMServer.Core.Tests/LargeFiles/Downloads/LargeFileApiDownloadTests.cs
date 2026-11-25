@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -260,6 +261,40 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             Assert.Null(service.TryOpenArchive(decision.Download));
         }
 
+
+        [Fact]
+        public void AnArchiveTheStoreCannotOpen_IsNotServed_WhateverTheStoreThrows()
+        {
+            var service = _world.CreateService();
+            var decision = service.Decide(_file.FileId, _file.ArchiveId.Value, LargeFileCaller.Web(_world.ManagerA, null), record: false);
+            Assert.Equal(LargeFileDownloadOutcome.Ok, decision.Outcome);
+
+            foreach (var fault in new Exception[] { new UnauthorizedAccessException("access denied"), new InvalidOperationException("store fault"), new IOException("io") })
+            {
+                _world.Store.OpenFault = _ => fault;
+
+                Assert.Null(service.TryOpenArchive(decision.Download));
+            }
+
+            _world.Store.OpenFault = _ => new OperationCanceledException();
+            Assert.Throws<OperationCanceledException>(() => service.TryOpenArchive(decision.Download));
+        }
+
+        [Fact]
+        public async Task AnArchiveTheStoreIsDeniedAccessTo_AnswersTheSame404AsAnUnknownId()
+        {
+            var manager = _world.AddToken(_world.ManagerA);
+            _world.Store.OpenFault = id => id == _file.FileId ? new UnauthorizedAccessException("access denied") : null;
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, manager);
+
+            var denied = await Snapshot(client.GetAsync(Url(_file)));
+            var unknown = await Snapshot(client.GetAsync(LargeFileDownloadService.ApiDownloadPath(Guid.NewGuid(), _file.ArchiveId.Value)));
+
+            Assert.Equal(404, denied.Status);
+            Assert.Equal(unknown, denied);
+        }
 
         [Fact]
         public async Task TheMarkerFromTheTrustedProxy_HandsTheFileToCaddy()
