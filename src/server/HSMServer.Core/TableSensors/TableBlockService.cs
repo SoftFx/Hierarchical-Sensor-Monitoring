@@ -143,7 +143,7 @@ namespace HSMServer.Core.TableSensors
                         {
                             Outcome = TableBlockPutOutcome.Duplicate,
                             TableCount = directory.Entries.Count,
-                            RefusalsUnknown = true,
+                            RefusalsKnown = false,
                             Message = "The block was stored before and its hour has been merged; its sequence and refusals are not known any more.",
                         };
 
@@ -155,7 +155,7 @@ namespace HSMServer.Core.TableSensors
                             TableCount = appended.Entry.TableCount,
                             Refusals = (appended.Envelope?.Refusals ?? []).Select(r => new TableRefusalInfo(r.Index, TableIdText(directory, r.Index), r.Reason)).ToList(),
                             Message = appended.Envelope is null ? "The stored block's envelope could not be read; its refusals are not known." : null,
-                            RefusalsUnknown = appended.Envelope is null,
+                            RefusalsKnown = appended.Envelope is not null,
                         };
 
                     case TableBlockAppendOutcome.NotStored:

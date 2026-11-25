@@ -160,6 +160,8 @@ Little-endian: u8 version (1), i64 hour, i64 first block sequence, i64 last bloc
 
 ### Writing an hour
 
+**An hour of a product is merged atomically by its commit.** Its batches may span several databases (one per period class of its sensors), so there is no single write for all of them: each class's part is written with its mark in one synced write of its own, and the hour's record in the product's `Hours` database, written last, is the commit point. Before the record the hour is not merged, whatever parts are on disk; after it the hour is merged. `Hours` is rebuilt from the marks when it is missing or damaged. This also lets a product's merged hours be known at its first use without opening a single week database.
+
 `WriteHour(product, commit, parts)`, one part per period class:
 
 1. If the hour is committed, nothing (a repeat changes nothing).
@@ -191,7 +193,7 @@ Per product opened: the merged hours with, per class, the minimum and maximum ro
 
 - `CloseHour(hour)`: no block is appended to that hour or an earlier one afterwards, also with the clock behind (held in memory: the merge closes its newest hour again after a restart).
 - `DeleteMergedHour(hour, keep, watermarks)`: under the append lock, raises the watermarks, deletes the hour's blocks except `keep` (blocks the merge could not read) from `Blocks` (synced) and then `BlockIndex` (a repeat removes index entries left by a crash between the two), and drops them from the in-memory index and the duplicate map; then compacts the range outside the append lock.
-- Watermarks per product and producer, in memory (`RaiseWatermarks`, `GetWatermark`): an append at or below its producer's watermark is a duplicate with `Merged`, which the block service answers as `Duplicate` with `RefusalsUnknown` and no sequence. The durable watermarks are in the records of the merged hours (`GetWatermarks`); the merge raises them before the first put after a start (part 3).
+- Watermarks per product and producer, in memory (`RaiseWatermarks`, `GetWatermark`): an append at or below its producer's watermark is a duplicate with `Merged`, which the block service answers as `Duplicate` with `RefusalsKnown` false, no sequence and no refusals (`RefusalsKnown` is true by default and false also for a duplicate whose stored envelope cannot be read; the same shape as the wire step's). The durable watermarks are in the records of the merged hours (`GetWatermarks`); the merge raises them before the first put after a start (part 3).
 - `TableSensors.DeleteMergedBlocksAfterHours` (24 by default, 0..8,760): how long the blocks of a merged hour stay after its commit; reads of a merged hour take the batches and ignore them (part 3).
 
 ### Self-monitoring
@@ -223,6 +225,61 @@ What it says:
 - A read across many weeks costs the opens it has to repeat (about 14 ms each: 106 opens for two reads of a year at bounds 8 and 32) and, more, one or two seeks per hour: the median table's year is 8,904 hours, 17,808 seeks, and takes about 1 s even with every database open.
 - **The week stays the unit.** A month would cut a year's 53 opens to 13 (about 0.5 s less for a read of a year at a bound of 8) and nothing else: the seeks per hour, the bytes read and the memory per open database are the same. It would cost a coarser retention (rows kept up to a month past their period). Not built. A read of a long range is bound by its seeks per hour; a summary per sensor and week (which hours hold it) would remove most of them, if long reads of quiet tables matter (not built, not needed by any decision yet).
 - Not measured: Linux; a cold disk (every figure is warm or nearly); the whole feed (four times the bytes; the counts of databases, opens and seeks do not change with it); the read with the row limit of a real read (1 M rows would stop the busiest table's year after about two days).
+
+## What the merge (part 3) and retention (part 4) must do
+
+Built in parts 1 and 2 and meant to be called as described here. The decisions behind it are in issue #1850 (the owner's decisions of 2026-11-25 and the architect's answers to the phase A report) and ADR-0021 points 9 to 12.
+
+### The API to call
+
+| Call | Where | What for |
+|---|---|---|
+| `TableBatchCodec.Encode(TableBatch, TableBatchEncodeStats)` / `Decode` | `src/database/HSMDatabase.SealedHistory/TableBatchCodec.cs` | Encode up to 4,096 rows of one sensor; decode, also to verify bit for bit before anything is deleted (`TableBatchColumn` carries the values and the null map in the bit order of `TableNullMap`). |
+| `ITableBlockStore.CloseHour(hour)` | `src/database/HSMDatabase.AccessManager/TableBlocks/ITableBlockStore.cs` | Before merging an hour: no block is appended to it afterwards. In memory only: call it for the newest merged hour after every start, before the first put. |
+| `ITableBlockStore.GetBlocks(product)`, `ReadBlock(entry)` | the same | The blocks of the hour (`ArrivalHourTicks`), their envelopes (refused tables) and bytes. `ReadBlock` null or a `TableBlockFormatException` from `TableBlockReader`: an unreadable block, kept and listed. `TableBlockStoreException`: a fault, stop the hour and retry later. |
+| `ITableBatchStore.WriteHour(product, commit, parts)` | `src/database/HSMDatabase.AccessManager/TableBatches/ITableBatchStore.cs` | Write and commit one merged hour of a product: one `TableBatchHourPart` per period class, the batches of each sensor in their row order; `TableBatchHourCommit` with the first and last block sequence of the hour, the blocks merged, the unreadable ones (`UnreadableBlocks`) and the product's cumulative watermarks (producer id to the highest producer sequence merged: the previous hour's map from `GetWatermarks`, raised by this hour's blocks). Idempotent: an hour committed is not written again, a part with its mark is skipped. |
+| `ITableBatchStore.GetHours(product)`, `IsHourMerged` | the same | The merged hours in memory: per hour its period classes with their minimum and maximum row time (select the hours of a read by them: a late block's rows sit in a later merge hour), the first block sequence (for ordering, below) and the unreadable blocks. |
+| `ITableBatchStore.GetWatermarks(product)`, `GetProducts()` | the same | At start, for every product with a folder: raise the block store's watermarks with `ITableBlockStore.RaiseWatermarks` before the first put. |
+| `ITableBatchStore.ReadSensor(product, sensor, periodWeeks, hours)` | the same | A sensor's batches for the selected merge hours, from the database of each hour's week and of the class given (the sensor's current class; outside a move a sensor's rows of a week are in one database), the hour region then the moved region, in hour order then ordinal. |
+| `ITableBlockStore.DeleteMergedHour(hour, keep, watermarks)` | `ITableBlockStore.cs` | After the commit and after `TableSensors.DeleteMergedBlocksAfterHours` (24 h by default): delete the hour's blocks except the unreadable ones, raising the watermarks in the same lock. Idempotent; a repeat also removes index entries left by a crash between its two writes. |
+| `ITableBatchStore.DropWeek(product, week)`, `GetWeeks(product)` | `ITableBatchStore.cs` | Retention: drop a week database as a folder when its period class has passed for it (rows may stay up to a week longer). |
+| `TableBatchDatabase.WriteMoved(product, week, hour, batches)` (internal) | `src/database/HSMDatabase.LevelDB/TableBatches/TableBatchDatabase.cs` | The move of a sensor to another period class: writes into the region of moved batches of the target week (after every hour key, so it never overlaps ingest). Nothing more of the move is built. |
+| `TableSensors.MaxOpenBatchDatabases`, `DeleteMergedBlocksAfterHours` | `src/server/HSMServer/ServerConfiguration/Sections/TableSensorsConfig.cs`, `TableBlockOptions` | The bound on open week databases (set on the store by `TableBlockService`'s constructor) and the delay before the blocks of a merged hour are deleted (not used yet). |
+
+### Blocks or batches, never both, never neither
+
+The order of writes for one arrival hour H:
+
+1. `CloseHour(H)`.
+2. Per product with blocks in H: read the blocks, build the batches, encode, decode and compare every cell and every null with the source rows. A mismatch: nothing written for that product, the failure counted as an Error, the blocks stay.
+3. `WriteHour` for the product (parts, then the commit in `Hours`).
+4. Only once every product with blocks in H is committed, and after the delay: `DeleteMergedHour(H, keep: the unreadable blocks, watermarks: every product's watermarks of H)`.
+
+**The read rule that makes it hold:** for product P and hour H, when `IsHourMerged(P, H)` (the commit exists) the hour is read from batches only and its blocks are ignored, kept ones and those still within the delay included; otherwise from blocks only. A crash at any point leaves an hour either committed (batches) or not (blocks); the blocks are deleted only after the commit. A repeat of the merge skips committed hours and parts already written.
+
+### What goes into the batches
+
+- **The sensor of a table:** by its path in the product (`ITreeValuesCache.TryGetSensorByPath`), as the put does. Rows of a table refused in the envelope are skipped; rows of a table with no table sensor on its path, or of a block whose sequence is below the sensor's `FirstSequence` (a removed sensor's rows), are dropped and counted. Batches are keyed by sensor id, so a sensor created on a removed sensor's path never sees the old rows.
+- **The class of an hour's batches:** the period class the sensor has at the merge (its history setting in whole weeks, rounded up: Week 1, Month 5, 3 months 14, 6 months 27, Year 53, a custom period rounded up, at least 1; Forever = `P0`). A change of the period afterwards is a move (part 4), never a second class for the same week.
+- **Order:** the rows of a sensor in the hour sorted stably by time, then block sequence, then row in the block (the order `TableRowCollector` uses for blocks), cut evenly into batches of at most 4,096 rows (`ChunkCodec` cuts the same way) and written in that order: the ordinal of a batch within its hour and database is its rank.
+- **Equal times across blocks and batches:** a read orders by time, then by arrival hour, then by rank within the hour. For an unmerged hour the rank is (block sequence << 24 | row); for a merged one it is the batch ordinal then the row in the batch. Since every block of an earlier arrival hour has a smaller sequence than every block of a later one, the order is the same before, during and after the merge of an hour.
+
+### Watermarks and duplicates
+
+- The watermark of a product and producer is the highest producer sequence merged. It is durable in the records of the merged hours; in the block store it is in memory only (`RaiseWatermarks`, raised again by `DeleteMergedHour`). After a start the merge must raise it from `GetWatermarks` for every product before the first put, or a resend of a merged block would be stored again.
+- A put at or below the watermark is a duplicate with `RefusalsKnown` false. `TableBlockPutResult.AcceptedTables` still counts every table of such a duplicate (`TableCount` minus no refusals): callers must look at `RefusalsKnown` first (to settle with the wire step).
+- It relies on a producer delivering its blocks in order and never taking its sequence back (#1845: a collector that cannot read its producer state takes a new producer id).
+
+### Memory and time of the merge
+
+Measured in phase A (in memory, one busy hour of 2.4 M rows): about 1.7 s on one core (0.2–0.35 s reading and splitting the 360 blocks, 1.2–1.3 s encoding, under 0.1 s verifying) and about 200 MB of managed heap with list-based accumulators; with arrays about 40 bytes per row. The budget idea: when an hour's rows (the sum of `TableBlockIndexEntry.RowCount` of its blocks) times 40 bytes exceed a configured budget (256 MB suggested), merge the hour's tables in several passes, each pass reading the blocks again (0.2–0.35 s a pass) and keeping only its share of the tables. One merge at a time, below normal priority, never holding the block store's append lock while it reads or encodes.
+
+### Retention and removal (part 4)
+
+- Retention drops a week database when its class's period has passed for it; every sensor in a class database has that period (the move keeps it so). Blocks never merged leave when their arrival hour is older than the longest period of the product's table sensors.
+- A period change moves the sensor's rows into the databases of the new class (copy into the moved region of the same week, delete from the old database, one compaction of the old database at the end), with a durable record of the move in progress that the read consults; a second change during a move is queued or redirects it; a removed sensor cancels its move; a week whose new period has passed is deleted instead of copied. When every sensor with rows in a week's database moves to the same new class and that class has no database for the week yet, the move is a rename of the folder.
+- Removing a sensor deletes its index records and batches; under Forever a week is compacted once the removed share passes 10%.
+- The `CheckSensorHistory` skip of table sensors (`src/server/HSMServer.Core/Cache/TreeValuesCache.cs`) is where the history setting starts to apply to them; the page of a table sensor says that rows are kept by whole weeks and may stay up to a week longer.
 
 ## Key Files
 

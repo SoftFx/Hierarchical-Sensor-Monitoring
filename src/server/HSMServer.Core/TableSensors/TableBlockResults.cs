@@ -66,11 +66,11 @@ namespace HSMServer.Core.TableSensors
         public long? Sequence { get; init; }
 
         /// <summary>
-        /// A duplicate whose refusals are not known: the first put's block was merged and deleted (its producer sequence is
-        /// at or below the producer's watermark, #1850), or its envelope could not be read. <see cref="Refusals"/> is then empty
-        /// and says nothing about the tables.
+        /// False for a duplicate whose refusals are not known: the first put's block was merged and deleted (its producer
+        /// sequence is at or below the producer's watermark, #1850), or its envelope could not be read. <see cref="Refusals"/>
+        /// is then empty and says nothing about the tables. True for every other result.
         /// </summary>
-        public bool RefusalsUnknown { get; init; }
+        public bool RefusalsKnown { get; init; } = true;
 
         public int TableCount { get; init; }
 

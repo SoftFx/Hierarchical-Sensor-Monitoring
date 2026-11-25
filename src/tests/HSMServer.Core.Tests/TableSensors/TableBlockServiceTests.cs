@@ -314,7 +314,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var resent = _service.Put(_product, _producer, sequence, block);
 
             Assert.Equal(TableBlockPutOutcome.Duplicate, resent.Outcome);
-            Assert.True(resent.RefusalsUnknown);
+            Assert.False(resent.RefusalsKnown);
             Assert.Null(resent.Sequence);
             Assert.Empty(resent.Refusals);
             Assert.Equal(0, Read(sensor, T0, T0.AddHours(1)).RowCount);
@@ -322,7 +322,8 @@ namespace HSMServer.Core.Tests.TableSensors
             // An ordinary duplicate knows its refusals.
             var next = NextProducerSequence();
             _service.Put(_product, _producer, next, block);
-            Assert.False(_service.Put(_product, _producer, next, block).RefusalsUnknown);
+            Assert.True(_service.Put(_product, _producer, next, block).RefusalsKnown);
+            Assert.True(_service.Put(_product, _producer, NextProducerSequence(), block).RefusalsKnown);
         }
 
         [Fact]
