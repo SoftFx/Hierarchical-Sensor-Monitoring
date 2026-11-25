@@ -3,10 +3,10 @@
     <PackageId>HSMDataCollector.HSMDataCollector</PackageId>
     <TargetFrameworks>net6.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
-    <AssemblyVersion>4.0.1</AssemblyVersion>
-    <AssemblyFileVersion>4.0.1</AssemblyFileVersion>
-    <ProductVersion>4.0.1</ProductVersion>
-    <Version>4.0.1-preview</Version>
+    <AssemblyVersion>4.1.0</AssemblyVersion>
+    <AssemblyFileVersion>4.1.0</AssemblyFileVersion>
+    <ProductVersion>4.1.0</ProductVersion>
+    <Version>4.1.0-preview</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
@@ -48,6 +48,15 @@
     <!-- PrivateAssets="all" keeps HSMSensorDataObjects out of the .nuspec dependencies;
          its DLL is bundled into this package instead (see IncludeSensorDataObjectsInPackage). -->
     <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" PrivateAssets="all" />
+    <!-- The table block format (ADR-0021), bundled the same way. Its own packages are kept out
+         of the .nuspec by PrivateAssets="all", so the collector references them directly below. -->
+    <ProjectReference Include="..\..\api\HSMTableBlocks\HSMTableBlocks.csproj" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The dependencies of the bundled HSMTableBlocks.dll: zstd (MIT, a managed port, no native
+         binaries) and CRC-32 (MIT, Microsoft). The versions are those HSMTableBlocks builds with. -->
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
+    <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
   </ItemGroup>
   <PropertyGroup>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeSensorDataObjectsInPackage</TargetsForTfmSpecificBuildOutput>
@@ -55,6 +64,7 @@
   <Target Name="IncludeSensorDataObjectsInPackage">
     <ItemGroup>
       <BuildOutputInPackage Include="$(OutputPath)HSMSensorDataObjects.dll" />
+      <BuildOutputInPackage Include="$(OutputPath)HSMTableBlocks.dll" />
     </ItemGroup>
   </Target>
 </Project>
