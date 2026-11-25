@@ -310,6 +310,15 @@ namespace HSMServer.SensorApi
             schema = null;
             error = null;
 
+            // The count first, with the text of the schema's own rule: a huge array is refused
+            // before a column of it is mapped.
+            var limits = _tableLimits ?? TableBlockLimits.Default;
+            if (columns.Count > limits.MaxColumnsPerTable)
+            {
+                error = $"a table schema has at most {limits.MaxColumnsPerTable} columns, this one has {columns.Count}";
+                return false;
+            }
+
             var built = new List<TableSchemaColumn>(columns.Count);
 
             for (var i = 0; i < columns.Count; i++)

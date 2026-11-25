@@ -334,8 +334,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
         // Lock-free while the databases are open, also after a failed write (the databases stay open until the reopen).
         // Closed (never opened, a reopen that failed, disposed), it goes through EnsureOpen like a put: inside the backoff
         // after a failure it throws the fault, past it the read reopens the store itself (a server that only reads would
-        // otherwise never recover), and a disposed store throws. A store never opened and without a folder answers no
-        // blocks and creates nothing. It never answers the in-memory index of databases that are closed: their blocks
+        // otherwise never recover; that reopen creates nothing), and a disposed store throws. A store never opened and
+        // without a folder answers no blocks and creates nothing; one never opened whose folder exists is opened as a put
+        // would open it (the databases may be created in the folder). It never answers the in-memory index of databases that are closed: their blocks
         // would all read as missing. Nor the empty initial index during the first open of the process: Open assigns
         // _blocks at its start and swaps the index in at its end, and _opened is set after that, so until then a read waits
         // on _lock for the open. (During a reopen the index in memory is the whole previous one.)
@@ -403,7 +404,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
             if (failure is null)
                 return new TableBlockStoreException($"The table block store {_folder} is not open.");
 
-            return new TableBlockStoreException($"The table block store {_folder} is closed after a failure and reopens at its next use: {failure?.Message}", failure);
+            return new TableBlockStoreException($"The table block store {_folder} is closed after a failure and reopens at its next use: {failure.Message}", failure);
         }
 
         // Every block that cannot be read is counted; the log gets an Error line at most once a minute, with the count of
@@ -510,9 +511,11 @@ namespace HSMDatabase.LevelDB.TableBlocks
                 return true;
 
             // A store that has failed stays failed until an open succeeds: inside the backoff it answers the fault; past it,
-            // the caller tries the open. A read (create false) never creates: a folder that is missing or cannot be reached
-            // fails that open as a fault, the backoff starts again, and nothing in memory is dropped (a store cannot tell a
-            // removed folder from an unreachable one). Only a put or a registration (create true) creates a fresh store.
+            // the caller tries the open. That reopen, when a read (create false) tries it, creates nothing: a folder that is
+            // missing or cannot be reached fails it as a fault, the backoff starts again, and nothing in memory is dropped (a
+            // store cannot tell a removed folder from an unreachable one). Only a put or a registration (create true)
+            // creates a fresh store after a failure. A store that never failed is opened by a read as by a put when its
+            // folder exists (the databases may be created in it), and answers no blocks without one.
             var mayCreate = create || _failure is null;
 
             if (_failure is not null)
