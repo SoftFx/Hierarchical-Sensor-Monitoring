@@ -58,6 +58,11 @@ Browser-level tests using Playwright (TypeScript):
 - Auth flow
 - User registration
 - Environment management
+- The page of a table sensor (`home/table_sensor_page.spec.ts`, #1847): the rows it draws are sent by
+  `tools/TableSeeder`, a .NET 8 console client of the collector session's table connection built on the repo's
+  `HSMTableBlocks` (one block, waits for the ack, exits non-zero with the reason on a refusal; `--insecure` accepts the
+  test server's self-signed certificate). The spec runs it with `dotnet run -c Release`, so the machine that runs the
+  suite needs the .NET 8 SDK; the e2e workflow (`tests.yml`) builds the tool once before the specs run.
 
 ## Running Tests
 
@@ -71,8 +76,10 @@ dotnet test src/tests/HSMServer.Core.Tests/
 # Database tests
 dotnet test src/tests/HSMDatabase.LevelDB.Tests/
 
-# E2E (requires running HSMServer)
+# E2E (requires running HSMServer; the base URL defaults to https://localhost:443)
 cd src/tests/Autotests && npx playwright test
+# against another server, one spec (the setup project runs first)
+PLAYWRIGHT_TEST_BASE_URL=https://localhost:44990 CI=1 npx playwright test --project=chromium home/table_sensor_page.spec.ts
 ```
 
 ## Test Writing Guidelines
