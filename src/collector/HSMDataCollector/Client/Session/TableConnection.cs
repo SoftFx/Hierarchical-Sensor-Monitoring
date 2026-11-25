@@ -814,6 +814,10 @@ namespace HSMDataCollector.Client.Session
             {
                 Want();
 
+                // Set before the first write: a frame written on a connection that was then lost may be stored, and a
+                // TooLarge from a later connection must say so, or the pipeline would give this sequence to other rows.
+                var written = false;
+
                 for (var connection = 0; connection < ConnectionsPerPut; connection++)
                 {
                     token.ThrowIfCancellationRequested();
@@ -824,12 +828,14 @@ namespace HSMDataCollector.Client.Session
                         return TableBlockAck.NotDelivered(_downReason ?? "no table connection");
 
                     if (block.Length + FrameHeaderSize > link.MaxFrameBytes)
-                        return TableBlockAck.TooLarge($"a block of {block.Length + FrameHeaderSize} bytes with its frame header is larger than the table connection takes ({link.MaxFrameBytes} bytes)");
+                        return TableBlockAck.TooLarge($"a block of {block.Length + FrameHeaderSize} bytes with its frame header is larger than the table connection takes ({link.MaxFrameBytes} bytes)", written);
 
                     // The block limits of the hello, from the block's header (nothing is decompressed): a block packed
                     // for larger limits would be refused for good (400), so it is packed again instead.
                     if (ExceedsLimits(block, BlockLimits, out var exceeded))
-                        return TableBlockAck.TooLarge($"a block exceeds the block limits of the table connection ({exceeded})");
+                        return TableBlockAck.TooLarge($"a block exceeds the block limits of the table connection ({exceeded})", written);
+
+                    written = true;
 
                     var answer = await SendBlockAsync(link, producer, sequence, block, token).ConfigureAwait(false);
 

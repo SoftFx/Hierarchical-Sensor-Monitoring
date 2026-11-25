@@ -312,6 +312,54 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        // A block stored without an ack on the first connection; the second connection's hello takes smaller frames, so
+        // the put answers TooLarge there and the rows are packed again. The put says the frame was written, so the new
+        // blocks never take the stored block's sequence (the known limit: those rows are stored twice, under two
+        // sequences, rather than lost to a "duplicate").
+        [Fact]
+        public async Task A_block_packed_again_after_a_lost_ack_takes_new_sequences()
+        {
+            using (var rig = new Rig())
+            {
+                await rig.StartAsync();
+
+                var noAckInTime = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var waits = 0;
+
+                rig.Link.AckDeadlineForTests = () => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
+                rig.Server.AnswerTableNext(TableAnswer.StoreSilently());
+
+                var random = new Random(1846);
+
+                for (var row = 0; row < 600; row++)
+                    Assert.True(rig.Table.AddRow(T0.AddTicks(row), random.NextDouble(), random.NextDouble()));
+
+                var tick = Task.Run(() => rig.Collector.TickTablesAsync());
+
+                await UntilAsync(() => rig.Server.TableFrames.Count == 1, "the block was not sent");
+                Assert.True(rig.Server.TableFrames[0].FrameBytes > 2000);
+
+                // The next hello takes frames of 2,000 bytes.
+                rig.Server.TableMaxFrameBytes = 2000;
+                noAckInTime.SetResult(true);
+                await tick;
+
+                var frames = rig.Server.TableFrames;
+
+                Assert.True(frames.Count > 2, $"{frames.Count} frame(s)");
+                Assert.Equal(0, frames[0].Sequence);
+                Assert.Equal(1, frames[0].Connection);
+                Assert.All(frames.Skip(1), f => Assert.Equal(2, f.Connection));
+                Assert.Equal(Enumerable.Range(1, frames.Count - 1).Select(s => (long)s), frames.Skip(1).Select(f => f.Sequence));
+                Assert.All(frames, f => Assert.Equal("stored", f.Outcome));
+
+                // Stored twice, under two sequences: never lost, never counted as lost.
+                Assert.Equal(1200, rig.Server.StoredTableRowsOf("quotes/A").Count);
+                Assert.Equal(0, rig.Table.RowsDropped);
+                Assert.Equal(0, rig.Collector.TablePipeline.BacklogBlocks);
+            }
+        }
+
         [Fact]
         public async Task A_close_1013_keeps_the_block_and_sends_the_same_frame_again()
         {

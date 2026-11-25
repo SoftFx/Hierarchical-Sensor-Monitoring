@@ -309,8 +309,10 @@ block's rows (whatever limits the pipeline reads at that moment: the put may hav
 breaks a limit on its own is dropped and counted as too large. A `TooLarge` for a block of one row is final: the row
 is dropped and counted as too large, reported once. So every `TooLarge` removes the head or halves it: the answers
 `TooLarge` to the rows of one block are at most twice its rows, and no answer keeps the delivery loop turning without
-progress or a wait. The new blocks take its sequence (the next one when the block may have reached the server), and
-the blocks behind it, which were never put, are numbered after them.
+progress or a wait. The new blocks take its sequence, or the next one when the block may have reached the server: a
+put of it ended without an answer, or this put wrote its frame on a connection that was lost before the ack (the put
+says so with its `TooLarge`). The blocks behind it, which were never put, are numbered after them. So a sequence
+that was on the wire is never given to other rows, and the next sequence never goes back below one.
 
 **Stop.** The table drain ends by closing the table connection (`ITableBlockChannel.CloseAsync`), inside the drain
 budget and before the session is closed: a close frame `1000` (written even when the budget is spent; it is bounded
@@ -411,11 +413,11 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   settable limits, decodes each binary frame with the block reader and answers it as scripted): `TableConnectionTests`:
   the upgrade, hello and probe; every ack status; a lost ack and its `duplicate` (the end of the wait is decided by the
   test through `AckDeadlineForTests`, not by a clock); `1013`; `1000`; each upgrade refusal (404, 400, 409, 406, 503)
-  and the 404 / 400 asked again with the next session;
-  a block in flight across a new session; splitting by the hello's frame limit and block limits, and a block packed
-  before a smaller hello; a stop with a block in flight; a binary frame, an oversized frame, a text that is not JSON
-  and a foreign ack from the server; the heartbeat; start, stop, start; dispose and stop from every state; no table
-  connection object without a table sensor.
+  and the 404 / 400 asked again with the next session; a block in flight across a new session; splitting by the
+  hello's frame limit and block limits, a block packed before a smaller hello, and one packed again after a lost ack
+  (new sequences, never the stored block's); a stop with a block in flight; a binary frame, an oversized frame, a text
+  that is not JSON and a foreign ack from the server; the heartbeat; start, stop, start; dispose and stop from every
+  state; no table connection object without a table sensor.
 - End to end, net8.0, the Docker-backed lane: `TableSensorEndToEndTests` registers a table sensor on the real server,
   delivers rows at a tick and in the stop drain, and reads them back through `POST api/sensors/tableHistory`.
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` and `table_connection_contract.hsmtest`
@@ -425,10 +427,13 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 ## Known Issues / Limitations
 
 - No local file: a crash or a stop that cannot deliver loses what is held (counted); a restart takes a new producer id.
-- **Rows can be stored twice after a smaller hello.** A block whose put ended without an answer may be on the server.
-  When the next connection's hello then allows less than that block needs, its rows are packed again under new
-  sequences, and a block the server did store is not recognised as their duplicate. It takes a lost ack and a server
-  whose limits were lowered between two connections.
+- **Rows can be stored twice after a smaller hello.** A block whose frame went out without an answer (a lost ack) may
+  be on the server. When a connection's hello then allows less than that block needs, its rows are packed again under
+  new sequences after its own, and a server that did store the block stores those rows a second time: it cannot
+  recognise them as a duplicate. A row that the new limits do not take at all is dropped and counted as too large,
+  although the server may hold it in the first block (counted as lost, perhaps stored). It takes a lost ack and a
+  server whose limits were lowered between two connections. What cannot happen: rows lost without a count because a
+  new block took the sequence of a block the server held and was answered `duplicate`.
 - **A `409` is not asked again within its session.** The collector waits for its next session; when the server
   refused a session that is in fact alive, blocks wait until that session ends.
 - **Collectors that share an access key take turns with frames over 64 KiB** (one reservation per key on the server):

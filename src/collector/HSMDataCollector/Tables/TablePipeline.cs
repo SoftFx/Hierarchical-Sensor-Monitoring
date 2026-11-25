@@ -1194,6 +1194,12 @@ namespace HSMDataCollector.Tables
 
                     if (ack.Outcome == TableBlockOutcome.TooLarge)
                     {
+                        // Its frame went out on a connection of this put that was lost before the ack: the server may
+                        // hold its sequence, which is then never given to other rows (RepackAsync).
+                        if (ack.MaybeSent)
+                            lock (run.BacklogLock)
+                                head.MaybeSent = true;
+
                         // A block of one row cannot be made smaller: the answer is final, its row dropped and counted.
                         if (head.Rows <= 1)
                         {
@@ -1327,7 +1333,10 @@ namespace HSMDataCollector.Tables
                     if (ReferenceEquals(run.InFlight, head))
                         run.InFlight = null;
 
-                    // The blocks behind were never put: they follow in order.
+                    // The blocks behind were never put (one block is put at a time, always the head): they follow in
+                    // order. No sequence that was on the wire is given out again: the head's is skipped when its frame
+                    // may have been written (on an earlier put, or on an earlier connection of this one), and every
+                    // block put before it had a lower sequence.
                     for (var later = after; later != null; later = later.Next)
                         later.Value.Sequence = next++;
 

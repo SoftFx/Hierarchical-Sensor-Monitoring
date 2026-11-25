@@ -546,6 +546,43 @@ namespace HSMDataCollector.Tests.Tables
             }
         }
 
+        // A block whose frame went out on a connection that was lost before its ack (the server may have stored it), and
+        // whose put then met a smaller hello on the next connection: its sequence is never given to other rows. Here
+        // every row of it breaks the new limit and is dropped by the repack; the block behind it and a block of new rows
+        // take the sequences after it. Given its sequence, the next block would be answered "duplicate" by a server that
+        // stored the first one, and its rows would be neither stored nor counted.
+        [Fact]
+        public async Task A_block_that_may_be_on_the_server_keeps_its_sequence_from_other_rows_when_it_is_packed_again()
+        {
+            var sender = new FakeTableSender { BlockLimits = new TableBlockLimits(maxRows: 2) };
+
+            using (var collector = await StartedAsync(Options(sender)))
+            {
+                var table = collector.CreateTableSensor("t", Quotes());
+
+                for (var i = 0; i < 4; i++)
+                    Assert.True(table.AddRow(T0.AddSeconds(i), i, i));
+
+                // The first block: written on a connection that was lost, then too large for the next one, which takes
+                // no row at all.
+                sender.AnswerNext(_ =>
+                {
+                    sender.MaxBlockBytes = 10;
+                    return TableBlockAck.TooLarge("scripted: a smaller hello after a lost ack", maybeSent: true);
+                });
+
+                await collector.TickTablesAsync();
+
+                sender.MaxBlockBytes = 4 * 1024 * 1024 - 40;
+                Assert.True(table.AddRow(T0.AddSeconds(10), 10, 10));
+                await collector.TickTablesAsync();
+
+                Assert.Equal(new long[] { 0, 1, 2 }, sender.Attempts.Select(a => a.Sequence));
+                Assert.Equal(2, table.RowsDropped);
+                Assert.Equal(3, sender.RowsOf("t").Count);
+            }
+        }
+
         [Fact]
         public async Task The_backlog_bound_drops_the_oldest_blocks_and_counts_their_rows()
         {
