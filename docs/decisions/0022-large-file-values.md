@@ -30,7 +30,7 @@ Two stores for the content were measured the same way (`docs/initiatives/large-f
 Constraints:
 
 - The public collector API, the DTOs of `HSMSensorDataObjects` and the session protocol are compatibility-sensitive: additions only.
-- The collector targets net6.0 and net472. The native collector depends on curl and nlohmann-json, has no streaming upload, no compression and a text-only session.
+- The collector targets net6.0 and net472. On `master` the native collector depends on curl and nlohmann-json, has no streaming upload, no compression and a text-only session; zstd and binary frames reach it with table sensors (#1848).
 - A collector on a session sends nothing over HTTP (ADR-0019 and the owner's rule of 2026-11-10).
 - A dump holds the memory of a process: keys, passwords, client data.
 - Sensor history is not part of the server's backups.
@@ -55,7 +55,7 @@ Constraints:
 16. **Retention is the sensor's history setting, by age only.** There is no "last N", no volume quota and no mark that protects a file. When the disk is short the server refuses new files (point 7) and deletes nothing early; the refusal is counted in a self-monitoring sensor with an alert.
 17. **A sensor set up for dumps has the alert "new data has been received" by default.** The message is sent once, when the file is stored, and carries the file name, the size and a link to the sensor page, through new template variables.
 18. **Users see large values on the sensor page:** a list with name, size, time, state and the download; no preview.
-19. **Both collectors get the feature, in parallel,** in one epic; the server part comes before both. The Aggregator runs on the native collector and TTS on the managed one, and both leave dumps. The managed collector already has its second connection and zstd from table sensors; the native collector waits for them (#1848), so the managed one is likely to reach production first. (First decided as native first; changed on 2026-11-25 when the owner named the second consumer.) The epic has an integration branch of its own, cut from the branch of table sensors.
+19. **Both collectors get the feature, in parallel,** in one epic; the server part comes before both. The Aggregator runs on the native collector and TTS on the managed one, and both leave dumps. The managed collector has zstd from table sensors and its second connection is in review (PR #1894); the native collector has zstd too and waits for binary frames (#1848, PR #1892). Neither waits for the other. (First decided as native first; changed on 2026-11-25 when the owner named the second consumer.) The epic has an integration branch of its own, cut from the branch of table sensors.
 
 ## Consequences
 
@@ -70,7 +70,7 @@ Constraints:
 - "One store, LevelDB" of ADR-0021 was decided for table rows and stands for them. This ADR adds a store of another kind for another kind of data and supersedes nothing.
 - A File sensor with large values cannot be moved to another product in the first version: its archives lie under the first product's password.
 - A zip with AES opens in 7-Zip and WinRAR and, as a rule, not in the archiver built into Windows. The zip built into .NET cannot encrypt; the server needs a library for it.
-- The native collector gains zstd, binary WebSocket frames and its first code that reads a file as a stream. The first two are shared with table sensors (#1848) and built once.
+- The native collector gets its first code that reads a file as a stream. zstd and binary WebSocket frames come to it with table sensors (#1848), are built once there, and this epic depends on them.
 - In a crash loop every crash leaves a dump. The server refuses when its disk is short, and the files pile up on the application's disk; that disk is the application's concern.
 - A collector on the HTTP transport cannot send a large file.
 - The piece protocol is portable behaviour of the collector: it ships with conformance scenarios and verbs in both drivers.
