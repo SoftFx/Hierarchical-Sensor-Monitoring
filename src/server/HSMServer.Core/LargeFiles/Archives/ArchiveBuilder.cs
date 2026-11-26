@@ -393,6 +393,8 @@ namespace HSMServer.Core.LargeFiles.Archives
 
                 if (IsGone(fileId, item.Kind))
                     Forget(fileId, "the file was removed during the build");
+                else if (ex is BuildException { OutOfSpace: true } || IsOutOfSpace(ex))
+                    WaitForRoom(fileId, productId, null); // space taken outside HSM after the store's reservation
                 else
                     Fail(fileId, productId, Describe(ex));
             }
@@ -448,7 +450,7 @@ namespace HSMServer.Core.LargeFiles.Archives
             catch (Exception ex) when (ex is not (BuildException or ArchiveFormatException or OperationCanceledException))
             {
                 // The writer's own exceptions are not trusted to leave the password out of their text.
-                throw new BuildException($"the archive writer failed ({ex.GetType().Name})");
+                throw new BuildException($"the archive writer failed ({ex.GetType().Name})", IsOutOfSpace(ex));
             }
         }
 
@@ -782,6 +784,17 @@ namespace HSMServer.Core.LargeFiles.Archives
 
         private static string StoreError(Exception ex) => $"{ex.GetType().Name}: {ex.Message}";
 
+        // A full volume: ERROR_HANDLE_DISK_FULL (0x27) or ERROR_DISK_FULL (0x70) as a Win32 HRESULT on Windows, the raw
+        // errno ENOSPC (28) that .NET puts in an IOException's HResult on Linux.
+        internal static bool IsOutOfSpace(Exception ex)
+        {
+            const int Win32Facility = unchecked((int)0x80070000);
+            const int Enospc = 28;
+
+            return ex is IOException { HResult: var hresult } &&
+                   (hresult == Enospc || (hresult & unchecked((int)0xFFFF0000)) == Win32Facility && (hresult & 0xFFFF) is 0x27 or 0x70);
+        }
+
 
         private enum BuildKind : byte
         {
@@ -803,7 +816,11 @@ namespace HSMServer.Core.LargeFiles.Archives
 
 
         /// <summary>A failure with a text the builder composed: it carries no password.</summary>
-        private sealed class BuildException(string message) : Exception(message);
+        private sealed class BuildException(string message, bool outOfSpace = false) : Exception(message)
+        {
+            /// <summary>The cause was a full volume: the build waits for room instead of failing.</summary>
+            public bool OutOfSpace { get; } = outOfSpace;
+        }
 
 
         /// <summary>
@@ -906,7 +923,7 @@ namespace HSMServer.Core.LargeFiles.Archives
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}");
+                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}", IsOutOfSpace(ex));
                 }
 
                 _sha.AppendData(buffer);
@@ -923,7 +940,7 @@ namespace HSMServer.Core.LargeFiles.Archives
                 }
                 catch (Exception ex)
                 {
-                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}");
+                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}", IsOutOfSpace(ex));
                 }
             }
 

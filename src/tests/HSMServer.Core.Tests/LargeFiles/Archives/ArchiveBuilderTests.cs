@@ -228,6 +228,54 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
         }
 
+        // What .NET reports for a full volume: ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL as HRESULTs on Windows, the raw
+        // errno ENOSPC (28) on Linux (observed with .NET 8 writing to a full tmpfs).
+        [Theory]
+        [InlineData(unchecked((int)0x80070070))]
+        [InlineData(unchecked((int)0x80070027))]
+        [InlineData(28)]
+        public async Task AFullVolumeWhileWritingTheTemporaryArchive_WaitsForRoom_AbandonsIt_AndIsNotAFailure(int hresult)
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var content = TestContent.Compressible(250_000);
+            var file = _h.Store.AddVerified(_h.Product, content);
+            _h.Writer.FailWrite = _ => new IOException("There is not enough space on the disk.", hresult);
+
+            await _h.Run();
+
+            var status = _h.Builder.GetStatus(file.FileId);
+            Assert.Equal(ArchiveBuildState.WaitingForRoom, status.State);
+            Assert.Equal(_h.Now + TimeSpan.FromMinutes(1), status.NextAttemptUtc);
+            Assert.Equal(1, _h.Builder.Statistics.WaitedForRoom);
+            Assert.Equal(0, _h.Builder.Statistics.Failed);
+            Assert.Contains("no room", _h.Finished.Single().Error);
+            Assert.Single(_h.Store.Abandoned);
+            Assert.Empty(_h.Store.TempFiles());
+            Assert.Equal(LargeArchiveFileState.Verified, _h.Store.TryGetFile(file.FileId).State);
+
+            _h.Writer.FailWrite = null;
+            _h.Advance(TimeSpan.FromMinutes(1));
+            await _h.Run();
+
+            Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(file.FileId).State);
+            Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
+        }
+
+        [Fact]
+        public async Task AnotherIOFaultWhileWriting_IsAFailure()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(250_000));
+            _h.Writer.FailWrite = _ => new IOException("The device is not ready.", unchecked((int)0x80070015));
+
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.Failed, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Equal(0, _h.Builder.Statistics.WaitedForRoom);
+            Assert.Equal(1, _h.Builder.Statistics.Failed);
+            Assert.Single(_h.Store.Abandoned);
+        }
+
         [Fact]
         public async Task CommitFault_DuringAReencryption_AbandonsTheBuild_KeepsTheOldArchive_AndIsRetried()
         {
