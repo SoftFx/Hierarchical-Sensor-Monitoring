@@ -174,6 +174,7 @@ namespace HSMServer.Core.TableSensors
                 if (t < _from || t >= _to)
                     continue;
 
+                // row < TableBlockOptions.MaxRowsPerBlockLimit (2^24): the configuration refuses a larger MaxRows.
                 Append(t, entry.ArrivalHourTicks, (entry.Sequence << 24) | (uint)row, table, row);
             }
 

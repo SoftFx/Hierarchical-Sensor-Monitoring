@@ -96,7 +96,8 @@ namespace HSMServer.ServerConfiguration
         {
             Check(MaxDecompressedBytes, TableBlockLimits.FormatMaxDecompressedBytes, nameof(MaxDecompressedBytes));
             Check(MaxTables, int.MaxValue, nameof(MaxTables));
-            Check(MaxRows, int.MaxValue, nameof(MaxRows));
+            // A read ranks a block's rows by (sequence << 24) | row: a row index must fit in 24 bits.
+            Check(MaxRows, TableBlockOptions.MaxRowsPerBlockLimit, nameof(MaxRows));
             Check(MaxColumnsPerTable, TableBlockLimits.FormatMaxColumnsPerTable, nameof(MaxColumnsPerTable));
             Check(MaxTableIdLength, TableBlockLimits.FormatMaxTableIdLength, nameof(MaxTableIdLength));
             // A read collects one row past its limit to know where the next page starts.

@@ -72,6 +72,7 @@ public sealed class TableBlockOperationsTests : IDisposable
     [InlineData(nameof(TableSensorsConfig.MaxDecompressedBytes), (1 << 30) + 1)]
     [InlineData(nameof(TableSensorsConfig.MaxTables), 0)]
     [InlineData(nameof(TableSensorsConfig.MaxRows), -1)]
+    [InlineData(nameof(TableSensorsConfig.MaxRows), (1 << 24) + 1)] // the read ranks a block's rows by (sequence << 24) | row
     [InlineData(nameof(TableSensorsConfig.MaxColumnsPerTable), 256)]
     [InlineData(nameof(TableSensorsConfig.MaxTableIdLength), 65_536)]
     [InlineData(nameof(TableSensorsConfig.MaxReadRows), 0)]
