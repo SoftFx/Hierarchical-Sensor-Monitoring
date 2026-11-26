@@ -1511,6 +1511,64 @@ namespace
         }
     }
 
+    // `end` answered 503 (the server could not read the part): wait, begin, end again, at most three such
+    // rounds in a row; then a long wait (30 minutes), said once and not counted as a loss, and the file is
+    // sent after it. Both paths: a handed-over file and a routed send.
+    void NativeLargeFileEndUnreadableIsBounded()
+    {
+        for (int round = 0; round < 2; ++round)
+        {
+            Rig rig;
+            hsm_sensor_t* sensor = nullptr;
+            if (round == 1)
+                Check(hsm_collector_create_file_sensor(rig.collector, "reports", "unread", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+            for (int i = 0; i < 4; ++i)
+                rig.script->AnswerEndNext(FileScriptAnswer::WithStatus(503, 1, std::string(), "the part cannot be read"));
+            rig.StartDriven(); // the clock moves only by the uploader's waits other than the idle one
+            hsm_large_file_t* file = nullptr;
+            if (round == 0)
+            {
+                const std::string source = rig.folder.File("unread.dmp");
+                WriteFile(source, Content(70000, 60));
+                auto options = NoLimit();
+                Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+            }
+            else
+            {
+                Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+                Check(hsm_sensor_add_file(sensor, std::string(1536 * 1024, '\x04').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+                // A routed send waits between attempts on the idle clock: moved here, a second at a time.
+                Check(WaitFor([&] {
+                          rig.Advance(1000);
+                          return rig.script->Ends().size() >= 4;
+                      }),
+                      "four ends" + rig.log.All());
+            }
+            Check(WaitFor([&] { return rig.log.Count("could not read the stored part") == 1; }), "said once past the bound" + rig.log.All());
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            Check(rig.script->Ends().size() == 4, "no fifth end before the long wait: " + std::to_string(rig.script->Ends().size()));
+            Check(rig.script->Begins().size() == 4, "a begin before each end: " + std::to_string(rig.script->Begins().size()));
+            if (round == 0)
+                Check(Result(file).outcome == HSM_LARGE_FILE_PENDING, "still pending, not a loss");
+            Check(rig.log.Count("was dropped") == 0 && rig.log.Count("is not sent") == 0, "not counted as a loss");
+            rig.Advance(30LL * 60 * 1000);
+            rig.Scan();
+            Check(WaitFor([&] {
+                      rig.Advance(1000);
+                      return rig.script->StoredFiles().size() == 1;
+                  }),
+                  "sent after the long wait" + rig.log.All());
+            Check(rig.log.Count("could not read the stored part") == 1, "said once");
+            if (file != nullptr)
+            {
+                Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file));
+                hsm_large_file_release(file);
+            }
+            if (sensor != nullptr)
+                hsm_sensor_release(sensor);
+        }
+    }
+
 #if defined(_WIN32)
     void NativeLargeFileWriterHoldsTheFile()
     {
@@ -1609,6 +1667,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_lifecycle_from_the_logger_is_refused", [](const std::string&) { NativeLargeFileLifecycleFromTheLoggerIsRefused(); } },
         { "native_large_file_discard_after_a_cut", [](const std::string&) { NativeLargeFileDiscardAfterACut(); } },
         { "native_large_file_piece_send_timeout_begins_again", [](const std::string&) { NativeLargeFilePieceSendTimeoutBeginsAgain(); } },
+        { "native_large_file_end_unreadable_is_bounded", [](const std::string&) { NativeLargeFileEndUnreadableIsBounded(); } },
 #if defined(_WIN32)
         { "native_large_file_writer_holds_the_file", [](const std::string&) { NativeLargeFileWriterHoldsTheFile(); } },
 #else

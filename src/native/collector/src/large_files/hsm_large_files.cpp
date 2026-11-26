@@ -820,6 +820,7 @@ namespace hsm::collector::large_files
             int in_a_row = 0;
             int no_progress = 0;
             int not_held = 0;
+            int end_unreadable = 0;
             SetCut(item.owner);
             struct Clear
             {
@@ -976,6 +977,9 @@ namespace hsm::collector::large_files
                             break;
                         }
                         case FileAnswerKind::RetryLater:
+                            // The server could not read the part: wait, begin, end again; bounded per attempt.
+                            if (++end_unreadable > kMaxNoProgress)
+                                return EndUnreadable(item.path, ended);
                             if (!Wait(ended.retry_after_ms > 0 ? ended.retry_after_ms : kDefaultRetryMs, "end: the server could not read the file", &item))
                                 return Outcome{ Result::Cut, std::string(), 0 };
                             restart = true;
@@ -991,6 +995,16 @@ namespace hsm::collector::large_files
                     }
                 }
             }
+        }
+
+        // `end` answered 503 more than kMaxNoProgress times in a row: the server cannot read the part now. The
+        // file waits a long time (said once, not a loss: it is still there and is tried again).
+        Outcome EndUnreadable(const std::string& what, const FileAnswer& ended)
+        {
+            Say("end-unreadable:" + what, true,
+                "The server could not read the stored part of " + what + " " + std::to_string(kMaxNoProgress + 1) + " times at end (" + Status(ended) +
+                    "); it is tried again in 30 minutes.");
+            return Outcome{ Result::Later, "the server cannot read the part now", Now() + kFeatureAbsentRetryMs };
         }
 
         // A 404 on a piece or at end: the connection no longer holds the upload. Waited for (a backoff)
@@ -1739,6 +1753,13 @@ namespace hsm::collector::large_files
                         }
                         if (stop_.load())
                             return;
+                        if (ended.kind == FileAnswerKind::RetryLater && ++routed->end_unreadable > kMaxNoProgress)
+                        {
+                            // Counted across attempts; a long wait past the bound, said once.
+                            routed->end_unreadable = 0;
+                            RoutedLater(routed, EndUnreadable(routed->sensor + "/" + routed->name, ended).not_before_ms);
+                            return;
+                        }
                         if (ended.kind == FileAnswerKind::Lost || ended.kind == FileAnswerKind::NotOpen || ended.kind == FileAnswerKind::Cancelled)
                             ResetConnection();
                         RoutedLater(routed, Now() + (ended.retry_after_ms > 0 ? ended.retry_after_ms : Backoff()));

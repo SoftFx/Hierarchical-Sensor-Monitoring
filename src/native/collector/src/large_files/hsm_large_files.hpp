@@ -177,6 +177,8 @@ namespace hsm::collector::large_files
         /// Begins again after `end` answered 409 "pieces are missing", and 404s on a piece or at end.
         int no_progress = 0;
         int not_held = 0;
+        /// `end` answered 503 (the server could not read the part): rounds of wait, begin, end.
+        int end_unreadable = 0;
     };
 
 #if defined(HSM_COLLECTOR_LARGE_FILES)

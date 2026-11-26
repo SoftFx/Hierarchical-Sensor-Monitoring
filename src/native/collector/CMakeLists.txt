@@ -435,7 +435,8 @@ if(HSM_COLLECTOR_LARGE_FILES)
             native_large_file_watch_release_racing_an_upload
             native_large_file_lifecycle_from_the_logger_is_refused
             native_large_file_discard_after_a_cut
-            native_large_file_piece_send_timeout_begins_again)
+            native_large_file_piece_send_timeout_begins_again
+            native_large_file_end_unreadable_is_bounded)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
     if(WIN32)
