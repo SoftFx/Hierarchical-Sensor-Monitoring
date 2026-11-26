@@ -551,16 +551,20 @@ hsm_large_file_watch_release(w);                             /* stops watching *
   0 as its default. Output structs are written up to `min(struct_size, sizeof)`. `not_secure` (0 = secure, the
   default) says whether the server keeps the file in a zip under the product's dump password (secure) or in the
   same zip without a password; it travels in `begin`.
-- **Ordinary file sends above the threshold.** On the session, `hsm_sensor_add_file` and
-  `hsm_sensor_add_file_from_path` with a content larger than a quarter of the session's frame limit (1 MiB at the
-  default) send it on the file connection as a large value that is not secure, when the server has file
-  connections; otherwise, as before, a value that does not fit a frame is dropped, logged and counted. Their result
-  codes and the 10 MiB cap do not change (`aicontext/features/collector/large-files/native-collector.md`,
-  "Ordinary sends above the threshold").
+- **Ordinary file sends above the threshold.** On the session, a value of `hsm_sensor_add_file` and
+  `hsm_sensor_add_file_from_path` is queued as before; when the value queue is about to send it, a content larger
+  than a quarter of the frame limit of that session (1 MiB at the default) goes on the file connection as a large
+  value that is not secure, when the server has file connections and the sensor's registration was acknowledged
+  (at most 60 s; a refused registration: at once the ordinary way); otherwise, as before, a value that does not fit
+  a frame is dropped, logged and counted. A routed send that waits when the collector stops goes back to the value
+  queue before its stop drain unless its upload had begun (then dropped, logged and counted). Their result codes
+  and the 10 MiB cap do not change (`aicontext/features/collector/large-files/native-collector.md`, "Ordinary sends
+  above the threshold").
 - **Paths** (folder, mask, file, data folder) are UTF-8; a relative one is made absolute from the current
   directory at the call. The mask has `*` and `?`, matches the whole name, ignores the case of ASCII letters on
   Windows only, and may not contain `[`, `]`, `;`, `\`, `/` or a control character.
-- **Result codes.** `HSM_RESULT_INVALID_ARGUMENT` (with `hsm_collector_last_error`) for a mistake of the call;
+- **Result codes.** `HSM_RESULT_INVALID_ARGUMENT` (with `hsm_collector_last_error`) for a mistake of the call,
+  a full sensor path over 1,024 characters (UTF-16, the server's bound of `begin`) included;
   `HSM_RESULT_INVALID_STATE` **only after dispose**. A collector that cannot send large files (the HTTP transport,
   the in-memory default at Start, a libcurl without WebSocket, a build without `HSM_COLLECTOR_HTTP` and
   `HSM_COLLECTOR_TABLES`) does not fail the call: the watch is `UNAVAILABLE` and the handed-over file ends
@@ -576,8 +580,13 @@ hsm_large_file_watch_release(w);                             /* stops watching *
   a lifecycle listener). A read blocked on a dead network share is cancelled on Windows (`CancelSynchronousIo`); on
   Linux it can hold Stop until the read returns.
 - **No silent loss.** Every file not sent (refused, given up, vanished, unreadable, a link, a name that is not
-  UTF-8, a handed-over file still pending at dispose) is said once per file and run through the error channel and
-  counted in `.module/Collector queue stats/Queue overflow`; the watch counts `files_not_sent`.
+  UTF-8 or is over 1,024 characters, a handed-over file still pending at dispose) is said once per file and run
+  through the error channel and counted in `.module/Collector queue stats/Queue overflow`; the watch counts
+  `files_not_sent`. A handed-over file that cannot be read ends `MISSING`; one no `begin` can carry (its name) ends
+  `REFUSED`.
+- **`hsm_large_file_cancel` racing `stored`.** A cancel before the collector commits the outcome keeps the source
+  and the outcome stays `CANCELLED`; once the collector has the server's `stored` and has decided the delete, the
+  outcome is `STORED` (and `source_deleted` says whether the delete was done).
 
 ## Alerts (registration payload)
 
