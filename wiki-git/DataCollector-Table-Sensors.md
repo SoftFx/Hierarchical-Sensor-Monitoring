@@ -1,6 +1,6 @@
 # DataCollector Table Sensors
 
-> **Draft, not released yet.** This page describes the table sensors branch (`feature/1842-table-sensors`, epic #1842): the managed collector HSMDataCollector 4.1.0 (`4.1.0-preview` in the branch), the native collector 0.15.2, the C++ wrapper 2.0.0, and a server later than 3.44.0. The released server 3.44.0 has no table sensors.
+> Table sensors need HSMServer 3.45.0 or later and one of: the managed collector HSMDataCollector `4.1.0-preview` (NuGet prerelease), the native collector 0.15.2, the C++ wrapper 2.0.0 (built from the repository). Earlier servers have no table sensors.
 
 This page is for a developer who sends rows from an application. What a table sensor is, what the site shows and how to read rows back is on [Table Sensors](Table-Sensors). All kinds of sensors are compared on [Sensor Types](Sensor-types).
 
@@ -12,8 +12,8 @@ In short: you declare a table sensor with its columns, add rows from any thread,
 
 | Part | Version |
 |---|---|
-| Server | the first release with table sensors, later than 3.44.0, with collector sessions and table connections on (both are on by default) |
-| Managed collector (C#) | HSMDataCollector 4.1.0 (`4.1.0-preview` in the branch), .NET 6+ or .NET Framework 4.7.2+ |
+| Server | 3.45.0 or later, with collector sessions and table connections on (both are on by default) |
+| Managed collector (C#) | HSMDataCollector `4.1.0-preview` (NuGet prerelease), .NET 6+ or .NET Framework 4.7.2+ |
 | Native collector (C, C++) | 0.15.2 (table sensors are delivered since 0.15.1), built with `HSM_COLLECTOR_TABLES=ON` and `HSM_COLLECTOR_HTTP=ON`, and libcurl 8.14.0 or later with WebSocket support |
 | Legacy C++ wrapper | HSMCppWrapper 2.0.0 |
 | Transport | **the collector session** (the default of the managed collector since 4.0.0 and of the wrapper since 2.0.0; the native collector needs `UseSessionTransport()`) |
@@ -188,7 +188,7 @@ The package carries `HSMTableBlocks.dll` and depends on `ZstdSharp.Port` (a mana
 
 ### A complete program
 
-This program sends 600 rows of time, bid and ask (one ask empty) and prints what happened. It was built against the branch's collector project and run against a server built from the branch.
+This program sends 600 rows of time, bid and ask (one ask empty) and prints what happened. It was built against the repository's collector project and run against a server built from it.
 
 ```csharp
 using System;
@@ -288,7 +288,7 @@ The project file, for building against the repository (a NuGet consumer referenc
 </Project>
 ```
 
-Its output against a server of the branch:
+Its output against that server:
 
 ```
 Created quotes/EURUSD: Pending
@@ -574,9 +574,9 @@ Collectors that share one access key and send large messages (over 64 KiB) take 
 
 ## Try it
 
-From an empty server to rows sent by your own C# program, on the chart and in a downloaded file. You need Docker Desktop, the .NET 8 SDK and a clone of the repository with the branch `feature/1842-table-sensors`.
+From an empty server to rows sent by your own C# program, on the chart and in a downloaded file. You need Docker Desktop, the .NET 8 SDK and a clone of the repository (branch `master`, 3.45.0 or later).
 
-**1. Run a server from the branch and create a product.** Follow steps 1 to 4 of [Table Sensors: Try it](Table-Sensors#try-it): a server at `https://localhost` (or your own port), a product `TableDocs`, its `DefaultKey`.
+**1. Run a server and create a product.** Follow steps 1 to 4 of [Table Sensors: Try it](Table-Sensors#try-it): a server at `https://localhost` (or your own port), a product `TableDocs`, its `DefaultKey`.
 
 **2. Make the program.** Create a folder with the [project file](#a-complete-program) (set `<repository>` to your clone) and the program above as `Program.cs`. `dotnet build -c Release`. Expect "Build succeeded" (warnings `CA1416` of the collector project are expected). Failure: a missing reference (check the three paths).
 

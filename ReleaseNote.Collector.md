@@ -1,21 +1,13 @@
-# HSM DataCollector 4.0.0-preview
+# HSM DataCollector 4.1.0-preview
 
-Prerelease for testing. Changes since 3.5.0 (3.6-3.9 were not published). Since 3.10.0-preview only the Breaking section is new.
-
-## Breaking
-* **The collector session is the default transport** (ADR-0019): one WebSocket to the server on 443, no fallback to HTTP. Needs **HSMServer 3.43.0** or later and a proxy that passes WebSockets; otherwise set `CollectorOptions.Transport = Http`. A file larger than about 1 MiB is dropped and reported on a session (over HTTP it went up to 10 MiB): raise the server's `CollectorSessions.MaxFrameBytes` or use `Http`. Where no session can exist (.NET Framework with `AllowUntrustedServerCertificate`, an OS without WebSockets) the default stays HTTP and Start says why.
+Prerelease for testing. New since 4.0.0-preview: table sensors.
 
 ## New
-* Collector session: values, registrations, files (up to about 1 MiB by default) and server directives on one connection.
-* **TCP connection failure rate** sensor (`AddNetworkConnectionFailuresRate`, Windows).
-* Server directive channel: extra request headers and `X-Hsm-Directive` answers.
-* **`SensorOptions.PreviousPaths`**: history follows a sensor whose path changed.
+* **Table sensors** (`CreateTableSensor(path, TableSensorOptions)`, ADR-0021): rows of a time and nullable `long`/`double` columns, added from any thread with `AddRow`. The rows of all table sensors are packed and compressed every `CollectorOptions.TableTickPeriod` (10 s) and sent on a second WebSocket of the collector session, with acknowledgements; a block is sent again after a lost connection, never stored twice.
+* Every row that cannot be delivered is counted per sensor (`ITableSensor.RowsDropped`, `State`, `StateReason`) and reported in the collector's own sensors; nothing throws because the network or the server is missing.
+* Needs **HSMServer 3.45.0** or later and the session transport. On `CollectorOptions.Transport = Http` a table sensor is `Unavailable` and its rows are counted as dropped.
 
-## Behaviour changes
-* `Service alive` registers its alert with a 5-minute inactivity period; before, it never fired on default settings.
-* A registration rejected with a 4xx is reported once and not resent; a command send is one attempt per cycle, in the order issued.
-* Stop drains registrations first, under one budget; the package in flight is kept on Dispose.
+## Package
+* Bundles `HSMTableBlocks.dll` (the block format); new dependencies `ZstdSharp.Port` 0.8.8 (managed zstd, no native binaries) and `System.IO.Hashing` 8.0.0.
 
-## Reliability
-* Send failures, queue overflow and top-CPU sampling faults are reported (deduplicated).
-* Lifecycle races fixed: the obsolete `Initialize`, a failed start during Stop/Dispose.
+Docs: wiki page "DataCollector Table Sensors".

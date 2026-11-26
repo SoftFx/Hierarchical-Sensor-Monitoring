@@ -1,6 +1,6 @@
 # Table Sensors
 
-> **Draft, not released yet.** This page describes the table sensors branch (`feature/1842-table-sensors`, epic #1842). The released server 3.44.0 has no table sensors; the first release with them is later than 3.44.0. Where the branch is not finished, the page says so.
+> Table sensors are new in HSMServer 3.45.0 (epic #1842); earlier servers have none. Where something is not finished, the page says so.
 
 This page is for a user of the HSM site: what a table sensor is, what its page shows, how long its rows are kept, how to watch it and how to read its rows over the REST API. How to send rows from an application is on [DataCollector Table Sensors](DataCollector-Table-Sensors). All kinds of sensors are compared on [Sensor Types](Sensor-types).
 
@@ -155,7 +155,7 @@ For a table sensor the period is counted in **whole weeks**, rounded up:
 
 Rows are stored by week and deleted a whole week at a time, once the period has passed **after the end of the row's week**. A row is therefore kept at least for the period and at most one week longer. The server checks once an hour.
 
-One exception, a known issue of this branch that is not decided yet: a table sensor that takes "1 month" (or another preset) from a **folder** is currently kept for ever, as an ordinary sensor's history is in that case.
+One exception, a known issue that is not decided yet: a table sensor that takes "1 month" (or another preset) from a **folder** is currently kept for ever, as an ordinary sensor's history is in that case.
 
 **Changing the period.**
 
@@ -346,12 +346,12 @@ In the section `CollectorSessions`: `MaxTableFrameBytes` (4 MiB) is the largest 
 
 ## Try it
 
-From an empty server to rows on the chart and in a file, without writing code. You need Docker Desktop, the .NET 8 SDK, Node 20 and `curl`, and a clone of the repository with the branch `feature/1842-table-sensors`. The version for a developer, with a C# program, is in [DataCollector Table Sensors](DataCollector-Table-Sensors#try-it).
+From an empty server to rows on the chart and in a file, without writing code. You need Docker Desktop, the .NET 8 SDK, Node 20 and `curl`, and a clone of the repository (branch `master`, 3.45.0 or later). The version for a developer, with a C# program, is in [DataCollector Table Sensors](DataCollector-Table-Sensors#try-it).
 
-**1. Run a server built from the branch.** From the repository root, in PowerShell:
+**1. Run a server built from the repository.** From the repository root, in PowerShell:
 
 ```powershell
-.\scripts\local-docker-build.ps1 -Branch feature/1842-table-sensors -ImageTag tables
+.\scripts\local-docker-build.ps1 -Branch master -ImageTag tables
 ```
 
 It checks the branch out, builds the server into the image `hsmonitoring/hierarchical_sensor_monitoring:tables` and starts it with Caddy at `https://localhost` (port 443). Expect "HSM Server is running". Failure: the script stops with the failing step (`dotnet publish failed`, `docker build failed`); a warning that `gh` is missing only means the agent download page will not work, which this walk-through does not need.
