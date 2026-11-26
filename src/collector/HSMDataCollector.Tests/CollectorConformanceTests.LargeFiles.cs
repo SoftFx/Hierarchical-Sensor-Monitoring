@@ -318,10 +318,6 @@ namespace HSMDataCollector.Tests
                     FileServer(state, step.Action).Files.AnswerEndNext(ParseFileAnswer(step.Arg(0)));
                     return true;
 
-                case "file_server_answer_discard_next":
-                    FileServer(state, step.Action).Files.AnswerDiscardNext(ParseFileAnswer(step.Arg(0)));
-                    return true;
-
                 // ---- expectations ----
 
                 case "expect_large_file_result":

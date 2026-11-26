@@ -3744,7 +3744,6 @@ namespace
         // CONFORMANCE-UNSUPPORTED: file_server_answer_begin_next (#1887)
         // CONFORMANCE-UNSUPPORTED: file_server_answer_piece_next (#1887)
         // CONFORMANCE-UNSUPPORTED: file_server_answer_end_next (#1887)
-        // CONFORMANCE-UNSUPPORTED: file_server_answer_discard_next (#1887)
         // CONFORMANCE-UNSUPPORTED: expect_large_file_result (#1887)
         // CONFORMANCE-UNSUPPORTED: expect_large_file_pending (#1887)
         // CONFORMANCE-UNSUPPORTED: expect_large_file_watch_state (#1887)
@@ -3779,7 +3778,6 @@ namespace
             "file_server_answer_begin_next",
             "file_server_answer_piece_next",
             "file_server_answer_end_next",
-            "file_server_answer_discard_next",
             "expect_large_file_result",
             "expect_large_file_pending",
             "expect_large_file_watch_state",

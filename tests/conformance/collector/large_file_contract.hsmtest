@@ -50,7 +50,6 @@
 #                                                   drop_after_store (stored, then the connection cut), silent, close:<code>
 # file_server_answer_end_next|answer                checking, mismatch (400: discarded), missing:<next>, cannot_take, drop,
 #                                                   drop_after_store, silent, close:<code>
-# file_server_answer_discard_next|answer            the same answers, for `discard`
 # Verbs (expectations):
 # expect_large_file_result|name|outcome|timeout_s   stored, refused, given_up, missing, unavailable, cancelled
 # expect_large_file_pending|name                    the hand-over has not settled
