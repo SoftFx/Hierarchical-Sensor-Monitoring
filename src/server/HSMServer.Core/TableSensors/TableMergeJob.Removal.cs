@@ -88,8 +88,10 @@ namespace HSMServer.Core.TableSensors
                     continue;
                 }
 
-                // Out of the tree, its entity not yet out of the database (a removal the tree is making): it waits.
-                if (!mark.Ready)
+                // Out of the tree, its entity not yet out of the database (a removal the tree is making): it waits. Decided
+                // on the mark as it is now, read after the tree check: the tree marks before it removes, so a removal made
+                // again since the pass read the marks (an earlier run's mark replaced by an unconfirmed one) is seen.
+                if (!IsLive(mark) || !mark.Ready)
                     continue;
 
                 going.Add(mark.ProductId);
@@ -125,7 +127,7 @@ namespace HSMServer.Core.TableSensors
                     continue;
                 }
 
-                if (!mark.Ready)
+                if (!IsLive(mark) || !mark.Ready)
                     continue;
 
                 try
@@ -140,6 +142,9 @@ namespace HSMServer.Core.TableSensors
                 }
             }
         }
+
+        // Whether the mark is still the store's mark of its sensor or product, unchanged since the pass read it.
+        private bool IsLive(TableRemoval mark) => Batches.GetRemovals().Contains(mark);
 
         // The products that hold a placement of a sensor, as far as they can be read now.
         private List<Guid> Holders(IReadOnlyList<Guid> products, Guid sensor)
@@ -209,14 +214,17 @@ namespace HSMServer.Core.TableSensors
                     using (_gate.Delete())
                         gone = Batches.DeleteSensorHours(product, id, week, week.WeekStartTicks, week.WeekStartTicks + WeekTicks);
 
-                    if (gone.Batches == 0)
-                        continue;
+                    // Every database visited, whatever this pass deleted there: a crash between an earlier delete and its note
+                    // would otherwise leave a database a tenth of which is deleted off the compaction list for good.
+                    if (gone.Batches > 0)
+                    {
+                        run.Steps++;
+                        run.RemovalSteps++;
+                        batches += gone.Batches;
+                        rows += gone.Rows;
+                        Checkpoint?.Invoke("removal-deleted");
+                    }
 
-                    run.Steps++;
-                    run.RemovalSteps++;
-                    batches += gone.Batches;
-                    rows += gone.Rows;
-                    Checkpoint?.Invoke("removal-deleted");
                     NoteDeleted(product, week);
                 }
 
@@ -230,7 +238,9 @@ namespace HSMServer.Core.TableSensors
                 Checkpoint?.Invoke("removal-unplaced");
             }
 
-            Batches.ClearRemovals([mark]);
+            if (!Batches.ClearRemovals([mark]))
+                return false;
+
             Checkpoint?.Invoke("removal-cleared");
 
             _removalProgress.Remove(id);
@@ -292,7 +302,10 @@ namespace HSMServer.Core.TableSensors
             Batches.RemoveProduct(product);
             Checkpoint?.Invoke("removal-product-removed");
 
-            Batches.ClearRemovals(removals.Where(m => m.ProductId == product).ToList());
+            // Its marks as they are now (sensors marked with it since the pass read them included).
+            if (!Batches.ClearRemovals(Batches.GetRemovals().Where(m => m.ProductId == product && (m.SensorId is not null || m == mark)).ToList()))
+                return false;
+
             Checkpoint?.Invoke("removal-cleared");
 
             _removalProgress.Remove(product);

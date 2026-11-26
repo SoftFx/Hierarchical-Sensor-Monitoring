@@ -280,7 +280,10 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.True(Directory.Exists(folder));
 
             await _server.Cache.RemoveProductAsync(victim);
-            Assert.Equal([new TableRemoval(victim, null, false, Confirmed: true)], _server.Batches.GetRemovals());
+            var marks = _server.Batches.GetRemovals();
+            Assert.Equal(2, marks.Count);
+            Assert.All(marks, m => Assert.Equal((victim, true), (m.ProductId, m.Ready)));
+            Assert.Single(marks, m => m.SensorId is null);
 
             // Hour 1 is merged for r alone (the victim's not merged), the victim's blocks of hours 0 and 1 are deleted and
             // r's kept; the open hour 2 waits, so the product's folder and its mark stay for now.
@@ -291,7 +294,7 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal([Hour0.AddHours(2).Ticks], _server.Blocks.GetBlocks(victim).Select(e => e.ArrivalHourTicks));
             Assert.Equal(kept, _server.Blocks.GetBlocks(_product).Select(e => e.Sequence));
             Assert.True(Directory.Exists(folder));
-            Assert.Single(_server.Batches.GetRemovals());
+            Assert.Equal(2, _server.Batches.GetRemovals().Count);
             Assert.Equal(0, _server.Batches.MergeStatistics.LagHours);
 
             // Hour 2 closed: its block goes, then the folder, then the mark.
@@ -326,7 +329,7 @@ namespace HSMServer.Core.Tests.TableSensors
             CrashAt(point, 1);
             CrashedPass(RemoveAt);
             await RestartAsync(crash: true);
-            Assert.Equal(point is not "removal-cleared", _server.Batches.GetRemovals().Count == 1);
+            Assert.Equal(point is not "removal-cleared", _server.Batches.GetRemovals().Count > 0);
 
             var rerun = Pass(RemoveAt.AddMinutes(1));
             Assert.Null(rerun.Fault);
@@ -444,6 +447,137 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Null(_server.Batches.GetPlacement(_product, lost.Id));
             Assert.Empty(_server.Batches.GetRemovals());
             Assert.Equal(rows, Rows(r));
+        }
+
+
+        // === The tree's side, and marks that change during a pass (the review of the removal) ===
+
+        [Fact]
+        public async Task The_tree_records_a_removal_while_the_sensor_is_still_in_the_tree_and_its_entity_in_the_database()
+        {
+            var s = await RegisterAsync("s", keep: KeepP52);
+            PutHours(1, "s");
+
+            (bool InTree, bool InDatabase)? atMark = null;
+            _server.Batches.Checkpoint = p =>
+            {
+                if (p == "removals-writing")
+                    atMark = (_server.Cache.GetSensor(s.Id) is not null, _server.Database.EntityExists(s.Id));
+            };
+
+            await _server.Cache.RemoveSensorAsync(s.Id);
+            _server.Batches.Checkpoint = null;
+
+            Assert.Equal((true, true), atMark);
+            Assert.False(_server.Database.EntityExists(s.Id));
+            Assert.True(Assert.Single(_server.Batches.GetRemovals()).Ready);
+        }
+
+        [Fact]
+        public async Task A_removed_node_marks_every_table_sensor_below_it_in_one_write_and_their_rows_go_while_its_siblings_stay()
+        {
+            var a = await RegisterAsync("node/a", keep: KeepP52);
+            var b = await RegisterAsync("node/deep/b", keep: KeepP52);
+            var r = await RegisterAsync("r", keep: KeepP52);
+            PutHours(1, "node/a", "node/deep/b", "r");
+            var rows = Rows(r);
+
+            var writes = 0;
+            _server.Batches.Checkpoint = p => { if (p == "removals-writing") writes++; };
+            await _server.Cache.RemoveProductAsync(a.Parent.Id);
+            _server.Batches.Checkpoint = null;
+
+            Assert.Equal(1, writes);
+            Assert.Equal(new[] { a.Id, b.Id }.Order(), _server.Batches.GetRemovals().Select(m => m.SensorId.Value).Order());
+            Assert.All(_server.Batches.GetRemovals(), m => Assert.Equal((_product, true), (m.ProductId, m.Ready)));
+
+            Assert.Equal(2, Pass(RemoveAt).RemovalsDone);
+            Assert.Equal((0, 0, 1), (Bytes(a, 52), Bytes(b, 52), Bytes(r, 52)));
+            Assert.Empty(_server.Batches.GetRemovals());
+            Assert.Equal(rows, Rows(r));
+            Assert.Contains(_product, _server.Batches.GetProducts());
+        }
+
+        [Fact]
+        public async Task A_mark_replaced_during_the_pass_by_one_not_confirmed_deletes_nothing_on_the_mark_the_pass_read()
+        {
+            var s = await RegisterAsync("s", keep: KeepP52);
+            PutHours(2, "s");
+
+            // A mark of an earlier run while s is in the tree (a crash between the mark and the removal of the entity).
+            _server.Batches.MarkRemoved([(_product, s.Id)], []);
+            await RestartAsync(crash: true);
+            Assert.True(Assert.Single(_server.Batches.GetRemovals()).Earlier);
+
+            // During the pass, after it read the marks: s leaves the tree and is marked again, not confirmed (here its first
+            // mark write fails, so the mark is written alone: the window between the tree's cache and its database).
+            _server.Job.Checkpoint = p =>
+            {
+                if (p != "reconciled")
+                    return;
+
+                _server.Job.Checkpoint = null;
+                _server.Batches.Checkpoint = q => { if (q == "removals-writing") throw new IOException("disk full"); };
+                Task.Run(() => _server.Cache.RemoveSensorAsync(s.Id)).GetAwaiter().GetResult();
+                _server.Batches.Checkpoint = null;
+                _server.Batches.MarkRemoved([(_product, s.Id)], []);
+            };
+
+            var report = Pass(RemoveAt);
+            Assert.Equal((0, null), (report.RemovalsDone, report.Fault));
+            Assert.Equal(2, Bytes(s, 52));
+            Assert.False(Assert.Single(_server.Batches.GetRemovals()).Ready);
+
+            _server.Batches.ConfirmRemoved([s.Id], []);
+            Assert.Equal(1, Pass(RemoveAt.AddMinutes(1)).RemovalsDone);
+            Assert.Equal(0, Bytes(s, 52));
+        }
+
+        [Fact]
+        public async Task A_sensor_removed_during_a_pass_is_not_counted_as_an_orphan_and_the_next_pass_removes_it()
+        {
+            var s = await RegisterAsync("s", keep: KeepP52);
+            PutHours(1, "s");
+
+            _server.Job.Checkpoint = p =>
+            {
+                if (p != "reconciled")
+                    return;
+
+                _server.Job.Checkpoint = null;
+                Task.Run(() => _server.Cache.RemoveSensorAsync(s.Id)).GetAwaiter().GetResult();
+            };
+
+            Assert.Equal(0, Pass(RemoveAt).RemovalsDone);
+            Assert.Equal(0, _server.Batches.MergeStatistics.OrphanPlacements);
+            Assert.Equal(1, Bytes(s, 52));
+
+            Assert.Equal(1, Pass(RemoveAt.AddMinutes(1)).RemovalsDone);
+            Assert.Equal(0, Bytes(s, 52));
+        }
+
+        [Fact]
+        public async Task A_crash_between_a_removals_delete_and_its_note_still_puts_a_tenth_deleted_database_on_the_compaction_list()
+        {
+            // s with 500 rows in hour 0 and r with one, in P52: s is far more than a tenth of the database.
+            var s = await RegisterAsync("s", keep: KeepP52);
+            await RegisterAsync("r", keep: KeepP52);
+            var random = new Random(1850);
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("s", Enumerable.Range(0, 500).Select(i => (Hour0.AddSeconds(i), (double?)random.NextDouble(), (long?)random.Next())).ToArray()),
+                ("r", [(Hour0.AddMinutes(1), 1.0, 1)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
+
+            await _server.Cache.RemoveSensorAsync(s.Id);
+            CrashAt("removal-deleted", 1);
+            CrashedPass(RemoveAt);
+            await RestartAsync(crash: true);
+            Assert.Empty(_server.Batches.GetCompactList(_product));
+
+            Assert.Equal(1, Pass(RemoveAt.AddMinutes(1)).RemovalsDone);
+            Assert.Equal(0, Bytes(s, 52));
+            Assert.True(_server.Batches.GetDeletedShare(_product, new TableBatchWeek(WeekStart, 52)).Share >= TableMergeJob.CompactShare);
+            Assert.Contains(new TableBatchWeek(WeekStart, 52), _server.Batches.GetCompactList(_product));
         }
 
 

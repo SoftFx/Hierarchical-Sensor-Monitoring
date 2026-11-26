@@ -441,7 +441,9 @@ namespace HSMServer.Core.Cache
 
             try
             {
-                batches.ConfirmRemoved(sensors, products);
+                // Only what the environment database no longer holds: its deletes are logged and swallowed when they fail,
+                // so a removal that "returned" may have left the entity, which comes back at the next start.
+                batches.ConfirmRemoved(sensors.Where(id => !_database.EntityExists(id)).ToList(), products.Where(id => !_database.EntityExists(id)).ToList());
             }
             catch (Exception ex)
             {
@@ -531,20 +533,17 @@ namespace HSMServer.Core.Cache
                     }
 
                     // The stored table rows of the subtree (#1850 part 4d), recorded in one write before anything leaves the
-                    // tree: a root product goes whole (its folder of batches and its blocks), a node's table sensors one by one.
-                    if (product.IsRoot)
-                        MarkTableRemoval([], [product.Id]);
-                    else
-                        MarkTableRemoval(TableSensorsIn(product).Select(t => (product.Root?.Id ?? Guid.Empty, t.Id)).ToList(), []);
+                    // tree: its table sensors, and a root product itself (its folder of batches and its blocks go whole; its
+                    // sensors' marks then go with it, and they stand alone when the product's own removal did not complete).
+                    var root = product.IsRoot ? product.Id : product.Root?.Id ?? Guid.Empty;
+                    MarkTableRemoval(TableSensorsIn(product).Select(t => (root, t.Id)).ToList(), product.IsRoot ? [product.Id] : []);
 
                     RemoveProduct(request.Id, request.InitiatorInfo);
 
-                    // Gone from the database (a removal that threw stays unconfirmed: the merge job deletes nothing for it
-                    // in this run, and after a restart it acts by whether the entity loaded).
-                    if (product.IsRoot)
-                        ConfirmTableRemoval([], [product.Id]);
-                    else
-                        ConfirmTableRemoval(removedSensors, []);
+                    // Confirmed only for an entity the database no longer holds (a removal that failed stays unconfirmed:
+                    // the merge job deletes nothing for it in this run, and after a restart it acts by whether the entity
+                    // loaded).
+                    ConfirmTableRemoval(removedSensors, product.IsRoot ? [product.Id] : []);
 
                     RemoveProductFromCache(product);
 

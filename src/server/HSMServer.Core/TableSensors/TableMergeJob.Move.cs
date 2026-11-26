@@ -227,6 +227,18 @@ namespace HSMServer.Core.TableSensors
         {
             long pending = 0, stuck = 0;
             var orphans = new List<(Guid Product, Guid Sensor)>();
+
+            // The marks as they are now, not as the pass read them: a removal made during the pass is not an orphan.
+            try
+            {
+                removals = Batches.GetRemovals();
+            }
+            catch (Exception)
+            {
+                // Not known: every placement without its sensor counts (the fault is counted where the pass read them).
+                removals = null;
+            }
+
             var markedSensors = removals?.Where(m => m.SensorId is not null).Select(m => m.SensorId.Value).ToHashSet() ?? [];
             var markedProducts = removals?.Where(m => m.SensorId is null).Select(m => m.ProductId).ToHashSet() ?? [];
 

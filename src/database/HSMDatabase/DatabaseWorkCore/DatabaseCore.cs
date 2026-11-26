@@ -390,6 +390,8 @@ namespace HSMDatabase.DatabaseWorkCore
             return (totalDataCnt, totalKeySize, totalValueSize);
         }
 
+        public bool EntityExists(Guid id) => _environmentDatabase.EntityExists(id.ToString());
+
         public void RemoveSensorWithMetadata(Guid sensorId)
         {
             _environmentDatabase.RemoveSensor(sensorId.ToString());

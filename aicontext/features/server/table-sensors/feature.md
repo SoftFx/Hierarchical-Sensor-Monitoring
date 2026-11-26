@@ -98,11 +98,11 @@ Removing a table sensor removes its entity as for any sensor (`TreeValuesCache.R
 |---|---|---|
 | A table sensor (the tree, the API, a self-destroy sweep) | the sensor, with its root product | its keys in every week database of every class, its placement |
 | A node (not a root product) | every table sensor of its subtree, in one write | as above, per sensor |
-| A root product | the product (its sensors are not recorded one by one) | its blocks (never merged, or within their delay; the other products' blocks of the same hours stay), then its whole folder of batches |
+| A root product | the product and its table sensors, in one write | its blocks (never merged, or within their delay; the other products' blocks of the same hours stay), then its whole folder of batches |
 | A sensor whose parent is missing at start | the sensor, its product not known | as for a sensor, in the product that holds its placement |
 
 - A record that cannot be written is logged as an Error and the removal goes on: the sensor does not come back, and its rows stay as an orphan placement, counted (`Orphan table placements`) and named in a daily Warn, never deleted by themselves.
-- A crash between the record and the removal of the entity leaves a record of a sensor still in the tree after the restart: the job clears it with a Warn and deletes nothing.
+- The job acts on a record of this run only once the tree has confirmed that the entity is gone from the environment database (read back as absent). A crash between the record and the removal of the entity leaves a record of a sensor still in the tree after the restart: the job clears it with a Warn and deletes nothing.
 - A new sensor registered on the same path has another id and never sees the old rows; its own rows and placement are not touched by the old sensor's removal, also when they were merged before it.
 - A collector still sending the removed sensor's table gets it refused (`UnknownSensor`); the feed sensors of the removed sensor stay (`aicontext/features/server/table-feed-sensors/feature.md`).
 - Ordinary sensors are not touched by any of this.
@@ -135,7 +135,7 @@ Registration request (Type `Table`, schema) → product queue → `TryCheckTable
 
 ## Storage / Persistence
 
-The schema is part of the sensor's row in the environment database (`SensorEntity.Table`), so it is backed up with it. The rows themselves live in the block store (part 2b) and the batch store (#1850), which are not backed up, like sensor history; they are deleted with the sensor or its product (above). A table sensor entity that does not load is left out of the tree and not removed: its stored rows stay, reported as an orphan placement.
+The schema is part of the sensor's row in the environment database (`SensorEntity.Table`), so it is backed up with it. The rows themselves live in the block store (part 2b) and the batch store (#1850), which are not backed up, like sensor history; they are deleted with the sensor or its product (above). A table sensor entity that does not load is left out of the tree and not removed: its stored rows stay, reported as an orphan placement (unless an earlier run recorded its removal and stopped before its entity left the database: the user's removal is then carried out).
 
 ## UI / Operator Visibility
 

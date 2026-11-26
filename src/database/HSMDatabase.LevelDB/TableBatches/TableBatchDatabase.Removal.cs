@@ -116,7 +116,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
-        public void ClearRemovals(IReadOnlyCollection<TableRemoval> removals)
+        public bool ClearRemovals(IReadOnlyCollection<TableRemoval> removals)
         {
             ArgumentNullException.ThrowIfNull(removals);
 
@@ -127,19 +127,22 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 var sensorMarks = new Dictionary<Guid, TableRemoval>(_sensorMarks);
                 var productMarks = new Dictionary<Guid, TableRemoval>(_productMarks);
-                var cleared = false;
+                int cleared = 0;
 
                 // Only the same mark: one made again in this run since it was read stays.
-                foreach (var mark in removals)
-                    cleared |= mark.SensorId is Guid sensor
-                        ? sensorMarks.TryGetValue(sensor, out var current) && current == mark && sensorMarks.Remove(sensor)
-                        : productMarks.TryGetValue(mark.ProductId, out var product) && product == mark && productMarks.Remove(mark.ProductId);
+                foreach (var mark in removals.Distinct())
+                    if (mark.SensorId is Guid sensor
+                            ? sensorMarks.TryGetValue(sensor, out var current) && current == mark && sensorMarks.Remove(sensor)
+                            : productMarks.TryGetValue(mark.ProductId, out var product) && product == mark && productMarks.Remove(mark.ProductId))
+                        cleared++;
 
-                if (!cleared)
-                    return;
+                if (cleared > 0)
+                {
+                    WriteRemovals(sensorMarks, productMarks);
+                    (_sensorMarks, _productMarks) = (sensorMarks, productMarks);
+                }
 
-                WriteRemovals(sensorMarks, productMarks);
-                (_sensorMarks, _productMarks) = (sensorMarks, productMarks);
+                return cleared == removals.Distinct().Count();
             }
         }
 

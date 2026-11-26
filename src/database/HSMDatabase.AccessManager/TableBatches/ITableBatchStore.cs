@@ -533,9 +533,10 @@ namespace HSMDatabase.AccessManager.TableBatches
 
         /// <summary>
         /// Clears removals, durably, then in memory: each one only while it is the same mark (a sensor marked again since,
-        /// in this run, keeps its new mark). Throws <see cref="TableBatchStoreException"/> on a fault, with nothing changed.
+        /// in this run, keeps its new mark). Answers whether every one given was cleared. Throws
+        /// <see cref="TableBatchStoreException"/> on a fault, with nothing changed.
         /// </summary>
-        void ClearRemovals(IReadOnlyCollection<TableRemoval> removals);
+        bool ClearRemovals(IReadOnlyCollection<TableRemoval> removals);
 
         /// <summary>
         /// Removes a product's batches whole: from the call on, a read finds nothing of it (as for a product without a
