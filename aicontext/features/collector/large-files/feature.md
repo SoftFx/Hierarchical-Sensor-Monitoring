@@ -198,7 +198,7 @@ is not is the same zip without a password. Routed sends are never secure.
 once, when the user has none) / **identity** / `large-files`. The identity is the first 16 hex digits of the SHA-256 of
 `server|port|access key|computer|module|executable path`: two applications, or two products, never share a state.
 
-The folder is made and written once, at the first watch or hand-over (a probe file): a folder this account cannot write
+The folder is made and written (a probe file) at the first watch or hand-over after each Start, so a folder fixed between a Stop and a Start is noticed; a probe that was written but cannot be deleted leaves the folder usable (said once): a folder this account cannot write
 is told apart from a lock another process holds. Unwritable: watches are `Unavailable` and hand-overs complete
 `Unavailable`, with a reason that names the folder, said once; routed sends go the ordinary way. A routed-only collector
 never makes or probes the folder.

@@ -491,6 +491,50 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
+        public void A_data_folder_fixed_between_stop_and_start_is_noticed()
+        {
+            var (h, requeued, _) = Routing();
+
+            using (h)
+            {
+                var blocker = Path.Combine(h.Root, "blocker");
+
+                File.WriteAllText(blocker, "x");
+
+                var folder = Path.Combine(blocker, "data");
+
+                h.StartWith((s, t) => new LargeFileService(t, null, new LargeFileStateStore(folder, h.Errors.Enqueue), LargeFileHarness.Registration, h.Errors.Enqueue,
+                                                           n => true, null, h.Timings, n => { }, v => { lock (requeued) requeued.Add(v); }));
+
+                Assert.Equal(LargeFileWatchState.Unavailable, h.Service.Watch("dumps", h.Folder, "*.dmp", null).State);
+
+                // The operator fixes it while the collector is stopped.
+                h.Service.Stop();
+                File.Delete(blocker);
+                h.Service.Start();
+
+                var watch = h.Service.Watch("dumps", h.Folder, "*.dmp", null);
+
+                Assert.Equal(LargeFileWatchState.Active, watch.State);
+            }
+        }
+
+        [Fact]
+        public void What_is_said_once_is_bounded()
+        {
+            var said = new SaidOnce();
+
+            for (var i = 0; i < SaidOnce.Capacity * 3; i++)
+                Assert.True(said.First("key " + i));
+
+            Assert.Equal(SaidOnce.Capacity, said.Count);
+            Assert.False(said.First("key " + (SaidOnce.Capacity * 3 - 1)));
+
+            // The oldest were forgotten: said again.
+            Assert.True(said.First("key 0"));
+        }
+
+        [Fact]
         public void A_comment_is_cut_on_a_character_boundary()
         {
             var comment = new string('c', LargeFileService.MaxBeginComment - 2) + "\U0001F600" + "tail";

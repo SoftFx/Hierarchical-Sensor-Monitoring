@@ -94,7 +94,7 @@ namespace HSMDataCollector.LargeFiles
 
         private readonly string _root;
         private readonly object _made = new object();
-        private readonly HashSet<string> _said = new HashSet<string>(StringComparer.Ordinal);
+        private readonly SaidOnce _said = new SaidOnce();
         private bool _tried;
         private string _usable;
         private string _unusable;
@@ -126,7 +126,8 @@ namespace HSMDataCollector.LargeFiles
                         return null;
                     }
 
-                    // Made and written once: a folder this account cannot write is told apart from a lock another process holds.
+                    // Made and written once a run (Reprobe at each Start): a folder this account cannot write is told apart from a
+                    // lock another process holds.
                     try
                     {
                         Directory.CreateDirectory(_root);
@@ -134,8 +135,11 @@ namespace HSMDataCollector.LargeFiles
                         var probe = System.IO.Path.Combine(_root, "probe-" + Guid.NewGuid().ToString("N") + ".tmp");
 
                         File.WriteAllBytes(probe, new byte[1]);
-                        File.Delete(probe);
                         _usable = _root;
+
+                        // Written: the folder is usable. A probe that cannot be deleted (an antivirus holding it) is said, no more.
+                        try { File.Delete(probe); }
+                        catch (Exception ex) { Say($"The collector could not delete its probe file {probe} ({ex.Message}); the data folder is used all the same."); }
                     }
                     catch (Exception ex)
                     {
@@ -162,7 +166,7 @@ namespace HSMDataCollector.LargeFiles
             }
             catch (Exception ex)
             {
-                note = $"The data folder of large files cannot be found from CollectorOptions.DataFolder '{options.DataFolder}' ({ex.Message}): large files are sent without it, and a kept file may be offered again after a restart.";
+                note = $"The data folder of large files cannot be found from CollectorOptions.DataFolder '{options.DataFolder}' ({ex.Message}): watched folders and handed-over large files are unavailable, and file values above a quarter of the session frame go the ordinary way.";
                 return null;
             }
         }
@@ -284,6 +288,17 @@ namespace HSMDataCollector.LargeFiles
         internal UploadRecord ReadUpload(string key) => Read<UploadRecord>(key + ".json", r => r.Version == 1 && r.Upload != null && r.PieceBytes > 0);
 
         internal void WriteUpload(string key, UploadRecord record) => Write(key + ".json", record);
+
+        /// <summary>The next use of the folder probes it again (each Start of the collector).</summary>
+        internal void Reprobe()
+        {
+            lock (_made)
+            {
+                _tried = false;
+                _usable = null;
+                _unusable = null;
+            }
+        }
 
         /// <summary>
         /// Whether the data folder can be used (made and written); probes it on the first call. False with the reason when it
@@ -480,9 +495,8 @@ namespace HSMDataCollector.LargeFiles
         // Said once per text: a failure repeated on every try is one report.
         private void Say(string text)
         {
-            lock (_said)
-                if (!_said.Add(text))
-                    return;
+            if (!_said.First(text))
+                return;
 
             try { _report?.Invoke(text); }
             catch (Exception) { }

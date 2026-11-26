@@ -41,7 +41,7 @@ namespace HSMDataCollector.LargeFiles
         private readonly List<LargeFileWatch> _watches = new List<LargeFileWatch>();
         private readonly List<Handed> _handed = new List<Handed>();
         private readonly Dictionary<string, LargeFileSensor> _sensors = new Dictionary<string, LargeFileSensor>(StringComparer.Ordinal);
-        private readonly HashSet<string> _said = new HashSet<string>(StringComparer.Ordinal);
+        private readonly SaidOnce _said = new SaidOnce();
 
         // Under _gate.
         private Thread _thread;
@@ -355,8 +355,10 @@ namespace HSMDataCollector.LargeFiles
 
                 _resetRunState = true;
 
-                lock (_said)
-                    _said.Clear();
+                _said.Clear();
+
+                // A data folder fixed between a Stop and this Start is noticed: the probe is taken again.
+                _store.Reprobe();
 
                 if (HasWorkUnderGate)
                     EnsureThread();
@@ -987,9 +989,8 @@ namespace HSMDataCollector.LargeFiles
         // Said once per run under this key.
         private void Say(string key, string text)
         {
-            lock (_said)
-                if (!_said.Add(key))
-                    return;
+            if (!_said.First(key))
+                return;
 
             Report(text);
         }
