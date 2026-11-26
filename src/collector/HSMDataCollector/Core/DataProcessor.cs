@@ -172,23 +172,32 @@ namespace HSMDataCollector.Core
             // connection is closed before the session.
             // The file queue's drain waits only until the routed values no begin was answered for are back in it (as in the
             // native collector, whose stop gives them back before its drain), not for the close of the file connection.
+            // A start rollback clears the queues without counting: there the large files' stop starts only after that, so a
+            // value it gives back waits in the file queue for the next Start.
             var largeFiles = LargeFiles;
+            var flush = mode.FlushAcceptedWork();
             var routedReleased = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var largeFilesStop = largeFiles != null
+            var largeFilesStop = largeFiles != null && flush
                 ? Task.Run(() => largeFiles.Stop(() => routedReleased.TrySetResult(true)))
                 : Task.CompletedTask;
 
-            if (largeFiles == null)
+            if (largeFiles == null || !flush)
                 routedReleased.TrySetResult(true);
 
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
 
-            // A start rollback clears the queues without counting; values given back after it stay for the next Start.
-            if (mode.FlushAcceptedWork())
+            if (flush)
+            {
                 await StopWithFlushAsync(mode, Task.WhenAny(routedReleased.Task, largeFilesStop), failures).ConfigureAwait(false);
+            }
             else
+            {
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
+
+                if (largeFiles != null)
+                    largeFilesStop = Task.Run(() => largeFiles.Stop());
+            }
 
             await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
 
