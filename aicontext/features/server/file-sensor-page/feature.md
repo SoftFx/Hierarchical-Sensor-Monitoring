@@ -1,6 +1,6 @@
 # Feature: File sensor page
 
-> Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 > Scope: what the web UI shows of a File sensor's values, ordinary and large: the list page by page, the description of the last value, the states of a large file, its download and its download log, and the file actions behind them.
 
 ---
@@ -52,7 +52,7 @@ There is no "removed by retention" state: retention removes a value's row by its
 
 ## History export
 
-The CSV export of the History tab (`SensorHistoryController.ExportHistory`, the archive store injected) and of the Sensor API history quote every cell and double a quote in it. A collector's free text (a name, an extension, a comment, a string value) is written as text: a text that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe and the bidirectional control characters are neutralized. Typed values (numbers, times, time spans, statuses) and the base64 content of an ordinary file are written as they are. They write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
+Two exports write the values of a File sensor as CSV: the Sensor API's history file (`POST /api/sensors/historyFile`, `SensorsController`, an access key with read permission) and the web route `GET /SensorHistory/ExportHistory` (`SensorHistoryController.ExportHistory`, the archive store injected; signed in). The web route is what the **Export** button of the History tab calls (`history.js`, bound to the button in `_SensorHistoryContent.cshtml`), but a File sensor's page has no History tab (only Files and Journal, `_SensorFileContent.cshtml`): nothing on the site calls it for a File sensor, and it answers only a request made to its address. For a File sensor the export users reach is the Sensor API's. Both quote every cell and double a quote in it. A collector's free text (a name, an extension, a comment, a string value) is written as text: a text that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe and the bidirectional control characters are neutralized. Typed values (numbers, times, time spans, statuses) and the base64 content of an ordinary file are written as they are. They write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
 
 ## API / Public Contracts
 

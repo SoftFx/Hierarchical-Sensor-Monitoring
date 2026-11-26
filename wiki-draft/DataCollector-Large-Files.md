@@ -137,7 +137,7 @@ var options = new LargeFileOptions
 | `SettleTime` | 60 s | How long size and modification time must stay unchanged before a watched file is taken. At least 1 s. Not used for a handed-over file. |
 | `DeleteAfterUpload` | `true` | Delete the source after the server stored and checked the whole file. `false`: the file is left, recorded as delivered in the collector's data folder and not offered again. |
 | `MaxBytesPerSecond` | 10,000,000 | The speed limit (below). 0: no limit. |
-| `NewFileAlert` | `true` | The File sensor is registered with the flag `DefaultAlertsOptions.LargeFiles`, by which the sensor asks the server for its default alert "new data has been received" on every stored file. `false`: the flag is not sent. |
+| `NewFileAlert` | `true` | The File sensor is registered with the flag `DefaultAlertsOptions.LargeFiles`. A server that creates the sensor from that registration gives it the alert "New data has been received" with the message `[$product]$path new file $fileName ($fileSize) $link $fileNote`: one notification per stored file ([Large Files](Large-Files#the-alert)). A sensor that exists already gets nothing from the flag. `false`: the flag is not sent. |
 | `Secure` | `true` | A secure file (below). `false`: an ordinary one. |
 | `SensorOptions` | the defaults of `FileSensorOptions` | The registration of the File sensor: `Description`, `SensorLocation`, `IsComputerSensor`, `KeepHistory`, `SelfDestroy`, `TTL`, `TtlAlert`, `Alerts`, `DefaultAlertsOptions`, `EnableForGrafana`, `IsSingletonSensor`, `IsForceUpdate`, `SensorUnit`, `Statistics`. `MaxFileSizeBytes`, `DefaultFileName`, `Extension`, `IsPrioritySensor`, `AggregateData` and `PreviousPaths` do not apply to large files and are ignored (said once when set): the limit of a large file is the server's. |
 
@@ -786,13 +786,15 @@ info: DataCollector (v. 4.2.0.0) -> Stopped
 The file is gone from `dumps`, and the program exits with code 0. A file that stays in the folder is still being written, or is held open by another program.
 
 
-**5. Find the values.** On the site the tree of `LargeFileDocs` now has `crashes/dumps` and `reports/daily`, both File sensors. Read their last values with an API token of yours (create one on your profile page, section **API tokens**; read-only is enough), as `TOKEN` below, and the product's id (in the address of its settings page):
+**5. Look at the values.** On the site the tree of `LargeFileDocs` now has `crashes/dumps` and `reports/daily`, both File sensors. On the **Files** tab of `reports/daily`: `report.csv`, `not secure`, `ready`, with **Download**. On `crashes/dumps`: `app-crash.dmp`, `secure`, `waiting for the product's password`, under the notice "Secure large files of this product are kept and cannot be downloaded: the product has no dump password yet. …". Had you opened the tab during the upload, it would have shown `uploading, N%`, then `being checked`. The sensor's settings show its alert "New data has been received" with the message `[LargeFileDocs]crashes/dumps new file app-crash.dmp (38.15 MB) https://localhost/Home/<sensor id> waits for the product's dump password`. The page is described on [Large Files](Large-Files).
+
+The same over the REST API, with an API token of yours (your profile page, section **API tokens**; read-only is enough), as `TOKEN` below, and the product's id (in the address of its settings page):
 
 ```bash
 curl -k -H "Authorization: Bearer TOKEN" "https://localhost/api/v1/sensors?product=<product id>"
 ```
 
-Each File sensor's `lastValue.value` names the file (`app-crash.dmp`, 40,000,000 bytes; `report.csv`, 2,718,735 bytes) and carries a `largeFile` block; the value's `time` is the time the server accepted the file. For `report.csv` (not secure) the archive is ready at once:
+Each File sensor's `lastValue.value` has the name without the extension and the extension apart (`"name": "app-crash", "extension": "dmp"`), the size, and a `largeFile` block; the value's `time` is the time the server accepted the file. For `report.csv` (not secure) the archive is ready at once:
 
 ```json
 "largeFile": { "fileId": "…", "secure": false, "state": "packed", "notReadyReason": null,
@@ -808,16 +810,16 @@ For `app-crash.dmp` (secure) on a product without a dump password:
                "archive": null }
 ```
 
-**6. Set the dump password.** Open the product's settings page: the section **Dump password** says "Not set". Click **Generate**, copy the password, click **Save**: "Saved: dump password version 1. The kept secure archives of the product are re-encrypted with it in the background." Within a minute the dump is packed: `GET /api/v1/sensors/<sensor id>/large-files/<file id>` answers `"state": "packed"`, `"passwordVersion": 1` and a `downloadUrl`.
+**6. Set the dump password.** Open the product's settings page: the section **Dump password** says "Not set". Click **Generate**, copy the password, click **Save**: "Saved: dump password version 1. The kept secure archives of the product are re-encrypted with it in the background." Within a minute the dump's row turns `being packed`, then `ready`; over the API `GET /api/v1/sensors/<sensor id>/large-files/<file id>` answers `"state": "packed"`, `"passwordVersion": 1` and a `downloadUrl`.
 
-**7. Download both.**
+**7. Download both.** Click **Download** in each row, or with the token:
 
 ```bash
 curl -k -OJ -H "Authorization: Bearer TOKEN" "<downloadUrl of report.csv>"
 curl -k -OJ -D - -H "Authorization: Bearer TOKEN" "<downloadUrl of app-crash.dmp>"
 ```
 
-Expect `report.csv.zip` and `app-crash.dmp.zip`. The headers of the second show `Server: Caddy` (the bundled Caddy gives out the bytes once HSM has checked the request), `Content-Disposition: attachment; filename=app-crash.dmp.zip`, `Repr-Digest: sha-256=:…:` and `X-Hsm-Password-Version: 1`; the first has no `X-Hsm-Password-Version`. Failures: 404 (a wrong id, or a product you may not see), 409 with the reason (not packed yet: wait), 401 (no token; an access key never downloads).
+Expect `report.csv.zip` and `app-crash.dmp.zip`. The headers of the second show `Server: Caddy` (the bundled Caddy gives out the bytes once HSM has checked the request), `Content-Disposition: attachment; filename=app-crash.dmp.zip`, `Repr-Digest: sha-256=:…:` and `X-Hsm-Password-Version: 1`; the first has no `X-Hsm-Password-Version`. Failures: 404 (a wrong id, a product you may not see, or a link to a zip replaced by a new password), 409 with the reason (not packed yet: wait), 401 (no token; an access key never downloads), 503 (the download cannot be recorded now: try again later).
 
 **8. Open the archives.** `report.csv.zip` opens without a password. `app-crash.dmp.zip` asks for one: give the dump password. In 7-Zip:
 
@@ -829,6 +831,6 @@ Expect `report.csv.zip` and `app-crash.dmp.zip`. The headers of the second show 
 
 The extracted `app-crash.dmp` has the hash `Get-FileHash` printed in step 4. A wrong password gives "Wrong password". The archiver built into Windows usually cannot open an AES zip; use 7-Zip or WinRAR.
 
-**9. See a failure on purpose.** Add `Transport = CollectorTransport.Http` to the collector's options and run again: the log says `Large files cannot be sent: large files need the collector session transport, and this collector sends over HTTP (CollectorOptions.Transport).`, the program prints `Watching … : Unavailable …`, and a dump put into the folder stays there. The `SendFile` of 2.7 MB is posted over HTTP as an ordinary file value: its description has `"name": "report"`, `"extension": "csv"` and `"largeFile": null`.
+**9. See a failure on purpose.** Add `Transport = CollectorTransport.Http` to the collector's options and run again: the log says `Large files cannot be sent: large files need the collector session transport, and this collector sends over HTTP (CollectorOptions.Transport).`, the program prints `Watching … : Unavailable …`, and a dump put into the folder stays there. The `SendFile` of 2.7 MB is posted over HTTP as an ordinary file value: its description has `"largeFile": null`, and the **Files** tab shows it with **Preview**.
 
 **10. Clean up.** `docker compose -p hsm-largefiles -f docker-compose.yml -f ..\compose.largefiles.yml down -v` at the repository root, with the two variables of step 1 set. The data stays in the folders of the repository root; delete them to start empty next time.

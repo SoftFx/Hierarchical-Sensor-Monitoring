@@ -1,13 +1,13 @@
 # Feature: Dump password
 
-> Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 > Scope: the password of a root product under which its secure large file values are given out (#1885, ADR-0022 point 13): who sets and sees it, how it is generated and checked, its versions and their retention, where it is stored, and what it does and does not protect. The archives built under it and the download are `../large-file-download/feature.md`.
 
 ---
 
 ## Overview
 
-The password applies to **secure** files only (glossary "Secure file"): every secure large file value leaves the server as a zip encrypted with AES-256 under the dump password of the file's root product. A file that is not secure (the application decides at the send) leaves as the same zip without encryption, to everyone who may see the product, whether or not the product has a password; a password change does not rewrite it and password versions do not apply to it. The password is set and seen on the product's settings page by a Manager of that product and by an admin; no API, MCP tool, journal record or log line carries its value. HSM offers a generated password; one typed by a person has to pass rules of its own.
+The password applies to **secure** files only (glossary "Secure file"): every secure large file value leaves the server as a zip encrypted with AES-256 under the dump password of the file's root product. A file that is not secure (the application decides at the send) leaves as the same zip without encryption, to everyone who may see the product, whether or not the product has a password; a password change does not rewrite it and password versions do not apply to it. The password is set and seen on the product's settings page, which only a Manager of that product and an admin reach; no API, MCP tool, journal record or log line carries its value. HSM offers a generated password; one typed by a person has to pass rules of its own.
 
 A change of the password makes a new version. The secure archives of the product are re-encrypted with it in the background; each archive records the version it opens with, and a download names it in `X-Hsm-Password-Version`. A replaced version stays readable to Managers and admins until 30 days after its last archive was re-encrypted, so a copy downloaded earlier can still be opened.
 
@@ -16,7 +16,7 @@ While a product has no password, its secure large files are accepted and kept ve
 ## Invariants
 
 - **One password per root product.** A nested node resolves to its root; the service refuses a product that is not a root.
-- **Set and seen by a Manager of the root product or an admin** (`User.IsManager(root)`, which is true for an admin). Everyone who may see the product sees only whether a password is set.
+- **Set and seen by a Manager of the root product or an admin** (`User.IsManager(root)`, which is true for an admin). Only they reach the product settings page and its section. Everyone else who may see the product learns that a password is missing from the notice on the File sensor page (`../file-sensor-page/feature.md`), shown while a secure large file of the product is listed.
 - **Never in an answer of `/api/v1` or MCP, never in a log line, a journal value or an exception text.** The value reaches a browser only in the JSON answer of the page's POST actions. Product models, view models, change sets and DTOs do not hold it: it is stored apart from the product entity.
 - **Versions are atomic, unique and durable.** Every change runs under one lock: the next version is one past the higher of the highest kept version and the highest version a packed archive of the product carries (read from the archive store), so a version is never given twice even after the row was lost (a power loss, a restore of an older backup); the database row is written first and memory changes only after the write landed. Two Managers saving at once get two consecutive versions, both durable. A failed write changes nothing, journals nothing, raises nothing and fails the action.
 - **A password can be replaced, never cleared.** An empty value is refused.
@@ -27,7 +27,7 @@ While a product has no password, its secure large files are accepted and kept ve
 
 | # | Workflow | Initiator |
 |---|---|---|
-| 1 | See whether the product has a dump password | anyone who may see the product |
+| 1 | See whether the product has a dump password | Manager of the root product, admin (the settings page); anyone who may see the product gets the File sensor page's notice while a secure file waits |
 | 2 | Generate a password, copy it, save it | Manager of the root product, admin |
 | 3 | Type a password and save it | Manager of the root product, admin |
 | 4 | Show the values of every kept version (to open an archive downloaded under an older one) | Manager of the root product, admin |
@@ -35,10 +35,10 @@ While a product has no password, its secure large files are accepted and kept ve
 
 ## The settings section
 
-The product settings page (`EditProduct`) carries a **Dump password** section (`Views/Product/_DumpPassword.cshtml`) for everyone who may see the root product (`User.IsProductAvailable`):
+The product settings page (`EditProduct`) carries a **Dump password** section (`Views/Product/_DumpPassword.cshtml`). The page is reached only by a Manager of the root product and an admin: `ProductController.EditProduct` carries `[ProductRoleFilterByEncodedProductId(..., ProductRoleEnum.ProductManager)]`, which sends anyone else to `/Home/Index`. A Viewer never sees the section; while a secure large file of a product without a password is listed, the File sensor page tells everyone who sees the product that the password is missing ("Secure large files of this product are kept and cannot be downloaded: the product has no dump password yet. A Manager of the product or an admin sets it in the product settings."), with a link to the settings for a Manager and an admin only. The section's model decides its parts by role (`DumpPasswordPageService`) and would show the first part to anyone who may see the product, but the page filter lets only those two roles in:
 
-- **Everyone:** "Set", "Not set" or "Cannot be read" (with "the product's secure large files are kept and cannot be downloaded" when not set), and a short text: the password applies to secure large files only; every secure large file is given out only as an AES-256 zip under this password; a large file that is not secure (the sending application decides) is given out as the same zip without encryption to everyone who may see the product, whether or not a password is set, and a new password does not change it; it opens in 7-Zip or WinRAR and usually not in the archiver built into Windows; the password does not hide the name of the file inside, its sizes or its time; a new password re-encrypts the kept secure archives in the background, and until then an archive opens with the version it was made with, which the download names.
-- **A Manager of the root product or an admin, additionally:** the table of kept versions (version, set at, set by, state: current; replaced, archives being re-encrypted; replaced, kept until a date) without values; **Show**, which fetches the values; a field with **Generate** and **Save**.
+- **The state and the text:** "Set", "Not set" or "Cannot be read" (with "the product's secure large files are kept and cannot be downloaded" when not set), and a short text: the password applies to secure large files only; every secure large file is given out only as an AES-256 zip under this password; a large file that is not secure (the sending application decides) is given out as the same zip without encryption to everyone who may see the product, whether or not a password is set, and a new password does not change it; it opens in 7-Zip or WinRAR and usually not in the archiver built into Windows; the password does not hide the name of the file inside, its sizes or its time; a new password re-encrypts the kept secure archives in the background, and until then an archive opens with the version it was made with, which the download names.
+- **For a Manager of the root product or an admin (every user of the page), additionally:** the table of kept versions (version, set at, set by, state: current; replaced, archives being re-encrypted; replaced, kept until a date) without values; **Show**, which fetches the values; a field with **Generate** and **Save**.
 
 The page model never holds a value. The three actions of `DumpPasswordController` are POSTs with a JSON body, cookie-authenticated, `[ValidateAntiForgeryToken]` (the token travels in the `RequestVerificationToken` header) and `Cache-Control: no-store`:
 
