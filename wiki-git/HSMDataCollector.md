@@ -49,6 +49,7 @@ await collector.Stop();
 | `PackageCollectPeriod` | TimeSpan | `15 sec` | How often buffered values are flushed to the server |
 | `ExceptionDeduplicatorWindow` | TimeSpan | `1 hour` | Identical error messages within this window are deduplicated — only the first is sent |
 | `DataSender` | IDataSender | — | Custom HTTP client implementation. Leave `null` to use the default HTTPS client |
+| `DataFolder` | string | `null` | (4.2.0) Where the collector keeps what survives a restart, today the state of large files. `null` takes `%LOCALAPPDATA%\HSMDataCollector` (Windows) or `~/.local/share/HSMDataCollector`; each collector gets a subfolder of its own |
 
 ### How ComputerName and Module Affect Paths
 
@@ -317,6 +318,46 @@ stateSensor.AddValue(2); // send integer value of the enum
 var fileSensor = collector.CreateFileSensor("MyApp/daily_report");
 await fileSensor.SendFileAsync("/path/to/report.csv");
 ```
+
+A file value is limited to 10 MiB by default (`FileSensorOptions.MaxFileSizeBytes`); larger files, such as dumps, are
+sent as **large files** (below). On the session transport (4.2.0) a file value larger than about 1 MiB (a quarter of the
+server's session frame) travels on the large-file connection and is stored as a large file value without a password; it
+has no preview on the sensor page.
+
+### Large files (4.2.0)
+
+A large file (a dump of up to tens of gigabytes) is sent as a value of a File sensor whose content is kept on the
+server's disk: the collector reads it in pieces, compresses each piece with zstd, sends them one at a time on the
+collector session and continues after a cut from where the server stopped. Large files need the session transport (the
+default); the server must support them.
+
+```csharp
+using HSMDataCollector.Core;
+using HSMDataCollector.Options;
+
+// Every *.dmp file that appears in the folder is sent once it has not changed for a minute,
+// and deleted after the server confirmed it stored the whole file.
+var watch = collector.WatchLargeFiles("MyApp/dumps", @"C:\MyApp\dumps", "*.dmp");
+
+// Or one file the application knows is complete:
+LargeFileResult result = await collector.SendLargeFileAsync("MyApp/dumps", @"C:\MyApp\dumps\now.dmp",
+    new LargeFileOptions { DeleteAfterUpload = false });
+```
+
+| `LargeFileOptions` | Default | Meaning |
+|---|---|---|
+| `SettleTime` | 60 s | a watched file is taken when its size and time have not changed for this long (and, on Windows, nobody writes it) |
+| `DeleteAfterUpload` | `true` | delete the source after the server stored it; `false` keeps it and does not send it again |
+| `MaxBytesPerSecond` | 10,000,000 | the most bytes per second the upload sends; `0` means no limit |
+| `NewFileAlert` | `true` | the sensor gets the server's default alert "new data has been received" |
+| `Secure` | `true` | the server gives the file out only as a zip under the product's dump password; `false`: a zip without a password, open to everyone who sees the product |
+| `SensorOptions` | `null` | the File sensor's registration (description, location, history period...) |
+
+One file is sent at a time, on a background thread of lowered priority; the calls may be made from any thread and in any
+state of the collector, and Stop does not wait for an upload: it continues after the next Start. Files that cannot be
+sent (refused by the server, over its limit, failing again and again) are left where they are, written to the
+collector's errors and counted in the `Queue overflow` sensor under `Large files`. The state (which files were delivered,
+the upload in progress) is kept in `CollectorOptions.DataFolder`.
 
 ---
 

@@ -27,6 +27,9 @@ namespace HSMDataCollector.Client.Session
         /// <summary>The subprotocol of the table connection (#1845, ADR-0021 point 7): a second WebSocket of the session.</summary>
         internal const string TablesSubprotocol = "hsm.tables.v1";
 
+        /// <summary>The subprotocol of the file connection (#1884, ADR-0022 point 6): a third WebSocket of the session, for large files.</summary>
+        internal const string FilesSubprotocol = "hsm.files.v1";
+
         /// <summary>The request header a table connection names its session in: the <c>sessionId</c> of the session's hello.</summary>
         internal const string SessionHeader = "X-Hsm-Session";
 

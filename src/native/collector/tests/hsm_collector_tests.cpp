@@ -3722,6 +3722,58 @@ namespace
         if (ExecuteTableConformanceStep(*state.tables, state.collector.value, step))
             return;
 
+        // Large file values (ADR-0022): tests/conformance/collector/large_file_contract.hsmtest, written with the managed
+        // collector (#1888). The native collector gets large files with #1887, which implements these verbs, removes the
+        // markers and registers the fixture in CMakeLists.txt; until then the fixture is not registered here.
+        // CONFORMANCE-UNSUPPORTED: large_file_create (#1887)
+        // CONFORMANCE-UNSUPPORTED: large_file_send (#1887)
+        // CONFORMANCE-UNSUPPORTED: large_file_watch (#1887)
+        // CONFORMANCE-UNSUPPORTED: large_file_send_not_secure (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_begin_field_starts (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_begin_field_absent (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_stored_size (#1887)
+        // CONFORMANCE-UNSUPPORTED: large_file_change_after_piece (#1887)
+        // CONFORMANCE-UNSUPPORTED: large_file_clock_advance (#1887)
+        // CONFORMANCE-UNSUPPORTED: large_file_restart (#1887)
+        // CONFORMANCE-UNSUPPORTED: create_collector_on_http (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_limits (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_refuse_upgrades (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_accept_upgrades (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_holds (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_answer_begin_next (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_answer_piece_next (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_answer_end_next (#1887)
+        // CONFORMANCE-UNSUPPORTED: file_server_answer_discard_next (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_large_file_result (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_large_file_pending (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_large_file_watch_state (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_large_file_source (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_large_files_not_sent (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_stored (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_stored_count (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_begins (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_begin_order (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_begin_field (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_pieces (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_discards (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_file_connections_at_least (#1887)
+        // CONFORMANCE-UNSUPPORTED: expect_refused_file_upgrades_at_least (#1887)
+        static const std::set<std::string> large_file_verbs = {
+            "large_file_create", "large_file_send", "large_file_send_not_secure", "large_file_watch", "large_file_change_after_piece",
+            "expect_file_begin_field_starts", "expect_file_begin_field_absent", "expect_file_stored_size",
+            "large_file_clock_advance", "large_file_restart", "create_collector_on_http", "file_server_limits",
+            "file_server_refuse_upgrades", "file_server_accept_upgrades", "file_server_holds",
+            "file_server_answer_begin_next", "file_server_answer_piece_next", "file_server_answer_end_next",
+            "file_server_answer_discard_next", "expect_large_file_result", "expect_large_file_pending",
+            "expect_large_file_watch_state", "expect_large_file_source", "expect_large_files_not_sent",
+            "expect_file_stored", "expect_file_stored_count", "expect_file_begins", "expect_file_begin_order",
+            "expect_file_begin_field", "expect_file_pieces", "expect_file_discards", "expect_file_connections_at_least",
+            "expect_refused_file_upgrades_at_least",
+        };
+
+        if (large_file_verbs.count(action) != 0)
+            throw std::runtime_error("CONFORMANCE-UNSUPPORTED: " + action + " (#1887): the native collector has no large files yet");
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 

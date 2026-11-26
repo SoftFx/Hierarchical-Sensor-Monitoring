@@ -27,7 +27,7 @@ namespace HSMDataCollector.Core
     }
 
 
-    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector, ITableSensorCollector
+    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector, ITableSensorCollector, ILargeFileCollector
     {
         private readonly LoggerManager _logger = new LoggerManager();
 
@@ -169,6 +169,11 @@ namespace HSMDataCollector.Core
             // whatever it reports to: routing it here would take it away from its owner.
             (ownSender as IErrorReportingSender)?.RouteErrorsTo(_dataProcessor.AddError);
 
+            // A file value above a quarter of the session frame goes on the file connection (ADR-0022 point 21); the large
+            // file service is made with the first such value.
+            if (ownSender is Client.Session.SessionDataSender session && session.LargeFilesUnavailableReason == null)
+                session.FileRouter = file => LargeFileServiceOrNew().Route(file);
+
             _sensorsStorage = _dataProcessor.SensorStorage;
 
             AppDomain.CurrentDomain.UnhandledException += UnhandledExceptionHandler;
@@ -252,6 +257,76 @@ namespace HSMDataCollector.Core
 
             return sensor;
         }
+
+        /// <inheritdoc/>
+        public ILargeFileWatch WatchLargeFiles(string sensorPath, string folder, string mask, LargeFileOptions options = null) =>
+            LargeFileServiceOrNew().Watch(sensorPath, folder, mask, options);
+
+        /// <inheritdoc/>
+        public Task<LargeFileResult> SendLargeFileAsync(string sensorPath, string filePath, LargeFileOptions options = null, System.Threading.CancellationToken token = default) =>
+            LargeFileServiceOrNew().Send(sensorPath, filePath, options, token);
+
+        // The large files of this collector, made with the first watch or hand-over under the lifecycle gate; started when the
+        // collector runs. A disposed collector gets a service that is disposed already: its answers say so.
+        private HSMDataCollector.LargeFiles.LargeFileService LargeFileServiceOrNew()
+        {
+            var files = _dataProcessor.LargeFiles;
+
+            if (files != null)
+                return files;
+
+            lock (_opLock)
+            {
+                files = _dataProcessor.LargeFiles;
+
+                if (files != null)
+                    return files;
+
+                var transport = UsesTransportOfAnotherCollector ? null : _dataSender as Client.Session.SessionDataSender;
+                var unavailable = FindWhyLargeFilesCannotBeSent(transport);
+                string note = null;
+                var store = new HSMDataCollector.LargeFiles.LargeFileStateStore(transport == null || unavailable != null ? null : HSMDataCollector.LargeFiles.LargeFileStateStore.ResolveRoot(_options, out note), _dataProcessor.AddError);
+
+                if (note != null)
+                    _dataProcessor.AddError(note);
+
+                files = new HSMDataCollector.LargeFiles.LargeFileService(unavailable == null ? transport : null, unavailable, store,
+                                                        (path, options) => _sensorsStorage.LargeFileRegistration(path, options),
+                                                        _dataProcessor.AddError, _dataProcessor.TryReportDroppedLargeFiles, _logger, _options.LargeFileTimings,
+                                                        _dataProcessor.ReportDroppedFileValues, _dataProcessor.RequeueFile)
+                {
+                    MaxRouted = _options.MaxQueueSize,
+                };
+
+                if (Status == CollectorStatus.Disposed)
+                    files.Dispose();
+                else if (_tableRunMayStart)
+                    files.Start();
+
+                _dataProcessor.LargeFiles = files;
+                return files;
+            }
+        }
+
+        // Why this collector cannot send large files (ADR-0022 point 6: the session transport only), or null.
+        private string FindWhyLargeFilesCannotBeSent(Client.Session.SessionDataSender session)
+        {
+            if (UsesTransportOfAnotherCollector)
+                return "this collector uses the collector session of the collector created first from the same options; send large files through that collector";
+
+            if (session != null)
+                return session.LargeFilesUnavailableReason;
+
+            if (_dataSender is HsmHttpsClient)
+                return _httpByDefaultReason != null
+                    ? $"large files need the collector session transport, and this collector sends over HTTP because {_httpByDefaultReason}"
+                    : "large files need the collector session transport, and this collector sends over HTTP (CollectorOptions.Transport)";
+
+            return "large files need the collector session transport, and this collector was given a custom CollectorOptions.DataSender";
+        }
+
+        /// <summary>For tests: the large files of this collector, when made.</summary>
+        internal HSMDataCollector.LargeFiles.LargeFileService LargeFileService => _dataProcessor.LargeFiles;
 
         /// <summary>
         /// For tests: one table tick now. With <see cref="CollectorOptions.ManualTableTick"/> it also waits for the
