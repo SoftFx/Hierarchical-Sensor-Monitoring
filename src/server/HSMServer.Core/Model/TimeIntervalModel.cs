@@ -101,6 +101,17 @@ namespace HSMServer.Core.Model
             UseTicks ? Ticks > 0 && (DateTime.UtcNow - time).Ticks > Ticks
                      : DateTime.UtcNow > GetShiftedTime(time);
 
+        /// <summary>
+        /// The time below which the retention pass removes a sensor's history at <paramref name="utcNow"/> under this
+        /// KeepHistory policy, by <see cref="AppliedInterval"/> (a calendar preset inherited from a folder included, #1864);
+        /// null when retention never removes any: None (Forever), a period of ticks that is not positive (a preset inherited
+        /// before #1864 and not yet re-derived at start) or that reaches before <see cref="DateTime.MinValue"/> (Forever
+        /// inherited from a folder, long.MaxValue). The retention pass and the history floor of late values and large files
+        /// (#1441, #1883) both take it, so they cannot drift apart.
+        /// </summary>
+        internal DateTime? RetentionCutoff(DateTime utcNow) =>
+            IsNone || (UseTicks && (Ticks <= 0L || Ticks >= utcNow.Ticks)) ? null : GetShiftedTime(utcNow, -1);
+
         public DateTime GetShiftedTime(DateTime time, int coef = 1) => AppliedInterval switch
         {
             TimeInterval.Month => time.AddMonths(coef),

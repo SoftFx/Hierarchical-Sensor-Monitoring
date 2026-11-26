@@ -1761,10 +1761,12 @@ namespace HSMServer.Core.Cache
 
                     var policy = sensor.Settings.KeepHistory.Value;
 
-                    if (policy.TimeIsUp(from))
+                    // The cutoff is the history floor's too (HistoryFloor: late values, large files), so what retention
+                    // removes and what they take as removed cannot drift. TimeIsUp implies a cutoff.
+                    if (policy.TimeIsUp(from) && policy.RetentionCutoff(DateTime.UtcNow) is { } cutoff)
                     {
                         _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
-                        ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                        ClearSensorHistory(new(sensor.Id, cutoff));
                         cleared++;
 
                         if (policy.FolderPreset is not null)
@@ -3920,6 +3922,8 @@ namespace HSMServer.Core.Cache
                 // batch loop, and shifting 0 floors at UtcNow and would refuse
                 // every out-of-order value. Any ticks window too large to
                 // represent below DateTime.MinValue is the same no-floor case.
+                // The retention pass and this floor take one cutoff
+                // (TimeIntervalModel.RetentionCutoff), so they cannot drift.
                 var floor = HistoryFloor(sensor, DateTime.UtcNow);
 
                 if (lateValue.Time < floor)

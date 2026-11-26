@@ -342,6 +342,124 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Single(await ReadRowsAsync(sensor));
         }
 
+        // === The history floor follows what retention applies (#1864 merged into #1882) ===
+
+        // A product that inherits a calendar preset from its folder: since #1864 the retention pass applies it, so the
+        // floor of the large files follows it. Before, it was FromFolder with 0 ticks and the floor said "never expires".
+        public static TheoryData<string, int, int> InheritedAndOwnPolicies => new()
+        {
+            // policy, how many of the three files (40, 10 and 0 days old) are gone, how many are written again
+            { "inherited month", 1, 2 },
+            { "inherited forever", 0, 3 },
+            { "own month", 1, 2 },
+            { "own day", 2, 1 },
+        };
+
+        [Theory]
+        [MemberData(nameof(InheritedAndOwnPolicies))]
+        public async Task A_pass_judges_the_files_by_the_floor_retention_applies_a_preset_inherited_from_a_folder_included(string policy, int gone, int rolled)
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var old = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-40), "old.dmp");
+            var middle = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-10), "middle.dmp");
+            var recent = await UploadAtAsync(sensor, DateTime.UtcNow, "recent.dmp");
+
+            await SetPolicyAsync(sensor, policy);
+
+            // The rows are gone and nothing told the store: the pass decides by the floor alone.
+            _databaseCoreManager.DatabaseCore.ClearSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(gone, report.FilesRemoved);
+            Assert.Equal(rolled, report.RolledForward);
+            Assert.Equal(gone == 0, Store.TryGetFile(old.FileId) is not null);
+            Assert.Equal(gone < 2, Store.TryGetFile(middle.FileId) is not null);
+            Assert.NotNull(Store.TryGetFile(recent.FileId));
+        }
+
+        [Fact]
+        public async Task Retention_of_a_month_a_product_inherits_from_its_folder_takes_the_older_file_and_keeps_the_newer()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var old = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-40), "old.dmp");
+            var middle = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-10), "middle.dmp");
+
+            await SetPolicyAsync(sensor, "inherited month");
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.Null(Store.TryGetFile(old.FileId));
+            Assert.NotNull(Store.TryGetFile(middle.FileId));
+            Assert.Equal(middle.FileId, Assert.IsType<LargeFileValue>(Assert.Single(await ReadRowsAsync(sensor))).FileId);
+
+            // And the pass that follows agrees with what retention left.
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.Equal(0, report.RolledForward);
+        }
+
+        // On a fixed instant where a calendar month is not 31 days of ticks (a month before 2028-03-01 is 2028-02-01,
+        // 31 days before it is 2028-01-30): the floor is the calendar's, as the retention pass clears.
+        [Theory]
+        [InlineData("inherited month", "2028-02-01")]
+        [InlineData("own month", "2028-02-01")]
+        [InlineData("inherited forever", null)]
+        [InlineData("own day", "2028-02-29")]
+        public async Task The_history_floor_is_the_retention_cutoff_of_the_applied_policy(string policy, string expected)
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            await SetPolicyAsync(sensor, policy);
+
+            var now = new DateTime(2028, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+            var floor = TreeValuesCache.HistoryFloor(sensor, now);
+
+            Assert.Equal(expected is null ? DateTime.MinValue : DateTime.SpecifyKind(DateTime.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc), floor);
+            Assert.Equal(sensor.Settings.KeepHistory.Value.RetentionCutoff(now) ?? DateTime.MinValue, floor);
+        }
+
+        private async Task<LargeFileFinishResult> UploadAtAsync(BaseSensorModel sensor, DateTime time, string name)
+        {
+            _valuesCache.LargeFileClock = () => time;
+
+            try
+            {
+                return await UploadAsync(sensor, Content(Piece), name: name);
+            }
+            finally
+            {
+                _valuesCache.LargeFileClock = () => DateTime.UtcNow;
+            }
+        }
+
+        // The KeepHistory a test names: inherited from a folder (on the product, as FolderManager sets it) or the sensor's own.
+        private async Task SetPolicyAsync(BaseSensorModel sensor, string policy)
+        {
+            if (policy.StartsWith("inherited"))
+            {
+                var inherited = policy == "inherited month"
+                    ? new TimeIntervalModel(TimeInterval.Month).ToFromFolderModel()
+                    : TimeIntervalModel.None.ToFromFolderModel();
+
+                Assert.True((await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+                {
+                    Id = _product,
+                    KeepHistory = inherited,
+                    Initiator = InitiatorInfo.System,
+                })).IsOk);
+
+                Assert.True(sensor.Settings.KeepHistory.Value.IsFromFolder);
+                Assert.Equal(policy == "inherited month" ? TimeInterval.Month : null, sensor.Settings.KeepHistory.Value.FolderPreset);
+                return;
+            }
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                KeepHistory = policy == "own month" ? new TimeIntervalModel(TimeInterval.Month) : new TimeIntervalModel(TimeSpan.FromDays(1).Ticks),
+                Initiator = InitiatorInfo.System,
+            })).IsOk);
+        }
+
         [Fact]
         public async Task A_pass_removes_a_file_whose_row_is_gone_below_the_history_floor_and_writes_again_one_inside_the_kept_range()
         {

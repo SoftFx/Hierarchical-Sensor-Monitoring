@@ -25,18 +25,15 @@ namespace HSMServer.Core.Cache
 
         /// <summary>
         /// The floor of a sensor's history at <paramref name="utcNow"/>: the later of its KeepHistory cutoff (none when
-        /// the period is Forever or inherited as never expiring) and its last history clear. A row below it is removed by
-        /// retention or was removed by a clear; a late value below it is not stored (#1441).
+        /// retention never removes history) and its last history clear. A row below it is removed by retention or was
+        /// removed by a clear; a late value below it is not stored (#1441).
         /// </summary>
         internal static DateTime HistoryFloor(BaseSensorModel sensor, DateTime utcNow)
         {
-            // Round-6 (#1441): KeepHistory inherited from a folder reaches here as a FromFolder policy carrying the folder
-            // model's ticks, Forever as long.MaxValue and the month presets as 0. The retention pass (TimeIsUp) treats both
-            // as "never expires", and the floor agrees.
-            var keepPolicy = sensor.Settings.KeepHistory.Value;
-            var keepFloor = keepPolicy.IsNone || (keepPolicy.UseTicks && (keepPolicy.Ticks <= 0L || keepPolicy.Ticks >= utcNow.Ticks))
-                ? DateTime.MinValue
-                : keepPolicy.GetShiftedTime(utcNow, -1);
+            // The cutoff the retention pass clears to (TimeIntervalModel.RetentionCutoff): a calendar preset inherited
+            // from a folder floors by the calendar since #1864, Forever inherited from a folder (long.MaxValue) and a
+            // preset inherited before #1864 and not yet re-derived (0 ticks) have no floor, as retention removes nothing.
+            var keepFloor = sensor.Settings.KeepHistory.Value.RetentionCutoff(utcNow) ?? DateTime.MinValue;
             var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
 
             return keepFloor > clearFloor ? keepFloor : clearFloor;
