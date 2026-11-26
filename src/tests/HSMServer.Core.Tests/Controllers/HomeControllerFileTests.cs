@@ -600,6 +600,36 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.IsType<NotFoundResult>(Controller(Manager()).GetLargeFileDownloads(Encode(_sensor), Guid.NewGuid()));
         }
 
+
+        // The download names its file after the sensor's path; a path the plain filename cannot carry (Cyrillic, a percent
+        // sign) travels in filename* (RFC 5987), which the page's download reads first.
+        [Fact]
+        public async Task TheDownload_CarriesANonAsciiPath_InFilenameStar()
+        {
+            var sensor = AddFileSensor(_product, "дамп%1");
+            AddValues(sensor, 1);
+
+            var result = Assert.IsType<FileContentResult>(await Controller(Viewer()).GetFile(Encode(sensor), 0));
+
+            var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+            Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions.AddLogging(services);
+            Microsoft.Extensions.DependencyInjection.MvcCoreServiceCollectionExtensions.AddMvcCore(services);
+
+            var http = new DefaultHttpContext
+            {
+                RequestServices = Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services),
+            };
+            http.Response.Body = new System.IO.MemoryStream();
+
+            await result.ExecuteResultAsync(new ActionContext(http, new Microsoft.AspNetCore.Routing.RouteData(), new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor()));
+
+            var disposition = http.Response.Headers.ContentDisposition.ToString();
+            var star = System.Text.RegularExpressions.Regex.Match(disposition, "filename\\*=UTF-8''([^;]+)");
+
+            Assert.True(star.Success, disposition);
+            Assert.Equal("дамп%1.txt", Uri.UnescapeDataString(star.Groups[1].Value));
+        }
+
         private static FileValuesPageViewModel PageOf(IActionResult result) =>
             Assert.IsType<FileValuesPageViewModel>(Assert.IsType<PartialViewResult>(result).Model);
 

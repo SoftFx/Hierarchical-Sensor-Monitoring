@@ -35,10 +35,10 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 
 | Where it comes from | State on the page |
 |---|---|
-| store record `Uploading`, pieces missing, a piece within the store's lease time (`LargeFiles.LeaseTimeoutSeconds`) | uploading, N% |
+| store record `Uploading`, pieces missing, a piece within the store's lease time (`LargeFiles.LeaseTimeoutSeconds`, raised to the collector sessions' silence limit when it is shorter, #1944) | uploading, N% |
 | store record `Uploading`, the store's end check running now (`IsChecking`) | being checked |
 | store record `Uploading`, every piece in and no check running (the collector left before its end, or a check failed) | waiting for the collector to finish |
-| store record `Uploading`, no piece for longer than the lease time | waiting for the collector, N%; the time of the last piece and the day the store removes the part (`LargeFiles.AbandonedUploadDays` after it) |
+| store record `Uploading`, no piece for longer than the lease time | waiting for the collector, N%; the time of the last piece and when the store removes the part: `LargeFiles.AbandonedUploadDays` after the last piece, or, for a part that never got a piece, when its lease ends |
 | `verified`, secure, the product has no dump password (asked before the builder's state) | waiting for the product's password |
 | `verified`, builder `none`, `queued`, `building` (none: after a restart, before the builder lists the file) | being packed |
 | `verified`, builder `waitingForRoom` | being packed (waiting for disk space) |
@@ -52,7 +52,7 @@ There is no "removed by retention" state: retention removes a value's row by its
 
 ## History export
 
-The CSV export of the History tab (`SensorHistoryController.ExportHistory`, the archive store injected) and of the Sensor API history write every cell as text: quoted, a quote doubled, a text that starts with `=`, `+`, `-`, `@`, a tab or a carriage return and is not a number prefixed with an apostrophe, the bidirectional control characters neutralized. They write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
+The CSV export of the History tab (`SensorHistoryController.ExportHistory`, the archive store injected) and of the Sensor API history quote every cell and double a quote in it. A collector's free text (a name, an extension, a comment, a string value) is written as text: a text that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe and the bidirectional control characters are neutralized. Typed values (numbers, times, time spans, statuses) and the base64 content of an ordinary file are written as they are. They write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
 
 ## API / Public Contracts
 

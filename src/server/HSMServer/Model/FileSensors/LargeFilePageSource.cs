@@ -72,7 +72,8 @@ namespace HSMServer.Model.FileSensors
                             PiecesTotal = record.TotalPieces,
                             IsChecking = store.IsChecking(record.FileId),
                             LastPieceUtc = LastPieceOf(record),
-                            ExpiresUtc = LastPieceOf(record) + limits.AbandonedUploadAge,
+                            // A part with a piece is kept AbandonedUploadDays after it; an empty one goes when its lease ends.
+                            ExpiresUtc = record.PieceCount > 0 ? LastPieceOf(record) + limits.AbandonedUploadAge : record.CreatedUtc + limits.LeaseTimeout,
                             StalledAfter = limits.LeaseTimeout,
                             IsSecure = record.Secure,
                             Application = record.ClientName,

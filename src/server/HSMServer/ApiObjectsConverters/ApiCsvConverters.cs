@@ -185,7 +185,10 @@ namespace HSMServer.ApiObjectsConverters
                 return propValue;
             }
 
-            static string GetCsvValue(Header column, BaseValue value, string propValue) => CsvCell(GetTransformedValue(column, value, propValue));
+            static string GetCsvValue(Header column, BaseValue value, string propValue) =>
+                IsFreeText(column, value)
+                    ? CsvTextCell(GetTransformedValue(column, value, propValue))
+                    : CsvCell(GetTransformedValue(column, value, propValue));
         }
 
         private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)
@@ -204,21 +207,30 @@ namespace HSMServer.ApiObjectsConverters
 
         private static string BuildRow(this List<string> values) => string.Join(_columnSeparator, values);
 
+        /// <summary>One CSV cell as it is: quoted, a quote doubled. For typed values and the base64 content of a file.</summary>
+        internal static string CsvCell(string text) => $"\"{(text ?? string.Empty).Replace("\"", "\"\"")}\"";
+
         /// <summary>
-        /// One CSV cell, written as text: quoted, a quote doubled, the bidirectional control characters neutralized, and a
-        /// text that a spreadsheet would read as a formula (it starts with = + - @, a tab or a carriage return and is not a
-        /// number) prefixed with an apostrophe.
+        /// One CSV cell of free text a collector sent (a name, an extension, a comment, a string value), written as text:
+        /// the bidirectional control characters neutralized, a text that a spreadsheet would read as a formula (it starts
+        /// with = + - @, a tab or a carriage return) prefixed with an apostrophe, then quoted.
         /// </summary>
-        internal static string CsvCell(string text)
+        internal static string CsvTextCell(string text)
         {
             text = (text ?? string.Empty).WithoutBidiControls();
 
-            if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r' &&
-                !double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _) &&
-                !double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out _))
+            if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
                 text = "'" + text;
 
-            return $"\"{text.Replace("\"", "\"\"")}\"";
+            return CsvCell(text);
         }
+
+        // The columns that carry a collector's free text; every other column is a typed value or a file's base64 content.
+        private static bool IsFreeText(Header column, BaseValue value) => column.PropertyName switch
+        {
+            nameof(FileSensorValue.Name) or nameof(FileSensorValue.Extension) or nameof(BaseValue.Comment) => true,
+            nameof(StringValue.Value) => value is StringValue,
+            _ => false,
+        };
     }
 }

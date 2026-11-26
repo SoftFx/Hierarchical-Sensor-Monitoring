@@ -27,7 +27,10 @@ namespace HSMServer.Model.FileSensors
         /// <summary>When the last piece came; the start of the upload before any piece.</summary>
         public DateTime LastPieceUtc { get; init; }
 
-        /// <summary>When the store removes the part if no piece comes (the last piece plus LargeFiles.AbandonedUploadDays).</summary>
+        /// <summary>
+        /// When the store removes the part if no piece comes: the last piece plus LargeFiles.AbandonedUploadDays, or, for a
+        /// part that never got a piece, the end of its lease.
+        /// </summary>
         public DateTime ExpiresUtc { get; init; }
 
         /// <summary>No piece for longer than this (the store's lease time) and the upload waits for its collector; zero: never.</summary>

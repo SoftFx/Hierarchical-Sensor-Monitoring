@@ -191,6 +191,23 @@
             downloadFile(getFileAction + '?Selected=' + encodeURIComponent(encodedId) + '&dateTime=' + encodeURIComponent(row.dataset.time), 0);
         });
 
+        // The name the server gave: filename* (RFC 5987, UTF-8) first, then the plain filename as it is; never throws.
+        function fileNameOf(disposition) {
+            const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(disposition);
+
+            if (star) {
+                try {
+                    return decodeURIComponent(star[1].trim());
+                } catch (e) {
+                    // A malformed escape: the plain name below.
+                }
+            }
+
+            const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(disposition);
+
+            return plain ? plain[1].trim() : 'file';
+        }
+
         // A busy history (503) is asked again a few times; a missing file says so; the browser stays on the page.
         function downloadFile(url, attempt) {
             fetch(url, { credentials: 'same-origin' }).then(function (response) {
@@ -204,9 +221,7 @@
                     return;
                 }
 
-                const disposition = response.headers.get('Content-Disposition') || '';
-                const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-                const name = match ? decodeURIComponent(match[1]) : 'file';
+                const name = fileNameOf(response.headers.get('Content-Disposition') || '');
 
                 return response.blob().then(function (blob) {
                     const link = document.createElement('a');
@@ -273,6 +288,8 @@
                         return;
                     }
 
+                    // The list stays on its first pages: the live refresh may read it again.
+                    container.data('olderLoaded', false);
                     button.prop('disabled', false);
                     showToast(xhr.status === 503 ? 'The files of this sensor are being read; try again.' : 'The older files could not be read.');
                 }

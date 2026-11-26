@@ -63,6 +63,18 @@ namespace HSMServer.Core.Tests.LargeFiles
         }
 
         [Fact]
+        public void An_upload_without_a_piece_is_removed_when_its_lease_ends_not_days_later()
+        {
+            var sensor = Guid.NewGuid();
+            var begin = _store.Begin(new LargeFileUploadKey(Guid.NewGuid(), sensor, "empty.dmp", 3 * 65_536, DateTime.UtcNow, null), "dmp", 65_536, 65_536);
+            Assert.Equal(LargeFileBeginOutcome.Started, begin.Outcome);
+
+            var upload = Assert.Single(_source.GetUploads(sensor));
+
+            Assert.Equal(_store.Limits.LeaseTimeout, upload.ExpiresUtc - upload.LastPieceUtc);
+        }
+
+        [Fact]
         public void A_store_without_content_lists_nothing()
         {
             Assert.Empty(_source.GetUploads(Guid.NewGuid()));
