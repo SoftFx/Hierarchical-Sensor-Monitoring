@@ -61,6 +61,11 @@ of that state is shared between classes:
   `FileManager.SafeRemoveFolder` would spend 5 × 5 s retrying each folder. The fixture of the next run
   removes what is left.
 
+The test host starts with at least 128 worker and I/O pool threads (`Infrastructure/TestThreadPool.cs`, a
+module initializer): when dozens of classes start at once and block pool threads, a pool that grows by
+injection lets the product's bounded waits on its background loops (the security-event sink's 3 s drain,
+`UpdatesQueue.DisposeAsync`'s 5 s) expire.
+
 There is no shared "Database collection" any more; do not add one back to a database class. Before
 adding a static field, an environment variable, a fixed port or a fixed file path to such a class, put
 the class in an exclusive collection instead.
