@@ -56,13 +56,16 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
   webhook URL would exfiltrate every alert sent to it; edit / delete / clear-channel / test / invitation
   are admin or `ProductManager` on any folder the chat is bound to, so a global chat is admin-only.
 - The chat↔folder binding lives on the folder (`FolderEntity.Chats`); `Chat.Folders` is an in-memory
-  reverse index. `NotificationsController.SyncFolders` rewrites it through `FolderUpdate`, touching
-  only the folders the caller manages. That folder write is already journaled ("Folder chats update",
-  kind `folder`).
+  reverse index. `ChatAdministrationService.BindFoldersAsync` (#1825 — the write engine behind the web
+  POST flows, ex-`NotificationsController.SyncFolders`) rewrites it through `FolderUpdate`, touching
+  only the folders the caller manages (`ChatFolderBinding.Managed`, built by the web from
+  `GetUserFolders(CurrentUser)` — never from request data). That folder write is already journaled
+  ("Folder chats update", kind `folder`).
 - Validation: the name is required and at most 100 characters, with no uniqueness check — although the
   `ChatDto` doc says "unique per server" and alert import resolves chats by name. A webhook must be an
-  absolute http/https URL (`ValidateWebhooks`); nothing else is checked. Clearing a channel is an
-  explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`, `ClearTelegramBinding`): at the model an
+  absolute http/https URL (`ChatAdministrationService.ValidateWebhooks`, #1825); nothing else is
+  checked. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
+  `ClearTelegramBinding`): at the model an
   empty value means "no change", and the web form refuses an empty field for a stored webhook, pointing
   at the per-channel Remove button.
 - The test actions answer `OK` regardless of the outcome; delivery failures go to the channel's
@@ -75,11 +78,13 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
 - Bot credential: `TelegramConfig { BotName, BotToken, IsRunning }` in `Config/appsettings.json`.
   `SaveTelegramSettings` persists; `RestartTelegramBot` applies the token (the bot name and the on/off
   switch are read live). `TelegramBot.StartBotAsync` stops the running bot FIRST and validates the token
-  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token is
-  logged in clear in two places (`ConfigurationController.BuildTelegramChangesText`, and
-  `TelegramBot.StartBotAsync` on failure).
-- Journal: `JournalKinds` has no chat or server-settings kind; `ChatsManager` is not subscribed to the
-  journal and the chat storage layer logs nothing, so a changed webhook leaves no "who and when".
+  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token
+  is kept out of the log since #1824 (`TelegramSettingsChanges.Describe` says only that it changed)
+  and out of the journal since #1828 (its record names the state of the setting).
+- Journal: since #1828 every chat write leaves `chat` records (`ChatsManager` journals create,
+  update and delete, a webhook and the Telegram chat id never reaching a record) and a bot settings
+  save leaves `serverSettings` records. The kinds list is public contract — the journal API and the
+  MCP journal tool descriptions enumerate it by hand — and a test pins the full list.
 
 ## Proposed Direction
 

@@ -76,7 +76,7 @@ The table identifier inside a block is the sensor's path as the collector regist
 
 ### Operations that change a table sensor's path
 
-Every one is refused, and the refusal names the table sensor.
+Every one is refused. The refusals of the sensor's own operations name the table sensor; the rename of a node above it is refused by the general rule that no node below a root is renamed (#1881), which names the node.
 
 | Operation | Where | Answer |
 |---|---|---|
@@ -86,7 +86,7 @@ Every one is refused, and the refusal names the table sensor.
 | A move of another sensor onto the table sensor's path with merge | `MoveSensorAsync` (types differ) | `Conflict`, the error names the table sensor and its type |
 | A collector's previous paths that name the table sensor's path (#1724) | `ApplyPreviousPathsCoreAsync` | skipped with a Warn naming the sensor (that surface never fails the registration) |
 | Management API and MCP sensor moves | `SensorMoveAdministrationService` over `MoveSensorAsync` | entry outcome `notSupported` |
-| Renaming a node (not a root product) above a table sensor | `TreeValuesCache.UpdateProductAsync` and the queue handler `UpdateProduct` | error naming the table sensor; no caller renames a non-root node today, the guard keeps it so |
+| Renaming a node (not a root product) above a table sensor | `TreeValuesCache.UpdateProductAsync` and the queue handler `UpdateProduct` (`RenameRefusal`) | refused like the rename of any node below a root (#1881): "Cannot rename node '<path>' to '<name>': only a root product can be renamed, …" |
 
 Renaming a root product does not change a sensor's path (paths are relative to the root product) and is allowed. Moving a product between folders does not change paths. No operation re-parents a node.
 

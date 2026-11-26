@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
@@ -42,14 +43,32 @@ namespace HSMServer.Core.Tests.Dashboards
             Assert.False(subscription.IsMatch(BuildSensor()), "a broken edit must not degrade into match-all");
         }
 
+        // A product outside any folder has no folder id. The folder filter read
+        // the id's value anyway and threw, which from the dashboard's handler of
+        // a new sensor failed the creation of that sensor. Such a product is
+        // covered only by a filter that selects "no folder" (Guid.Empty).
+        [Fact]
+        public void FolderFilter_ForASensorOfAFolderlessProduct_DoesNotMatch_UnlessNoFolderIsSelected()
+        {
+            var sensor = BuildSensor();
 
-        private static PanelSubscription BuildSubscription(string pathTemplate) =>
+            Assert.Null(sensor.Root.FolderId);
+
+            Assert.False(BuildSubscription("*/cpu", folders: [Guid.NewGuid()]).IsMatch(sensor), "a filter of real folders does not cover a folderless product");
+            Assert.False(BuildSubscription("*/cpu", folders: []).IsMatch(sensor), "an empty filter covers nothing");
+
+            Assert.True(BuildSubscription("*/cpu", folders: [Guid.NewGuid(), Guid.Empty]).IsMatch(sensor), "\"no folder\" is selected");
+            Assert.True(BuildSubscription("*/cpu", folders: null).IsMatch(sensor), "no filter at all");
+        }
+
+
+        private static PanelSubscription BuildSubscription(string pathTemplate, List<Guid> folders = null) =>
             new(new PanelSubscriptionEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
                 PathTemplate = pathTemplate,
                 Color = "Red", // the entity ctor parses the color name
-                Folders = null, // no folder filter: the template is the only gate
+                Folders = folders, // null is no folder filter: the template is the only gate
             });
 
         private static BaseSensorModel BuildSensor()

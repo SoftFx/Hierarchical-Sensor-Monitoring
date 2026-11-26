@@ -3,6 +3,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
@@ -18,11 +19,18 @@ namespace HSMServer.Model.Folders.ViewModels
         // public constructor without parameters for action Home/UpdateFolderInfo
         public FolderInfoViewModel() : base() { }
 
-        internal FolderInfoViewModel(FolderModel folder) : base(folder)
+        /// <param name="folder">The folder.</param>
+        /// <param name="visibleProducts">
+        /// The products of the folder the panel is rendered over: the ones its reader sees
+        /// (<see cref="UserTreeAccess.GetVisibleProducts"/>), so the statistics say nothing about the others.
+        /// </param>
+        internal FolderInfoViewModel(FolderModel folder, IEnumerable<ProductNodeViewModel> visibleProducts) : base(folder)
         {
-            ProductStatuses = folder.Products.Values.ToGroupedList(x => x.Status);
+            var products = visibleProducts.ToList();
 
-            TotalProducts = folder.Products.Count;
+            ProductStatuses = products.ToGroupedList(x => x.Status);
+
+            TotalProducts = products.Count;
             Id = folder.Id;
         }
     }

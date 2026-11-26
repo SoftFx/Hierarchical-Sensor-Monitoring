@@ -71,7 +71,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
-                    .AddSingleton<IJournalService, JournalService>();
+                    .AddSingleton<IJournalService, JournalService>()
+                    .AddSingleton<HSMServer.Core.Journal.JournalAppender>();
 
             // The put and read of table blocks (#1844), for the transport of step 3 (#1845). Constructed on first
             // resolve; its constructor opens nothing (the store opens on the first put or read, and the first put raises
@@ -142,6 +143,20 @@ namespace HSMServer.ServiceExtensions
             // id source the alert/template write endpoints validate
             // destination.chats against.
             services.AddScoped<ChatsReadService>();
+
+            // The chat write engine (#1825): behind the web controller's chat
+            // flows now, behind the /api/v1 + MCP write surface (#1829) later.
+            services.AddScoped<ChatAdministrationService>();
+
+            // The chat verification surface (#1826): the result-carrying test
+            // message and the Telegram invitation issuer, behind both the REST
+            // actions and the MCP tools. The delivery half adapts the concrete
+            // channels of NotificationsCenter (their types are sealed) and is
+            // registered under the seam it is consumed through — the service
+            // asks for the interface, so a concrete-only registration leaves
+            // every chat API action and MCP chat tool unresolvable.
+            services.AddScoped<IChatDelivery, NotificationsCenterChatDelivery>();
+            services.AddScoped<ChatVerificationService>();
 
             // The shared folder read implementation — same shape: behind both
             // the REST folder controller and the MCP folder tools. The
@@ -240,6 +255,7 @@ namespace HSMServer.ServiceExtensions
                         sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors))
                     .AddSingleton<IApiTokenUsageGate>(sp => sp.GetRequiredService<MonitoringGate>())
                     .AddSingleton<TreeViewModel>()
+                    .AddSingleton<UserTreeAccess>()
                     .AddSingleton<ISensorApiTelemetry, SensorApiTelemetry>()
                     .AddSingleton<TelemetryCollector>()
                     // The table schema of a registration is checked against the configured limits (#1845).
