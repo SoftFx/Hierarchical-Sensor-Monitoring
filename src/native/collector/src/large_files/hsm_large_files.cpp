@@ -2758,4 +2758,14 @@ namespace hsm::collector::large_files
         return false;
 #endif
     }
+
+    std::size_t LargeFiles::RoutedWaitingForTests() const
+    {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        std::lock_guard<std::mutex> guard(shared_->mutex);
+        return impl_->routed_.size();
+#else
+        return 0;
+#endif
+    }
 } // namespace hsm::collector::large_files

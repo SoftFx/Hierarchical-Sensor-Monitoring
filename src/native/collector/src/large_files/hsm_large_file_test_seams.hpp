@@ -31,4 +31,6 @@ namespace hsm::collector::large_files::test
     void OnFinish(hsm_collector_t* collector, std::function<void(const std::string& phase)> hook);
     /// File values given a route copy (their content kept beside their JSON) since the collector was made.
     std::uint64_t RouteCopies(hsm_collector_t* collector);
+    /// Routed sends waiting for the file connection (LargeFiles::RoutedWaitingForTests); 0 without large files.
+    std::size_t RoutedWaiting(hsm_collector_t* collector);
 } // namespace hsm::collector::large_files::test

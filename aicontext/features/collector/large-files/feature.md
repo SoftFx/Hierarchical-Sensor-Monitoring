@@ -173,11 +173,18 @@ as soon as it is taken, as a queued value does.
 - Order: routed sends go before the files of the large-file API, in the order sent; one waiting preempts a large file in
   progress after its piece in flight, and that file then begins again and continues from the server's piece. The speed
   limit (the default 10 MB/s) applies to both.
-- `stored` completes it. An answer with `retryAfter` is tried again while the process lives. A final refusal, a give-up,
-  a registration refused, Stop and Dispose are a **dropped file value**: said with the path, name and size, and counted in
-  `Queue overflow` under the **file queue** (not `Large files`). A routed upload cut by Stop discards its part while the
-  connection is there; otherwise the part expires. A value whose `stored` answer was on its way when Stop came is still
-  counted as dropped: Stop over-reports rather than under-reports.
+- `stored` completes it. An answer with `retryAfter` is tried again while the process lives. A final refusal, a give-up
+  and a registration refused are a **dropped file value**: said with the path, name and size, and counted in
+  `Queue overflow` under the **file queue** (not `Large files`).
+- Stop and Dispose, once the upload in progress was cut and is over (at most 1 s; the uploader's thread itself stays
+  while it has watches, files or routed values, waiting for the next Start, so a stop does not wait for it): a routed value no `begin` was answered for (waiting for its
+  registration, behind another upload, or against a server whose 404/400 had not come yet) goes back to the file queue
+  (`DataProcessor.RequeueFile`, taken whatever the collector's state), whose stop drain sends it the ordinary way: a
+  `list` frame when it fits, else dropped and counted as before. DataProcessor's stop drains the file queue only after
+  the uploader's stop has given them back. A value given back to a file queue that is not drained (a Dispose after a
+  failed Start) is dropped at Dispose: one line with the count, counted under the file queue. One whose upload had begun is a dropped file value, as above: a routed upload cut by Stop
+  discards its part while the connection is there, otherwise the part expires; one whose `stored` answer was on its way
+  is still counted as dropped (Stop over-reports rather than under-reports). The same in the native collector.
 - No file connection (the upgrade refused with `404`/`400`): the route is missing until the next session; what waits is
   given back to the file queue (`DataProcessor.RequeueFile`) and goes the ordinary way: a `list` frame when it fits, else
   dropped, said and counted as before. A value given back (the route missing, a registration answered with an error, no

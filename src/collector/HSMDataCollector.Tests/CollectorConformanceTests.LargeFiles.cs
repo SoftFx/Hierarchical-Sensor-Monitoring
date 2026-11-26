@@ -375,6 +375,17 @@ namespace HSMDataCollector.Tests
                     Assert.Equal(int.Parse(step.Arg(1), CultureInfo.InvariantCulture), FileServer(state, step.Action).Files.StoredCount(step.Arg(0)));
                     return true;
 
+                case "expect_routed_file_values_waiting":
+                {
+                    // count|timeout_s: file values the route took that wait for the file connection (polled until equal).
+                    var expected = int.Parse(step.Arg(0), CultureInfo.InvariantCulture);
+                    Func<int> waiting = () => state.Collector.LargeFileService?.RoutedCount ?? 0;
+
+                    await PollAdvancingAsync(state, () => waiting() == expected, step.Arg(1)).ConfigureAwait(false);
+                    Assert.True(waiting() == expected, $"expect_routed_file_values_waiting: {waiting()}, expected {expected}.");
+                    return true;
+                }
+
                 case "expect_file_begins":
                 {
                     // name|count|timeout_s: begins of the file the server received (polled up to count, then equality).

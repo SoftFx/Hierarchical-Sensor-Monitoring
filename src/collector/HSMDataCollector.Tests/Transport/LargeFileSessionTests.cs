@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using HSMDataCollector.Client.Session;
 using HSMDataCollector.Core;
+using HSMDataCollector.LargeFiles;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Tests.LargeFiles;
@@ -158,6 +159,11 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        private sealed class LongStopWait : LargeFileTimings
+        {
+            internal override TimeSpan StopWait => TimeSpan.FromSeconds(10);
+        }
+
         // A late ack under load is not read as no ack (which would send the frame again, at-least-once, #1925): these tests
         // count list frames.
         private static CollectorOptions Unhurried(CollectorOptions options)
@@ -250,6 +256,83 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
+        public void A_routed_value_that_has_not_begun_at_a_stop_goes_in_a_list_frame_of_the_stop_drain()
+        {
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
+            using (var collector = new DataCollector(Unhurried(OptionsFor(server))))
+            {
+                server.AcceptFileUpgrades();
+
+                // Every registration faults: the routed value waits for its acknowledgement and never begins.
+                server.AckWith("commands", 500);
+
+                var file = collector.CreateFileSensor("session/quarter", "report");
+
+                collector.Start().Wait();
+                Assert.True(SpinWait.SpinUntil(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/quarter")), Patience));
+
+                file.AddValue(new string('a', 20000));
+
+                Assert.True(SpinWait.SpinUntil(() => collector.LargeFileService != null && collector.LargeFileService.RoutesTaken == 1, Patience));
+                Assert.Equal(0, ListFramesWithTheValue(server));
+
+                collector.Stop().Wait();
+
+                Assert.Equal(1, ListFramesWithTheValue(server));
+                Assert.Equal(0, server.Files.BeginCount("report.txt"));
+            }
+        }
+
+        [Fact]
+        public void A_disposed_collector_with_a_watch_sends_a_routed_value_that_has_not_begun_and_a_small_one_in_the_drain()
+        {
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
+            {
+                var options = Unhurried(OptionsFor(server));
+
+                // The uploader's thread does not end at a stop while it has a watch: a stop that waited for it would wait its
+                // whole bound, here widened past the dispose's drain budget (1 s).
+                options.LargeFileTimings = new LongStopWait();
+
+                var collector = new DataCollector(options);
+
+                try
+                {
+                    server.AcceptFileUpgrades();
+
+                    // Every registration faults: the routed value waits for its acknowledgement and never begins.
+                    server.AckWith("commands", 500);
+
+                    var folder = Path.Combine(_root, "watched");
+
+                    Directory.CreateDirectory(folder);
+
+                    var file = collector.CreateFileSensor("session/quarter", "report");
+
+                    collector.Start().Wait();
+
+                    // A watch keeps the uploader's thread: it does not end at the stop of the dispose.
+                    collector.WatchLargeFiles("dumps", folder, "*.dmp");
+                    Assert.True(SpinWait.SpinUntil(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/quarter")), Patience));
+
+                    file.AddValue(new string('a', 20000));
+                    Assert.True(SpinWait.SpinUntil(() => collector.LargeFileService != null && collector.LargeFileService.RoutedCount == 1, Patience));
+
+                    file.AddValue("small");
+                }
+                finally
+                {
+                    // A terminal dispose drains within a second: the routed value given back must be in the file queue by then.
+                    collector.Dispose();
+                }
+
+                Assert.Equal(1, ListFramesWithTheValue(server));
+                Assert.Contains(server.Accepted, r => r.Op == "list" && r.Body.Contains("\"Value\":[115,109,97,108,108]"));
+                Assert.Equal(0, server.Files.BeginCount("report.txt"));
+            }
+        }
+
+        [Fact]
         public void A_collector_on_http_cannot_send_large_files_and_says_so()
         {
             var options = new CollectorOptions { AccessKey = "k", ServerAddress = "https://localhost", Port = 44399, Transport = CollectorTransport.Http };
@@ -266,6 +349,50 @@ namespace HSMDataCollector.Tests.Transport
                 Assert.Equal(LargeFileWatchState.Unavailable, watch.State);
                 Assert.True(File.Exists(path));
             }
+        }
+
+        [Fact]
+        public void A_value_given_back_to_a_stopped_file_queue_is_said_and_counted_at_dispose()
+        {
+            var options = new CollectorOptions { AccessKey = "k", ServerAddress = "https://localhost", Port = 44399, Transport = CollectorTransport.Http };
+            var errors = new ErrorLog();
+            var collector = new DataCollector(options);
+
+            collector.AddCustomLogger(errors);
+
+            // What a stop without a drain (a failed Start) gives back waits in the stopped file queue; a Dispose then loses it.
+            var processor = (DataProcessor)typeof(DataCollector).GetField("_dataProcessor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(collector);
+
+            processor.RequeueFile(new HSMSensorDataObjects.SensorValueRequests.FileSensorValue { Path = "report", Value = new System.Collections.Generic.List<byte> { 1, 2, 3 } });
+            collector.Dispose();
+
+            Assert.Single(errors.Errors, e => e.Contains("1 file value(s) were dropped") && e.Contains("disposed"));
+        }
+
+        private sealed class ErrorLog : HSMDataCollector.Logging.ICollectorLogger
+        {
+            private readonly System.Collections.Generic.List<string> _errors = new System.Collections.Generic.List<string>();
+
+            internal string[] Errors
+            {
+                get
+                {
+                    lock (_errors)
+                        return _errors.ToArray();
+                }
+            }
+
+            public void Debug(string message) { }
+
+            public void Info(string message) { }
+
+            public void Error(string message)
+            {
+                lock (_errors)
+                    _errors.Add(message);
+            }
+
+            public void Error(Exception ex) => Error(ex.ToString());
         }
 
         [Fact]

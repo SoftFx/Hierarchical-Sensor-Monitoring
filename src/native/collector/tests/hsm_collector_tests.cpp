@@ -1810,6 +1810,17 @@ namespace
             return true;
         }
 
+        if (action == "expect_routed_file_values_waiting")
+        {
+            // count|timeout_s: file values the route took that wait for the file connection (polled until equal).
+            args(2);
+            const auto waiting = [&] { return static_cast<long long>(hsm::collector::large_files::test::RoutedWaiting(state.collector.value)); };
+            const long long expected = ToInt(step[1]);
+            PollLargeFiles(state, [&] { return waiting() == expected; }, step[2]);
+            RequireLarge(waiting() == expected, "expect_routed_file_values_waiting: " + std::to_string(waiting()) + ", expected " + step[1]);
+            return true;
+        }
+
         if (action == "expect_file_begins")
         {
             // name|count|timeout_s: polled up to the count, then equal.

@@ -10802,4 +10802,10 @@ namespace hsm::collector::large_files::test
     {
         return collector->impl->RouteCopiesForTests();
     }
+
+    std::size_t RoutedWaiting(hsm_collector_t* collector)
+    {
+        auto* files = collector->impl->LargeFilesFor(false);
+        return files != nullptr ? files->RoutedWaitingForTests() : 0;
+    }
 } // namespace hsm::collector::large_files::test

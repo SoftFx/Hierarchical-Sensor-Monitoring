@@ -59,6 +59,8 @@
 # expect_file_stored|name|seed|timeout_s            stored and checked by the server; its bytes are the seeded content
 # expect_file_stored_count|name|count
 # expect_file_begins|name|count|timeout_s           begins of the file the server received
+# expect_routed_file_values_waiting|count|timeout_s file values above a quarter of the frame that the route took and that
+#                                                   wait for the file connection (not yet stored, given back or dropped)
 # expect_file_begin_order|name,name,...             the first begin of each file, in order
 # expect_file_begin_field|index|field|value         a field of begin number `index` (0 = first), as its JSON text
 # expect_file_begin_field_starts|index|field|prefix the same field starts with the prefix
@@ -394,6 +396,25 @@ a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_session_no
 a_file_value_above_a_quarter_frame_goes_on_the_file_connection|stop
 a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_no_http_requests
 
+# A routed value no begin was answered for is a value still: a stop gives it back to the value queue, whose stop drain
+# sends it in a list frame (20000 bytes of "a" are about 60000 bytes of JSON: it fits). Here its registration is never
+# acknowledged (every commands request fails), so it waits.
+
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|session_server_hello|65536|30
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|create_collector_on_session|50|20|5000
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|file_server_accept_upgrades
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|session_server_ack|commands|500
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|create_file_sensor|contract/session/big-file|report|txt
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|start
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_session_requests_containing_at_least|commands|contract/session/big-file"|1|15
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|add_file_value|0|repeat:a:20000|Warning|big
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_routed_file_values_waiting|1|10
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_session_no_request_contains|97,97,97,97,97,97,97,97
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|stop
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_session_requests_containing|list|97,97,97,97,97,97,97,97|1|5
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_session_accepted_contains|list|97,97,97,97,97,97,97,97|0
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_file_begins|report.txt|0|0
+a_routed_value_that_has_not_begun_at_a_stop_goes_in_the_stop_drain|expect_routed_file_values_waiting|0|0
 # --- the access key can no longer send ---
 
 a_1008_is_final_until_the_next_start|create_collector_on_session|100|50|10000
