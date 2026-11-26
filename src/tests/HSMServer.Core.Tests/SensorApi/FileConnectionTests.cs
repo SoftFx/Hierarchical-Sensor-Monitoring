@@ -307,21 +307,23 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Single(host.Log.Matching($"upload {begun.Upload} of \"app.dmp\"", "is stored"));
         }
 
-        // A check longer than the quick wait is answered 202, with a retry time by the file's size, and asked again.
+        // The retry time of a running check: about the time it reads the file at 256 MiB a second, 1..30 s.
         [Theory]
+        [InlineData(0, 1)]
         [InlineData(100_000, 1)]
         [InlineData(300L * 1024 * 1024, 2)]
         [InlineData(64L * 1024 * 1024 * 1024, 30)]
-        public async Task ALongCheck_Is202WithARetryTimeByTheSize(long size, int retryAfter)
-        {
-            Assert.Equal(retryAfter, FileConnection.CheckRetryAfter(size));
+        public void TheRetryTimeOfACheck_FollowsTheSize(long size, int retryAfter) => Assert.Equal(retryAfter, FileConnection.CheckRetryAfter(size));
 
-            if (size > 100_000)
-                return;
+        // A check longer than the quick wait is answered 202, with the retry time of its size, and asked again.
+        [Fact]
+        public async Task ALongCheck_Is202WithTheRetryTimeOfItsSize()
+        {
+            const int retryAfter = 1;
 
             await using var host = await StartHost();
             using var file = await OpenFileAsync(host);
-            var data = TestFile.Random("a.dmp", (int)size);
+            var data = TestFile.Random("a.dmp", 100_000);
             var gate = _store.FinishGate = new FakeFileUploadStore.Gate();
 
             var begun = await file.BeginAsync(data, _path);
@@ -404,18 +406,60 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("127.0.0.1", entry.RemoteAddress);
         }
 
-        [Fact]
-        public async Task ABeginWithoutStatusOrComment_IsOkWithNoComment()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task ABeginWithoutSecureStatusOrComment_OrWithNulls_IsSecureOkWithNoComment(bool nulls)
         {
             await using var host = await StartHost();
             using var file = await OpenFileAsync(host);
 
-            Assert.Equal(200, (await file.BeginAsync(TestFile.Random("a.dmp", 70_000), _path)).Status);
+            var fields = nulls ? ",\"secure\":null,\"status\":null,\"comment\":null,\"source\":null" : string.Empty;
+            await file.SendTextAsync($"{{\"id\":1,\"op\":\"begin\",\"body\":{{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536{fields}}}}}");
 
-            var entry = _store.Find("a.dmp");
+            Assert.Equal(200, (await file.ReceiveAckAsync()).Status);
 
+            var entry = _store.Find("a");
+
+            Assert.True(entry.Key.Secure);
             Assert.Equal(HSMSensorDataObjects.SensorStatus.Ok, entry.Status);
             Assert.Null(entry.Comment);
+            Assert.Null(entry.Key.Source);
+        }
+
+        // After a 202 the connection no longer holds the upload: a 409 to a later end sends the collector to
+        // begin, which answers the missing piece.
+        [Fact]
+        public async Task A409ToEndAfterA202_IsFollowedByBegin_WhichAnswersTheMissingPiece()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+            var gate = _store.FinishGate = new FakeFileUploadStore.Gate();
+            _store.FinishFindsLastPieceGone = true;
+
+            var begun = await file.BeginAsync(data, _path);
+
+            for (var i = 0; i < data.PieceCount; i++)
+                await file.SendPieceAsync(data.Piece(i), begun.Upload);
+
+            Assert.Equal(202, (await file.EndAsync(begun.Upload, data.Hash())).Status);
+
+            gate.Release.SetResult();
+
+            var missing = await file.EndUntilSettledAsync(begun.Upload, data.Hash());
+
+            Assert.Equal(409, missing.Status);
+            Assert.Equal(data.PieceCount - 1, missing.Next);
+
+            var again = await file.BeginAsync(data, _path);
+
+            Assert.Equal(begun.Upload, again.Upload);
+            Assert.Equal(data.PieceCount - 1, again.Next);
+
+            await file.SendPieceAsync(data.Piece(data.PieceCount - 1), again.Upload);
+
+            Assert.Equal("stored", (await file.EndUntilSettledAsync(again.Upload, data.Hash())).State);
         }
 
         [Fact]
@@ -986,7 +1030,8 @@ namespace HSMServer.Core.Tests.SensorApi
         public static TheoryData<string, string> MalformedBegins => new()
         {
             { "{\"id\":1,\"op\":\"begin\"}", "malformed body" },
-            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536}}", "invalid begin: path is missing" },
+            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536}}", "invalid begin: path must have 1..1024 characters" },
+            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"" + new string('p', 1025) + "\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536}}", "invalid begin: path must have 1..1024 characters" },
             { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536}}", "invalid begin: name must have 1..1024 characters" },
             { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":-1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536}}", "invalid begin: size must be a whole number of bytes, 0 or more" },
             { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00\",\"pieceBytes\":65536}}", "invalid begin: modified must be a time with a UTC designator or an offset" },
@@ -1317,6 +1362,42 @@ namespace HSMServer.Core.Tests.SensorApi
             }
 
             Assert.Single(_store.Find("a.dmp").Pieces);
+        }
+
+        // Shutdown while an end waits for its check: the wait ends with the start of the shutdown, the end is
+        // answered 202 and the connection closed with 1001. (The wait is made a minute long: without the end of
+        // the wait the answer would not come within the test's patience.)
+        [Fact]
+        public async Task ShutdownWhileAnEndWaitsForItsCheck_EndsTheWait()
+        {
+            var host = await StartHost();
+            host.Handler.FileQuickCheck = TimeSpan.FromMinutes(1);
+            var data = TestFile.Random("a.dmp", 100_000);
+            var gate = _store.FinishGate = new FakeFileUploadStore.Gate();
+
+            try
+            {
+                using var file = await OpenFileAsync(host);
+
+                var begun = await file.BeginAsync(data, _path);
+
+                for (var i = 0; i < data.PieceCount; i++)
+                    await file.SendPieceAsync(data.Piece(i), begun.Upload);
+
+                await file.SendTextAsync(TestFile.End(99, begun.Upload, data.Hash()));
+                await gate.Entered.Task.WaitAsync(Patience);
+
+                var stop = Task.Run(host.StopAsync);
+
+                Assert.Equal(202, (await file.ReceiveAckAsync()).Status);
+                Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, await file.ExpectCloseAsync());
+
+                await stop.WaitAsync(Patience);
+            }
+            finally
+            {
+                await host.DisposeAsync();
+            }
         }
 
         // Shutdown during a check: the check is cancelled and awaited; nothing changes, and after the restart

@@ -13,10 +13,17 @@ namespace HSMServer.SensorApi.Sessions.Files
     internal sealed class FileChecks
     {
         private readonly CancellationTokenSource _stopping = new();
+        private readonly CancellationTokenSource _closing = new();
         private readonly ConcurrentDictionary<Task, byte> _running = new();
 
 
         public CancellationToken Stopping => _stopping.Token;
+
+        // Cancelled when the shutdown begins, before the connections are closed: an `end` stops waiting for
+        // its check then, so its answer does not take the shutdown's budget.
+        public CancellationToken Closing => _closing.Token;
+
+        public void BeginShutdown() => _closing.Cancel();
 
         public int Running => _running.Count;
 

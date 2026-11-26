@@ -21,7 +21,9 @@ namespace HSMServer.SensorApi.Sessions.Files
     {
         // How long `end` waits for its check before it answers 202: a small file (a routed ordinary send, a
         // few pieces) gets its outcome in the first answer.
-        public static readonly TimeSpan QuickCheck = TimeSpan.FromSeconds(2);
+        public static readonly TimeSpan DefaultQuickCheck = TimeSpan.FromSeconds(2);
+
+        public const int MaxPathLength = 1024;
 
         // The longest a comment of `begin` may be: a begin is a text frame, and a frame above 64 KiB needs an
         // upload the connection holds.
@@ -39,6 +41,7 @@ namespace HSMServer.SensorApi.Sessions.Files
         private readonly FileChecks _checks;
         private readonly int _maxPieceBytes;
         private readonly Logger _logger;
+        private readonly TimeSpan _quickCheck;
 
         // The upload this connection holds; null when it holds none. Changed by the loop only.
         private volatile Upload _upload;
@@ -47,13 +50,14 @@ namespace HSMServer.SensorApi.Sessions.Files
         private CheckRun _check;
 
 
-        public FileConnection(CollectorSession session, IFileUploadStore store, FileChecks checks, int maxPieceBytes, Logger logger)
+        public FileConnection(CollectorSession session, IFileUploadStore store, FileChecks checks, int maxPieceBytes, Logger logger, TimeSpan? quickCheck = null)
         {
             _session = session;
             _store = store;
             _checks = checks;
             _maxPieceBytes = maxPieceBytes;
             _logger = logger;
+            _quickCheck = quickCheck ?? DefaultQuickCheck;
         }
 
 
@@ -320,7 +324,15 @@ namespace HSMServer.SensorApi.Sessions.Files
             _check = StartCheck(upload, hash);
 
             // A quick check is answered with its outcome; a long one with 202, and the collector asks again.
-            await Task.WhenAny(_check.Task, Task.Delay(QuickCheck));
+            // Not past the start of a shutdown, which waits for this frame's answer before it closes.
+            try
+            {
+                await _check.Task.WaitAsync(_quickCheck, _checks.Closing);
+            }
+            catch (Exception)
+            {
+                // Past the wait, cut by a shutdown, or a faulted check: AnswerCheck tells which.
+            }
 
             AnswerCheck(_check, output, id);
         }
@@ -477,7 +489,8 @@ namespace HSMServer.SensorApi.Sessions.Files
                 return;
             }
 
-            var answer = check.Task.Result;
+            // The check catches what it meets; a throw past it (its Release) is a fault of the server.
+            var answer = check.Task.IsCompletedSuccessfully ? check.Task.Result : CheckAnswer.Fault("the end check failed");
 
             switch (answer.Kind)
             {
@@ -603,9 +616,9 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             var body = request.Body;
 
-            if (!TryString(body, "path", out var path) || string.IsNullOrEmpty(path))
+            if (!TryString(body, "path", out var path) || string.IsNullOrEmpty(path) || path.Length > MaxPathLength)
             {
-                error = "invalid begin: path is missing";
+                error = $"invalid begin: path must have 1..{MaxPathLength} characters";
                 return false;
             }
 
@@ -647,7 +660,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             // Absent means secure: an older collector, or a mistake, fails closed (ADR-0022 point 20).
             var secure = true;
 
-            if (body.TryGetProperty("secure", out var secureElement))
+            if (body.TryGetProperty("secure", out var secureElement) && secureElement.ValueKind != JsonValueKind.Null)
             {
                 if (secureElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                 {
@@ -661,7 +674,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             // The status of a routed ordinary send, as the Status of a value in a list frame; absent means Ok.
             var status = SensorStatus.Ok;
 
-            if (body.TryGetProperty("status", out var statusElement))
+            if (body.TryGetProperty("status", out var statusElement) && statusElement.ValueKind != JsonValueKind.Null)
             {
                 if (statusElement.ValueKind != JsonValueKind.Number || !statusElement.TryGetInt32(out var statusNumber) || !Enum.IsDefined(typeof(SensorStatus), statusNumber))
                 {

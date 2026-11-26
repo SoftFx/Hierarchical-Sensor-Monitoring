@@ -402,7 +402,7 @@ namespace HSMServer.SensorApi.Sessions
                     kind);
 
                 if (isFile)
-                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger);
+                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger, FileQuickCheck);
 
                 SessionProtocol.MarkUpgraded(context);
 
@@ -849,6 +849,10 @@ namespace HSMServer.SensorApi.Sessions
 
         // For the tests: the end checks of large files running now.
         internal int FileChecksRunning => _fileChecks.Running;
+
+        // How long an `end` waits for its check before it answers 202; a test makes it long, to see that a
+        // shutdown ends the wait.
+        internal TimeSpan FileQuickCheck { get; set; } = FileConnection.DefaultQuickCheck;
 
         // The piece size the file connection's hello announces.
         internal int FilePieceBytes => _filePieceBytes;
@@ -1354,6 +1358,8 @@ namespace HSMServer.SensorApi.Sessions
                 // The lifetime callback is synchronous, so this waits; the budget bounds it.
                 // On the thread pool, so that nothing in the sweep tries to come back to
                 // the thread that is waiting here.
+                _fileChecks.BeginShutdown();
+
                 Task.Run(() => _registry.CloseAllAsync(SessionProtocol.CloseGoingAway, ShutdownReason, ShutdownBudget)).GetAwaiter().GetResult();
             }
             catch (Exception ex)

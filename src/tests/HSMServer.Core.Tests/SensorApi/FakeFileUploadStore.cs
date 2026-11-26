@@ -31,6 +31,9 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public volatile bool FaultChecks;
 
+        // The next finish finds the last piece gone (a part cut back at a restart) and answers Incomplete.
+        public volatile bool FinishFindsLastPieceGone;
+
         // A discard that throws as a cancelled one would, before it ends the lease.
         public volatile bool DiscardThrows;
 
@@ -256,6 +259,17 @@ namespace HSMServer.Core.Tests.SensorApi
 
                 if (FaultChecks)
                     throw new FileUploadStoreException("A read fault made by the test.");
+
+                if (FinishFindsLastPieceGone)
+                {
+                    FinishFindsLastPieceGone = false;
+
+                    lock (_lock)
+                    {
+                        entry.Pieces.RemoveAt(entry.Pieces.Count - 1);
+                        return new FileFinishResult(FileFinishOutcome.Incomplete, entry.FileId, null, entry.Pieces.Count, null);
+                    }
+                }
 
                 var check = await checker.CheckAsync(new Reader(entry), wholeHash, ct);
 
