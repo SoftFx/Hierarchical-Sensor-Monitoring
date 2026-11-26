@@ -9,9 +9,23 @@ using System.Text;
 namespace HSMServer.Model.Configuration
 {
     /// <summary>
+    /// The three bot settings as one value (#1830): what a save compares, applies and
+    /// journals. The web form posts all three; the management surface fills the omitted
+    /// ones from the stored settings.
+    /// </summary>
+    internal readonly record struct TelegramBotSettings(string BotName, string BotToken, bool IsEnabled)
+    {
+        internal static TelegramBotSettings Of(TelegramConfig config) => new(config.BotName, config.BotToken, config.IsRunning);
+
+        internal static TelegramBotSettings Of(TelegramSettingsViewModel posted) => new(posted.BotName, posted.BotToken, posted.IsEnabled);
+    }
+
+
+    /// <summary>
     /// One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
     /// of the save and its journal records. The bot token is a secret: the log and the
-    /// journal say THAT it changed, never the old or the new value.
+    /// journal say THAT it changed, never the old or the new value. Shared by the settings
+    /// page and the management surface (#1830).
     /// </summary>
     internal static class TelegramSettingsChanges
     {
@@ -43,11 +57,7 @@ namespace HSMServer.Model.Configuration
             if (changes.Count == 0)
                 return changes;
 
-            config.Telegram.IsRunning = posted.IsEnabled;
-            config.Telegram.BotToken = posted.BotToken;
-            config.Telegram.BotName = posted.BotName;
-
-            config.ResaveSettings();
+            Apply(config, TelegramBotSettings.Of(config.Telegram), TelegramBotSettings.Of(posted));
 
             Write(changes, journal, InitiatorInfo.AsUser(userName));
 
@@ -59,7 +69,11 @@ namespace HSMServer.Model.Configuration
         /// absent and an empty value are the same setting: a server that was never
         /// configured holds nulls, and the form posts an empty field as an empty string.
         /// </summary>
-        internal static List<Change> Between(TelegramConfig current, TelegramSettingsViewModel posted)
+        internal static List<Change> Between(TelegramConfig current, TelegramSettingsViewModel posted) =>
+            Between(TelegramBotSettings.Of(current), TelegramBotSettings.Of(posted));
+
+        /// <inheritdoc cref="Between(TelegramConfig, TelegramSettingsViewModel)"/>
+        internal static List<Change> Between(TelegramBotSettings current, TelegramBotSettings posted)
         {
             var changes = new List<Change>();
             var currentToken = current.BotToken ?? string.Empty;
@@ -67,9 +81,9 @@ namespace HSMServer.Model.Configuration
             var currentName = current.BotName ?? string.Empty;
             var postedName = posted.BotName ?? string.Empty;
 
-            if (current.IsRunning != posted.IsEnabled)
-                changes.Add(new(new("Enable messages", $"{current.IsRunning}", $"{posted.IsEnabled}"),
-                    $"IsRunning: {current.IsRunning} -> {posted.IsEnabled}"));
+            if (current.IsEnabled != posted.IsEnabled)
+                changes.Add(new(new("Enable messages", $"{current.IsEnabled}", $"{posted.IsEnabled}"),
+                    $"IsRunning: {current.IsEnabled} -> {posted.IsEnabled}"));
 
             if (JournalAppender.Change.SecretChanged(currentToken, postedToken))
                 changes.Add(new(JournalAppender.Change.OfSecret("Bot token", currentToken, postedToken),
@@ -80,6 +94,25 @@ namespace HSMServer.Model.Configuration
                     $"BotName: {currentName} -> {postedName}"));
 
             return changes;
+        }
+
+        /// <summary>
+        /// Applies a save to the configuration and persists it. Only a setting whose value
+        /// changes is written: one that keeps its value is not saved over, so a writer of
+        /// another setting racing this one is not overwritten.
+        /// </summary>
+        internal static void Apply(IServerConfig config, TelegramBotSettings current, TelegramBotSettings target)
+        {
+            if (current.IsEnabled != target.IsEnabled)
+                config.Telegram.IsRunning = target.IsEnabled;
+
+            if ((current.BotToken ?? string.Empty) != (target.BotToken ?? string.Empty))
+                config.Telegram.BotToken = target.BotToken;
+
+            if ((current.BotName ?? string.Empty) != (target.BotName ?? string.Empty))
+                config.Telegram.BotName = target.BotName;
+
+            config.ResaveSettings();
         }
 
         // The log line of the save; null when nothing changed.

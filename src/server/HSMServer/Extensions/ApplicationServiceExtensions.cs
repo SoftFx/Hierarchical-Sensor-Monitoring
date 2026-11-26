@@ -38,6 +38,7 @@ using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
+using HSMServer.Model.ManagementApi.TelegramBot;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Mcp;
 using HSMServer.Notifications;
@@ -163,6 +164,14 @@ namespace HSMServer.ServiceExtensions
             // every chat API action and MCP chat tool unresolvable.
             services.AddScoped<IChatDelivery, NotificationsCenterChatDelivery>();
             services.AddScoped<ChatVerificationService>();
+
+            // The bot-credential surface (#1830): the first server-settings surface of the
+            // area, behind the REST controller and the MCP tools. Its Telegram side is the
+            // running bot behind NotificationsCenter (a sealed concrete type), reached
+            // through the ITelegramBotRuntime seam — the service asks for the interface, so
+            // the adapter must be registered under it (the IChatDelivery lesson above).
+            services.AddScoped<TelegramBotAdministrationService>();
+            services.AddScoped<ITelegramBotRuntime, NotificationsCenterTelegramBotRuntime>();
 
             // The shared folder read implementation — same shape: behind both
             // the REST folder controller and the MCP folder tools. The

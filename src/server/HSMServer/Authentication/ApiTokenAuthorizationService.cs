@@ -98,6 +98,21 @@ namespace HSMServer.Authentication
         // attempt to re-point a webhook belongs in the audit trail.
         ApiTokenAuthorization AuthorizeChatWrite(ClaimsPrincipal principal, Guid chatId,
             System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds);
+
+        // Decision for READING the server settings — the Telegram bot credential, the first
+        // settings surface of the area (#1830). The web Configuration page is admin-only
+        // ([AuthorizeIsAdmin]) and the mirror keeps that rule: an admin owner reads them, a
+        // read-only token included (the flag constrains writes only, as everywhere). The
+        // settings are one well-known block with no id to enumerate, so a non-admin answers
+        // Forbidden, never NotFound. A denial is recorded ONCE, as AuthorizationDenied.
+        ApiTokenAuthorization AuthorizeServerSettingsRead(ClaimsPrincipal principal);
+
+        // Decision for CHANGING the server settings (#1830) — the rule of the read plus the
+        // token mirror's write half: an admin owner with a read-write token. The read-write
+        // arm is defense-in-depth (the management policy already rejects read-only tokens
+        // on unsafe methods): every transport gets the same decision from this one place.
+        // Forbidden, never NotFound; recorded ONCE, as AuthorizationDenied.
+        ApiTokenAuthorization AuthorizeServerSettingsWrite(ClaimsPrincipal principal);
     }
 
 
@@ -215,6 +230,25 @@ namespace HSMServer.Authentication
             }
 
             return ApiTokenAuthorization.Allowed;
+        }
+
+        public ApiTokenAuthorization AuthorizeServerSettingsRead(ClaimsPrincipal principal) =>
+            AuthorizeServerSettings(principal, write: false);
+
+        public ApiTokenAuthorization AuthorizeServerSettingsWrite(ClaimsPrincipal principal) =>
+            AuthorizeServerSettings(principal, write: true);
+
+        // The admin-only rule of the server settings in the token mirror's terms: the owner
+        // is an admin and, for a write, the token is not read-only. The settings have no
+        // boundary of their own, so a denial is recorded against the Global scope — as the
+        // other boundary-less writes above are.
+        private ApiTokenAuthorization AuthorizeServerSettings(ClaimsPrincipal principal, bool write)
+        {
+            if (TryResolveCaller(principal, out var owner, out var readOnly) && owner.IsAdmin && !(write && readOnly))
+                return ApiTokenAuthorization.Allowed;
+
+            Record(principal, write, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
+            return ApiTokenAuthorization.Forbidden;
         }
 
         private ApiTokenAuthorization Authorize(ClaimsPrincipal principal, bool write, ApiTokenResource resource)

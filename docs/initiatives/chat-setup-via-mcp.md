@@ -23,8 +23,9 @@ The management API and MCP expose chats read-only (`GET /api/v1/chats`, `list_ch
 `destination.chats` id source). `aicontext/features/server/mcp/feature.md` lists "folder/chat lifecycle
 tools (web-UI only)" among the known gaps; this initiative closes the chat half — #1829 landed it
 (`POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, on the web editor's
-engine and gates). What remains of the problem above is the bot credential (#1830) and the guide
-(#1827, #1831).
+engine and gates). #1830 lands the bot credential (`GET`/`PATCH /api/v1/telegram-bot`,
+`get_telegram_bot`/`update_telegram_bot`, administrators only — the first server-settings surface). What
+remains of the problem above is the guide (#1827, #1831).
 
 ## Goals
 
@@ -90,7 +91,12 @@ engine and gates). What remains of the problem above is the bot credential (#183
 - Bot credential: `TelegramConfig { BotName, BotToken, IsRunning }` in `Config/appsettings.json`.
   `SaveTelegramSettings` persists; `RestartTelegramBot` applies the token (the bot name and the on/off
   switch are read live). `TelegramBot.StartBotAsync` stops the running bot FIRST and validates the token
-  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token
+  with `GetMe` afterwards, so on the web page's Restart a mistyped token leaves Telegram delivery down
+  until fixed. Since #1830 the management surface (`TelegramBotAdministrationService` behind
+  `GET`/`PATCH /api/v1/telegram-bot` and `get_telegram_bot`/`update_telegram_bot`, administrators only)
+  probes a new token with `GetMe` before anything is saved and leaves the running bot alone on a
+  refusal; starts run one at a time, a start that fails leaves the bot stopped, and the running bot
+  remembers the username `GetMe` gave it. The token
   is kept out of the log since #1824 (`TelegramSettingsChanges.Describe` says only that it changed)
   and out of the journal since #1828 (its record names the state of the setting).
 - Journal: since #1828 every chat write leaves `chat` records (`ChatsManager` journals create,
@@ -186,6 +192,22 @@ journal and the API surface; 6 is the web half and the orchestrator half of the 
 | 7 | Docs + end-to-end smoke | #1832 — closes the initiative; blocked by every other ticket. `aicontext/features/server/{notifications,mcp,management-api}/`, the glossary; the scenario above against a dev server |
 
 Steps 1, 2a, 3–4 and 6a have no blockers and start in parallel.
+
+Step 5 as landed (#1830) settled four points the table above leaves open:
+
+- The name of a token change is checked against the `GetMe` of the probe itself. A name passed
+  without a token change is checked against the username the running bot remembers from its start —
+  one `GetMe` with the stored token only when the bot is stopped, or runs a token the settings have
+  since left behind.
+- After a token change the STORED name must match the new token's bot too: an omitted field does not
+  change, so a stored name of another bot is refused with the right name in the message, rather than
+  silently rewritten or left to break invitation links.
+- An empty `botToken` or `botName` is refused under its field; clearing the credential stays a web
+  page action.
+- A restart that fails after the save answers 200 with `isRunning: false` — the save has landed, and
+  an update that changes nothing restarts nothing. Together with "only a token change restarts" this
+  means a stopped bot with a saved credential cannot be started through this surface; the web
+  page's Restart button does it. An explicit restart is a possible follow-up.
 
 ## Risks
 

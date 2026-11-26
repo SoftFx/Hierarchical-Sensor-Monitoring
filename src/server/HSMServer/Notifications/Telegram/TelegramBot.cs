@@ -29,6 +29,7 @@ namespace HSMServer.Notifications
         private const string RedactedToken = "[redacted]";
         private const int MaxMessageLength = 1000;
         public const string BotIsNotRunningError = "Telegram Bot is not running.";
+        internal const string BotIsDisposedError = "The Telegram bot is disposed.";
 
         private readonly static NLog.Logger _logger = NLog.LogManager.GetLogger(nameof(TelegramBot));
 
@@ -46,6 +47,23 @@ namespace HSMServer.Notifications
         private ITelegramBotClient _bot;
         private readonly Func<string, ITelegramBotClient> _clientFactory;
 
+        // Cancelled when the bot is disposed (#1830): a start in flight ends at once,
+        // whenever it began, and none begins afterwards.
+        private readonly CancellationTokenSource _lifetime = new();
+
+        // One start at a time (#1830): the web UI's Restart button and the management
+        // surface's token change can ask together, and two clients receiving at once would
+        // answer every Telegram update twice. Held for a whole start, the stop of the
+        // previous client included. Not reentrant: nothing under it may wait for it again.
+        private readonly SemaphoreSlim _lifecycle = new(1, 1);
+
+        // The bot that is running: the token it was started with and the username Telegram
+        // reported for it then (#1830). The pair is kept, not read back from the
+        // configuration — the saved token may change under a running bot (the web page
+        // saves and restarts in two steps). Set by the start after its GetMe and cleared by
+        // the stop, both under the gate above; read by anyone, as the one reference it is.
+        private volatile RunningBot _running;
+
 
         private string BotToken => _config.BotToken;
 
@@ -53,6 +71,13 @@ namespace HSMServer.Notifications
 
 
         public bool IsBotRunning => _bot is not null;
+
+        // The username Telegram reported for the running bot, when it runs on exactly this
+        // token; null otherwise, and the caller asks Telegram itself (GetBotUsernameAsync).
+        internal string UsernameOfRunningBot(string token) =>
+            _running is { } running && string.Equals(running.Token, token, StringComparison.Ordinal)
+                ? running.Username
+                : null;
 
         public event Action<string> ErrorHandled;
         public event Action<string, string> MessageSended;
@@ -74,7 +99,31 @@ namespace HSMServer.Notifications
 
         public async ValueTask DisposeAsync()
         {
+            if (_lifetime.IsCancellationRequested)
+                return;
+
+            // Disposing comes before anything else: a start in flight ends at once, whenever
+            // it began, and none begins afterwards.
+            _lifetime.Cancel();
+
+            // The stop outside the gate is what the common case needs — a start waiting for
+            // Telegram is cancelled and lets go of the gate. A start that had got past its
+            // own token by then is stopped under the gate, before the gate goes away.
             await StopBotAsync();
+
+            await _lifecycle.WaitAsync();
+
+            try
+            {
+                await StopBotAsync();
+            }
+            finally
+            {
+                _lifecycle.Release();
+            }
+
+            _lifecycle.Dispose();
+            _lifetime.Dispose();
         }
 
         internal async Task<(string link, string error)> TryGetChatLink(long chatId)
@@ -161,6 +210,24 @@ namespace HSMServer.Notifications
 
         internal async Task<string> StartBotAsync()
         {
+            if (_lifetime.IsCancellationRequested)
+                return BotIsDisposedError;
+
+            await _lifecycle.WaitAsync();
+
+            try
+            {
+                return await StartUnderGateAsync();
+            }
+            finally
+            {
+                _lifecycle.Release();
+            }
+        }
+
+        // The body of a start, run with the lifecycle gate held.
+        private async Task<string> StartUnderGateAsync()
+        {
             if (IsBotRunning)
             {
                 var message = await StopBotAsync();
@@ -171,7 +238,9 @@ namespace HSMServer.Notifications
             if (!_config.IsValid)
                 return ConfigurationsError;
 
-            _tokenSource = new CancellationTokenSource();
+            // Linked to the bot's lifetime: disposing the bot ends this start too, even if
+            // it began a moment before.
+            _tokenSource = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
 
             // The token THIS start is attempted with: the redaction below must target it even when
             // the saved token changes while the request is in flight.
@@ -180,7 +249,9 @@ namespace HSMServer.Notifications
 
             try
             {
-                await _bot.GetMe(_tokenSource.Token);
+                var me = await _bot.GetMe(_tokenSource.Token);
+
+                _running = new RunningBot(token, me.Username);
             }
             catch (Exception exc)
             {
@@ -194,13 +265,72 @@ namespace HSMServer.Notifications
                 return $"An error ({RedactToken(exc.Message, token)}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 
-            await _bot.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
+            try
+            {
+                await _bot.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
 
-            await ChatNamesSynchronization();
+                await ChatNamesSynchronization();
 
-            _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
+                _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
+            }
+            catch (Exception exc)
+            {
+                // A start that breaks off after GetMe must not leave a client that counts as
+                // running and receives nothing: it is stopped, and reported like a refusal.
+                await StopBotAsync();
+
+                _logger.Error(RedactToken(exc.ToString(), token));
+
+                return RedactToken($"An error ({exc.Message}) has been occurred while starting the Bot. " +
+                    "Please check Bot configurations. The current state of the Bot is stopped.", token);
+            }
 
             return string.Empty;
+        }
+
+        // Asks Telegram who owns a token — the check of a bot credential BEFORE anything is
+        // saved or restarted (#1830). Nothing of the running bot is touched: the question
+        // goes through a client of its own. The outcome is answered, never thrown: the
+        // caller decides what a refusal and a missing road to Telegram mean for its write.
+        internal async Task<TelegramTokenProbe> GetBotUsernameAsync(string token)
+        {
+            ITelegramBotClient client;
+
+            try
+            {
+                client = _clientFactory(token);
+            }
+            catch (Exception ex) when (ex is ArgumentException or FormatException)
+            {
+                // The client refuses a token that is not shaped like one: no request leaves.
+                return ProbeFailure(TelegramTokenProbe.Rejected(RedactToken(ex.Message, token)));
+            }
+
+            try
+            {
+                var me = await client.GetMe(CancellationToken.None);
+
+                return TelegramTokenProbe.Accepted(me.Username);
+            }
+            catch (ApiRequestException ex) when (ex.ErrorCode is 401 or 404)
+            {
+                // Telegram answered, and about the token: unauthorized, or no such bot.
+                return ProbeFailure(TelegramTokenProbe.Rejected(RedactToken(ex.Message, token)));
+            }
+            catch (Exception ex)
+            {
+                // No road to Telegram, a timeout, a rate limit: the token was not judged.
+                return ProbeFailure(TelegramTokenProbe.Unreachable(RedactToken(ex.Message, token)));
+            }
+        }
+
+        // Logs an attempt that ended in no username; the text is the bot's own, with the
+        // token already wiped (#1824).
+        private TelegramTokenProbe ProbeFailure(TelegramTokenProbe answer)
+        {
+            _logger.Warn($"Telegram was asked who owns a bot token and gave no username: {answer.Verdict} ({answer.Reason})");
+
+            return answer;
         }
 
         internal async Task<string> StopBotAsync()
@@ -209,6 +339,7 @@ namespace HSMServer.Notifications
 
             var bot = _bot;
             _bot = null;
+            _running = null;
 
             if (bot is not null)
             {
@@ -428,5 +559,7 @@ namespace HSMServer.Notifications
             _logger.Error(message);
             ErrorHandled?.Invoke(message);
         }
+
+        private sealed record RunningBot(string Token, string Username);
     }
 }
