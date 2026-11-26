@@ -34,6 +34,8 @@ namespace HSMDatabase.LevelDB
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly DB _database;
+        private static readonly WriteOptions _syncWrite = new() { Sync = true };
+
         private readonly ReadOptions _iteratorOptions = new();
         private readonly Options _databaseOptions = new()
         {
@@ -116,11 +118,26 @@ namespace HSMDatabase.LevelDB
 
         public static LevelDBDatabaseAdapter ForReadOnly(string absolutePath) => new(absolutePath, readOnly: true);
 
-        public void Delete(byte[] key)
+        // Virtual for the tests that observe which kind of write a worker uses.
+        public virtual void Delete(byte[] key)
         {
             try
             {
                 _database.Delete(key);
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        // Like Delete, but the removal is in the log on the disk before the call returns (fsync): for a row whose loss
+        // after a power failure is worse than the cost of the sync.
+        public virtual void DeleteSynced(byte[] key)
+        {
+            try
+            {
+                _database.Delete(key, _syncWrite);
             }
             catch (Exception e)
             {
@@ -242,6 +259,20 @@ namespace HSMDatabase.LevelDB
             try
             {
                 _database.Put(key, value);
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        // Like Put, but the row is in the log on the disk before the call returns (fsync): for a row whose loss after a
+        // power failure is worse than the cost of the sync.
+        public virtual void PutSynced(byte[] key, byte[] value)
+        {
+            try
+            {
+                _database.Put(key, value, _syncWrite);
             }
             catch (Exception e)
             {

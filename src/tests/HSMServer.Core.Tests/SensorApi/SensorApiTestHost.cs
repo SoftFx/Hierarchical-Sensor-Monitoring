@@ -1,6 +1,7 @@
-using HSMCommon.TaskResult;
+﻿using HSMCommon.TaskResult;
 using HSMServer.Controllers;
 using HSMServer.Core.Cache;
+using HSMServer.Core.LargeFiles.Archives;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableSensors;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -304,12 +305,13 @@ namespace HSMServer.Core.Tests.SensorApi
 
         // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
         // setting and the folder whose agent/version.txt names the staged agent.
+        // `largeFiles` is the store the history read describes large file values from (#1885).
         // `tables` and `tableSensors` are for the table connection (#1845): the block service its
         // blocks are put into, and the section with MaxConcurrentPuts and the block limits. The
         // ingestion checks a table registration against those limits, as in production (one
         // source); the defaults when none is given.
         public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null,
-            ITableBlockService tables = null, TableSensorsConfig tableSensors = null)
+            ITableBlockService tables = null, TableSensorsConfig tableSensors = null, ILargeFileArchiveStore largeFiles = null)
         {
             var telemetry = new RecordingTelemetry();
 
@@ -334,6 +336,8 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
             builder.Services.AddSingleton(tables ?? new Mock<ITableBlockService>(MockBehavior.Strict).Object);
+            // The large file store the history read describes large file values from (#1885): an empty one unless given.
+            builder.Services.AddSingleton(largeFiles ?? new Mock<ILargeFileArchiveStore>().Object);
             builder.Services.AddSingleton<TimeProvider>(new ManualTimeProvider());
 
             builder.Services.AddControllers()

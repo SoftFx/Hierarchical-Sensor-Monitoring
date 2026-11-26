@@ -191,7 +191,7 @@ What the numbers say: LevelDB can hold the pieces and loses none in a crash, at 
 - **HSM decides, Caddy gives out** (owner, 2026-11-25). The download request comes to HSM: it checks the sign-in or the API token and that the caller may see the product, records the download, and answers with an instruction to Caddy to serve the file. The bytes go from Caddy, not through HSM. Only the subtree of finished archives is mounted into the Caddy container, read-only; parts and checked files are never there. No public route of Caddy reaches that folder: a file is served only as the answer to HSM's instruction. The path is built by HSM from the id of the file, parsed as a GUID, under a fixed root. Without Caddy (`docker-compose.direct.yml`) HSM serves the same file itself, with ranges.
 - A link to a download works only with the sign-in or the token of the caller. There are no signed links: a link that carried its own permission would be a credential in a chat or in the transcript of an AI agent.
 - A download that is cut must fail visibly for the client, never look like a whole file: the size is announced, the answer carries an `ETag`, and the hash of the archive is in a header and on the page.
-- **Every download is recorded in a download log**: who (the user, or the token and its owner), when, which file. It is a record of its own and not the journal, which holds changes of configuration and never refuses an action when its write fails. A download that cannot be recorded is refused. One record covers the requests of one caller for one file within a short time, so a download manager that asks in ranges does not write hundreds. Whether the bytes all arrived is in Caddy's access log.
+- **Every download is recorded in a download log**: who (the user, or the token and its owner), when, which file. It is a record of its own and not the journal, which holds changes of configuration and never refuses an action when its write fails. A download that cannot be recorded is refused. One record covers the requests of one caller for one file within a short time, so a download manager that asks in ranges does not write hundreds. The bundled Caddy keeps no access log: the download log records that a download was allowed, and nothing records that it completed.
 
 ### Access
 
@@ -211,8 +211,8 @@ What the numbers say: LevelDB can hold the pieces and loses none in a crash, at 
 
 ## Open questions
 
-- How exactly HSM hands a file to Caddy (an internal redirect answered by `reverse_proxy` with `handle_response`, or `forward_auth` in front of a `file_server`): to be tried against the bundled Caddy 2.11 and `caddy/test.sh` in the step.
-- The zip library for AES-256 and Zip64 on the server (the zip built into .NET has no encryption), and what a build and a re-encryption of a large file cost: not measured.
+- ~~How exactly HSM hands a file to Caddy~~ — settled by #1885: `reverse_proxy` with `handle_response` on HSM's `X-Hsm-Archive` answer (`aicontext/architecture/docker.md`).
+- ~~The zip library for AES-256 and Zip64 on the server, and what a build and a re-encryption cost~~ — settled by #1885: SharpZipLib 1.4.2; the measured costs are in `aicontext/features/server/large-file-download/feature.md`.
 - The compression ratio and speed on a real dump: needs a sample from the owner, measured on his machine, numbers only.
 - The link speed between the application hosts and the server: it decides the default speed limit. (Dumps appear about once a month: at that rate and a history period of a few months the store holds a handful of files, and a crash loop is the exception the free-space refusal is for.)
 - The retention period a dump sensor gets by default.

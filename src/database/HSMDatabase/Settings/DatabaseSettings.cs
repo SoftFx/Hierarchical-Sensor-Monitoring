@@ -16,6 +16,7 @@ namespace HSMDatabase.Settings
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
         private const string DefaultServerLayoutDatabaseName = "ServerLayout";
         private const string DefaultChangeSetsDatabaseName = "ChangeSets";
+        private const string DefaultDownloadLogDatabaseName = "DownloadLog";
         private const string DefaultTableBlocksFolderName = "Tables";
         public const string DefaultLargeFilesFolder = "LargeFiles";
 
@@ -42,6 +43,8 @@ namespace HSMDatabase.Settings
         public string ServerLayoutDatabaseName { get; init; } = DefaultServerLayoutDatabaseName;
 
         public string ChangeSetsDatabaseName { get; init; } = DefaultChangeSetsDatabaseName;
+
+        public string DownloadLogDatabaseName { get; init; } = DefaultDownloadLogDatabaseName;
 
         public string TableBlocksFolderName { get; init; } = DefaultTableBlocksFolderName;
 

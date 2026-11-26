@@ -14,6 +14,7 @@ using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
+using HSMServer.Core.LargeFiles.Archives;
 using HSMServer.Core.Model.Requests;
 using HSMServer.ServerConfiguration;
 using HSMServer.Extensions;
@@ -51,11 +52,13 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly AgentDirectives _directives;
         private readonly TableReadService _tableReads;
+        private readonly ILargeFileArchiveStore _largeFiles;
 
 
         public SensorsController(SensorIngestionService ingestion, CollectorSessionHandler sessions, ITreeValuesCache cache,
-            TelemetryCollector telemetry, AgentDirectives directives, TableReadService tableReads)
+            TelemetryCollector telemetry, AgentDirectives directives, TableReadService tableReads, ILargeFileArchiveStore largeFiles)
         {
+            _largeFiles = largeFiles;
             _tableReads = tableReads;
             _telemetry = telemetry;
             _ingestion = ingestion;
@@ -309,7 +312,8 @@ namespace HSMServer.Controllers
 
 
         /// <summary>
-        /// Get history [from, to] or [from - count] for some sensor
+        /// Get history [from, to] or [from - count] for some sensor. A large file value of a File sensor is described
+        /// (LargeFile: file id, name, extension, size, secure, state) and its content is never part of the answer.
         /// </summary>
         [HttpPost("history")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -326,7 +330,7 @@ namespace HSMServer.Controllers
                 if (coreRequest.IsOk)
                 {
                     var historyValues = await _cache.GetSensorValues(coreRequest.Value).Flatten();
-                    var response = JsonSerializer.Serialize(historyValues.Convert());
+                    var response = JsonSerializer.Serialize(historyValues.Convert(_largeFiles));
 
                     return Ok(response);
                 }
@@ -356,7 +360,8 @@ namespace HSMServer.Controllers
         public Task<IActionResult> TableHistory([FromBody] TableHistoryRequest request) => _tableReads.ReadAsync(HttpContext, request);
 
         /// <summary>
-        /// Get file (csv or txt) history [from, to] or [from - count] for some sensor
+        /// Get file (csv or txt) history [from, to] or [from - count] for some sensor. A large file value has an empty
+        /// content column and its description in a last "Large file" column.
         /// </summary>
         [HttpPost("historyFile")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -373,7 +378,7 @@ namespace HSMServer.Controllers
                 if (coreRequest.IsOk)
                 {
                     var historyValues = await _cache.GetSensorValues(coreRequest.Value).Flatten();
-                    var response = historyValues.ConvertToCsv();
+                    var response = historyValues.ConvertToCsv(largeFiles: _largeFiles);
 
                     return request.IsZipArchive
                            ? File(response.CompressToZip(request.FileName, request.Extension), $"{request.FileName}.zip".GetContentType())

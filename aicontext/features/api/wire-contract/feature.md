@@ -126,7 +126,7 @@ A table sensor (ADR-0021, `aicontext/features/server/table-sensors/feature.md`) 
 
 `TableHistoryRequest` (`HistoryRequests/TableHistoryRequest.cs`, #1845): `Path`, `From`, `To`, `MaxRows?`, `Format` (`TableHistoryFormat`: Json=0, Csv=1, Blocks=2, a number), `MaxBlockFormatVersion?`. See "Table history".
 
-History DTOs (`HistoryRequests/`): `HistoryRequest { path, from, to?, count?, options }`, `FileHistoryRequest { +fileName="temp", extension="csv", isZipArchive }` — used by server tooling; the collector itself does not query history.
+History DTOs (`HistoryRequests/`): `HistoryRequest { path, from, to?, count?, options }`, `FileHistoryRequest { +fileName="temp", extension="csv", isZipArchive }` — used by server tooling; the collector itself does not query history. A large file value in the answer (#1885) carries an additive `LargeFile` description and no content (`../overview.md`, "A large file value in the history"); the request DTOs are unchanged.
 
 ## JSON conventions
 

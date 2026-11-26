@@ -75,6 +75,7 @@ namespace HSMServer.BackgroundServices
 
         internal TableBlockSensors TableBlockSensors { get; }
 
+        // The large file store (#1883) and the archive side (#1885): archive builds and the download log, with default alerts.
         internal LargeFileSensors LargeFileSensors { get; }
 
         private readonly IDatabaseCore _database;
