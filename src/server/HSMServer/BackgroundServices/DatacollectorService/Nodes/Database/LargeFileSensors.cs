@@ -13,6 +13,23 @@ using NLog;
 namespace HSMServer.BackgroundServices
 {
     /// <summary>
+    /// What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+    /// password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+    /// </summary>
+    public sealed class LargeFileArchiveSide(IServiceProvider provider)
+    {
+        internal long FailedBuilds() =>
+            provider.GetService(typeof(HSMServer.Core.LargeFiles.Archives.IArchiveBuilder)) is HSMServer.Core.LargeFiles.Archives.IArchiveBuilder builder
+                ? Interlocked.Read(ref builder.Statistics.Failed)
+                : 0;
+
+        internal bool HasDumpPassword(Guid productId) =>
+            provider.GetService(typeof(HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService)) is not HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService passwords ||
+            passwords.HasPassword(productId);
+    }
+
+
+    /// <summary>
     /// Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
     /// self-monitoring sample. Inert until the store has content (<c>uploads/</c> or <c>archives/</c> exists, not only its
     /// folder, which a bind mount creates): a server that never took a large file creates none of these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
@@ -210,8 +227,9 @@ namespace HSMServer.BackgroundServices
                               "Read from the store's records at every sample. See the File sensor page feature documentation (#1886).",
             });
 
-            _gauges.Add(new TableBlockSensors.Counter(() => _now.BytesStored, false,
-                (value, _) => bytes.AddValue(Math.Round(value / BytesInMb, 2))));
+            // Compared as posted, in hundredths of a MB: a change below that posts nothing.
+            _gauges.Add(new TableBlockSensors.Counter(() => (long)Math.Round(_now.BytesStored / BytesInMb * 100), false,
+                (value, _) => bytes.AddValue(value / 100.0)));
 
             _created = true;
         }

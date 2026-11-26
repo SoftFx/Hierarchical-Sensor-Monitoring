@@ -75,17 +75,22 @@ namespace HSMServer.Core.Model.Policies
 
             var safe = new StringBuilder(Math.Min(name.Length, MaxFileNameLength + 1));
 
-            foreach (var ch in name)
+            // By rune, so a format character outside the BMP (a surrogate pair) is seen as one.
+            foreach (var rune in name.EnumerateRunes())
             {
-                safe.Append(ch switch
-                {
-                    '<' => '\u2039',
-                    '>' => '\u203A',
-                    '&' => '\uFF06',
-                    _ when char.IsControl(ch) || ch is '\u2028' or '\u2029' or '\u0085' ||
-                           char.GetUnicodeCategory(ch) == System.Globalization.UnicodeCategory.Format => ' ',
-                    _ => ch,
-                });
+                var category = Rune.GetUnicodeCategory(rune);
+
+                if (rune.Value == '<')
+                    safe.Append('\u2039');
+                else if (rune.Value == '>')
+                    safe.Append('\u203A');
+                else if (rune.Value == '&')
+                    safe.Append('\uFF06');
+                else if (category is System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format
+                         or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator)
+                    safe.Append(' ');
+                else
+                    safe.Append(rune.ToString());
 
                 if (safe.Length > MaxFileNameLength)
                     break;

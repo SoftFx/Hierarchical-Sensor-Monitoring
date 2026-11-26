@@ -189,6 +189,10 @@ namespace HSMServer.ServiceExtensions
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
 
+            // What the self-monitoring of large files (#1886) asks the archive side, resolved at each sample: the builder
+            // reports to the collector wrapper, so the wrapper must not build it.
+            services.AddSingleton(provider => new LargeFileArchiveSide(provider));
+
             // The file values of a File sensor for its page (#1886); stateless over the cache.
             // Scoped: it reads the download step's description (LargeFileDownloadService is scoped).
             services.AddScoped<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.LargeFilePageSource>();
@@ -478,13 +482,6 @@ namespace HSMServer.ServiceExtensions
         {
             // Before the tree loads: every File policy reads it, whatever creates the policy.
             HSMServer.Core.Model.Policies.FileAlertContext.Use(services.GetRequiredService<HSMServer.Core.Model.Policies.IFileAlertContext>());
-
-            // The self-monitoring of large files (#1886) counts the builder's failed builds and asks for the dump password;
-            // both are built after the collector wrapper that holds the sensors, so they are handed over here.
-            if (services.GetService<HSMServer.Core.LargeFiles.Archives.IArchiveBuilder>() is { } builder &&
-                services.GetService<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>() is { } passwords &&
-                services.GetService<DataCollectorWrapper>() is { } wrapper)
-                wrapper.LargeFileSensors.UseArchiveSide(() => System.Threading.Interlocked.Read(ref builder.Statistics.Failed), passwords.HasPassword);
 
             services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
 

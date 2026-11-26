@@ -44,6 +44,25 @@ namespace HSMServer.Core.Tests.LargeFiles
 
 
         [Fact]
+        public void A_store_that_cannot_be_read_lists_no_uploads_and_describes_a_file_as_unavailable()
+        {
+            var store = new Mock<ILargeFileStore>();
+            store.SetupGet(s => s.HasContent).Returns(true);
+            store.Setup(s => s.GetFiles(It.IsAny<LargeFileState>())).Throws(new LargeFileStoreException("disk gone"));
+            store.Setup(s => s.TryGetFile(It.IsAny<Guid>())).Throws(new LargeFileStoreException("disk gone"));
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupGet(d => d.LargeFiles).Returns(store.Object);
+
+            var source = new LargeFilePageSource(database.Object, downloads: null, passwords: null, log: null);
+            var fileId = Guid.NewGuid();
+
+            Assert.Empty(source.GetUploads(Guid.NewGuid()));
+            Assert.Equal(LargeFileStoredFacts.Unavailable, source.Describe(fileId).State);
+            Assert.Equal(LargeFileRowState.Unavailable, FileSensorPageService.Decide(source.Describe(fileId), hasPassword: true).State);
+        }
+
+        [Fact]
         public void A_store_without_content_lists_nothing()
         {
             Assert.Empty(_source.GetUploads(Guid.NewGuid()));

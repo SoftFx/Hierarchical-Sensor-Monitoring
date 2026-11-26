@@ -109,7 +109,7 @@ namespace HSMServer.Model.FileSensors
             var allUploads = firstPage ? _largeFiles.GetUploads(sensorId) : [];
             var uploads = allUploads.Take(PageSize).Select(ToUploadRow).ToList();
             var hasPassword = _largeFiles.HasDumpPassword(productId);
-            var rows = page.Select(file => ToRow(file, productId, hasPassword, canManage)).ToList();
+            var rows = page.Select(file => ToRow(file, sensorId, productId, hasPassword, canManage)).ToList();
 
             // Only a secure file waits for the password; a not secure one is given out without one.
             var listsSecure = allUploads.Any(upload => upload.IsSecure) || rows.Any(row => row.IsLarge && row.Kind == SecureKind);
@@ -166,6 +166,9 @@ namespace HSMServer.Model.FileSensors
             if (facts is null)
                 return (LargeFileRowState.Missing, "file is missing");
 
+            if (facts.State == LargeFileStoredFacts.Unavailable)
+                return (LargeFileRowState.Unavailable, "state cannot be read now");
+
             if (facts.State == "packed" && facts.DownloadUrl is not null)
                 return facts.BuildState is "queued" or "building"
                     ? (LargeFileRowState.Ready, "ready (being re-encrypted under the new password)")
@@ -194,7 +197,7 @@ namespace HSMServer.Model.FileSensors
         }
 
 
-        private FileValueRowViewModel ToRow(FileValue file, Guid productId, bool hasPassword, bool canManage)
+        private FileValueRowViewModel ToRow(FileValue file, Guid sensorId, Guid productId, bool hasPassword, bool canManage)
         {
             var row = FileValueRowViewModel.From(file);
 
@@ -202,6 +205,11 @@ namespace HSMServer.Model.FileSensors
                 return row;
 
             var facts = _largeFiles.Describe(fileId);
+
+            // A value that names a file of another sensor (a disagreement the store reports) shows nothing of that file.
+            if (facts is not null && facts.State != LargeFileStoredFacts.Unavailable && facts.SensorId != sensorId)
+                facts = null;
+
             var (state, text) = Decide(facts, hasPassword);
 
             return new FileValueRowViewModel
@@ -214,7 +222,7 @@ namespace HSMServer.Model.FileSensors
                 Status = row.Status,
                 Comment = row.Comment,
                 IsLarge = true,
-                Kind = facts is null ? null : KindOf(facts.IsSecure),
+                Kind = facts is null || facts.State == LargeFileStoredFacts.Unavailable ? null : KindOf(facts.IsSecure),
                 LargeState = state,
                 StateText = text,
                 Reason = state == LargeFileRowState.Ready ? null : facts?.NotReadyReason,

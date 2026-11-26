@@ -242,6 +242,35 @@ public sealed class LargeFileOperationsTests : IDisposable
     }
 
     [Fact]
+    public void The_archive_side_is_asked_at_each_call_and_absent_services_count_as_nothing_failed_and_a_password_set()
+    {
+        var builder = new Mock<HSMServer.Core.LargeFiles.Archives.IArchiveBuilder>();
+        var statistics = new HSMServer.Core.LargeFiles.Archives.ArchiveBuildStatistics { Failed = 3 };
+        builder.SetupGet(b => b.Statistics).Returns(statistics);
+
+        var passwords = new Mock<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>();
+        var withPassword = Guid.NewGuid();
+        passwords.Setup(p => p.HasPassword(withPassword)).Returns(true);
+
+        var empty = new LargeFileArchiveSide(new Mock<IServiceProvider>().Object);
+        Assert.Equal(0, empty.FailedBuilds());
+        Assert.True(empty.HasDumpPassword(Guid.NewGuid()));
+
+        var provider = new Mock<IServiceProvider>();
+        provider.Setup(p => p.GetService(typeof(HSMServer.Core.LargeFiles.Archives.IArchiveBuilder))).Returns(builder.Object);
+        provider.Setup(p => p.GetService(typeof(HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService))).Returns(passwords.Object);
+
+        var side = new LargeFileArchiveSide(provider.Object);
+
+        // Nothing is resolved when it is made: only when asked.
+        provider.Verify(p => p.GetService(It.IsAny<Type>()), Times.Never());
+
+        Assert.Equal(3, side.FailedBuilds());
+        Assert.True(side.HasDumpPassword(withPassword));
+        Assert.False(side.HasDumpPassword(Guid.NewGuid()));
+    }
+
+    [Fact]
     public void A_store_that_cannot_read_its_records_skips_the_gauges_but_not_the_counters()
     {
         var store = new Mock<ILargeFileStore>();

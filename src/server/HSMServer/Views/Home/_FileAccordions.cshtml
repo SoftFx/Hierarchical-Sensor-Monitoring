@@ -53,7 +53,7 @@
     <div class='accordion my-1 file-row' id='@row.RowId' data-time='@row.TimeTicks' data-extension='@row.Extension'
          data-preview='@(row.IsPreviewEnabled ? "true" : "false")' data-large='@(row.IsLarge ? "true" : "false")'
          data-state='@(row.IsLarge ? row.LargeState.ToString() : string.Empty)'
-         data-live='@(row.IsLarge && row.LargeState is not (LargeFileRowState.Ready or LargeFileRowState.Missing) ? "true" : "false")'>
+         data-live='@(row.IsLarge && row.LargeState is not (LargeFileRowState.Ready or LargeFileRowState.Missing or LargeFileRowState.Unavailable) ? "true" : "false")'>
         <div class='accordion-item'>
             <h2 class='accordion-header'>
                 <button class='accordion-button collapsed pt-2 pb-1 file-row-toggle' type='button' data-bs-toggle='collapse'

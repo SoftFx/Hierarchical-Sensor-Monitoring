@@ -21,6 +21,7 @@ namespace HSMServer.Model.FileSensors
         private readonly LargeFileDownloadService _downloads;
         private readonly IDumpPasswordService _passwords;
         private readonly IDownloadLog _log;
+        private readonly NLog.Logger _logger = NLog.LogManager.GetLogger(nameof(LargeFilePageSource));
 
 
         public LargeFilePageSource(IDatabaseCore database, LargeFileDownloadService downloads, IDumpPasswordService passwords, IDownloadLog log)
@@ -37,6 +38,20 @@ namespace HSMServer.Model.FileSensors
 
 
         public IReadOnlyList<LargeFileUploadFacts> GetUploads(Guid sensorId)
+        {
+            try
+            {
+                return ReadUploads(sensorId);
+            }
+            catch (Exception ex)
+            {
+                // A store that cannot be read never takes the page of a File sensor down: no uploads are listed.
+                _logger.Error(ex, $"The uploads of sensor {sensorId} could not be read from the large file store: {ex.Message}");
+                return [];
+            }
+        }
+
+        private IReadOnlyList<LargeFileUploadFacts> ReadUploads(Guid sensorId)
         {
             if (Store is not { } store)
                 return [];
@@ -62,6 +77,20 @@ namespace HSMServer.Model.FileSensors
         }
 
         public LargeFileStoredFacts Describe(Guid fileId)
+        {
+            try
+            {
+                return DescribeFile(fileId);
+            }
+            catch (Exception ex)
+            {
+                // A row whose file cannot be read now says so; it is never shown as a file that is missing.
+                _logger.Error(ex, $"Large file {fileId} could not be described: {ex.Message}");
+                return new LargeFileStoredFacts { FileId = fileId, State = LargeFileStoredFacts.Unavailable };
+            }
+        }
+
+        private LargeFileStoredFacts DescribeFile(Guid fileId)
         {
             // The origin is the store's record alone; the download step's own store sees the same files.
             var record = Store?.TryGetFile(fileId);

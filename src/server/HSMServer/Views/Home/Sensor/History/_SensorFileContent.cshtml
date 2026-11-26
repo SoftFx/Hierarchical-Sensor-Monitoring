@@ -173,6 +173,12 @@
                 url: recentAction + '?fileId=' + encodeURIComponent(encodedId),
                 cache: false,
                 success: function (response) {
+                    // An empty answer while the list holds files is a read that met another one (the sensor's history is
+                    // read by one reader at a time): keep the list, the next poll reads again.
+                    const listed = '.file-row, .large-file-upload';
+                    if ($('<div>').html(response).find(listed).length === 0 && container.find(listed).length > 0)
+                        return;
+
                     if (!container.data('olderLoaded') && container.find('.accordion-collapse.show').length === 0)
                         container.html(response);
                 }

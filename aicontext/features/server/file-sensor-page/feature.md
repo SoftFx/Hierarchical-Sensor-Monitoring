@@ -42,7 +42,8 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 | `verified`, builder `failed` | packing failed |
 | `verified`, secure, builder `waitingForPassword` | waiting for the product's password (a not secure file is "being packed") |
 | `packed` | ready (with "being re-encrypted under the new password" while a re-encryption runs; the old archive stays downloadable) |
-| a large value whose file the store has no record of | file is missing (no button) |
+| a large value whose file the store has no record of, or whose record belongs to another sensor | file is missing (no button) |
+| the store cannot be read now | state cannot be read now (no button, no kind); the uploads are not listed; ordinary values are shown as usual |
 
 There is no "removed by retention" state: retention removes a value's row by its key range and the store's pass then removes the file, so a large value leaves the list with its history, as any value does. The password notice appears only when a secure large file is listed. The texts of why a file cannot be downloaded are step 3's (`LargeFileDto.notReadyReason`). Where the store has no application or host, the row shows `—`.
 
@@ -88,4 +89,4 @@ There is no "removed by retention" state: retention removes a value's row by its
 
 ## Known Issues / Limitations
 
-- A concurrent read of the same File sensor's history answers an empty page (the per-sensor file-history lock of the cache); reloading the tab reads it again.
+- The history of one File sensor is read by one reader at a time (the per-sensor file-history lock of the cache): a page, a download or a preview asked while another read of the same sensor runs answers an empty page or 404; asking again reads it. The live refresh keeps the list it has when its read met another one.

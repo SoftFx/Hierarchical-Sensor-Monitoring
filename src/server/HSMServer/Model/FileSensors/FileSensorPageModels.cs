@@ -52,6 +52,7 @@ namespace HSMServer.Model.FileSensors
         PackingFailed,
         Ready,
         Missing,
+        Unavailable,
     }
 
 

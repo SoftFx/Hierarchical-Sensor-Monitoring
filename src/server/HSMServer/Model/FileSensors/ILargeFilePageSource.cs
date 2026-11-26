@@ -41,6 +41,9 @@ namespace HSMServer.Model.FileSensors
     /// </summary>
     public sealed record LargeFileStoredFacts
     {
+        /// <summary>The <see cref="State"/> of a file whose state could not be read now (a fault of the store).</summary>
+        public const string Unavailable = "unavailable";
+
         public Guid FileId { get; init; }
 
         /// <summary>The sensor the file was uploaded to.</summary>

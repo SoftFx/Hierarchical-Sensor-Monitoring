@@ -46,6 +46,18 @@
             two counters are posted only once one of them is above zero (a sealed week is still read).
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileArchiveSide">
+            <summary>
+            What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+            password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+            </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileArchiveSide.#ctor(System.IServiceProvider)">
+            <summary>
+            What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+            password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+            </summary>
+        </member>
         <member name="T:HSMServer.BackgroundServices.LargeFileSensors">
             <summary>
             Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
@@ -2162,6 +2174,9 @@
             A verified or packed large file, in the vocabulary of the download (#1885): <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> "verified" or
             "packed", <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.BuildState"/> "none", "queued", "building", "waitingForPassword", "waitingForRoom" or "failed".
             </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.LargeFileStoredFacts.Unavailable">
+            <summary>The <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> of a file whose state could not be read now (a fault of the store).</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.SensorId">
             <summary>The sensor the file was uploaded to.</summary>

@@ -368,11 +368,11 @@ namespace HSMServer.Core.Tests.Controllers
             };
             _largeFiles.Files[waiting.FileId] = new LargeFileStoredFacts
             {
-                FileId = waiting.FileId, State = "verified", BuildState = "none", NotReadyReason = "no password",
+                FileId = waiting.FileId, SensorId = _sensor.Id, State = "verified", BuildState = "none", NotReadyReason = "no password",
             };
             _largeFiles.Files[routed.FileId] = new LargeFileStoredFacts
             {
-                FileId = routed.FileId, State = "verified", BuildState = "queued", IsSecure = false,
+                FileId = routed.FileId, SensorId = _sensor.Id, State = "verified", BuildState = "queued", IsSecure = false,
             };
             _largeFiles.Downloads[ready.FileId] = [new LargeFileDownloadFacts(DateTime.UtcNow, "viewer", "web")];
 
@@ -407,6 +407,32 @@ namespace HSMServer.Core.Tests.Controllers
             // The page lists a secure file without a password: the notice, with the settings for the Manager.
             Assert.True(viewer.ShowPasswordMissing);
             Assert.NotNull(manager.PasswordSettingsUrl);
+        }
+
+        [Fact]
+        public async Task ARowWhoseFileIsAnotherSensors_ShowsNothingOfThatFile_AndAStoreFaultIsNotAMissingFile()
+        {
+            var foreign = AddLarge(_sensor, "foreign.dmp", 100);
+            var unreadable = AddLarge(_sensor, "unreadable.dmp", 100);
+            AddValues(_sensor, 1);
+
+            _largeFiles.Files[foreign.FileId] = new LargeFileStoredFacts
+            {
+                FileId = foreign.FileId, SensorId = _hidden.Id, State = "packed", DownloadUrl = "/LargeFiles/Download/x/y", Application = "other",
+            };
+            _largeFiles.Files[unreadable.FileId] = new LargeFileStoredFacts { FileId = unreadable.FileId, State = LargeFileStoredFacts.Unavailable };
+
+            var page = PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor)));
+
+            var foreignRow = page.Rows.Single(r => r.TimeTicks == foreign.Time.Ticks);
+            Assert.Equal(LargeFileRowState.Missing, foreignRow.LargeState);
+            Assert.Null(foreignRow.DownloadUrl);
+            Assert.Equal(FileValueRowViewModel.Unknown, foreignRow.Application);
+
+            var unreadableRow = page.Rows.Single(r => r.TimeTicks == unreadable.Time.Ticks);
+            Assert.Equal(LargeFileRowState.Unavailable, unreadableRow.LargeState);
+            Assert.Null(unreadableRow.Kind);
+            Assert.Null(unreadableRow.DownloadUrl);
         }
 
         [Fact]
