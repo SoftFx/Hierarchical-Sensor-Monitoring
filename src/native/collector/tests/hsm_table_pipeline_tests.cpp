@@ -3553,6 +3553,102 @@ namespace
         rig.Stop();
     }
 
+    // ---- #1848 step 6: a block whose write does not finish (a server that stopped reading) ----
+    //
+    // Plaintext, like every test server here: the connection's own wait bounds the write (libcurl
+    // answers CURLE_AGAIN). The Schannel case these guard is a manual check
+    // (docs/test/NativeWsStalledPeer.md); what these pin is what the caller does with a
+    // write that ended at its bound or at a cancel.
+
+    // Rows enough for one block larger than the loopback buffers hold (about 21 MB packed): values
+    // that do not compress.
+    constexpr std::size_t kStuckRows = 2500000;
+
+    void AddIncompressibleRows(const Table& table)
+    {
+        std::uint64_t state = 0x2545f4914f6cdd1dull;
+        for (std::size_t i = 0; i < kStuckRows; ++i)
+        {
+            state = state * 6364136223846793005ull + 1442695040888963407ull;
+            const double value = static_cast<double>(state >> 11) / 9007199254740992.0;
+            Check(AddDouble(table, 1000000 + static_cast<int64_t>(i) * 1000, value) == HSM_RESULT_OK, "add");
+        }
+    }
+
+    // The first table connection stops reading before its block: the block's write ends at its bound
+    // ("send timed out"), the put sees the connection lost, and the SAME frame (producer, sequence)
+    // goes whole on the next connection and is stored. The rows are stored once and none is counted as
+    // dropped; what the first connection got is a frame cut short with the same header.
+    void NativeTableStuckWriteSendsTheSameFrameOnTheNextConnection()
+    {
+        SessionRig rig(RigOptions{ true, 30000,
+                                   [](Server& server) {
+                                       server.SetTableHello(64 * 1024 * 1024, 30);
+                                       server.PauseTableReading(1);
+                                   },
+                                   [](tables::SessionTableChannelOptions& options) {
+                                       // A short bound only on the first connection, the one that reads nothing;
+                                       // the second carries the block under a bound no healthy write comes near.
+                                       options.send_bound_ms_for_tests = [](std::int64_t connection) {
+                                           return connection == 1 ? std::int64_t{ 1000 } : std::int64_t{ 600000 };
+                                       };
+                                   } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        AddIncompressibleRows(table);
+        rig.Tick();
+        if (rig.server.TableFrames().empty())
+        {
+            rig.WaitUp(2);
+            rig.Tick();
+        }
+        rig.server.ResumeTableReading();
+        WaitOrFail([&] { return !rig.server.TableTruncatedFrames().empty(); }, "the cut frame of the first connection");
+
+        const auto frames = rig.server.TableFrames();
+        CheckEqual(std::string("0"), Sequences(rig.server), "sequences stored whole");
+        CheckEqual(std::string("2"), FrameConnections(rig.server), "the connection that carried it whole");
+        const auto cut = rig.server.TableTruncatedFrames();
+        CheckEqual(std::size_t{ 1 }, cut.size(), "frames cut short");
+        CheckEqual(1, cut[0].connection, "the connection of the cut frame");
+        CheckEqual(std::int64_t{ 0 }, cut[0].sequence, "the cut frame's sequence");
+        CheckEqual(frames[0].producer, cut[0].producer, "the cut frame's producer");
+        CheckEqual("truncated of " + std::to_string(frames[0].frame_bytes), cut[0].outcome, "the cut frame declared the whole frame");
+        Check(cut[0].frame_bytes < frames[0].frame_bytes, "the first connection got only part of the frame");
+        Check(rig.log.Count("send timed out") >= 1, "the write's end is said");
+        CheckEqual(std::size_t{ kStuckRows }, rig.StoredRows("t"), "stored once");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::size_t{ 0 }, tables::test::Pipeline(rig.collector.value)->BacklogBlocks(), "backlog");
+        rig.Stop();
+    }
+
+    // A stop while a block's write is stuck (every table connection reads nothing): the stop returns,
+    // the write ends at the stop's cancel, and the block's rows are counted once as not delivered and
+    // never stored. A write that held the stop would fail by the test's CTest TIMEOUT.
+    void NativeTableStopDuringAStuckWriteCountsTheRowsOnce()
+    {
+        SessionRig rig(RigOptions{ false, 1000,
+                                   [](Server& server) {
+                                       server.SetTableHello(64 * 1024 * 1024, 30);
+                                       server.PauseTableReading(0);
+                                   },
+                                   [](tables::SessionTableChannelOptions& options) { options.ack_abandoned_for_tests = [](std::int64_t) { return false; }; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        AddIncompressibleRows(table);
+        hsm_collector_test_advance_clock_ms(rig.collector.value, 10000);
+        // The block's write is under way: the paused connection holds bytes of it.
+        WaitOrFail([&] { return rig.server.PausedTableBytes() > 0; }, "the block's write under way");
+        rig.Stop();
+        CheckEqual(std::uint64_t{ kStuckRows }, Stats(table).rows_dropped, "counted once as not delivered");
+        CheckEqual(std::size_t{ 0 }, rig.StoredRows("t"), "nothing stored");
+        Check(rig.server.TableFrames().empty(), "no block arrived whole");
+    }
+
     // The link itself: a 4 MiB and a 16 MiB binary frame go whole, each answered by its ack.
     void NativeTableLinkCarriesLargeFrames()
     {
@@ -3780,6 +3876,8 @@ const std::map<std::string, std::function<void(const std::string&)>>& TablePipel
         { "native_table_retry_after_as_managed", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableRetryAfterAsManaged(); } },
         { "native_table_service_reports_the_connection_of_a_new_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableServiceReportsTheConnectionOfANewSession(); } },
         { "native_table_three_lost_connections_keep_the_block_at_the_head", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableThreeLostConnectionsKeepTheBlockAtTheHead(); } },
+        { "native_table_stuck_write_sends_the_same_frame_on_the_next_connection", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStuckWriteSendsTheSameFrameOnTheNextConnection(); } },
+        { "native_table_stop_during_a_stuck_write_counts_the_rows_once", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStopDuringAStuckWriteCountsTheRowsOnce(); } },
         { "native_table_stress_writers_reconnects_and_stop", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStressWritersTicksReconnectsAndStop(); } },
 #endif
     };

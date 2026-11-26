@@ -18,6 +18,8 @@
     <InternalsVisibleTo Include="HSMDatabase.LevelDB.Tests" />
     <InternalsVisibleTo Include="SealedHistoryBench" />
     <InternalsVisibleTo Include="HSMServer.Core.Tests" />
+    <!-- The child process of the kill test of the large file store (#1883) pauses an append through FaultHook. -->
+    <InternalsVisibleTo Include="HSMDatabase.LargeFiles.CrashHost" />
   </ItemGroup>
 
   <ItemGroup>

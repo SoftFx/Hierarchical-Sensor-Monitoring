@@ -8378,6 +8378,90 @@ namespace
         Require(opened.status_code != 0, ("the endpoint must answer the upgrade with an HTTP status: " + opened.error).c_str());
     }
 
+    // Manual check, not registered in CTest (docs/test/NativeWsStalledPeer.md): the real Schannel case
+    // of #1848 step 6, which the plaintext tests cannot drive. HSM_WS_STALL_URL names a wss:// (or
+    // ws://) peer that takes each upgrade and then reads nothing (src/native/collector/tests/manual/
+    // stall_peer.py). HSM_WS_STALL_RUNS runs (default 10) of each: a 16 MiB binary send with a 2 s
+    // timeout; and after the buffers were filled (as many 16000-byte frames as a first connection
+    // took before one timed out), a 4-byte text send with a 2 s timeout, Close(0), and Close with a
+    // 1 s linger. Prints how long each took, how it ended and how many calls into libcurl it made.
+    void NativeWsLiveStalledSend()
+    {
+        const std::string url = TestEnvironment("HSM_WS_STALL_URL");
+        if (url.empty())
+        {
+            std::cout << "native_ws_live_stalled_send: skipped (HSM_WS_STALL_URL is not set)" << std::endl;
+            return;
+        }
+        const std::string runs_text = TestEnvironment("HSM_WS_STALL_RUNS");
+        const int runs = runs_text.empty() ? 10 : std::stoi(runs_text);
+        const auto ms_since = [](std::chrono::steady_clock::time_point started) {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+        };
+        const auto open = [&](hsm::http::WebSocketConnection& connection) {
+            const auto opened = connection.Open(url, {}, "", 10000);
+            Require(opened.ok, ("the stalled peer must take the upgrade: " + opened.error).c_str());
+        };
+
+        const std::string large(16 * 1024 * 1024, 'x');
+        for (int run = 0; run < runs; ++run)
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            open(connection);
+            std::string error;
+            const auto started = std::chrono::steady_clock::now();
+            const bool sent = connection.SendBinary(large.data(), large.size(), 2000, error);
+            std::cout << "native_ws_live_stalled_send: 16MiB run " << run << ": sent=" << sent << " after " << ms_since(started) << " ms, error='"
+                      << error << "', open=" << connection.IsOpen() << std::endl;
+        }
+
+        // How many 16000-byte frames fill the buffers: the first that times out says.
+        const std::string piece(hsm::http::WebSocketConnection::kMaxPieceBytes, 'f');
+        int fill = 0;
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            open(connection);
+            std::string error;
+            while (fill < 100000 && connection.SendBinary(piece.data(), piece.size(), 2000, error))
+                ++fill;
+            std::cout << "native_ws_live_stalled_send: " << fill << " frames of " << piece.size() << " bytes were taken before one timed out ('" << error << "')"
+                      << std::endl;
+        }
+
+        const char* const ops[] = { "text4", "close0", "close-linger" };
+        for (const char* op : ops)
+        {
+            for (int run = 0; run < runs; ++run)
+            {
+                hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+                int calls = 0;
+                connection.SetSendTraceForTests([&calls](size_t, bool) { ++calls; });
+                open(connection);
+                std::string error;
+                int taken = 0;
+                while (taken < fill && connection.SendBinary(piece.data(), piece.size(), 2000, error))
+                    ++taken;
+                if (taken < fill)
+                {
+                    std::cout << "native_ws_live_stalled_send: " << op << " run " << run << ": the fill stopped at " << taken << " frames ('" << error << "')"
+                              << std::endl;
+                    continue;
+                }
+                calls = 0;
+                const auto started = std::chrono::steady_clock::now();
+                std::string result;
+                if (std::string(op) == "text4")
+                    result = connection.SendText("ping", 2000, error) ? "sent" : "failed: " + error;
+                else if (std::string(op) == "close0")
+                    connection.Close(0);
+                else
+                    connection.Close(1000);
+                std::cout << "native_ws_live_stalled_send: " << op << " run " << run << ": " << (result.empty() ? "returned" : result) << " after "
+                          << ms_since(started) << " ms, libcurl writes=" << calls << ", open=" << connection.IsOpen() << std::endl;
+            }
+        }
+    }
+
     // Cancel() from another thread unblocks a Receive that is waiting: the session's stop path.
     void NativeWsCancelUnblocksReceive()
     {
@@ -8519,6 +8603,285 @@ namespace
         Require(connection.SendText("after-binary", 5000, error), ("a text send after the binary ones must succeed: " + error).c_str());
         Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text == "echo:after-binary",
                 "text must still round-trip after binary messages");
+    }
+
+    // ---- #1848 step 6: what bounds a send (the owner-side bound of WebSocketConnection::SendFrame) ----
+    //
+    // Plaintext, like every test server here. Against a plaintext peer libcurl answers CURLE_AGAIN
+    // when the socket is full, so the connection's own wait bounded a send even before #1848 step 6;
+    // the wait INSIDE libcurl's Schannel send (lib/vtls/schannel.c, schannel_send) that step 6 is about
+    // is not reached by these tests. What pins the property that matters there is the send trace: no
+    // call into libcurl is made without a wait that found the socket writable right before it, and no
+    // call passes more than one TLS record's worth. The real Schannel case is a manual check:
+    // docs/test/NativeWsStalledPeer.md.
+
+    // Bounded wait for a condition, generous enough for the sanitizer builds.
+    template <typename Condition>
+    bool Eventually(Condition condition)
+    {
+        return WaitUntilFor(condition, 30000);
+    }
+
+    struct SendTrace
+    {
+        struct Call
+        {
+            size_t bytes = 0;
+            bool after_writable_wait = false;
+        };
+        std::mutex mutex;
+        std::vector<Call> calls;
+
+        void Install(hsm::http::WebSocketConnection& connection)
+        {
+            connection.SetSendTraceForTests([this](size_t bytes, bool after_wait) {
+                std::lock_guard<std::mutex> guard(mutex);
+                calls.push_back({ bytes, after_wait });
+            });
+        }
+
+        std::vector<Call> Take()
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            std::vector<Call> taken;
+            taken.swap(calls);
+            return taken;
+        }
+
+        size_t Count()
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            return calls.size();
+        }
+    };
+
+    // Every curl_ws_send of a connection comes right after a wait that found the socket writable,
+    // and none passes more than kMaxPieceBytes: for frames below, at and above the piece size, a
+    // 16 MiB frame, a text message, the pong written inside Receive and the close frame of a close
+    // with a linger. A 16 MiB frame still arrives as ONE frame of the exact bytes. An implementation
+    // that hands libcurl a call without its wait fails on `after_writable_wait`; one that passes a
+    // whole large frame (or 64 KiB at once) fails on the size.
+    void NativeWsEveryWriteWaitsForTheSocket()
+    {
+        if (!WsAvailable("native_ws_every_write_waits_for_the_socket"))
+            return;
+
+        constexpr size_t kPiece = hsm::http::WebSocketConnection::kMaxPieceBytes;
+        hsm::test::WebSocketTestServer server; // answers a binary message with "binary:<size>:<fnv1a64>"
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        SendTrace trace;
+        trace.Install(connection);
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+
+        const auto check_calls = [&](const std::vector<SendTrace::Call>& calls, size_t at_least, const std::string& label) {
+            Require(calls.size() >= at_least, (label + ": " + std::to_string(calls.size()) + " curl_ws_send calls, at least " + std::to_string(at_least) + " expected").c_str());
+            for (size_t i = 0; i < calls.size(); ++i)
+            {
+                Require(calls[i].after_writable_wait, (label + ": curl_ws_send call " + std::to_string(i) + " came without a wait that found the socket writable").c_str());
+                Require(calls[i].bytes <= kPiece, (label + ": curl_ws_send call " + std::to_string(i) + " passed " + std::to_string(calls[i].bytes) + " bytes").c_str());
+            }
+        };
+
+        const size_t sizes[] = { 0, 5, kPiece, kPiece + 1, 16 * 1024 * 1024 };
+        for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i)
+        {
+            const std::string payload = PatternBytes(sizes[i]);
+            const std::string label = std::to_string(payload.size()) + " bytes";
+            std::string error;
+            std::string text;
+            Require(connection.SendBinary(payload.data(), payload.size(), 60000, error), ("a binary send of " + label + " must succeed: " + error).c_str());
+            check_calls(trace.Take(), (std::max)(size_t{ 1 }, (payload.size() + kPiece - 1) / kPiece), label);
+            Require(connection.Receive(text, 60000, error) == hsm::http::WebSocketReceive::Text, ("the answer after " + label + ": " + error).c_str());
+            const std::string expected =
+                "binary:" + std::to_string(payload.size()) + ":" + hsm::test::ws_detail::Hex64(hsm::test::ws_detail::Fnv1a64(payload));
+            Require(text == expected, ("the server must have read " + label + " with the same checksum, it answered '" + text + "'").c_str());
+            const auto received = server.BinaryReceived();
+            Require(received.size() == i + 1 && received[i] == payload, ("the server must hold the " + label + " byte for byte").c_str());
+        }
+        Require(server.DataFrameFragments() == 0, "every message must have gone as ONE frame, never fragmented");
+
+        std::string error;
+        std::string text;
+        Require(connection.SendText("hello", 5000, error), ("a text send: " + error).c_str());
+        check_calls(trace.Take(), 1, "a text message");
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text == "echo:hello", "the echo of the text");
+
+        // The pong Receive writes for a ping goes through the same wait.
+        Require(server.SendPing(), "the server's ping");
+        Require(connection.SendText("after-ping", 5000, error), ("a text send: " + error).c_str());
+        Require(connection.Receive(text, 5000, error) == hsm::http::WebSocketReceive::Text && text == "echo:after-ping", "the echo after the ping");
+        Require(Eventually([&] { return server.Pongs() == 1; }), "the pong must reach the server");
+        check_calls(trace.Take(), 2, "the pong and a text message");
+
+        // The close with a linger writes its close frame through the same wait.
+        connection.Close(1000);
+        check_calls(trace.Take(), 1, "the close frame of a close with a linger");
+        Require(Eventually([&] { return !server.CloseCodes().empty(); }) && server.CloseCodes().front() == 1000, "the close frame must reach the server");
+    }
+
+    // Opens a connection to a server that then stops reading (PauseReading after the upgrade).
+    void OpenThenPause(hsm::test::WebSocketTestServer& server, hsm::http::WebSocketConnection& connection)
+    {
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+        server.PauseReading(true);
+    }
+
+    hsm::test::WebSocketTestServer::Options SilentServerOptions()
+    {
+        hsm::test::WebSocketTestServer::Options options;
+        options.echo = false;
+        return options;
+    }
+
+    // A peer that has stopped reading cannot make a send outlast its deadline or a cancel: a 64 MiB
+    // frame (more than the loopback buffers of either OS hold) ends "send timed out", a cancel during
+    // it ends it "cancelled", and text sends after the buffers are full end "send timed out". Each
+    // releases the connection. None of the assertions is on a duration: a send that does not end
+    // fails by the test's CTest TIMEOUT.
+    void NativeWsSendToAPeerThatStopsReading()
+    {
+        if (!WsAvailable("native_ws_send_to_a_peer_that_stops_reading"))
+            return;
+
+        const std::string large = PatternBytes(64 * 1024 * 1024);
+        {
+            hsm::test::WebSocketTestServer server(SilentServerOptions());
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            OpenThenPause(server, connection);
+            std::string error;
+            Require(!connection.SendBinary(large.data(), large.size(), 1000, error), "a 64 MiB send to a peer that reads nothing must not succeed");
+            Contains(error, "send timed out");
+            Require(!connection.IsOpen(), "a send that timed out releases the connection");
+        }
+        {
+            hsm::test::WebSocketTestServer server(SilentServerOptions());
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            SendTrace trace;
+            trace.Install(connection);
+            OpenThenPause(server, connection);
+            std::string error;
+            bool sent = true;
+            std::thread sender([&] { sent = connection.SendBinary(large.data(), large.size(), 600000, error); });
+            // The send is under way (two pieces handed to libcurl), and it cannot finish: the cancel
+            // must end it, wherever it is.
+            Require(Eventually([&] { return trace.Count() >= 2; }), "the send must have started");
+            connection.Cancel();
+            sender.join();
+            Require(!sent, "a cancelled send must not succeed");
+            Contains(error, "cancelled");
+            Require(!connection.IsOpen(), "a cancelled send releases the connection");
+        }
+        {
+            hsm::test::WebSocketTestServer server(SilentServerOptions());
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            OpenThenPause(server, connection);
+            const std::string text(64 * 1024, 't');
+            std::string error;
+            int sends = 0;
+            while (sends < 4096 && connection.SendText(text, 300, error))
+                ++sends;
+            Require(sends < 4096, "text sends to a peer that reads nothing must stop being taken");
+            Contains(error, "send timed out");
+            Require(!connection.IsOpen(), "the text send that timed out releases the connection");
+        }
+    }
+
+    // Close(0) never waits and writes no close frame when the socket does not take one now; a close
+    // with a linger is bounded by its linger the same way; a send on a socket that never turns
+    // writable makes no call into libcurl at all and ends "send timed out". The socket's state is the
+    // test seam's (SetWritableForTests), since a full buffer is not a state a test can hold: the OS
+    // keeps moving bytes into the peer's buffer. With the socket writable, Close(0) does write its
+    // frame (the other half of the rule).
+    void NativeWsCloseWritesNothingToAFullSocket()
+    {
+        if (!WsAvailable("native_ws_close_writes_nothing_to_a_full_socket"))
+            return;
+
+        for (const int linger : { 0, 300 })
+        {
+            hsm::test::WebSocketTestServer server(SilentServerOptions());
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            SendTrace trace;
+            trace.Install(connection);
+            std::atomic<bool> writable{ true };
+            connection.SetWritableForTests([&writable] { return writable.load(); });
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+
+            writable.store(false);
+            std::string error;
+            Require(!connection.SendText("x", 200, error), "a send to a socket that is never writable must not succeed");
+            Contains(error, "send timed out");
+            Require(trace.Count() == 0, "a send to a socket that is never writable must not call into libcurl");
+
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+            connection.Close(linger);
+            Require(trace.Count() == 0, ("Close(" + std::to_string(linger) + ") must not write to a socket that is not writable").c_str());
+            Require(!connection.IsOpen(), "the close releases the connection");
+            Require(Eventually([&] { return server.Upgrades() == 2 && !server.Connected(); }), "the server must see the connection end");
+            Require(server.CloseCodes().empty(), "no close frame may have reached the server");
+        }
+
+        hsm::test::WebSocketTestServer server(SilentServerOptions());
+        hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+        SendTrace trace;
+        trace.Install(connection);
+        connection.SetWritableForTests([] { return true; });
+        Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+        connection.Close(0);
+        const auto calls = trace.Take();
+        Require(calls.size() == 1 && calls[0].after_writable_wait, "Close(0) on a writable socket writes its close frame once, after the check");
+        Require(Eventually([&] { return !server.CloseCodes().empty(); }) && server.CloseCodes().front() == 1000, "the close frame must reach the server");
+    }
+
+    // A send's timeout bounds the whole frame, even against a peer that reads: a deadline that has
+    // passed at the call writes nothing ("send timed out" with no call into libcurl; a timeout of 0
+    // is such a deadline), and a deadline that passes between two pieces stops the frame there and
+    // releases the connection, though the socket would take the next piece. The deadline is made to
+    // pass by the test clock (SetClockForTests) at the second call into libcurl, not by waiting. A
+    // wait that polled once more past its deadline would send the whole frame and fail this.
+    void NativeWsSendStopsAtItsDeadline()
+    {
+        if (!WsAvailable("native_ws_send_stops_at_its_deadline"))
+            return;
+
+        const std::string payload = PatternBytes(1024 * 1024);
+        hsm::test::WebSocketTestServer server(SilentServerOptions());
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            SendTrace trace;
+            trace.Install(connection);
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the upgrade must succeed");
+            std::string error;
+            Require(!connection.SendBinary(payload.data(), payload.size(), 0, error), "a send with a timeout of 0 must not succeed");
+            Contains(error, "send timed out");
+            Require(trace.Count() == 0, "a send whose deadline has passed must not call into libcurl");
+            Require(!connection.IsOpen(), "a send that timed out releases the connection");
+        }
+        {
+            hsm::http::WebSocketConnection connection(/*verify_peer=*/false);
+            SendTrace trace;
+            std::atomic<int> calls{ 0 };
+            std::atomic<bool> passed{ false };
+            connection.SetSendTraceForTests([&](size_t bytes, bool after_wait) {
+                {
+                    std::lock_guard<std::mutex> guard(trace.mutex);
+                    trace.calls.push_back({ bytes, after_wait });
+                }
+                if (++calls == 2)
+                    passed.store(true); // the deadline passes while the second piece is handed over
+            });
+            connection.SetClockForTests([&passed] {
+                return passed.load() ? std::chrono::steady_clock::time_point::max() : std::chrono::steady_clock::now();
+            });
+            Require(Eventually([&] { return !server.Connected(); }), "the server must be free for the next connection");
+            Require(connection.Open(WsUrl(server), {}, "", 5000).ok, "the second upgrade must succeed");
+            std::string error;
+            Require(!connection.SendBinary(payload.data(), payload.size(), 600000, error), "a frame whose deadline passed between two pieces must not be sent whole");
+            Contains(error, "send timed out");
+            Require(trace.Count() == 2, ("the frame must stop after the piece in flight when the deadline passed, it made " + std::to_string(trace.Count()) + " calls").c_str());
+            Require(!connection.IsOpen(), "a send that timed out releases the connection");
+            Require(server.BinaryReceived().empty(), "no part of the frame may count as a message");
+        }
     }
 
     // The receive cap is the connection's own: the session keeps 8 MiB, a connection that expects
@@ -12065,7 +12428,12 @@ namespace
             { "native_ws_cancel_unblocks_receive", [](const std::string&) { NativeWsCancelUnblocksReceive(); } },
             { "native_ws_refuses_binary_and_oversized_messages", [](const std::string&) { NativeWsRefusesBinaryAndOversizedMessages(); } },
             { "native_ws_live_probe", [](const std::string&) { NativeWsLiveProbe(); } },
+            { "native_ws_live_stalled_send", [](const std::string&) { NativeWsLiveStalledSend(); } },
             { "native_ws_sends_binary_frames_intact", [](const std::string&) { NativeWsSendsBinaryFramesIntact(); } },
+            { "native_ws_every_write_waits_for_the_socket", [](const std::string&) { NativeWsEveryWriteWaitsForTheSocket(); } },
+            { "native_ws_send_to_a_peer_that_stops_reading", [](const std::string&) { NativeWsSendToAPeerThatStopsReading(); } },
+            { "native_ws_close_writes_nothing_to_a_full_socket", [](const std::string&) { NativeWsCloseWritesNothingToAFullSocket(); } },
+            { "native_ws_send_stops_at_its_deadline", [](const std::string&) { NativeWsSendStopsAtItsDeadline(); } },
             { "native_ws_receive_cap_is_set_per_connection", [](const std::string&) { NativeWsReceiveCapIsSetPerConnection(); } },
             { "native_ws_second_connection_opens_beside_the_session", [](const std::string&) { NativeWsSecondConnectionOpensBesideTheSession(); } },
             { "native_ws_second_connection_refusal_reports_its_status", [](const std::string&) { NativeWsSecondConnectionRefusalReportsItsStatus(); } },

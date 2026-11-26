@@ -176,7 +176,7 @@ namespace HSMServer.BackgroundServices
         // Posts a counter when it changes. A failure counter (errorWhenGrown) is Error when it grew since the previous
         // sample and goes back to Ok at the next sample without growth. One that must stay 0 (errorWhenNonZero) is Error
         // whenever it is above 0.
-        private sealed class Counter(Func<long> read, bool errorWhenGrown, Action<long, bool> post, bool errorWhenNonZero = false)
+        internal sealed class Counter(Func<long> read, bool errorWhenGrown, Action<long, bool> post, bool errorWhenNonZero = false)
         {
             private long? _posted;
             private bool _postedError;

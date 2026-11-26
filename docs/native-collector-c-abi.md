@@ -156,6 +156,12 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.15.2** (#1848, table sensors step 6) — no ABI change: every WebSocket send of the collector (the session,
+  the table connection) ends by its timeout or a cancel on every TLS backend. Before, on Windows with TLS (libcurl's
+  Schannel backend), a send to a server that stopped reading waited inside libcurl until the server read again, and
+  a stop could wait as long. The connection now waits for the socket itself before each call into libcurl and hands
+  libcurl at most one TLS record per call; `Close(0)` writes no close frame to a socket that does not take it now.
+  `aicontext/features/collector/http-client/feature.md`, "What bounds a send".
 - **0.15.1** (#1848, table sensors step 6, part 4) — no ABI change: the table connection of the
   collector session. A collector on the session (`hsm_collector_use_session_transport`) built with
   `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES` registers its table sensors as a `commands` request

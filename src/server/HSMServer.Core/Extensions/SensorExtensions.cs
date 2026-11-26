@@ -44,7 +44,14 @@ namespace HSMServer.Core
                     .Min();
 
                 var now = DateTime.UtcNow;
-                return sensor.LastValue with
+
+                // The marker is a copy of the last value; a copy of a large file value would be a second row naming the same
+                // file (#1883): it is a plain file value with the name and the extension, as a new value from the UI is.
+                var last = sensor.LastValue is LargeFileValue large
+                    ? new FileValue { Name = large.Name, Extension = large.Extension, Value = [], OriginalSize = 0, Status = large.Status }
+                    : sensor.LastValue;
+
+                return last with
                 {
                     IsTimeout = true,
                     Time = now,

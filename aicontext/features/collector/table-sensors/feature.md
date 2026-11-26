@@ -655,22 +655,36 @@ for every lifecycle report).
 - A writer paused between the moment it reads that the ledger is open and its count, across a whole stop, has its rows
   in the next run's first report instead of none (the managed known limit loses them from the reports).
 
-**Known limits of the table connection (0.15.1).**
+**What bounds a block's write (0.15.2, #1848 step 6).** A block's write ends at its bound (ten heartbeats, at least
+10 s: 300 s with the server's default `heartbeatSeconds` of 30) or at the stop's cancel, on every TLS backend; a stop
+does not wait for the bound: it cancels the write when its own budget (the stop drain's, at most 5 s) is spent, and the
+cancel is seen within 100 ms: the connection waits for the socket to be writable before each
+call into libcurl, with the write's deadline and the cancel flag, and hands libcurl at most 16000 bytes per call (one
+TLS record), so no call into libcurl waits on its own (`aicontext/features/collector/http-client/feature.md`, "What
+bounds a send"). Before 0.15.2, on Windows with TLS (Schannel) a write to a server that stopped reading did not end at
+its bound: libcurl's Schannel send waits on the socket without a limit in connect-only mode, so a 16 MiB write with a
+2 s bound returned only when the server read again, and a stop (which joins the delivery thread before it closes the
+table connection and the session) lasted as long. Now a write that does not finish fails "send timed out" (or
+"cancelled" at a stop), the connection is released, and the put sends the same frame (same producer and sequence) on
+the next connection, up to three per put, then answers "not delivered" and the block stays at the head; at a stop its
+rows are counted once as not delivered at stop. A frame cut short is never stored by the server (it reads whole
+messages). Measured on the final code (Windows, Schannel, a peer that reads nothing, 10 runs each): the 16 MiB write
+ended at 2000–2014 ms; `docs/test/NativeWsStalledPeer.md` has the rest.
 
-- **A stop can wait for a block write that does not end.** On Windows with TLS (Schannel) a libcurl WebSocket send can
-  block past its timeout when the server stops reading in the middle of a large frame (measured: a 16 MiB send with a
-  2 s timeout returned after 20 s). The stop's cancel cannot interrupt it there, and the stop joins the delivery thread
-  before it closes the table connection and the session, so a stop (and a dispose) can last as long as that write: the
-  frame's size over what the server still reads, bounded by the write's own bound of ten heartbeats (at least 10 s)
-  only where libcurl honours it. How to bound it is open (branch `feature/1848-native-send-bound`). Where libcurl hands
-  the write back between its pieces, a cancel is seen within one wait slice (100 ms).
+**Known limits of the table connection (0.15.2).**
+
+- **Post-handshake TLS messages can still hold a call inside libcurl for up to 60 s** (Windows, Schannel): a message from the server that makes Schannel's DecryptMessage return `SEC_I_RENEGOTIATE` can still hold a call inside libcurl for up to 60 s: libcurl 8.21.0 handles every such status in `schannel_recv_renegotiate` (`lib/vtls/schannel.c`), which waits on the socket in slices of up to 1 s until the context is re-established, for at most `MAX_RENEG_BLOCK_TIME` (60 s); a send meeting a renegotiation in progress waits there too. libcurl's own comment says this is "not necessarily literal TLS renegotiation", so it is not limited to a TLS 1.2 renegotiation; whether Windows returns it for TLS 1.3 post-handshake messages was not checked against Microsoft's documentation. The collector's deadline does not end that wait; a cancel does, within about a second: the loop calls `Curl_pgrsUpdate` at every slice, which calls the progress callback `Open` installs (`CURLOPT_XFERINFOFUNCTION` over the cancel flag, with `CURLOPT_NOPROGRESS` 0, neither cleared after the open), and a non-zero answer ends it with `CURLE_ABORTED_BY_CALLBACK` (read in `lib/progress.c`, `pgrsupdate`; not tested). Not tested.
+- **The bound rests on an observation, not on a documented guarantee:** a send of one TLS record on a socket that
+  `select` reported writable was accepted whole by Windows in every call measured (about 10,600 calls, stalled and
+  healthy peers). Microsoft does not document it. Were a call ever to block there, it would hold the thread until the
+  peer read again, as before 0.15.2.
 - **Rows stored and counted as lost after a smaller hello.** The frame and limit check runs again on every connection
   of a put: when the frame went out on one connection and was stored but its ack was lost, and the next connection's
   hello states a smaller `maxFrameBytes` or `blockLimits`, the put answers `TooLarge` and the block's rows are dropped
   and counted as too large although the server holds them. The managed collector's limit of the same origin
   ("Rows can be stored twice after a smaller hello", above) packs such rows again and may store them twice; the native
   collector counts stored rows as lost instead. Neither loses a row without a count.
-- No run against a real HSM server is part of 0.15.1: the table connection is proven against the scripted table side
+- No run against a real HSM server is part of 0.15.1 or 0.15.2: the table connection is proven against the scripted table side
   of `tests/ws_test_server.hpp` (a second, independent implementation of the server's side) and the shared fixture.
 - The heartbeat waits for the delivery thread: while a registration or a put is under way (each bounded by the
   request timeout) no ping is sent; a block's ack wait sends one when a heartbeat passes without a write.
@@ -710,7 +724,15 @@ new one; three ack bodies that are not JSON are one line), `_retry_after_as_mana
 string are none, `-5` and `0` are not used, `2000000000` is capped at 5 minutes, `7` is 7 s),
 `_service_reports_the_connection_of_a_new_session` (one call that replaces the connection of an ended session says
 that a connection came up) and `_three_lost_connections_keep_the_block_at_the_head` (three connections without an ack,
-then not delivered: the block stays at the head, and the next tick sends the same producer and sequence on a fourth).
+then not delivered: the block stays at the head, and the next tick sends the same producer and sequence on a fourth),
+and since 0.15.2 (#1848 step 6, a table connection of the scripted server that stops reading before its block;
+plaintext, so they pin what the caller does with a write that ended, not the Schannel wait itself, which is the
+manual check of `docs/test/NativeWsStalledPeer.md`) `_stuck_write_sends_the_same_frame_on_the_next_connection` (a
+block of about 21 MB to a first connection that reads nothing: the write ends at its bound, the same producer and
+sequence go whole on the second connection and are stored once, nothing dropped; the first connection got a frame cut
+short with the same header) and `_stop_during_a_stuck_write_counts_the_rows_once` (every table connection reads
+nothing; the stop returns and the block's rows are counted once as not delivered, none stored). A write that did not
+end would fail them by their CTest timeout.
 `table_connection_contract.hsmtest` runs through the native driver in the same builds.
 
 ## Open Points

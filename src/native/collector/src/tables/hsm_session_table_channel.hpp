@@ -62,6 +62,10 @@ namespace hsm::collector::tables
         std::function<void(bool error, const std::string& message)> log;
         /// For tests: see AckedLinkOptions::ack_abandoned_for_tests.
         std::function<bool(std::int64_t request_id)> ack_abandoned_for_tests;
+        /// For tests: the bound of one block's write on the `connection`-th table connection opened (1
+        /// = the first), in place of the channel's own (ten heartbeats, at least 10 s); 0 keeps the
+        /// channel's. Lets a test put a short bound only on the connection it wants stuck.
+        std::function<std::int64_t(std::int64_t connection)> send_bound_ms_for_tests;
     };
 
     class SessionTableChannel final : public ITableChannel

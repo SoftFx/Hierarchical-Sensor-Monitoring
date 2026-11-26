@@ -551,9 +551,14 @@ if(HSM_COLLECTOR_TABLES)
                 native_table_reports_are_said_once_per_kind
                 native_table_retry_after_as_managed
                 native_table_service_reports_the_connection_of_a_new_session
-                native_table_three_lost_connections_keep_the_block_at_the_head)
+                native_table_three_lost_connections_keep_the_block_at_the_head
+                native_table_stuck_write_sends_the_same_frame_on_the_next_connection
+                native_table_stop_during_a_stuck_write_counts_the_rows_once)
             add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
         endforeach()
+        # #1848 step 6: a write that does not end would hold the test; the timeout fails it.
+        set_tests_properties(native_table_stuck_write_sends_the_same_frame_on_the_next_connection
+                             native_table_stop_during_a_stuck_write_counts_the_rows_once PROPERTIES TIMEOUT 300)
         set_tests_properties(native_table_stress_writers_reconnects_and_stop native_table_dispose_from_every_state
                              native_table_every_ack_status_maps_to_its_answer PROPERTIES TIMEOUT 600)
     endif()
@@ -636,6 +641,16 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_sends_binary_frames_intact
         COMMAND hsm_collector_tests native_ws_sends_binary_frames_intact
     )
+    # #1848 step 6: what bounds a send (the wait before every write into libcurl). A send that does
+    # not end fails by the timeout, never by a measured duration.
+    foreach(name
+            native_ws_every_write_waits_for_the_socket
+            native_ws_send_to_a_peer_that_stops_reading
+            native_ws_close_writes_nothing_to_a_full_socket
+            native_ws_send_stops_at_its_deadline)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+        set_tests_properties(${name} PROPERTIES TIMEOUT 300)
+    endforeach()
     add_test(NAME native_ws_receive_cap_is_set_per_connection
         COMMAND hsm_collector_tests native_ws_receive_cap_is_set_per_connection
     )
