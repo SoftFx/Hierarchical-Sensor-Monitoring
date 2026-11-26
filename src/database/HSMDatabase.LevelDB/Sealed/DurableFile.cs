@@ -108,7 +108,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 if (attempt >= RenameRetryPauses.Length || error is not (ErrorAccessDenied or ErrorSharingViolation))
                 {
                     if (attempt > 0)
-                        _logger.Warn($"The rename of {from} to {to} failed after {attempt} retries: another process held a file (error {firstError}, last {error})");
+                        _logger.Warn($"The rename of {from} to {to} failed after {attempt} retries (first error {firstError}, last {error})");
 
                     throw new IOException($"Could not rename {from} to {to} (error {error})");
                 }

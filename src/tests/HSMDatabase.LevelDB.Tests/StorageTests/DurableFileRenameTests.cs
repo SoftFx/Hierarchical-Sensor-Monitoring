@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using HSMDatabase.LevelDB.Sealed;
 using Xunit;
 
@@ -10,7 +11,7 @@ namespace HSMDatabase.LevelDB.Tests.StorageTests
     // shares read, write and delete (a virus scanner or the search indexer reading a record just written), and with error 32
     // while one holds the source. Those two are retried after DurableFile.RenameRetryPauses; any other error is not; past the
     // retries the error of the last attempt is thrown as before. The pause seam makes the holder let go at a known attempt,
-    // so nothing here depends on the clock. Linux replaces an open file and retries nothing: the tests return there.
+    // so nothing here depends on the clock. Linux replaces an open file and retries nothing: the tests are skipped there.
     public sealed class DurableFileRenameTests : IDisposable
     {
         private readonly string _folder = Path.Combine(Path.GetTempPath(), $"hsm-durable-rename-{Guid.NewGuid():N}");
@@ -33,31 +34,34 @@ namespace HSMDatabase.LevelDB.Tests.StorageTests
         }
 
 
-        [Fact]
+        [OnlyOnWindowsFact]
         public void A_replace_whose_target_a_scanner_holds_succeeds_once_the_scanner_lets_go()
         {
-            if (!OperatingSystem.IsWindows())
-                return;
+            using var scanner = HoldAsAScannerDoes(_target);
 
-            var scanner = HoldAsAScannerDoes(_target);
+            // The test's reader lets go during the second pause, well inside the bound. From then on the pauses are real
+            // ones, so a scanner of the machine reading the fresh files gets the time the retry gives it in production.
+            DurableFile.Rename(_temporary, _target, overwrite: true, pause =>
+            {
+                Pause(pause);
 
-            // The scanner lets go during the second pause: well inside the bound.
-            DurableFile.Rename(_temporary, _target, overwrite: true, pause => Pause(pause, () => { if (_pauses.Count == 2) scanner.Dispose(); }), Attempting);
+                if (_pauses.Count == 2)
+                    scanner.Dispose();
+                else if (_pauses.Count > 2)
+                    Thread.Sleep(pause);
+            }, Attempting);
 
             Assert.Equal("new", File.ReadAllText(_target));
             Assert.False(File.Exists(_temporary));
 
-            // Two attempts failed while it held the file (more only if another process of the machine held it too).
+            // The first two attempts failed while the test's reader held the target.
             Assert.True(_attempts >= 3, $"{_attempts} attempts");
             Assert.Equal(DurableFile.RenameRetryPauses[.._pauses.Count], _pauses);
         }
 
-        [Fact]
+        [OnlyOnWindowsFact]
         public void A_replace_held_past_the_last_retry_throws_the_error_of_the_last_attempt_and_leaves_both_files()
         {
-            if (!OperatingSystem.IsWindows())
-                return;
-
             using (HoldAsAScannerDoes(_target))
             {
                 var error = Assert.Throws<IOException>(() => DurableFile.Rename(_temporary, _target, overwrite: true, pause => Pause(pause), Attempting));
@@ -76,12 +80,9 @@ namespace HSMDatabase.LevelDB.Tests.StorageTests
             Assert.Equal("new", File.ReadAllText(_temporary));
         }
 
-        [Fact]
+        [OnlyOnWindowsFact]
         public void A_rename_whose_source_is_missing_is_tried_once()
         {
-            if (!OperatingSystem.IsWindows())
-                return;
-
             File.Delete(_temporary);
 
             var error = Assert.Throws<IOException>(() => DurableFile.Rename(_temporary, _target, overwrite: true, pause => Pause(pause), Attempting));
@@ -92,12 +93,9 @@ namespace HSMDatabase.LevelDB.Tests.StorageTests
             Assert.Equal("old", File.ReadAllText(_target));
         }
 
-        [Fact]
+        [OnlyOnWindowsFact]
         public void A_rename_onto_an_existing_file_without_overwrite_is_tried_once()
         {
-            if (!OperatingSystem.IsWindows())
-                return;
-
             // As the hsm-sealed marker and a committed archive are renamed: over nothing, and an existing target is an error.
             var error = Assert.Throws<IOException>(() => DurableFile.Rename(_temporary, _target, overwrite: false, pause => Pause(pause), Attempting));
 
@@ -129,10 +127,17 @@ namespace HSMDatabase.LevelDB.Tests.StorageTests
             _attempts++;
         }
 
-        private void Pause(TimeSpan pause, Action then = null)
+        private void Pause(TimeSpan pause) => _pauses.Add(pause);
+
+
+        private sealed class OnlyOnWindowsFactAttribute : FactAttribute
         {
-            _pauses.Add(pause);
-            then?.Invoke();
+            public OnlyOnWindowsFactAttribute()
+            {
+                if (!OperatingSystem.IsWindows())
+                    Skip = "Windows only: there a reader of the target blocks the replace; on Linux rename(2) replaces an open file, " +
+                           "so the error this retry cures cannot be made";
+            }
         }
     }
 }

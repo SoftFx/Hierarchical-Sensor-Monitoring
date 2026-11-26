@@ -105,6 +105,10 @@ namespace HSMDatabase.LevelDB.LargeFiles
         private readonly string _usedMark;
         private volatile bool _usedMarkWritten;
 
+        // The mark is written by the first verify of a file, under that file's gate only: the first verifies of two files (two
+        // products' queues) meet here, write it once, and the second returns only once the first's write is durable.
+        private readonly object _usedMarkLock = new();
+
 
         public LargeFileStore(string folder, string usedMarkPath = null)
         {
@@ -687,10 +691,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 try
                 {
                     // Before the first verified record (and so before its value row): the mark that the server holds large files.
-                    if (_usedMark is not null && !_usedMarkWritten && !File.Exists(_usedMark))
-                        DurableFile.WriteAtomic(_usedMark, $"large files held since {Clock():O}", strict: true);
-
-                    _usedMarkWritten = true;
+                    EnsureUsedMark();
                     WriteRecord(verified);
                 }
                 catch (Exception ex) when (IsFileError(ex))
@@ -709,6 +710,25 @@ namespace HSMDatabase.LevelDB.LargeFiles
                 _logger.Info($"Large file {fileId:N} verified: sensor {verified.SensorId}, {verified.Size} bytes, value time {verified.ValueTimeUtc:O}");
 
                 return verified;
+            }
+        }
+
+        // Once per store, before any record says Verified: two first verifies at once write the mark once, and neither goes on
+        // before it is durable. A failed write leaves the flag down, so the next verify tries again.
+        private void EnsureUsedMark()
+        {
+            if (_usedMark is null || _usedMarkWritten)
+                return;
+
+            lock (_usedMarkLock)
+            {
+                if (_usedMarkWritten)
+                    return;
+
+                if (!File.Exists(_usedMark))
+                    DurableFile.WriteAtomic(_usedMark, $"large files held since {Clock():O}", strict: true);
+
+                _usedMarkWritten = true;
             }
         }
 
