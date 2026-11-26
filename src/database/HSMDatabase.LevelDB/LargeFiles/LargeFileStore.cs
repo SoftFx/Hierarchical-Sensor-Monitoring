@@ -91,8 +91,10 @@ namespace HSMDatabase.LevelDB.LargeFiles
         private LargeFileStoreException _openFailure;
         private long _openFailedMs;
 
-        // Set when values name files the store has no record of: an archive no record names may then be one of them.
+        // Set when values name files the store has no record of, or a row could not be read: an archive no record names may then
+        // be one of them. And until a check of the values has completed without a failure in this process, none is removed.
         private string _orphanArchivesKeptBecause;
+        private volatile bool _valuesChecked;
         private readonly HashSet<Guid> _orphanArchiveProductsReported = [];
 
 
@@ -181,6 +183,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
             return (int)Math.Min(bound, int.MaxValue);
         }
 
+
+        public void ConfirmValuesChecked() => _valuesChecked = true;
 
         public void KeepOrphanArchives(string reason)
         {
@@ -1170,7 +1174,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
             lock (_lock)
             {
                 productsWithRecords = [.. _files.Values.Select(e => e.Record.ProductId)];
-                keptBecause = _orphanArchivesKeptBecause;
+                keptBecause = _orphanArchivesKeptBecause ?? (_valuesChecked ? null : "the check of the values against the store has not completed in this process");
             }
 
             foreach (var product in ProductFolders(ArchivesFolderName))

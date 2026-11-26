@@ -178,8 +178,8 @@ namespace HSMServer.Core.Cache
                 else
                     SensorUpdateViewAndNotify(sensor);
 
-                // The write of a value row reports nothing (a failure is only logged), and the add may skip it (a late value
-                // below the history floor, a value inside an aggregated span): read it back, write it directly when missing.
+                // The add may not write the row (a late value below the history floor, a value inside an aggregated span): it is
+                // read back, and written directly when it is missing.
                 var row = _database.GetSensorValue(sensor.Id, time.Ticks);
 
                 if (row is null || !IsRowOf(sensor, row, record.FileId))
@@ -248,8 +248,13 @@ namespace HSMServer.Core.Cache
         // For each verified or packed record of the product: is its value still there? Decided on the product's queue, so
         // that a retention pass, a clear, a removal or the finish of an upload is never half-seen. Only decisions are taken
         // here; the files are removed by the caller, and a missing row inside the kept range is written again here.
+        /// <summary>Called before a product's check runs on its queue. Test seam: a check whose queue does not answer.</summary>
+        internal Action<Guid> BeforeLargeFileCheck { get; set; }
+
         private void CheckLargeFiles(LargeFileCheckRequest request)
         {
+            BeforeLargeFileCheck?.Invoke(request.ProductId);
+
             foreach (var record in request.Records)
             {
                 try
@@ -314,6 +319,13 @@ namespace HSMServer.Core.Cache
                 if (!store.HasFiles(sensor.Id))
                     return;
 
+                // Only when the database confirms the entity is gone; otherwise the store's pass decides later, on its rule.
+                if (_database.SensorEntityExists(sensor.Id) != false)
+                {
+                    _logger.Warn($"The large files of the removed sensor '{sensor.FullPath}' are left to the store's pass: the database does not confirm the sensor is gone");
+                    return;
+                }
+
                 foreach (var record in store.GetFiles().Where(r => r.SensorId == sensor.Id))
                     store.Remove(record.FileId, $"its sensor '{sensor.FullPath}' was removed");
             }
@@ -338,7 +350,7 @@ namespace HSMServer.Core.Cache
                 foreach (var record in store.GetFiles().Where(r => r.SensorId == sensor.Id && r.State != LargeFileState.Uploading &&
                                                                    r.ValueTimeUtc is { } time && time >= from && time <= to))
                 {
-                    // The delete of the rows reports nothing: a row still there keeps its file (the pass looks again).
+                    // A row that a point read still finds after the delete keeps its file; the pass looks at it again.
                     if (_database.GetSensorValue(sensor.Id, record.ValueTimeUtc.Value.Ticks) is not null)
                     {
                         _logger.Warn($"The row of large file {record.FileId:N} of sensor '{sensor.FullPath}' at {record.ValueTimeUtc:O} is still there after the clear; the file is kept");

@@ -10,6 +10,7 @@ using System.Collections.Concurrent;
 using HSMDatabase.AccessManager.Formatters;
 using HSMDatabase.AccessManager.LargeFiles;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.LargeFiles;
 using HSMServer.Core.Model;
@@ -520,14 +521,13 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             try
             {
+                // Delivered on the product's queue inside the finish, before it answers: no waiting needed.
                 var verified = await UploadAsync(sensor, Content(Piece));
-                await WaitForAsync(() => !alerts.IsEmpty);
                 Assert.Single(alerts);
 
-                // The row lost and written again from the record: shown, not alerted again.
+                // The row lost and written again from the record, on the same queue inside the pass: shown, not alerted again.
                 _databaseCoreManager.DatabaseCore.ClearSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
                 Assert.Equal(1, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RolledForward);
-                await Task.Delay(500);
 
                 Assert.Single(alerts);
                 Assert.NotNull(Store.TryGetFile(verified.FileId));
@@ -776,6 +776,54 @@ namespace HSMServer.Core.Tests.LargeFiles
             var environment = _databaseCoreManager.DatabaseCore.GetType().GetField("_environmentDatabase", Private)!.GetValue(_databaseCoreManager.DatabaseCore);
             var adapter = environment!.GetType().GetField("_database", Private)!.GetValue(environment);
             adapter!.GetType().GetMethod("Put", [typeof(byte[]), typeof(byte[])])!.Invoke(adapter, [System.Text.Encoding.UTF8.GetBytes(key), value]);
+        }
+
+        [Fact]
+        public async Task The_timeout_marker_of_a_large_last_value_is_a_plain_file_value_and_its_file_stays()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+
+            _valuesCache.LargeFileClock = () => DateTime.UtcNow.AddHours(-1);
+            var verified = await UploadAsync(sensor, Content(Piece));
+            _valuesCache.LargeFileClock = () => DateTime.UtcNow;
+
+            // A TTL the last value has outlived: the next sweep step expires the sensor.
+            sensor.Policies.AddTTLPolicy(new PolicyUpdate { TTL = TimeSpan.FromMinutes(1).Ticks });
+
+            var marker = sensor.GetTimeoutValue();
+            Assert.IsType<FileValue>(marker);
+            Assert.True(marker.IsTimeout);
+
+            // The cache's TTL sweep step writes the marker row.
+            _valuesCache.RunSensorTimeoutStep(sensor);
+            Assert.True(sensor.IsExpired);
+
+            var rows = new List<byte[]>();
+            await foreach (var row in _databaseCoreManager.DatabaseCore.GetSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue))
+                rows.Add(row);
+
+            Assert.Equal(2, rows.Count);
+            Assert.Single(rows, r => LargeFileValue.IsLargeFileRow(r));
+            Assert.True(Assert.IsType<FileValue>(new MemoryPackFormatter().Deserialize(rows.Single(r => !LargeFileValue.IsLargeFileRow(r)))).IsTimeout);
+
+            Assert.Equal(0, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).FilesRemoved);
+            Assert.NotNull(Store.TryGetFile(verified.FileId));
+        }
+
+        [Fact]
+        public async Task Files_are_kept_when_their_products_queue_does_not_answer_the_check()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var verified = await UploadAsync(sensor, Content(Piece));
+            await SetKeepHistoryAsync(sensor, TimeSpan.FromDays(1));
+            _databaseCoreManager.DatabaseCore.ClearSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
+
+            _valuesCache.BeforeLargeFileCheck = _ => throw new InvalidOperationException("the queue does not answer (test)");
+            var report = await _service.RunPassAsync(DateTime.UtcNow.AddDays(3), atStart: false);
+
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.Equal(1, report.Unchecked);
+            Assert.NotNull(Store.TryGetFile(verified.FileId));
         }
 
         private static async Task WaitForAsync(Func<bool> condition)

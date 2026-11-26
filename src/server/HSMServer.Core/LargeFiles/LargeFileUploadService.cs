@@ -145,6 +145,10 @@ namespace HSMServer.Core.LargeFiles
         private readonly TreeValuesCache _cache;
         private readonly SemaphoreSlim _passLock = new(1, 1);
 
+        // Set once a check of the values against the store has completed without a failure (the start check, or a later pass
+        // that repeats it): until then archives no record names are kept.
+        private bool _valuesChecked;
+
 
         public LargeFileUploadService(IDatabaseCore database, ITreeValuesCache cache, LargeFileOptions options = null)
         {
@@ -315,11 +319,36 @@ namespace HSMServer.Core.LargeFiles
 
             // Only on a server that ever took a large file: the folder alone may come from a bind mount. The mark that it did lives
             // with the databases, so a store folder that was lost or replaced by an empty one is still compared with the values.
-            var rowsWithoutRecord = atStart && (store.HasContent || store.WasUsed) ? await ReportRowsWithoutRecordAsync(token) : 0;
+            // The check runs at start and, until one has completed without a failure, at every later pass (a start pass that
+            // stopped, a scan that was cancelled or could not read a sensor's rows).
+            var rowsWithoutRecord = 0;
 
-            // A value naming a file the store does not know: an archive no record names may be that file.
-            if (rowsWithoutRecord > 0)
-                store.KeepOrphanArchives($"{rowsWithoutRecord} large values name files the store has no record of");
+            if (atStart || !_valuesChecked)
+            {
+                if (store.HasContent || store.WasUsed)
+                {
+                    var (missing, failed) = await ReportRowsWithoutRecordAsync(token);
+                    rowsWithoutRecord = missing;
+
+                    // A value naming a file the store does not know, or rows that could not be read: an archive no record names
+                    // may be that file.
+                    if (missing > 0)
+                        store.KeepOrphanArchives($"{missing} large values name files the store has no record of");
+
+                    if (failed > 0)
+                        store.KeepOrphanArchives($"the rows of {failed} File sensors could not be compared with the store");
+                    else
+                        _valuesChecked = true;
+                }
+                else
+                {
+                    // Never held a large file: no value can name one.
+                    _valuesChecked = true;
+                }
+
+                if (_valuesChecked)
+                    store.ConfirmValuesChecked();
+            }
 
             if (!store.Exists)
                 return new LargeFilePassReport { RowsWithoutRecord = rowsWithoutRecord };
@@ -476,11 +505,13 @@ namespace HSMServer.Core.LargeFiles
 
         // The rows of File sensors that hold a large value whose file has no record. A row is recognised by its union tag
         // (its first byte); only those rows are deserialized.
-        private async Task<int> ReportRowsWithoutRecordAsync(CancellationToken token)
+        // The number of large values without a record, and of File sensors whose rows could not be read ("cannot tell").
+        private async Task<(int Missing, int Failed)> ReportRowsWithoutRecordAsync(CancellationToken token)
         {
             var store = Store;
             var known = store.GetFiles().Select(r => r.FileId).ToHashSet();
             var missing = 0;
+            var failed = 0;
 
             foreach (var sensor in _cache.GetSensors().OfType<FileSensorModel>())
             {
@@ -501,11 +532,13 @@ namespace HSMServer.Core.LargeFiles
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.Error(ex, $"The rows of sensor '{sensor.FullPath}' could not be compared with the large file store");
+                    failed++;
+                    store.Statistics.Add(ref store.Statistics.StartDisagreements);
+                    _logger.Error(ex, $"The rows of sensor '{sensor.FullPath}' could not be compared with the large file store; archives no record names are kept");
                 }
             }
 
-            return missing;
+            return (missing, failed);
         }
 
 

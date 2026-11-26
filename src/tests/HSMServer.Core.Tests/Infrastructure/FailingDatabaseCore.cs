@@ -58,7 +58,10 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public HSMDatabase.AccessManager.LargeFiles.ILargeFileStore LargeFiles => _inner.LargeFiles;
 
-        public byte[] GetSensorValue(Guid sensorId, long ticks) => _inner.GetSensorValue(sensorId, ticks);
+        public byte[] GetSensorValue(Guid sensorId, long ticks) => SensorValueReadFails ? [] : _inner.GetSensorValue(sensorId, ticks);
+
+        // A read of a sensor's history that fails (#1883).
+        internal bool SensorValuesReadFails { get; set; }
 
         // A read of a sensor's entity that fails (#1883).
         internal bool SensorEntityReadFails { get; set; }
@@ -289,14 +292,18 @@ namespace HSMServer.Core.Tests.Infrastructure
             OnAddSensorValue?.Invoke(sensorId, value);
             _inner.AddSensorValue(sensorId, value);
         }
-        // A delete of history rows that fails without a word, as SensorValuesDatabaseWorker's does (#1883).
-        internal bool ClearSensorValuesSilentlyFails { get; set; }
+        // A delete of history rows that leaves the rows in place (#1883): the code that removes files after a clear must look at
+        // the rows, not at the call.
+        internal bool ClearSensorValuesLeavesRows { get; set; }
 
         public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to)
         {
-            if (!ClearSensorValuesSilentlyFails)
+            if (!ClearSensorValuesLeavesRows)
                 _inner.ClearSensorValues(sensorId, from, to);
         }
+
+        // A point read of a row that cannot be read (the empty answer of a failed read) (#1883).
+        internal bool SensorValueReadFails { get; set; }
 
         // Sensor-move merge (#1720): set to make the history copy throw, as a
         // failed write inside it does.
@@ -328,7 +335,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds) => _inner.GetLastAndFirstValues(sensorIds);
         public Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors) => _inner.GetLatestValuesFromTo(sensors);
         public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count) => _inner.GetSensorValuesPage(sensorId, from, to, count);
-        public IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.GetSensorValues(sensorId, from, to);
+        public IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to) =>
+            SensorValuesReadFails ? throw new InvalidOperationException("a history read that fails (test)") : _inner.GetSensorValues(sensorId, from, to);
         public List<SensorEntity> GetAllSensors() => _inner.GetAllSensors();
         public void ExportValuesDatabase(string databaseName, Dictionary<Guid, string> sensors) => _inner.ExportValuesDatabase(databaseName, sensors);
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId) => _inner.CalculateSensorHistorySize(sensorId);

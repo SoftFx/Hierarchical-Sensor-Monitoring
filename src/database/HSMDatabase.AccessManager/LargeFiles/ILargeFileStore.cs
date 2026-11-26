@@ -461,6 +461,12 @@ namespace HSMDatabase.AccessManager.LargeFiles
         void KeepOrphanArchives(string reason);
 
         /// <summary>
+        /// Says that a check of the values against the store has completed without a failure in this process. Until then the
+        /// pass keeps every archive no record names (it may be the only copy of a value's file). Not durable.
+        /// </summary>
+        void ConfirmValuesChecked();
+
+        /// <summary>
         /// Begins or continues the upload of a file. The caller has checked the sensor and the name (1..1,024 characters),
         /// the source identity, the client name and the remote address (each at most 256 characters). The client name and
         /// the remote address are kept in the record of a new upload; a continue keeps the record's. <paramref name="pieceSize"/> is the original bytes per piece,

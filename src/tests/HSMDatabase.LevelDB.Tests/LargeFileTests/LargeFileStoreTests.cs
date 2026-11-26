@@ -932,6 +932,12 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.True(File.Exists(stray));
 
             _now = _now.AddHours(2);
+
+            // Not before a check of the values against the store has completed in this process.
+            Assert.Equal(0, store.RunStorePass().OrphanArchivesRemoved);
+            Assert.True(File.Exists(stray));
+
+            store.ConfirmValuesChecked();
             var removed = store.RunStorePass();
 
             Assert.Equal(1, removed.OrphanArchivesRemoved);
