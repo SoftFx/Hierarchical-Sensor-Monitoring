@@ -705,6 +705,30 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         }
 
         [Fact]
+        public void An_archives_folder_that_cannot_be_listed_counts_as_content()
+        {
+            var archives = Path.Combine(_root, LargeFileStore.ArchivesFolderName);
+            Directory.CreateDirectory(archives);
+
+            // "Cannot tell" is content: the start checks and the counters must not take an unreadable store for an empty one.
+            Assert.True(LargeFileStore.HasEntries(archives, _ => throw new IOException("the volume is gone")));
+            Assert.True(LargeFileStore.HasEntries(archives, _ => throw new UnauthorizedAccessException("denied")));
+            Assert.True(LargeFileStore.HasEntries(archives, ThrowingWhileListed));
+
+            Assert.False(LargeFileStore.HasEntries(archives, Directory.EnumerateFileSystemEntries));
+            Assert.False(LargeFileStore.HasEntries(Path.Combine(_root, "absent"), _ => throw new IOException("never listed")));
+
+            // Lazy, as the real listing is: it throws on the first MoveNext, not when called.
+            static IEnumerable<string> ThrowingWhileListed(string folder)
+            {
+                if (folder is not null)
+                    throw new IOException("the listing broke");
+
+                yield break;
+            }
+        }
+
+        [Fact]
         public void A_lease_follows_the_monotonic_clock_not_the_wall_clock()
         {
             var store = Open();
