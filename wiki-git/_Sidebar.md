@@ -11,6 +11,7 @@
  - [Sensor Types](Sensor-types)
  - [Table Sensors](Table-Sensors)
  - [Large Files](Large-Files)
+ - [Sealed Sensor History](Sealed-Sensor-History)
 
 **🔔 Alerts**
  - [Alerts Overview](Alerts-Overview)
