@@ -532,65 +532,111 @@ namespace hsm::http
 
             std::string error;
             if (!connection->SendBinary(reinterpret_cast<const char*>(frame.data()), frame.size(), send_timeout_ms, error))
+                return SendFailed(error);
+            last_sent_ = Clock::now();
+            return AwaitAck(id, ack_timeout_ms, ack);
+        }
+        catch (...)
+        {
+            Ended("the request failed", 0);
+            return AckedLinkPutResult::Lost;
+        }
+    }
+
+    AckedLinkPutResult AckedBinaryLink::Request(const std::string& op, const std::string& body_json, int64_t send_timeout_ms, int64_t ack_timeout_ms, AckedLinkAck& ack)
+    {
+        try
+        {
+            if (cancelled_.load())
+                return AckedLinkPutResult::Cancelled;
+            std::shared_ptr<WebSocketConnection> connection;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                connection = connection_;
+            }
+            if (!connection || !connection->IsOpen())
+                return AckedLinkPutResult::NotOpen;
+
+            const int64_t id = next_id_++;
+            // The envelope is built by the JSON library; the body is the caller's JSON text, parsed
+            // first so that the frame is one JSON object whatever the caller passed.
+            nlohmann::json request = nlohmann::json::object();
+            request["id"] = id;
+            request["op"] = op;
+            request["body"] = body_json.empty() ? nlohmann::json::object() : nlohmann::json::parse(body_json);
+            const std::string text = request.dump();
+            highest_sent_ = id;
+
+            std::string error;
+            if (!connection->SendText(text, send_timeout_ms, error))
+                return SendFailed(error);
+            last_sent_ = Clock::now();
+            return AwaitAck(id, ack_timeout_ms, ack);
+        }
+        catch (...)
+        {
+            Ended("the request failed", 0);
+            return AckedLinkPutResult::Lost;
+        }
+    }
+
+    AckedLinkPutResult AckedBinaryLink::SendFailed(const std::string& error)
+    {
+        if (cancelled_.load())
+        {
+            Ended("cancelled", 0);
+            return AckedLinkPutResult::Cancelled;
+        }
+        Ended("writing a request failed: " + Printable(error), 0);
+        return AckedLinkPutResult::Lost;
+    }
+
+    // The wait for the ack of request `id`, which was written whole: the deadline starts now.
+    AckedLinkPutResult AckedBinaryLink::AwaitAck(int64_t id, int64_t ack_timeout_ms, AckedLinkAck& ack)
+    {
+        std::string error;
+        const auto deadline = Clock::now() + std::chrono::milliseconds((std::max<int64_t>)(ack_timeout_ms, 0));
+        for (;;)
+        {
+            const bool hooked = static_cast<bool>(options_.ack_abandoned_for_tests);
+            const bool expired = hooked ? options_.ack_abandoned_for_tests(id) : RemainingMs(deadline) <= 0;
+            if (expired)
+            {
+                // No ack in time: the connection is closed, so a late ack cannot be taken for the
+                // next request's; the caller sends again on the next connection.
+                Close(kCloseLingerMs, 1000, "no ack in time");
+                end_.why = "a request got no ack within " + std::to_string(ack_timeout_ms) + " ms";
+                return AckedLinkPutResult::Lost;
+            }
+            // Nothing was sent for a heartbeat while the answer is awaited: a ping keeps the
+            // server's silence limit away from a long store.
+            if (Clock::now() - last_sent_ >= std::chrono::milliseconds(heartbeat_ms_) && !SendPing(error))
             {
                 if (cancelled_.load())
                 {
                     Ended("cancelled", 0);
                     return AckedLinkPutResult::Cancelled;
                 }
-                Ended("writing a request failed: " + Printable(error), 0);
+                Ended("sending a heartbeat failed: " + Printable(error), 0);
                 return AckedLinkPutResult::Lost;
             }
-            last_sent_ = Clock::now();
-
-            const auto deadline = Clock::now() + std::chrono::milliseconds((std::max<int64_t>)(ack_timeout_ms, 0));
-            for (;;)
+            const int64_t until_ping = (std::max<int64_t>)(heartbeat_ms_ - std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - last_sent_).count(), 1);
+            const int64_t slice = hooked ? kHookSliceMs : (std::max<int64_t>)((std::min)(RemainingMs(deadline), until_ping), 1);
+            const Frame got = ReceiveOne(slice, ack);
+            switch (got)
             {
-                const bool hooked = static_cast<bool>(options_.ack_abandoned_for_tests);
-                const bool expired = hooked ? options_.ack_abandoned_for_tests(id) : RemainingMs(deadline) <= 0;
-                if (expired)
-                {
-                    // No ack in time: the connection is closed, so a late ack cannot be taken for the
-                    // next request's; the caller sends again on the next connection.
-                    Close(kCloseLingerMs, 1000, "no ack in time");
-                    end_.why = "a request got no ack within " + std::to_string(ack_timeout_ms) + " ms";
-                    return AckedLinkPutResult::Lost;
-                }
-                // Nothing was sent for a heartbeat while the answer is awaited: a ping keeps the
-                // server's silence limit away from a long store.
-                if (Clock::now() - last_sent_ >= std::chrono::milliseconds(heartbeat_ms_) && !SendPing(error))
-                {
-                    if (cancelled_.load())
-                    {
-                        Ended("cancelled", 0);
-                        return AckedLinkPutResult::Cancelled;
-                    }
-                    Ended("sending a heartbeat failed: " + Printable(error), 0);
-                    return AckedLinkPutResult::Lost;
-                }
-                const int64_t until_ping = (std::max<int64_t>)(heartbeat_ms_ - std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - last_sent_).count(), 1);
-                const int64_t slice = hooked ? kHookSliceMs : (std::max<int64_t>)((std::min)(RemainingMs(deadline), until_ping), 1);
-                const Frame got = ReceiveOne(slice, ack);
-                switch (got)
-                {
-                case Frame::Ack:
-                    if (ack.id == id)
-                        return AckedLinkPutResult::Acked;
-                    // A late ack of an earlier request of this connection: nobody waits for it.
-                    break;
-                case Frame::None:
-                    break;
-                case Frame::Ended:
-                    return AckedLinkPutResult::Lost;
-                case Frame::Cancelled:
-                    return AckedLinkPutResult::Cancelled;
-                }
+            case Frame::Ack:
+                if (ack.id == id)
+                    return AckedLinkPutResult::Acked;
+                // A late ack of an earlier request of this connection: nobody waits for it.
+                break;
+            case Frame::None:
+                break;
+            case Frame::Ended:
+                return AckedLinkPutResult::Lost;
+            case Frame::Cancelled:
+                return AckedLinkPutResult::Cancelled;
             }
-        }
-        catch (...)
-        {
-            Ended("the request failed", 0);
-            return AckedLinkPutResult::Lost;
         }
     }
 

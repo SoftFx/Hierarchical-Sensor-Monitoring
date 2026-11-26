@@ -12,7 +12,7 @@ endif()
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.15.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.16.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -122,6 +122,9 @@ add_library(hsm_collector_core STATIC
     src/tables/hsm_table_pipeline.cpp
     src/tables/hsm_table_row_buffer.cpp
     src/tables/hsm_table_schema.cpp
+    # Large files (#1887): the C ABI and the watches exist in every build; the uploads need
+    # HSM_COLLECTOR_LARGE_FILES (below).
+    src/large_files/hsm_large_files.cpp
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
@@ -228,6 +231,30 @@ if(HSM_COLLECTOR_TABLES)
     target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
 endif()
 
+# Large file values (#1887, ADR-0022): files uploaded in pieces on the file connection of the collector
+# session. They need the session (HSM_COLLECTOR_HTTP) and zstd and zlib's crc32_z (HSM_COLLECTOR_TABLES);
+# SHA-256 comes from the system on Windows (CNG, bcrypt) and from OpenSSL's libcrypto elsewhere, which
+# libcurl[ssl] already brings into the process there. Without both options the C ABI of large files
+# exists and every watch or file is UNAVAILABLE.
+set(HSM_COLLECTOR_LARGE_FILES OFF)
+if(HSM_COLLECTOR_HTTP AND HSM_COLLECTOR_TABLES)
+    set(HSM_COLLECTOR_LARGE_FILES ON)
+    target_sources(hsm_collector_core PRIVATE
+        src/large_files/hsm_sha256.cpp
+        src/large_files/hsm_file_connection.cpp
+        src/large_files/hsm_large_file_platform.cpp
+        src/large_files/hsm_large_file_state.cpp
+    )
+    target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_LARGE_FILES=1)
+    if(WIN32)
+        # CNG for SHA-256; the known folder of the default data folder (shell32, ole32).
+        target_link_libraries(hsm_collector_core PUBLIC bcrypt shell32 ole32)
+    else()
+        find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+        target_link_libraries(hsm_collector_core PRIVATE OpenSSL::Crypto)
+    endif()
+endif()
+
 # Header-only C++ RAII wrapper over the C ABI.
 add_library(hsm_collector_cpp INTERFACE)
 
@@ -325,7 +352,14 @@ if(HSM_COLLECTOR_BUILD_TESTS)
 add_executable(hsm_collector_tests
     tests/hsm_collector_tests.cpp
     tests/hsm_table_pipeline_tests.cpp  # table sensors (#1848); the parts that need zstd are #if HSM_COLLECTOR_TABLES
+    tests/hsm_large_file_tests.cpp      # large files (#1887); the parts that need the file connection are #if HSM_COLLECTOR_LARGE_FILES
 )
+if(HSM_COLLECTOR_LARGE_FILES)
+    target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_LARGE_FILES=1)
+    # The file connection against the scripted file side of tests/ws_test_server.hpp (#1887).
+    target_sources(hsm_collector_tests PRIVATE tests/hsm_file_connection_tests.cpp
+        tests/hsm_large_file_upload_tests.cpp) # the uploads end to end through the C ABI
+endif()
 
 target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
 
@@ -349,6 +383,97 @@ if(HSM_COLLECTOR_TABLES)
 endif()
 
 enable_testing()
+
+# Large files (#1887): the file connection's answers, SHA-256, the platform layer, the state files, the
+# uploader and the C ABI; the uploads against the scripted file side of tests/ws_test_server.hpp.
+if(HSM_COLLECTOR_LARGE_FILES)
+    foreach(name
+            native_large_file_sha256_matches_the_standard_vectors
+            native_large_file_modified_is_written_as_the_wire_asks
+            native_large_file_every_answer_maps_to_its_kind
+            native_large_file_hello_is_checked)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    # The uploads end to end: the C ABI, a collector on the session, the scripted file side.
+    foreach(name
+            native_large_file_mask_matches_both_collectors_rule
+            native_large_file_handed_file_is_stored_and_deleted
+            native_large_file_keep_mode_is_not_sent_again
+            native_large_file_settle_rule_on_a_growing_file
+            native_large_file_files_found_at_start_go_oldest_first
+            native_large_file_speed_limit_waits_between_frames
+            native_large_file_continues_after_a_drop
+            native_large_file_continues_after_a_restart
+            native_large_file_final_refusals_are_final_for_the_run
+            native_large_file_no_room_is_tried_again
+            native_large_file_three_discards_give_up
+            native_large_file_close_1008_is_final
+            native_large_file_empty_file_is_stored
+            native_large_file_cpp_wrapper
+            native_large_file_ordinary_send_above_the_threshold_is_routed
+            native_large_file_route_missing_takes_todays_path
+            native_large_file_secure_travels_in_begin
+            native_large_file_unanswered_piece_is_sent_again
+            native_large_file_corrupt_state_is_set_aside
+            native_large_file_checksum_mismatch_sends_the_piece_again
+            native_large_file_http_transport_is_unavailable
+            native_large_file_argument_mistakes_and_dispose
+            native_large_file_stop_and_dispose_in_the_middle
+            native_large_file_missing_after_checking_begins_again
+            native_large_file_begin_text_is_bounded
+            native_large_file_routed_bad_comment_takes_todays_path
+            native_large_file_piece_refusal_is_final
+            native_large_file_not_held_is_bounded
+            native_large_file_cancel_racing_stored
+            native_large_file_refused_registration_takes_todays_path
+            native_large_file_threshold_follows_the_session
+            native_large_file_default_retry_is_thirty_seconds
+            native_large_file_stop_gives_routed_sends_back
+            native_large_file_close_1008_sends_routed_back
+            native_large_file_routed_sends_are_bounded_in_bytes
+            native_large_file_teardown_during_waits
+            native_large_file_watch_release_racing_an_upload
+            native_large_file_lifecycle_from_the_logger_is_refused
+            native_large_file_discard_after_a_cut
+            native_large_file_piece_send_timeout_begins_again
+            native_large_file_end_unreadable_is_bounded
+            native_large_file_routed_bound_full_takes_todays_path
+            native_large_file_small_file_value_has_no_route_copy)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    if(WIN32)
+        add_test(NAME native_large_file_writer_holds_the_file COMMAND hsm_collector_tests native_large_file_writer_holds_the_file)
+    else()
+        add_test(NAME native_large_file_changed_file_is_discarded_and_sent_again
+            COMMAND hsm_collector_tests native_large_file_changed_file_is_discarded_and_sent_again)
+        add_test(NAME native_large_file_bad_name_is_refused COMMAND hsm_collector_tests native_large_file_bad_name_is_refused)
+    endif()
+    foreach(name
+            native_file_connection_open_sends_the_upgrade_hello_and_probe
+            native_file_connection_whole_upload_is_stored
+            native_file_connection_empty_file_is_stored
+            native_file_connection_continues_after_a_cut
+            native_file_connection_checksum_mismatch_sends_the_piece_again
+            native_file_connection_repeat_piece_answers_the_servers_next
+            native_file_connection_piece_ahead_answers_out_of_order
+            native_file_connection_bad_zstd_frame_discards
+            native_file_connection_end_check_failure_discards
+            native_file_connection_end_checking_then_stored
+            native_file_connection_discard_then_piece_is_not_held
+            native_file_connection_discard_on_an_old_server_is_unknown_op
+            native_file_connection_every_begin_status_reaches_its_kind
+            native_file_connection_silent_answer_is_lost
+            native_file_connection_cancel_ends_a_wait
+            native_file_connection_a_new_connection_replaces_the_old
+            native_file_connection_session_end_closes_it
+            native_file_connection_unusable_hello_is_refused
+            native_file_connection_protocol_errors_close_the_connection)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+else()
+    # A build without large files: every call exists and answers UNAVAILABLE.
+    add_test(NAME native_large_file_build_without_them_is_unavailable COMMAND hsm_collector_tests native_large_file_build_without_them_is_unavailable)
+endif()
 
 if(HSM_COLLECTOR_TABLES)
     foreach(name
@@ -1018,6 +1143,12 @@ if(HSM_COLLECTOR_TABLES)
     if(HSM_COLLECTOR_HTTP)
         add_conformance_test(conformance_table_connection_contract table_connection_contract.hsmtest)
     endif()
+endif()
+
+# Large file values (#1887): the uploader against the file connection of the scripted session server. Built with
+# both HSM_COLLECTOR_HTTP and HSM_COLLECTOR_TABLES (HSM_COLLECTOR_LARGE_FILES).
+if(HSM_COLLECTOR_LARGE_FILES)
+    add_conformance_test(conformance_large_file_contract large_file_contract.hsmtest)
 endif()
 
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
