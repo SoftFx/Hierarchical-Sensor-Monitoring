@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstring>
 #include <string_view>
+#include <thread>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -260,21 +261,39 @@ namespace hsm::http
 
     // Waits until the connection's socket is readable/writable, the deadline passes or Cancel() is
     // called. Waits in slices so a cancel is noticed without a wake-up primitive (see the header).
-    WebSocketConnection::Wait WebSocketConnection::WaitForSocket(bool for_read, Deadline deadline)
+    // A deadline that has passed is a Timeout, before any poll: so a send whose deadline passes between
+    // two pieces stops there. `poll_once` (WritableNow only): the socket is polled once even when the
+    // deadline has passed, a zero-timeout check. `honour_cancel` false: a cancel does not end the wait
+    // (the close frame of a cancelled connection is still written when the socket takes it).
+    WebSocketConnection::Wait WebSocketConnection::WaitForSocket(bool for_read, Deadline deadline, bool honour_cancel, bool poll_once)
     {
+        if (!for_read)
+            writable_seen_ = false;
         curl_socket_t sock = CURL_SOCKET_BAD;
         if (curl_easy_getinfo(static_cast<CURL*>(curl_), CURLINFO_ACTIVESOCKET, &sock) != CURLE_OK || sock == CURL_SOCKET_BAD)
             return Wait::Failed;
 
-        for (;;)
+        for (bool first = true;; first = false)
         {
-            if (cancelled_.load())
+            if (honour_cancel && cancelled_.load())
                 return Wait::Cancelled;
 
-            const int64_t left = RemainingMs(deadline);
-            if (left <= 0)
+            // Compared exactly, not in whole milliseconds: a deadline less than a millisecond away has
+            // not passed, and its slice is one millisecond.
+            const auto now = Now();
+            const bool passed = now >= deadline;
+            if (passed && !(first && poll_once))
                 return Wait::Timeout;
-            const int slice = static_cast<int>(std::min<int64_t>(left, kWaitSliceMs));
+            const int64_t left = passed ? 0 : std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+            const int slice = passed ? 0 : static_cast<int>(std::max<int64_t>(1, std::min<int64_t>(left, kWaitSliceMs)));
+            if (!for_read && writable_for_tests_ && !writable_for_tests_())
+            {
+                // The test's stand-in for full buffers: the slice passes as a poll that found
+                // nothing would.
+                if (slice > 0)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(slice));
+                continue;
+            }
 
 #if defined(_WIN32)
             // A winsock fd_set is a list of handles, not a bitmap indexed by descriptor value, so
@@ -307,38 +326,62 @@ namespace hsm::http
 #endif
             // Ready also covers an error or hang-up on the socket: the next curl call reports it.
             if (ready > 0)
+            {
+                if (!for_read)
+                    writable_seen_ = true;
                 return Wait::Ready;
+            }
         }
     }
 
-    // Writes one whole frame. libcurl encodes it; when the socket blocks part-way, curl_ws_send
+    bool WebSocketConnection::WritableNow()
+    {
+        return WaitForSocket(/*for_read=*/false, Now(), /*honour_cancel=*/false, /*poll_once=*/true) == Wait::Ready;
+    }
+
+    WebSocketConnection::Deadline WebSocketConnection::Now() const
+    {
+        return clock_for_tests_ ? clock_for_tests_() : std::chrono::steady_clock::now();
+    }
+
+    int WebSocketConnection::WsSend(const char* data, size_t size, size_t* sent, int64_t fragsize, unsigned int flags)
+    {
+        if (send_trace_for_tests_)
+            send_trace_for_tests_(size, writable_seen_);
+        writable_seen_ = false;
+        ForgetDetail();
+        return static_cast<int>(curl_ws_send(static_cast<CURL*>(curl_), data, size, sent, static_cast<curl_off_t>(fragsize), flags));
+    }
+
+    // Writes one whole frame. libcurl encodes it; when the socket takes only part of it, curl_ws_send
     // reports how much of the payload it took and expects the rest of the SAME frame next, so the
     // loop below only ever continues a frame it started.
+    //
+    // Why every call waits for the socket FIRST, and passes at most kMaxPieceBytes: libcurl cannot be
+    // left to wait. With Schannel (the TLS backend of libcurl on Windows) a send waits on the socket
+    // itself, without a bound: in libcurl 8.21.0, lib/vtls/schannel.c, schannel_send() writes each TLS
+    // record of at most 16 KiB in a loop that first calls SOCKET_WRITABLE(socket, timeout), and the
+    // timeout comes from Curl_timeleft_ms(), which is 0 ("no limit") for a connect-only handle
+    // (lib/connect.c, timeleft_now_ms: `!data->set.timeout || data->set.connect_only`), so it waits
+    // for ever; it never returns CURLE_AGAIN. One curl_ws_send also writes everything libcurl buffered
+    // (lib/ws.c, ws_flush: up to two chunks of 64 KiB, several records). So against a peer that has
+    // stopped reading, a single call would hold the thread until the peer read again or the
+    // connection broke: measured on Windows, a 16 MiB send with a 2 s timeout returned only when the
+    // peer read again, and a 4-byte text after a full buffer the same. Waiting here first, with our
+    // deadline and the cancel flag, and then passing one record's worth, means no call into libcurl
+    // finds the socket unwritable: a send on a socket that was seen writable was accepted whole by
+    // the OS in every call measured (#1848). The bound does not depend on the backend: with OpenSSL
+    // or GnuTLS libcurl returns CURLE_AGAIN instead of waiting, and the same loop goes on.
     bool WebSocketConnection::SendFrame(const char* data, size_t size, unsigned int flags, Deadline deadline, std::string& error)
     {
-        CURL* curl = static_cast<CURL*>(curl_);
+        const bool in_pieces = size > kMaxPieceBytes;
         size_t offset = 0;
+        bool started = false;
         for (;;)
         {
             if (cancelled_.load())
             {
                 error = kCancelled;
-                return false;
-            }
-
-            size_t sent = 0;
-            ForgetDetail();
-            const CURLcode rc = curl_ws_send(curl, data + offset, size - offset, &sent, 0, flags);
-            if (rc == CURLE_OK)
-            {
-                offset += (std::min)(sent, size - offset);
-                if (offset >= size)
-                    return true;
-                // A partial write means the socket blocked: wait for it below.
-            }
-            else if (rc != CURLE_AGAIN)
-            {
-                error = Describe(rc);
                 return false;
             }
 
@@ -354,6 +397,37 @@ namespace hsm::http
                 return false;
             case Wait::Failed:
                 error = "waiting on the connection failed";
+                return false;
+            }
+
+            size_t sent = 0;
+            CURLcode rc = CURLE_OK;
+            if (in_pieces)
+            {
+                // CURLWS_OFFSET: a piece of one frame whose whole length goes with the first piece;
+                // the later pieces pass 0. libcurl has the frame's header and length by then.
+                const size_t piece = (std::min)(kMaxPieceBytes, size - offset);
+                rc = static_cast<CURLcode>(WsSend(data + offset, piece, &sent, started ? 0 : static_cast<int64_t>(size), flags | CURLWS_OFFSET));
+            }
+            else
+            {
+                rc = static_cast<CURLcode>(WsSend(data + offset, size - offset, &sent, 0, flags));
+            }
+            // After the first call the frame has begun, whatever its result: libcurl writes the
+            // frame's header into its send buffer before it can answer CURLE_AGAIN (lib/ws.c,
+            // ws_enc_send), and a frame is only started with that buffer empty.
+            started = true;
+
+            if (rc == CURLE_OK)
+            {
+                offset += (std::min)(sent, size - offset);
+                if (offset >= size)
+                    return true;
+                // A piece done, or a partial write (the socket took less): wait, then go on.
+            }
+            else if (rc != CURLE_AGAIN)
+            {
+                error = Describe(rc);
                 return false;
             }
         }
@@ -673,10 +747,15 @@ namespace hsm::http
                     payload.swap(control_);
                     if ((flags & CURLWS_CLOSE) != 0)
                     {
-                        // Complete the close handshake with one non-blocking attempt, echoing the
-                        // peer's status code when it sent one.
-                        size_t sent = 0;
-                        (void)curl_ws_send(curl, payload.data(), payload.size() >= 2 ? 2 : 0, &sent, 0, CURLWS_CLOSE);
+                        // Complete the close handshake with one attempt, echoing the peer's status
+                        // code when it sent one: only when the socket takes it now, since a
+                        // curl_ws_send on a socket that is not writable can wait without bound
+                        // (SendFrame says why).
+                        if (WritableNow())
+                        {
+                            size_t sent = 0;
+                            (void)WsSend(payload.data(), payload.size() >= 2 ? 2 : 0, &sent, 0, CURLWS_CLOSE);
+                        }
                         // RFC 6455 5.5.1: an optional 2-byte status code in network byte order,
                         // then an optional reason text.
                         closure_ = WebSocketClosure{};
@@ -771,9 +850,14 @@ namespace hsm::http
 
                 if (linger_ms <= 0 || cancelled_.load())
                 {
-                    // One non-blocking attempt: this path must never wait.
-                    size_t sent = 0;
-                    (void)curl_ws_send(curl, payload.data(), payload.size(), &sent, 0, CURLWS_CLOSE);
+                    // One attempt, and only when the socket takes it now: this path must never
+                    // wait, and a curl_ws_send on a socket that is not writable can wait without
+                    // bound (SendFrame says why). A peer that stopped reading gets no close frame.
+                    if (WritableNow())
+                    {
+                        size_t sent = 0;
+                        (void)WsSend(payload.data(), payload.size(), &sent, 0, CURLWS_CLOSE);
+                    }
                 }
                 else
                 {
