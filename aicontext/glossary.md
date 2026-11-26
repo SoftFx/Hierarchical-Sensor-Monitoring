@@ -1,6 +1,6 @@
 # HSM Glossary
 
-> Owner: shared | Last reviewed: 2026-11-25 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-26 | Canonical: yes
 
 Canonical terms for Hierarchical-Sensor-Monitoring. Prefer these names in code,
 docs, PR descriptions, review comments, and user-facing documentation.
@@ -131,6 +131,8 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Path pattern | A template's `paths` entry, compiled by `PathTemplateConverter` to a regex anchored `^...$` and matched against the sensor's full product-prefixed path. | `*` matches any run of characters within ONE segment (cannot cross `/`, may cover part of one); there is no any-depth wildcard (`**` is two single-segment classes) and the depth is fixed by the segment count — a pattern of LITERALS without `/` can never match. The guarantee is for literal characters only: constant parts reach the regex unescaped, so metacharacters in them stay live — `.` matches any character including `/` (`Product.cpu` matches `Product/cpu`). Semantics stated in the `AlertTemplateDto.Paths` field docs (#1565). |
 | Zero-match / dead pattern | A path pattern that matched no sensors in the template's folder at apply time. | A legal save (sensors may come later); since #1565 it is reported through the #1401 `warnings` channel of the create/update/restore result — one entry per dead pattern, the `sensor` slot carrying the pattern itself — instead of clean success. The reason text says "matched no sensors"; matching includes the template's sensor-type and folder filters. |
 | Notification | Delivered message via Telegram/email or other channel. | Use when discussing delivery, retries, and failures. |
+| Bot credential | The Telegram bot's three settings — its username (`BotName`), the token from BotFather (`BotToken`) and the delivery switch — kept in the settings file. Administrators change them on the Configuration page's Telegram tab and, since #1830, through `GET`/`PATCH /api/v1/telegram-bot` and the `get_telegram_bot`/`update_telegram_bot` tools. | The token is a secret and write-only on the management surface: a read answers `hasBotToken`, a journal record names the state of the setting, a log line says that it changed (#1824, #1828). |
+| Server settings | Settings that belong to the server itself rather than to the monitoring tree; `serverSettings` is their journal kind. | Since #1830 the bot credential is the only one with a management surface. |
 | TTL | Time-to-live policy on a sensor. | Expiration and status transitions should be tested. |
 
 ## API And Integration Terms

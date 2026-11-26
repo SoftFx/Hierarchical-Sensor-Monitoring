@@ -15,7 +15,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
     public abstract class DatabaseTestClass : IClassFixture<DatabaseRegisterFixture> { }
 
 
-    // Closes the databases one test class opened and removes their folder when the class ends.
+    // Closes the databases one test class opened and removes their folder when the class ends;
+    // a folder that cannot be removed fails the class's cleanup.
     public class DatabaseRegisterFixture : IDisposable
     {
         private readonly List<DatabaseCoreManager> _createdDatabases = new(1 << 8);
@@ -23,27 +24,43 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 
         public void Dispose()
         {
-            var folders = _createdDatabases.Select(u => u.DatabaseFolder).Distinct();
+            var folders = _createdDatabases.Select(u => u.DatabaseFolder).Distinct().ToList();
 
             _createdDatabases.ForEach(db => db.ClearDatabase());
 
+            var failures = new List<Exception>();
+
             foreach (var folder in folders)
-                TryRemoveFolder(folder);
+                try
+                {
+                    RemoveFolder(folder);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add(ex);
+                }
+
+            if (failures.Count > 0)
+                throw new AggregateException("A test class left its database folder behind: something still holds a file in it.", failures);
         }
 
-        // One attempt, no retry. DatabaseCore.Dispose does not close the Dashboards (ServerLayout)
-        // and ChangeSets databases, so their files stay locked until the test host exits and the
-        // folder cannot be removed here; FileManager.SafeRemoveFolder would retry 5 x 5 s on every
-        // such folder for nothing (#1943). What is left is removed by the DatabaseFixture of the
-        // next run, when no process holds it any more.
-        private static void TryRemoveFolder(string folder)
+        // One attempt, no retry, and a failure is an error of this class: DatabaseCore.Dispose closes
+        // every database it opened, so nothing may hold a file of the folder any more (#1943 follow-up).
+        // Throwing from a class fixture's Dispose makes xUnit report a "Test Class Cleanup Failure" on
+        // this class alone and turn the run red, while the class's tests keep their own results.
+        private static void RemoveFolder(string folder)
         {
+            if (!Directory.Exists(folder))
+                return;
+
             try
             {
                 Directory.Delete(folder, recursive: true);
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException($"Could not remove the test database folder {Path.GetFullPath(folder)}: {ex.Message}", ex);
+            }
         }
 
         internal void RegisterDatabase(DatabaseCoreManager dbAdapterManager) =>

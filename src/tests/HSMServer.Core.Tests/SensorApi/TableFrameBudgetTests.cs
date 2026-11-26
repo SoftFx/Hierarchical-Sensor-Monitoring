@@ -15,6 +15,22 @@ namespace HSMServer.Core.Tests.SensorApi
         private static readonly Guid KeyC = Guid.NewGuid();
 
 
+        // A wait whose token is already cancelled takes nothing, also when the bytes are free (the
+        // fast path): the contract "a cancelled wait takes nothing" holds exactly.
+        [Fact]
+        public async Task ATakeWithACancelledToken_TakesNothingEvenWhenTheBytesAreFree()
+        {
+            var budget = new TableFrameBudget(30);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => budget.TakeAsync(10, KeyA, cancelled.Token));
+
+            Assert.Equal(0, budget.InUse);
+            Assert.Equal(0, budget.Waiting);
+            Assert.True(budget.TryTake(30, KeyA));
+        }
+
         // A holds a take, a second take of A waits for it, and B, with room in the budget, is not
         // held back behind A's waiter: by the fast path and by the waiting one.
         [Fact]

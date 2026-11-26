@@ -32,7 +32,8 @@ namespace HSMServer.Model.ManagementApi.Chats
         private const string UnknownChannelMessage = "Unknown channel '{0}'.";
         private const string ChannelNotCarriedMessage = "The chat has no {0} configured.";
         private const string BotNotRunningMessage =
-            "The Telegram bot is not running. Configure or start it first (update_telegram_bot).";
+            "The Telegram bot is not running. Pass the bot token to update_telegram_bot: a token change starts the bot. " +
+            "If the token is stored already, restart the bot on the web Configuration page.";
 
         private readonly IChatsManager _chats;
         private readonly IApiTokenAuthorizationService _authorization;

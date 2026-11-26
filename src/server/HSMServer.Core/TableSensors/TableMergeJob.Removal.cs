@@ -110,6 +110,23 @@ namespace HSMServer.Core.TableSensors
                 }
             }
 
+            // The sensors whose deletes completed in this pass: their marks are cleared together at the end (one write of the
+            // record for the pass, not one per sensor), each only after its own deletes.
+            var done = new List<(TableRemoval Mark, long Batches, long Rows)>();
+
+            try
+            {
+                RemoveSensors(removals, products, going, done, run, faulted, utcNow, token);
+            }
+            finally
+            {
+                ClearSensorMarks(done, run, utcNow);
+            }
+        }
+
+        private void RemoveSensors(IReadOnlyList<TableRemoval> removals, IReadOnlyList<Guid> products, HashSet<Guid> going,
+            List<(TableRemoval Mark, long Batches, long Rows)> done, MoveRun run, HashSet<Guid> faulted, DateTime utcNow, CancellationToken token)
+        {
             HashSet<Guid> tree = null;
 
             foreach (var mark in removals.Where(m => m.SensorId is not null))
@@ -135,7 +152,8 @@ namespace HSMServer.Core.TableSensors
 
                 try
                 {
-                    RemoveSensorRows(mark, products, going, run, token);
+                    if (RemoveSensorRows(mark, products, going, run, token, out var batches, out var rows))
+                        done.Add((mark, batches, rows));
                 }
                 catch (Exception ex)
                 {
@@ -146,8 +164,53 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        // Whether the mark is still the store's mark of its sensor or product, unchanged since the pass read it.
-        private bool IsLive(TableRemoval mark) => Batches.GetRemovals().Contains(mark);
+        // Whether the mark is still the store's mark of its sensor or product, unchanged since the pass read it: a keyed
+        // lookup (#1922), not a copy of every mark.
+        private bool IsLive(TableRemoval mark) => Batches.FindRemoval(mark) == mark;
+
+        // Clears the marks of the sensors whose deletes completed in this pass in one write of the record, then counts and
+        // logs each one cleared. A mark not cleared (made again since the pass read it, or the write failed) stays for a later
+        // pass, which deletes nothing more for it and clears it then.
+        private void ClearSensorMarks(List<(TableRemoval Mark, long Batches, long Rows)> done, MoveRun run, DateTime utcNow)
+        {
+            if (done.Count == 0)
+                return;
+
+            // ClearRemovals clears only the same mark: one the store still holds for the sensor was made again since.
+            HashSet<TableRemoval> kept;
+            try
+            {
+                var all = Batches.ClearRemovals(done.Select(d => d.Mark).ToList());
+                Checkpoint?.Invoke("removal-cleared");
+                kept = all ? [] : done.Where(d => Batches.FindRemoval(d.Mark) is not null).Select(d => d.Mark).ToHashSet();
+            }
+            catch (Exception ex)
+            {
+                foreach (var (mark, batches, rows) in done)
+                    _removalProgress[mark.SensorId.Value] = (batches, rows);
+
+                MoveFault(Guid.Empty, utcNow, ex, $"the record of {done.Count} completed table sensor removals could not be cleared");
+                return;
+            }
+
+            foreach (var (mark, batches, rows) in done)
+            {
+                var id = mark.SensorId.Value;
+
+                if (kept.Contains(mark))
+                {
+                    _removalProgress[id] = (batches, rows);
+                    continue;
+                }
+
+                _removalProgress.Remove(id);
+                Stats.Add(ref Stats.RemovalsDone);
+                run.Removals++;
+
+                _logger.Info($"Table removal of sensor {id} (product {(mark.ProductId == Guid.Empty ? "not known" : mark.ProductId.ToString())}) done: " +
+                             $"{batches} batches ({rows} rows) deleted, its placement and its record cleared");
+            }
+        }
 
         // The products that hold a placement of a sensor, as far as they can be read now.
         private List<Guid> Holders(IReadOnlyList<Guid> products, Guid sensor)
@@ -191,12 +254,14 @@ namespace HSMServer.Core.TableSensors
         // A table sensor gone from the tree: every key of it, in every week database of every product that holds a placement
         // of it (not only the classes the placement names: what a lost in-flight record left is found too), from the week of
         // the placement's first hour on (it has no rows before it); then that product's move in flight if it is the sensor's;
-        // then the placement; then the mark. Answers whether it completed (false: the budget or the token stopped it; a later
-        // pass goes on, the databases already done hold nothing of it and write nothing again).
-        private bool RemoveSensorRows(TableRemoval mark, IReadOnlyList<Guid> products, HashSet<Guid> going, MoveRun run, CancellationToken token)
+        // then the placement; the mark is cleared by the caller (ClearSensorMarks, once for the pass). Answers whether its
+        // deletes completed, with what it deleted in this run (false: the budget or the token stopped it; a later pass goes on,
+        // the databases already done hold nothing of it and write nothing again).
+        private bool RemoveSensorRows(TableRemoval mark, IReadOnlyList<Guid> products, HashSet<Guid> going, MoveRun run, CancellationToken token,
+            out long batches, out long rows)
         {
             var id = mark.SensorId.Value;
-            var (batches, rows) = _removalProgress.GetValueOrDefault(id);
+            (batches, rows) = _removalProgress.GetValueOrDefault(id);
 
             foreach (var product in products)
             {
@@ -241,17 +306,6 @@ namespace HSMServer.Core.TableSensors
                 Checkpoint?.Invoke("removal-unplaced");
             }
 
-            if (!Batches.ClearRemovals([mark]))
-                return false;
-
-            Checkpoint?.Invoke("removal-cleared");
-
-            _removalProgress.Remove(id);
-            Stats.Add(ref Stats.RemovalsDone);
-            run.Removals++;
-
-            _logger.Info($"Table removal of sensor {id} (product {(mark.ProductId == Guid.Empty ? "not known" : mark.ProductId.ToString())}) done: " +
-                         $"{batches} batches ({rows} rows) deleted, its placement and its record cleared");
             return true;
         }
 

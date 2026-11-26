@@ -499,6 +499,34 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_pass_that_completes_many_sensor_removals_writes_the_record_of_removals_once()
+        {
+            const int count = 8;
+            var paths = Enumerable.Range(0, count).Select(i => $"node/t{i}").ToArray();
+            var sensors = new List<BaseSensorModel>();
+            foreach (var path in paths)
+                sensors.Add(await RegisterAsync(path, keep: KeepP52));
+            var r = await RegisterAsync("r", keep: KeepP52);
+            PutHours(1, [.. paths, "r"]);
+            var rows = Rows(r);
+
+            await _server.Cache.RemoveProductAsync(sensors[0].Parent.Id);
+            Assert.Equal(count, _server.Batches.GetRemovals().Count);
+
+            // One write of the record for the pass, not one per sensor (#1922).
+            var writes = 0;
+            _server.Batches.Checkpoint = p => { if (p == "removals-writing") writes++; };
+            var report = Pass(RemoveAt);
+            _server.Batches.Checkpoint = null;
+
+            Assert.Equal((count, null), (report.RemovalsDone, report.Fault));
+            Assert.Equal(1, writes);
+            Assert.Empty(_server.Batches.GetRemovals());
+            Assert.All(sensors, s => Assert.Equal(0, Bytes(s, 52)));
+            Assert.Equal(rows, Rows(r));
+        }
+
+        [Fact]
         public async Task A_mark_replaced_during_the_pass_by_one_not_confirmed_deletes_nothing_on_the_mark_the_pass_read()
         {
             var s = await RegisterAsync("s", keep: KeepP52);
