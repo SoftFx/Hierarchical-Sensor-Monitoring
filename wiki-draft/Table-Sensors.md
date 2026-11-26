@@ -165,7 +165,7 @@ One exception, a known issue of this branch that is not decided yet: a table sen
 
 **Not built yet:** moving a sensor's stored rows to its new period in the background, so that a shortened period frees disk soon and a lengthened sensor stops holding the old week files. Until then, the server's sensor `Move weeks pending` (under `Database/Tables`) counts the week files it keeps for that reason.
 
-**Removing a table sensor** (Remove in the tree) removes the sensor. Its rows are no longer shown and are not given to a new sensor created later at the same path. Rows of the removed sensor that are already stored stay on disk until their week is deleted by the period; deleting them at once is decided and not built yet. If the sensor's collector is still running, it registers the sensor again, as a new, empty sensor.
+**Removing a table sensor** (Remove in the tree) removes the sensor. Its rows are no longer shown and are not given to a new sensor created later at the same path. Its stored rows are deleted too, within a few minutes, whatever its period, as the history of any sensor is deleted with it; there is no undo. Removing a folder deletes the rows of every table sensor in it, and removing a product deletes all its table rows, including the rows it received in the last hours that were not yet merged. If the server stops in the middle, it finishes the deletion after it starts again. The server sensor `Orphan table placements` (under `Database/Tables`) counts the rare table sensors whose rows could not be scheduled for deletion; those rows are kept and named in the server log once a day. If the sensor's collector is still running, it registers the sensor again, as a new, empty sensor.
 
 ---
 

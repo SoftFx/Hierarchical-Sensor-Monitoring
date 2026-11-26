@@ -314,6 +314,8 @@ namespace HSMServer.Core.Tests.Infrastructure
         public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count) => _inner.GetSensorValuesPage(sensorId, from, to, count);
         public IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to) => _inner.GetSensorValues(sensorId, from, to);
         public List<SensorEntity> GetAllSensors() => _inner.GetAllSensors();
+
+        public bool EntityExists(Guid id) => _inner.EntityExists(id);
         public void ExportValuesDatabase(string databaseName, Dictionary<Guid, string> sensors) => _inner.ExportValuesDatabase(databaseName, sensors);
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId) => _inner.CalculateSensorHistorySize(sensorId);
         public IEnumerable<(byte[], byte[])> MigrateDatabaseV2() => _inner.MigrateDatabaseV2();

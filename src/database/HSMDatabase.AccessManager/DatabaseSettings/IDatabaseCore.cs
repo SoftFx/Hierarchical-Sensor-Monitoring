@@ -145,6 +145,12 @@ namespace HSMServer.Core.DataLayer
         Exception UpdateSensorChecked(SensorEntity entity);
         void RemoveSensorWithMetadata(Guid sensorId);
 
+        /// <summary>
+        /// Whether the entity of a sensor or of a product (node) with the id is in the environment database (#1850 part 4d:
+        /// a table removal is acted on only once its entity is gone). True when the read fails.
+        /// </summary>
+        bool EntityExists(Guid id);
+
         void AddSensorValue(Guid sensorId, BaseValue value);
         void ClearSensorValues(Guid sensorId, DateTime from, DateTime to);
 

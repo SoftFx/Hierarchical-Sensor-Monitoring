@@ -90,6 +90,23 @@ Every one is refused. The refusals of the sensor's own operations name the table
 
 Renaming a root product does not change a sensor's path (paths are relative to the root product) and is allowed. Moving a product between folders does not change paths. No operation re-parents a node.
 
+### Removing a table sensor or its product (#1850 part 4d)
+
+Removing a table sensor removes its entity as for any sensor (`TreeValuesCache.RemoveSensor`), and its stored rows go too, at once, as an ordinary sensor's values do (ADR-0021 point 12): no grace period, no undo. The tree records the removal in the batch store **before** the sensor leaves the tree (`ITableBatchStore.MarkRemoved`, one durable write); the merge job deletes its batches, index records and placement in the next passes, within its budget, once the sensor is gone from the tree (`aicontext/features/storage/table-batches/feature.md`, "The removal").
+
+| Removal | What the tree records | What the merge job deletes |
+|---|---|---|
+| A table sensor (the tree, the API, a self-destroy sweep) | the sensor, with its root product | its keys in every week database of every class, its placement |
+| A node (not a root product) | every table sensor of its subtree, in one write | as above, per sensor |
+| A root product | the product and its table sensors, in one write | its blocks (never merged, or within their delay; the other products' blocks of the same hours stay), then its whole folder of batches |
+| A sensor whose parent is missing at start | the sensor, its product not known | as for a sensor, in the product that holds its placement |
+
+- A record that cannot be written is logged as an Error and the removal goes on: the sensor does not come back, and its rows stay as an orphan placement, counted (`Orphan table placements`) and named in a daily Warn, never deleted by themselves.
+- The job acts on a record of this run only once the tree has confirmed that the entity is gone from the environment database (read back as absent). A crash between the record and the removal of the entity leaves a record of a sensor still in the tree after the restart: the job clears it with a Warn and deletes nothing.
+- A new sensor registered on the same path has another id and never sees the old rows; its own rows and placement are not touched by the old sensor's removal, also when they were merged before it.
+- A collector still sending the removed sensor's table gets it refused (`UnknownSensor`); the feed sensors of the removed sensor stay (`aicontext/features/server/table-feed-sensors/feature.md`).
+- Ordinary sensors are not touched by any of this.
+
 ## Loading, and a server that does not know the type (rollback)
 
 `SensorModelFactory` builds a `TableSensorModel` from an entity of type 11. The constructor throws `InvalidDataException` when the entity has no `Table`, its schema breaks the rules (read back with the format's maximum column count, so a sensor registered under a looser limit still loads), or its stored schema id is not the id of its columns.
@@ -118,7 +135,7 @@ Registration request (Type `Table`, schema) → product queue → `TryCheckTable
 
 ## Storage / Persistence
 
-The schema is part of the sensor's row in the environment database (`SensorEntity.Table`), so it is backed up with it. The rows themselves live in the block store (part 2b), which is not backed up, like sensor history.
+The schema is part of the sensor's row in the environment database (`SensorEntity.Table`), so it is backed up with it. The rows themselves live in the block store (part 2b) and the batch store (#1850), which are not backed up, like sensor history; they are deleted with the sensor or its product (above). A table sensor entity that does not load is left out of the tree and not removed: its stored rows stay, reported as an orphan placement (unless an earlier run recorded its removal and stopped before its entity left the database: the user's removal is then carried out).
 
 ## UI / Operator Visibility
 
@@ -132,6 +149,7 @@ The schema is part of the sensor's row in the environment database (`SensorEntit
 
 ## Tests
 
+- `HSMServer.Core.Tests/TableSensors/TableMergeJobTests.Removal.cs` (#1850 part 4d): a removed sensor's keys in every class and another sensor's keys byte for byte, a crash after every write of a sensor's and of a product's removal, a record of something still in the tree, a removal during a move, a product's blocks and folder, a new sensor on the path, an orphan placement, a record that does not read, a sensor removed at start without its parent.
 - `HSMServer.Core.Tests/TreeValuesCacheTests/TableSensorTests.cs`: registration (create, persist, restart; same schema; three kinds of other schema; another kind's path; no schema; another explicit type on a table path), a value addressed to a table sensor (rejected, nothing stored, value edit refused), no TTL inheritance and refused policy/TTL/aggregation updates, no template match, every move form (move, rename, other node, merge both ways, previous paths, dry run), node rename refused, history clear and retention, self-destroy, the rollback behaviour above. Every refusal is asserted to be a non-fault error; a table registration carrying alerts is refused before anything is created; a store failure during a table registration stays a fault (`A_store_fault_during_a_table_registration_is_still_a_fault`).
 - `SensorApi/RegistrationStatusTests.Registration_RefusedByATableSensor_IsARefusal_NotAFault`: what the HTTP routes answer (200 with a per-path entry, 406).
 - `SensorApi/TableRegistrationWireTests` (#1845): a table registration over `commands`, `addOrUpdate` and the session creates the sensor with its schema and is accepted again; every refusal of the ingestion (the rules of the schema, an unknown or out-of-byte-range type, a null column, columns on another type or without a type, the column limit, four spellings of a path not in normal form) is a per-path error in a 200 with the registration after it applied; the cache's refusals (another schema, no columns) reach the wire as refusals; `KeepHistory` is stored.
