@@ -351,7 +351,8 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.InRange(busy.RetryAfter ?? 0, 170, LargeFileStoreLimits.DefaultLeaseTimeoutSeconds);
         }
 
-        // A lease shorter than a frame's deadline (the silence limit) would let a frame outlast it: it is raised at start.
+        // A lease shorter than a frame's deadline (the silence limit) would let frames in flight pass twice the uploads in
+        // progress: it is raised at start.
         [Theory]
         [InlineData(10, 30, 90)]
         [InlineData(180, 30, 180)]
