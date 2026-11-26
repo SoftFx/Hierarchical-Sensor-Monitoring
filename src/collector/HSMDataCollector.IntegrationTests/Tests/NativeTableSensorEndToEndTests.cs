@@ -78,8 +78,9 @@ namespace HSMDataCollector.IntegrationTests.Tests
             await UntilAsync(async () => await StoredRowsAsync(path, baseNs) == RowsAtTick, $"{RowsAtTick} rows stored");
 
             // The connection is lost: the rows added meanwhile are kept and delivered once it is back, each once.
-            // A failed reconnect after the rows were added says the outage was real when they were (the first failure
-            // after a session is always logged); whether a tick packs them before the proxy is back is not controlled.
+            // A reconnect that failed during the outage says it was real (the first failure after a session is always
+            // logged); the rows are added while the proxy is gone either way. Whether that failure came before or after
+            // they were added, and whether a tick packs them before the proxy is back, are not controlled.
             var sessionsEnded = driver.LogCount("The collector session ended");
             var failedOpens = driver.LogCount("Cannot open a collector session");
             await _fixture.DisableConnectionAsync();
@@ -329,6 +330,8 @@ namespace HSMDataCollector.IntegrationTests.Tests
             catch (OperationCanceledException)
             {
                 process.Kill(entireProcessTree: true);
+                // The readers end once the killed process's pipes close; the process is disposed only after them.
+                await Task.WhenAny(Task.WhenAll(stdout, stderr), Task.Delay(TimeSpan.FromSeconds(10)));
                 return (-1, $"{file} did not finish within {patience}");
             }
 
