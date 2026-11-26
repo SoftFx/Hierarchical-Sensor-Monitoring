@@ -317,6 +317,13 @@ namespace HSMDataCollector.Tests.Transport
                 foreach (var name in context.Request.Headers.AllKeys)
                     headers[name] = context.Request.Headers[name];
 
+                // A file connection (#1884) asks for its own subprotocol.
+                if (IsFileUpgrade(context))
+                {
+                    await HandleFileUpgradeAsync(context, headers).ConfigureAwait(false);
+                    return;
+                }
+
                 // A table connection (#1845) asks for its own subprotocol.
                 if (IsTableUpgrade(context))
                 {
@@ -402,6 +409,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 // As the server does: a table connection lives as long as its session.
                 CloseTableConnectionOf(sessionId);
+                CloseFileConnectionOf(sessionId);
             }
         }
 

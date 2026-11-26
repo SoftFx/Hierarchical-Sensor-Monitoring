@@ -70,6 +70,12 @@ namespace HSMSensorDataObjects.SensorRequests
         None = 0,
         DisableTtl = 1,
         DisableStatusChange = 2,
+
+        /// <summary>
+        /// A File sensor registered for large file values (ADR-0022): the server gives it the default alert
+        /// "new data has been received", which notifies once per stored file. Additive; an older server ignores it.
+        /// </summary>
+        LargeFiles = 4,
     }
 
 

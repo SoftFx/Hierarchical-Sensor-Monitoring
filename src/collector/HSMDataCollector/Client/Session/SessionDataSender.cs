@@ -160,6 +160,9 @@ namespace HSMDataCollector.Client.Session
 
         public async Task StopAsync(bool terminal)
         {
+            // The file connection is closed by the large file uploader's stop, before this; one still open is dropped.
+            Volatile.Read(ref _files)?.Abort("the collector stopped");
+
             // The table connection closes before the session: the server closes it with its session anyway, and a block
             // it is storing is answered first.
             try
@@ -206,6 +209,7 @@ namespace HSMDataCollector.Client.Session
             }
 
             tables?.Dispose();
+            Volatile.Read(ref _files)?.Dispose();
             _connection.Dispose();
         }
 
@@ -239,8 +243,40 @@ namespace HSMDataCollector.Client.Session
         /// file values. A file whose element does not fit a frame is dropped, reported and counted,
         /// like any value larger than a frame.
         /// </summary>
-        public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) =>
-            SendAsync<SensorValueBase>(SessionProtocol.OpList, new SensorValueBase[] { file }, isRegistration: false, token);
+        public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+        {
+            // Larger than a quarter of the session frame (what fits a frame whatever the bytes are): on the file connection,
+            // as a large file value that is not secure, when this session has one (ADR-0022 point 21). Otherwise as today.
+            var router = Volatile.Read(ref _fileRouter);
+            var frame = _connection.MaxFrameBytes;
+
+            if (router != null && frame > 0 && file?.Value != null && file.Value.Count > frame / 4 && TryRoute(router, file))
+                return new ValueTask<PackageSendingInfo>(PackageSendingInfo.Answered(0, 200, null, 0));
+
+            return SendAsync<SensorValueBase>(SessionProtocol.OpList, new SensorValueBase[] { file }, isRegistration: false, token);
+        }
+
+        private Func<FileSensorValue, bool> _fileRouter;
+
+        // The route never throws into the file queue: a fault sends the value the ordinary way, said once.
+        private bool TryRoute(Func<FileSensorValue, bool> router, FileSensorValue file)
+        {
+            try
+            {
+                return router(file);
+            }
+            catch (Exception ex)
+            {
+                ReportError($"A file value of {file.Path} could not be handed to the file connection ({ex.Message}); it is sent the ordinary way.");
+                return false;
+            }
+        }
+
+        /// <summary>Takes a file value above the threshold for the file connection; false sends it the ordinary way.</summary>
+        internal Func<FileSensorValue, bool> FileRouter
+        {
+            set => Volatile.Write(ref _fileRouter, value);
+        }
 
         /// <summary>
         /// Whether a session can be opened. With one up the answer is yes; otherwise a session is
@@ -281,9 +317,10 @@ namespace HSMDataCollector.Client.Session
             // What is done with, by position in the package: acknowledged, refused for good, or
             // dropped and counted. On a failure the queue takes back only the rest.
             var settled = new bool[elements.Count];
+            var unsendable = new bool[elements.Count];
             double contentSize = 0;
             var dropped = 0;
-            var unsendable = 0;
+            var unsendableCount = 0;
             var index = 0;
 
             while (index < elements.Count)
@@ -314,7 +351,8 @@ namespace HSMDataCollector.Client.Session
                         }
 
                         settled[index] = true;
-                        unsendable++;
+                        unsendable[index] = true;
+                        unsendableCount++;
                         index++;
                         continue;
                     }
@@ -346,7 +384,7 @@ namespace HSMDataCollector.Client.Session
                 {
                     ack = await _connection.RequestAsync(op, body.ToString(), _requestTimeout, token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (token.IsCancellationRequested && (frameStart > 0 || unsendable > 0))
+                catch (OperationCanceledException) when (token.IsCancellationRequested && (frameStart > 0 || unsendableCount > 0))
                 {
                     // Cancelled part of the way through a package (a stop). The exception would
                     // send the whole package back, and what was delivered before this frame would
@@ -357,7 +395,7 @@ namespace HSMDataCollector.Client.Session
                 if (ack.IsSuccess)
                 {
                     if (isRegistration)
-                        LogRegistrationErrors(ack.Body);
+                        NoteRegistrations(paths, unsendable, frameStart, index, LogRegistrationErrors(ack.Body));
 
                     MarkSettled(settled, frameStart, index);
                     continue;
@@ -370,9 +408,13 @@ namespace HSMDataCollector.Client.Session
                 // A registration answered 4xx is refused for good (#1659 A2).
                 if (isRegistration && ack.Acked && ack.Status >= 400 && ack.Status < 500)
                 {
+                    for (var position = frameStart; position < index; position++)
+                        if (!unsendable[position])
+                            _registrations[paths[position]] = false;
+
                     // The whole package was this one frame: its status is the package's, and the
                     // queue reports the refusal and drops the package, as it does over HTTP.
-                    if (frameStart == 0 && index >= elements.Count && unsendable == 0)
+                    if (frameStart == 0 && index >= elements.Count && unsendableCount == 0)
                         return PackageSendingInfo.Answered(contentSize, ack.Status, error, dropped);
 
                     // One frame of several: said here, because the queue only hears about the
@@ -410,26 +452,43 @@ namespace HSMDataCollector.Client.Session
             }
         }
 
+        // How the registrations of sensors stand on this session's server, by path: true acknowledged without an error,
+        // false refused. A file value sent on the file connection waits for its sensor's (#1888, amendment, decision 7).
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _registrations =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
+
+        internal bool? RegistrationOf(string path) => path != null && _registrations.TryGetValue(path, out var accepted) ? accepted : (bool?)null;
+
+        private void NoteRegistrations(List<string> paths, bool[] unsendable, int from, int to, Dictionary<string, string> errors)
+        {
+            for (var position = from; position < to; position++)
+                if (!unsendable[position])
+                    _registrations[paths[position]] = errors == null || !errors.ContainsKey(paths[position]);
+        }
+
         // A success ack of a commands frame carries the per-path errors of the route: a
         // registration the server took but could not apply as asked.
-        private void LogRegistrationErrors(string body)
+        private Dictionary<string, string> LogRegistrationErrors(string body)
         {
             if (string.IsNullOrEmpty(body))
-                return;
+                return null;
 
             try
             {
                 var errors = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
 
                 if (errors == null)
-                    return;
+                    return null;
 
                 foreach (var error in errors)
                     _logger?.Error($"Command request for {error.Key} has been faulted. {error.Value}.");
+
+                return errors;
             }
             catch (JsonException)
             {
                 _logger?.Debug("The body of a commands ack is not a path-to-error dictionary.");
+                return null;
             }
         }
     }

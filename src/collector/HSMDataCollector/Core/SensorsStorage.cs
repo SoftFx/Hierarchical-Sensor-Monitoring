@@ -348,6 +348,19 @@ namespace HSMDataCollector.Core
             throw new InvalidOperationException($"Sensor with path {sensor.SensorPath} does not expose sensor identity metadata.");
         }
 
+        /// <summary>
+        /// The registration of a File sensor for large files (#1888): placed and described as <see cref="CreateFileSensor"/>
+        /// would, but not created as a sensor of this storage (its values are not on the value queue).
+        /// </summary>
+        internal AddOrUpdateSensorRequest LargeFileRegistration(string path, FileSensorOptions options)
+        {
+            var filled = FillOptions<FileSensorOptions, NoDisplayUnit>(path, SensorType.FileSensor, options);
+
+            filled.Path = filled.CalculateSystemPath();
+
+            return filled.ApiRequest;
+        }
+
         private T FillOptions<T, TDisplayUnit>(string path, SensorType type, T options)
             where T : SensorOptions<TDisplayUnit>, new()
             where TDisplayUnit : struct, Enum
