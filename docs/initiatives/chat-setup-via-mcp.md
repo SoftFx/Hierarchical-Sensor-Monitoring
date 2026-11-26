@@ -1,6 +1,6 @@
 # Initiative: Chat setup via MCP (notifications onboarding by an AI agent)
 
-> Owner: server | Last reviewed: 2026-11-23 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 
 ## Problem
 
@@ -21,7 +21,10 @@ The server already stores everything the setup needs, but every write is web-UI-
 
 The management API and MCP expose chats read-only (`GET /api/v1/chats`, `list_chats` / `get_chat` — the
 `destination.chats` id source). `aicontext/features/server/mcp/feature.md` lists "folder/chat lifecycle
-tools (web-UI only)" among the known gaps; this initiative closes the chat half.
+tools (web-UI only)" among the known gaps; this initiative closes the chat half — #1829 landed it
+(`POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, on the web editor's
+engine and gates). What remains of the problem above is the bot credential (#1830) and the guide
+(#1827, #1831).
 
 ## Goals
 
@@ -56,13 +59,25 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
   webhook URL would exfiltrate every alert sent to it; edit / delete / clear-channel / test / invitation
   are admin or `ProductManager` on any folder the chat is bound to, so a global chat is admin-only.
 - The chat↔folder binding lives on the folder (`FolderEntity.Chats`); `Chat.Folders` is an in-memory
-  reverse index. `NotificationsController.SyncFolders` rewrites it through `FolderUpdate`, touching
-  only the folders the caller manages. That folder write is already journaled ("Folder chats update",
-  kind `folder`).
-- Validation: the name is required and at most 100 characters, with no uniqueness check — although the
-  `ChatDto` doc says "unique per server" and alert import resolves chats by name. A webhook must be an
-  absolute http/https URL (`ValidateWebhooks`); nothing else is checked. Clearing a channel is an
-  explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`, `ClearTelegramBinding`): at the model an
+  reverse index. `ChatAdministrationService.BindFoldersAsync` (#1825 — the write engine behind the web
+  POST flows, ex-`NotificationsController.SyncFolders`) rewrites it through `FolderUpdate`, touching
+  only the folders the caller manages (`ChatFolderBinding.Managed`, built by the web from
+  `GetUserFolders(CurrentUser)`, by the management API from the folders the token's owner manages
+  (#1829) — never from request data). That folder write is already journaled
+  ("Folder chats update", kind `folder`).
+- Validation: the name is required and at most 100 characters; since #1829 it is also unique per server
+  ignoring case and surrounding spaces (excluding the chat itself) — `ChatNameValidator` behind
+  `ChatAdministrationService.Validate`, one rule for the API and the web form, and for the names the
+  Telegram `/start` flow gives the chats it creates. The storage repeats the check in front of its own
+  write, so concurrent creates of one name store one chat. The rule guards changes, not history: a chat
+  that keeps its own name breaks nothing, so duplicates that predate it stay editable. Before, nothing
+  enforced the uniqueness the
+  `ChatDto` doc promises and alert import relies on (it resolves chats by name). A webhook must be an
+  absolute http/https URL (the same `Validate`, #1825); on the API/MCP paths #1829 adds the folder scope
+  (every listed folder must exist and be managed by the token's owner — except a folder the chat is bound
+  to already, which may be listed whatever the owner's role there is: that binding stays) and #1705's
+  character rule on the name; the web form checks nothing else. The aggregation delay is 0 to 86 400 seconds — a negative delay never flushes a channel's accumulator, so it is refused by the engine and by the web form's `Range` attribute alike. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
+  `ClearTelegramBinding`): at the model an
   empty value means "no change", and the web form refuses an empty field for a stored webhook, pointing
   at the per-channel Remove button.
 - The test actions answer `OK` regardless of the outcome; delivery failures go to the channel's
@@ -75,11 +90,13 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half.
 - Bot credential: `TelegramConfig { BotName, BotToken, IsRunning }` in `Config/appsettings.json`.
   `SaveTelegramSettings` persists; `RestartTelegramBot` applies the token (the bot name and the on/off
   switch are read live). `TelegramBot.StartBotAsync` stops the running bot FIRST and validates the token
-  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token is
-  logged in clear in two places (`ConfigurationController.BuildTelegramChangesText`, and
-  `TelegramBot.StartBotAsync` on failure).
-- Journal: `JournalKinds` has no chat or server-settings kind; `ChatsManager` is not subscribed to the
-  journal and the chat storage layer logs nothing, so a changed webhook leaves no "who and when".
+  with `GetMe` afterwards, so a mistyped token leaves Telegram delivery down until fixed. The token
+  is kept out of the log since #1824 (`TelegramSettingsChanges.Describe` says only that it changed)
+  and out of the journal since #1828 (its record names the state of the setting).
+- Journal: since #1828 every chat write leaves `chat` records (`ChatsManager` journals create,
+  update and delete, a webhook and the Telegram chat id never reaching a record) and a bot settings
+  save leaves `serverSettings` records. The kinds list is public contract — the journal API and the
+  MCP journal tool descriptions enumerate it by hand — and a test pins the full list.
 
 ## Proposed Direction
 
@@ -91,7 +108,7 @@ GET    /api/v1/telegram-bot                              status {botName, isEnab
 PATCH  /api/v1/telegram-bot                              partial {botName?, botToken?, isEnabled?} (admin; a token change is probed, applied, then restarts)
 POST   /api/v1/chats                                     create (admin)
 PATCH  /api/v1/chats/{id}                                partial update, clear flags, folders (admin or PM of a bound folder)
-DELETE /api/v1/chats/{id}?dryRun=                        delete with a usage preview (the same gate)
+DELETE /api/v1/chats/{id}   (+ X-HSM-Dry-Run)         delete, with a usage preview on a dry run (the same gate; landed on the area's header, not on a query flag)
 POST   /api/v1/chats/{id}/telegram-invitations           issue {kind: direct|group} → {value, expiresAt, nextSteps} (the same gate)
 POST   /api/v1/chats/{id}/test-message                   {channel: telegram|slack|mattermost} → {delivered, error} (the same gate)
 GET    /api/v1/chats/setup-guide?channel=…                the messenger-side steps for one channel

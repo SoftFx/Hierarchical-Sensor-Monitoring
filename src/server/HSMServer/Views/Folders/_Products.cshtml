@@ -4,6 +4,7 @@
 @using HSMServer.Helpers
 @using HSMServer.Extensions
 @using HSMCommon.Constants
+@using HSMServer.Model.Authentication
 
 @model FolderProductsViewModel
 
@@ -12,6 +13,10 @@
 @{
     var noProducts = Model.DisplayProducts.Count == 0;
     var tableId = 0;
+
+    // A product leaves the folder only by the hand of someone who manages it (the save refuses the
+    // rest), so "Exclude from folder" is offered for those products alone.
+    var user = User as User;
 }
 
 
@@ -53,7 +58,7 @@ else
             @foreach (var product in Model.DisplayProducts)
             {
                 <tr id="row_product_@product.Id">
-                    <td class="text-break">@Html.Raw(product.Name)</td>
+                    <td class="text-break">@product.Name</td>
                     <td>
                         <span title="@product.UpdateTime.ToDefaultFormat()" time="@product.UpdateTime">
                             @product.UpdateTime.GetTimeAgo()
@@ -66,18 +71,21 @@ else
                         }
                     </td>
                     <td nowrap class="text-center w-10">
-                        <div class='btn-group'>
-                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                            </button>
-                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
-                                <li>
-                                    <a id='exclude_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                        Exclude from folder
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
+                        @if (user is not null && user.IsManager(product.Id))
+                        {
+                            <div class='btn-group'>
+                                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a id='exclude_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Exclude from folder
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        }
                     </td>
                 </tr>
             }

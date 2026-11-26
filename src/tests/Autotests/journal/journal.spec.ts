@@ -49,7 +49,7 @@ test('filters offer the entity kinds and products', async ({ adminPage: page }) 
   const kinds = page.locator('#journalFilterKind');
   await expect(kinds).toBeVisible();
 
-  for (const kind of ['sensorDataPolicies', 'alertTemplate', 'alertSchedule', 'nodeSettings', 'treeCrud', 'folder', 'other']) {
+  for (const kind of ['sensorDataPolicies', 'alertTemplate', 'alertSchedule', 'nodeSettings', 'treeCrud', 'folder', 'chat', 'serverSettings', 'other']) {
     await expect(kinds.locator(`option[value="${kind}"]`)).toHaveCount(1);
   }
 

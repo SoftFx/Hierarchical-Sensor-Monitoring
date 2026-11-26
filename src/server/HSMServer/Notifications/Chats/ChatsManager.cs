@@ -2,6 +2,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications.Telegram.Tokens;
@@ -11,6 +12,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -22,9 +24,23 @@ namespace HSMServer.Notifications.Chats
     {
         private readonly ConcurrentDictionary<ChatId, Chat> _telegramChatIds = new();
 
+        // One gate for every write that names a chat. The name rule (#1829) is checked by
+        // the engine against a snapshot, and the write comes after: two creates of one name
+        // could both pass the check. The rule's rename check is repeated here, under the
+        // gate and in front of the write, so the second of them is refused — TryAdd and
+        // TryUpdate answer false, which the engine tells apart from a storage failure.
+        // The gate is not reentrant, and it is held for no I/O beyond the storage's own
+        // write: a journal record is written after it, from the state read under it. The
+        // Added and Updated events of the storage ARE raised inside it —
+        // ConcurrentStorage raises them with the write. Neither has a subscriber today;
+        // one added later must not write back into this storage from the handler, or it
+        // waits on the gate forever.
+        private readonly SemaphoreSlim _nameWrites = new(1, 1);
+
         private readonly TelegramConfig _config;
         private readonly IDatabaseCore _database;
         private readonly IUserManager _userManager;
+        private readonly JournalAppender _journal;
 
         public TokensManager TokenManager { get; } = new();
 
@@ -43,52 +59,132 @@ namespace HSMServer.Notifications.Chats
         public event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
-        public ChatsManager(IDatabaseCore database, IUserManager userManager, IServerConfig config)
+        public ChatsManager(IDatabaseCore database, IUserManager userManager, IServerConfig config, JournalAppender journal)
         {
             _database = database;
             _config = config.Telegram;
             _userManager = userManager;
+            _journal = journal;
         }
 
 
-        public async override Task<bool> TryAdd(Chat model)
+        // A name another chat holds refuses the add here, whether or not the caller checked
+        // it first: the engine's check runs against a snapshot from before the write.
+        public async override Task<bool> TryAdd(Chat model) =>
+            await AddUnderGate(model, () => ChatNameValidator.IsTaken(model.Name, model.Id, Values)
+                ? Task.FromResult(false)
+                : base.TryAdd(model));
+
+        // Stores a chat the Telegram /start flow creates, under the first name free at the
+        // moment of the write. The name would otherwise be picked before the add and checked
+        // again inside it: two groups sharing a title, starting at once, could both pick the
+        // first free name, and the second add would then be refused.
+        private async Task<bool> TryAddUnderAFreeName(Chat chat, string proposed) =>
+            await AddUnderGate(chat, () =>
+            {
+                chat.Update(new ChatUpdate { Id = chat.Id, Name = TelegramChatName(proposed) });
+                return base.TryAdd(chat);
+            });
+
+        // A chat's addition under the name gate. The Telegram chat-id index is claimed
+        // first, so a collision rejects before any base mutation: without that pre-flight
+        // the base add could succeed and the index claim then fail, leaving the chat in
+        // storage but invisible to GetChatByChatId — a ghost chat that survives restart. A
+        // refused add releases the claim; a stored one is journaled from the state it had
+        // under the gate.
+        private async Task<bool> AddUnderGate(Chat model, Func<Task<bool>> add)
         {
-            // Pre-flight the Telegram chat-id index so a collision rejects before any base mutation.
-            // Without this, base.TryAdd could succeed and _telegramChatIds.TryAdd then fail, leaving
-            // the chat in storage but invisible to GetChatByChatId — a ghost chat that survives restart.
             if (model.TelegramChatId is not null && !_telegramChatIds.TryAdd(model.TelegramChatId, model))
                 return false;
 
-            if (!await base.TryAdd(model))
+            var created = default(ChatJournal.State);
+            var name = model.Name;
+            bool added;
+            await _nameWrites.WaitAsync();
+            try
+            {
+                added = await add();
+
+                if (added)
+                    (created, name) = (ChatJournal.StateOf(model), model.Name);
+            }
+            finally
+            {
+                _nameWrites.Release();
+            }
+
+            if (!added)
             {
                 if (model.TelegramChatId is not null)
                     _telegramChatIds.TryRemove(model.TelegramChatId, out _);
+
                 return false;
             }
+
+            _journal.Write(model.Id, JournalKinds.Chat, ChatJournal.CreateEnviroment, name, AuthorOf(model),
+                ChatJournal.CreationChanges(created));
 
             return true;
         }
 
-        public async override Task<bool> TryRemove(RemoveRequest remove) =>
-            TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove)
-            && (chat.TelegramChatId is null || _telegramChatIds.TryRemove(chat.TelegramChatId, out _));
+        public async override Task<bool> TryRemove(RemoveRequest remove)
+        {
+            if (!TryGetValue(remove.Id, out var chat) || !await base.TryRemove(remove))
+                return false;
+
+            _journal.Write(chat.Id, JournalKinds.Chat, ChatJournal.RemoveEnviroment, chat.Name, remove.Initiator,
+                [new("chat", chat.Name, "")]);
+
+            return chat.TelegramChatId is null || _telegramChatIds.TryRemove(chat.TelegramChatId, out _);
+        }
 
         public override async Task<bool> TryUpdate(ChatUpdate update)
         {
-            TryGetValue(update.Id, out var chat);
-            var oldTelegramChatId = chat?.TelegramChatId;
-
-            var result = await base.TryUpdate(update);
-
-            if (result && chat is not null && !Nullable.Equals(oldTelegramChatId, chat.TelegramChatId))
+            Chat chat = null;
+            var before = default(ChatJournal.State);
+            var after = default(ChatJournal.State);
+            bool result;
+            await _nameWrites.WaitAsync();
+            try
             {
-                if (oldTelegramChatId is not null)
-                    _telegramChatIds.TryRemove(oldTelegramChatId, out _);
-                if (chat.TelegramChatId is not null)
-                    _telegramChatIds[chat.TelegramChatId] = chat;
+                // Everything the journal record compares is read here, under the gate with
+                // the write itself, and the Telegram chat-id index follows the write at once.
+                TryGetValue(update.Id, out chat);
+                var oldTelegramChatId = chat?.TelegramChatId;
+                before = chat is null ? default : ChatJournal.StateOf(chat);
+
+                result = !ChatNameValidator.RenamesOntoATakenName(update.Name, update.Id, Values, chat?.Name)
+                    && await base.TryUpdate(update);
+
+                if (result)
+                {
+                    after = ChatJournal.StateOf(chat);
+
+                    if (!Nullable.Equals(oldTelegramChatId, chat.TelegramChatId))
+                    {
+                        if (oldTelegramChatId is not null)
+                            _telegramChatIds.TryRemove(oldTelegramChatId, out _);
+                        if (chat.TelegramChatId is not null)
+                            _telegramChatIds[chat.TelegramChatId] = chat;
+                    }
+                }
+            }
+            finally
+            {
+                _nameWrites.Release();
             }
 
+            if (result)
+                _journal.Write(chat.Id, JournalKinds.Chat, ChatJournal.UpdateEnviroment, after.Name,
+                    update.Initiator, ChatJournal.ChangesBetween(before, after));
+
             return result;
+        }
+
+        public override void Dispose()
+        {
+            _nameWrites.Dispose();
+            base.Dispose();
         }
 
 
@@ -110,6 +206,18 @@ namespace HSMServer.Notifications.Chats
 
         public Chat GetChatByChatId(ChatId chatId) => _telegramChatIds.GetValueOrDefault(chatId);
 
+        // The initiator of a chat's creation is its author. A fresh row has no slot for the
+        // write's initiator, and whoever creates a row is its author: the web flow passes the
+        // signed-in user, the /start flow the user who issued the invitation. A row whose
+        // author is gone journals under System.
+        private InitiatorInfo AuthorOf(Chat chat)
+        {
+            var name = chat.Author
+                ?? (_userManager.TryGetValueById(chat.AuthorId, out var author) ? author.Name : null);
+
+            return name is null ? InitiatorInfo.System : InitiatorInfo.AsUser(name);
+        }
+
         // Test-only seam to inject a stale _telegramChatIds entry — mirrors the production failure
         // mode where a binding was cleared through a path that bypassed TryUpdate. Lets the self-heal
         // tests reproduce the user-facing symptom without relying on a real storage corruption.
@@ -123,10 +231,16 @@ namespace HSMServer.Notifications.Chats
             $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
 
         public string GetChatInvitationLink(Guid chatId, User user) =>
-            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+            GetChatInvitationLink(chatId, user, InvitationToken.DefaultExpiration);
 
         public string GetChatGroupInvitation(Guid chatId, User user) =>
-            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+            GetChatGroupInvitation(chatId, user, InvitationToken.DefaultExpiration);
+
+        public string GetChatInvitationLink(Guid chatId, User user, TimeSpan invitationLifetime) =>
+            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";
+
+        public string GetChatGroupInvitation(Guid chatId, User user, TimeSpan invitationLifetime) =>
+            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";
 
         public async Task<ChatConnectResult> TryConnect(Message message, InvitationToken token)
         {
@@ -136,14 +250,17 @@ namespace HSMServer.Notifications.Chats
             // Both share the strict conflict policy (refuse rebind / refuse theft).
             if (token.ChatId is Guid chatId && chatId != Guid.Empty)
             {
+                // The binding is the work of the user who issued the invitation: the /start
+                // command is typed in Telegram, but the journal names the issuer.
                 if (TryGetValue(chatId, out var existing))
-                    return await BindTelegramToChat(existing, message);
+                    return await BindTelegramToChat(existing, message, InitiatorInfo.AsUser(token.User.Name));
 
                 return await CreateChatWithTelegram(chatId, message, token.User);
             }
 
             // Folder-scoped flow: create a brand-new chat and bind it to the folder named in the token.
             var isChatExist = _telegramChatIds.TryGetValue(message?.Chat, out var chat);
+            string proposedName = null;
 
             if (!isChatExist)
             {
@@ -157,11 +274,7 @@ namespace HSMServer.Notifications.Chats
                     TelegramType = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
                 };
 
-                chat.Update(new ChatUpdate()
-                {
-                    Id = chat.Id,
-                    Name = isUserChat ? message.From.Username : message.Chat.Title
-                });
+                proposedName = isUserChat ? message.From.Username : message.Chat.Title;
             }
 
             var folderName = ConnectChatToFolder is null
@@ -172,7 +285,7 @@ namespace HSMServer.Notifications.Chats
                 return new ChatConnectResult(ChatConnectOutcome.Failed);
 
             if (!isChatExist)
-                await TryAdd(chat);
+                await TryAddUnderAFreeName(chat, proposedName);
 
             chat.Folders.Add(token.FolderId);
             return new ChatConnectResult(ChatConnectOutcome.FolderAdded, folderName);
@@ -203,7 +316,6 @@ namespace HSMServer.Notifications.Chats
                 Id = chatId.ToByteArray(),
                 Author = user.Id.ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                Name = isUserChat ? message.From?.Username : incomingChat.Title,
                 SendMessages = Chat.DefaultSendMessages,
                 MessagesAggregationTimeSec = Chat.DefaultMessagesAggregationTimeSec,
                 TelegramChatId = incomingChat.Id,
@@ -216,11 +328,18 @@ namespace HSMServer.Notifications.Chats
                 Author = user.Name,
             };
 
-            if (!await TryAdd(chat))
+            if (!await TryAddUnderAFreeName(chat, isUserChat ? message.From?.Username : incomingChat.Title))
                 return new ChatConnectResult(ChatConnectOutcome.Failed);
 
             return new ChatConnectResult(ChatConnectOutcome.ChatBound, chat.Name);
         }
+
+        // A chat the /start flow creates is named after the Telegram chat — the group
+        // title, or the username of a direct chat. Chat names are unique per server
+        // (#1829) and two groups may share a title, so a name another chat holds gets
+        // " (2)", " (3)"… appended: nobody is there to pick another name.
+        private string TelegramChatName(string proposed) =>
+            ChatNameValidator.UniqueIn(proposed, GetValues());
 
         // Strict conflict policy: refuse if (a) the target Chat already has a different TelegramChatId
         // (rebind — admin must explicitly Remove Telegram via EditChat first), or (b) the incoming
@@ -228,7 +347,7 @@ namespace HSMServer.Notifications.Chats
         // as FailedAlreadyBound with the owner name). The theft check goes through GetActiveTelegramOwner,
         // which silently drops stale index entries (owner.TelegramChatId cleared or moved) so storage
         // corruption doesn't permanently block legitimate binds.
-        private async Task<ChatConnectResult> BindTelegramToChat(Chat existing, Message message)
+        private async Task<ChatConnectResult> BindTelegramToChat(Chat existing, Message message, InitiatorInfo initiator)
         {
             if (message?.Chat is null)
                 return new ChatConnectResult(ChatConnectOutcome.Failed);
@@ -261,6 +380,7 @@ namespace HSMServer.Notifications.Chats
                 Id = existing.Id,
                 TelegramChatId = incomingChat.Id,
                 TelegramChatTitle = isUserChat ? message.From?.Username : incomingChat.Title,
+                Initiator = initiator,
             };
 
             var updated = await TryUpdate(update);

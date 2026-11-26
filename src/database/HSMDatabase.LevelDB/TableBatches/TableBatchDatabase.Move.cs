@@ -77,8 +77,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                     if (hours.Count == 0)
                         return default;
 
-                    // Pinned as a part write is when it is the newest week: flushed when the next week starts.
-                    var handle = Acquire((productId, to.WeekStartTicks, to.PeriodWeeks), create: true, pin: to.WeekStartTicks >= product.PinnedWeek);
+                    // Pinned only as the product's newest (pinned) week, as a part write of it is: flushed when the next week
+                    // starts. An older week is never pinned here: it would stay open past the bound until then.
+                    var handle = Acquire((productId, to.WeekStartTicks, to.PeriodWeeks), create: true, pin: to.WeekStartTicks == product.PinnedWeek);
 
                     try
                     {
@@ -173,7 +174,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 try
                 {
-                    var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: false, pin: week.WeekStartTicks >= product.PinnedWeek);
+                    var handle = Acquire((productId, week.WeekStartTicks, week.PeriodWeeks), create: false, pin: week.WeekStartTicks == product.PinnedWeek);
                     if (handle is null)
                         return default;
 
@@ -350,7 +351,7 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                 // Lowered by what it counted before the compaction, not set to 0: bytes a delete counted meanwhile may not
                 // have been compacted.
-                var after = Acquire(key, create: false, pin: week.WeekStartTicks >= product.PinnedWeek);
+                var after = Acquire(key, create: false, pin: week.WeekStartTicks == product.PinnedWeek);
                 if (after is null)
                     return;
 

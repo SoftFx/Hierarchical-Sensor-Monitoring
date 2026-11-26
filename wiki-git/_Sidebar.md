@@ -8,6 +8,8 @@
  - [REST API](REST-API)
  - [MCP (AI agents)](MCP)
  - [Server Self-Monitoring](HSM-Server-Monitoring)
+ - [Sensor Types](Sensor-types)
+ - [Table Sensors](Table-Sensors)
 
 **🔔 Alerts**
  - [Alerts Overview](Alerts-Overview)
@@ -24,6 +26,7 @@
  - [Logging](DataCollector-logging)
  - [Statuses](DataCollector-statuses)
  - [Sensor Settings](DataCollector-sensor-settings)
+ - [Table Sensors](DataCollector-Table-Sensors)
  - Default sensors
    - [Windows](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Windows-sensors-collection)
    - [Unix](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection)
