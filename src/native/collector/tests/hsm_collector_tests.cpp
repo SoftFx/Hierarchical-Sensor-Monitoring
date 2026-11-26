@@ -892,6 +892,10 @@ namespace
             // The table connection of the session (#1848 part 4) is a side connection of the same route; in a
             // large file fixture the file connection (#1887) is, and the server gets the file script.
             options.side_subprotocol = state.large_file_fixture ? "hsm.files.v1" : "hsm.tables.v1";
+            // Elsewhere the server is older than large files: a file connection is refused with 404, so a file
+            // value above a quarter of the frame goes in a list frame (ADR-0022 point 21).
+            if (!state.large_file_fixture)
+                options.unoffered_subprotocol = "hsm.files.v1";
             state.session_server = std::make_unique<hsm::test::WebSocketTestServer>(options);
 #if defined(HSM_COLLECTOR_LARGE_FILES)
             if (state.large_file_fixture)
@@ -901,6 +905,9 @@ namespace
                 state.large_files->script = std::make_shared<hsm::test::FileServerScript>();
                 state.large_files->script->SetLimits(65536, 68719476736LL);
                 state.session_server->EnableFileScript(state.large_files->script);
+                // File connections are offered only after file_server_accept_upgrades; until then the server
+                // refuses them with 404, as a server older than large files does.
+                state.session_server->RefuseSideUpgradesWith(404);
             }
 #endif
         }
@@ -1540,13 +1547,14 @@ namespace
             return true;
         }
 
-        if (action == "large_file_send")
+        if (action == "large_file_send" || action == "large_file_send_not_secure")
         {
-            // sensor|name|keep_or_delete
+            // sensor|name|keep_or_delete; large_file_send_not_secure with the option Secure off.
             args(3);
             auto& files = LargeFilesOf(state);
             files.EnsureRoot();
-            const auto options = LargeFileOptionsOf(step[3]);
+            auto options = LargeFileOptionsOf(step[3]);
+            options.not_secure = action == "large_file_send_not_secure" ? 1 : 0;
             const auto path = (files.Files() / std::filesystem::u8path(step[2])).u8string();
             hsm_large_file_t* file = nullptr;
             const auto result = hsm_collector_send_large_file(state.collector.value, step[1].c_str(), path.c_str(), &options, &file);
@@ -1781,6 +1789,20 @@ namespace
             return true;
         }
 
+        if (action == "expect_file_stored_size")
+        {
+            // name|bytes|timeout_s: stored and checked by the server, with this many bytes.
+            args(3);
+            auto& script = FileScriptOf(state, action);
+            RequireLarge(PollLargeFiles(state, [&] { return script.StoredCount(step[1]) > 0; }, step[3]), "expect_file_stored_size: " + step[1] + " was not stored; the server saw " + LargeFileServerLog(state));
+            const auto stored = script.StoredFiles();
+            const auto found = stored.find(step[1]);
+            RequireLarge(found != stored.end() && found->second.size() == static_cast<std::size_t>(std::stoll(step[2])),
+                         "expect_file_stored_size: " + step[1] + " has " + (found == stored.end() ? std::string("no") : std::to_string(found->second.size())) +
+                             " bytes, expected " + step[2]);
+            return true;
+        }
+
         if (action == "expect_file_stored_count")
         {
             args(2);
@@ -1822,19 +1844,28 @@ namespace
             return true;
         }
 
-        if (action == "expect_file_begin_field")
+        if (action == "expect_file_begin_field" || action == "expect_file_begin_field_starts" || action == "expect_file_begin_field_absent")
         {
-            // index|field|value: a string without its quotes, anything else as its JSON text.
-            args(3);
+            // index|field|value: a string without its quotes, anything else as its JSON text; _starts: the value
+            // starts with the prefix; _absent (index|field): the begin does not carry the field.
+            const bool absent = action == "expect_file_begin_field_absent";
+            args(absent ? 2 : 3);
             const auto begins = FileScriptOf(state, action).Begins();
             const auto index = static_cast<std::size_t>(ToInt(step[1]));
-            RequireLarge(index < begins.size(), "expect_file_begin_field: only " + std::to_string(begins.size()) + " begin(s)");
+            RequireLarge(index < begins.size(), action + ": only " + std::to_string(begins.size()) + " begin(s)");
             const auto request = nlohmann::json::parse(begins[index].raw, nullptr, /*allow_exceptions=*/false);
-            RequireLarge(request.is_object() && request.contains("body") && request["body"].is_object() && request["body"].contains(step[2]),
-                         "expect_file_begin_field: begin " + step[1] + " has no field " + step[2] + ": " + begins[index].raw);
-            const auto& field = request["body"][step[2]];
+            RequireLarge(request.is_object() && request.contains("body") && request["body"].is_object(), action + ": begin " + step[1] + " has no body: " + begins[index].raw);
+            const auto& body = request["body"];
+            if (absent)
+            {
+                RequireLarge(!body.contains(step[2]), action + ": begin " + step[1] + " carries " + step[2] + ": " + begins[index].raw);
+                return true;
+            }
+            RequireLarge(body.contains(step[2]), action + ": begin " + step[1] + " has no field " + step[2] + ": " + begins[index].raw);
+            const auto& field = body[step[2]];
             const std::string value = field.is_string() ? field.get<std::string>() : field.dump();
-            RequireLarge(value == step[3], "expect_file_begin_field: " + step[2] + " of begin " + step[1] + " is " + value + ", expected " + step[3]);
+            const bool holds = action == "expect_file_begin_field" ? value == step[3] : value.rfind(step[3], 0) == 0;
+            RequireLarge(holds, action + ": " + step[2] + " of begin " + step[1] + " is " + value + ", expected " + step[3]);
             return true;
         }
 

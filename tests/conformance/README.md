@@ -473,7 +473,10 @@ the file's modification time through its attributes only (Windows: an open with 
 `SetFileTime`; elsewhere `utimensat`) once the script has decided its answer to that piece and before the answer goes
 out, so the collector's own open of the file is not disturbed. `large_file_restart` stops and destroys the collector,
 releases its handles and makes a new one with the same options, server, data folder and hooks; the case's folders are
-removed at its end.
+removed at its end. The scripted server refuses file connections with 404 until `file_server_accept_upgrades`
+(`RefuseSideUpgradesWith(404)` when the file script is enabled); in every other fixture it is a server older than large
+files, so an upgrade offering `hsm.files.v1` is refused with 404 there too (`Options::unoffered_subprotocol` of
+`ws_test_server.hpp`) and a file value above a quarter of the frame goes in a list frame.
 
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced

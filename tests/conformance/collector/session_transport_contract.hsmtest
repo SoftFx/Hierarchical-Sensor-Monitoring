@@ -233,6 +233,20 @@ file_value_waits_while_the_upgrade_is_refused|expect_no_http_requests
 # A file whose element cannot fit a frame is a value larger than a frame: it is not sent (it would
 # close the session and come back for ever), and the file after it is delivered. 1000 bytes of x
 # are 4000 bytes of JSON (120 is x).
+# A file value above a quarter of the frame that still fits a frame, on a server without file connections (the scripted
+# server offers none unless a case asks): it goes in a list frame, as before large files (ADR-0022 point 21, decision 11).
+# 20000 bytes of 'a' are 60000 bytes of JSON: above 65536 / 4, within 65536.
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|session_server_hello|65536|30
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|create_collector_on_session|50|20|5000
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|create_file_sensor|contract/session/quarter-file|report|txt
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|start
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|expect_session_accepted_contains|commands|contract/session/quarter-file"|15
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|add_file_value|0|repeat:a:20000|Ok|quarter
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|expect_session_accepted_contains|list|"Value":[97,97,97,97,97,97,97,97|20
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|expect_session_frames_fit|65536
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|stop
+file_above_a_quarter_frame_without_file_connections_goes_in_a_list_frame|expect_no_http_requests
+
 file_larger_than_a_frame_is_dropped|session_server_hello|2048|30
 file_larger_than_a_frame_is_dropped|create_collector_on_session|50|20|5000
 file_larger_than_a_frame_is_dropped|create_file_sensor|contract/session/huge-file|report|txt

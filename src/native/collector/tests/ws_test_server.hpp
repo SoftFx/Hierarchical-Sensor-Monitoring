@@ -268,6 +268,11 @@ namespace hsm::test
             // and served on a thread of its own; every other connection is a main connection,
             // served one at a time on a thread of its own, so both can be open at once.
             std::string side_subprotocol;
+            // With side connections on: an upgrade that offers this subprotocol (and not the side one) is
+            // refused with `unoffered_status`, as a server without that kind of connection refuses it (e.g.
+            // "hsm.files.v1" on a server older than large files, which answers 404). Empty: none.
+            std::string unoffered_subprotocol;
+            int unoffered_status = 404;
         };
 
         WebSocketTestServer()
@@ -564,6 +569,8 @@ namespace hsm::test
         }
 
         int SideUpgrades() const { return side_upgrades_.load(std::memory_order_acquire); }
+        // Upgrades refused because they offered Options::unoffered_subprotocol.
+        int UnofferedRefusedUpgrades() const { return unoffered_refused_.load(std::memory_order_acquire); }
         int SideRefusedUpgrades() const { return side_refused_.load(std::memory_order_acquire); }
 
         // True while a side connection is being served.
@@ -1122,6 +1129,14 @@ namespace hsm::test
                 if (ws_detail::Offers(ws_detail::HeaderValue(head, "sec-websocket-protocol"), options_.side_subprotocol))
                 {
                     AcceptSide(conn, head);
+                    continue;
+                }
+                if (!options_.unoffered_subprotocol.empty() &&
+                    ws_detail::Offers(ws_detail::HeaderValue(head, "sec-websocket-protocol"), options_.unoffered_subprotocol))
+                {
+                    unoffered_refused_.fetch_add(1, std::memory_order_release);
+                    WriteAll(conn, "HTTP/1.1 " + std::to_string(options_.unoffered_status) + " Refused\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    closesocket(conn);
                     continue;
                 }
                 // One main connection at a time, as without side connections.
@@ -2058,6 +2073,7 @@ namespace hsm::test
         std::atomic<bool> side_drop_{ false };
         std::atomic<int> side_upgrades_{ 0 };
         std::atomic<int> side_refused_{ 0 };
+        std::atomic<int> unoffered_refused_{ 0 };
         std::atomic<int> side_open_{ 0 };
         mutable std::mutex side_send_mutex_;
         socket_t side_connection_ = INVALID_SOCKET; // the latest side connection; guarded by side_send_mutex_
