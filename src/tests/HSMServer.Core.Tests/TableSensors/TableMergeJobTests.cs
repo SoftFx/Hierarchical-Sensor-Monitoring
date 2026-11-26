@@ -36,7 +36,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// sensors, nulls and sizes, watermarks across a restart, the deletion delay, the row limit and the memory budget.
     /// No timing: the job's clock is a parameter, the stores' clocks are seams.
     /// </summary>
-    [Collection("Database collection")]
     public partial class TableMergeJobTests : MonitoringCoreTestsBase<TableMergeFixture>, IAsyncLifetime
     {
         private static readonly DateTime Hour0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);

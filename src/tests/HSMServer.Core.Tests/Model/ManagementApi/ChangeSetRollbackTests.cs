@@ -34,7 +34,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
     // web-editor-style full-list re-assert must not false-positive), force
     // override, dry-run plans, redo via rollback of the rollback, and the
     // template fan-out restore.
-    [Collection("Database collection")]
     public class ChangeSetRollbackTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private static readonly ClaimsPrincipal User = BuildPrincipal();

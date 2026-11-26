@@ -25,7 +25,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// survives and takes over the occupant's history; its own row wins a
     /// same-tick collision; the occupant is removed.
     /// </summary>
-    [Collection("Database collection")]
     public class SensorMergeTests : MonitoringCoreTestsBase<SensorMoveFixture>
     {
         private static readonly MemoryPackFormatter _formatter = new();

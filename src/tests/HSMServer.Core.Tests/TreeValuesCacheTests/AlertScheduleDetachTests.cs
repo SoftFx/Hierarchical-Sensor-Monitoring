@@ -25,7 +25,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     // sensor policies (regular and TTL), leave policies bound to OTHER
     // schedules untouched, and persist the cleared entities so a restart
     // reloads the same state.
-    [Collection("Database collection")]
     public class AlertScheduleDetachTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private readonly TemplateConcurrencyFixture _fixture;

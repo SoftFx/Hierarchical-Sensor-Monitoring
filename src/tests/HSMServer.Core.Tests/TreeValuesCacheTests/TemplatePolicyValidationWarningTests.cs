@@ -29,7 +29,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     //  - the HARD failure channel (sensor missing / DB write failure) keeps
     //    the #1394 contract exactly: (false, products-naming error) with NO
     //    warnings riding the conflict.
-    [Collection("Database collection")]
     public class TemplatePolicyValidationWarningTests : TemplateFailureTestsBase
     {
         private readonly TemplateConcurrencyFixture _fixture;

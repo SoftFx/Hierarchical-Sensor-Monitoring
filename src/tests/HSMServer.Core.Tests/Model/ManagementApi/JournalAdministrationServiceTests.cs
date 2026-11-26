@@ -38,7 +38,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
     // journal service lists/filters them and rolls back BY RECORD, admin
     // only. The undo mechanics themselves stay covered by the change-set
     // suites; these tests pin the JOURNAL-side contract.
-    [Collection("Database collection")]
     public class JournalAdministrationServiceTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private static readonly ClaimsPrincipal TokenUser = BuildPrincipal();

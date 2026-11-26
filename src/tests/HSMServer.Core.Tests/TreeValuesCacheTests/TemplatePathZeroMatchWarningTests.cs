@@ -25,7 +25,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     //  - patterns that DO match produce no zero-match noise, and their sensors
     //    still get the policies — a dead sibling pattern does not poison the
     //    apply of the live one.
-    [Collection("Database collection")]
     public class TemplatePathZeroMatchWarningTests : TemplateFailureTestsBase
     {
         private readonly TemplateConcurrencyFixture _fixture;

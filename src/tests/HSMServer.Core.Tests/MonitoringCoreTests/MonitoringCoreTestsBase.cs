@@ -15,8 +15,9 @@ using HSMServer.Core.Schedule;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
-    [Collection("Database collection")]
-    public abstract class MonitoringCoreTestsBase<T> : IAsyncLifetime, IClassFixture<T> where T : DatabaseFixture
+    // Each class owns its database folder and its DatabaseRegisterFixture, so the database test
+    // classes run in parallel with each other (#1943); the tests of one class still run in order.
+    public abstract class MonitoringCoreTestsBase<T> : DatabaseTestClass, IAsyncLifetime, IClassFixture<T> where T : DatabaseFixture
     {
         protected const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 

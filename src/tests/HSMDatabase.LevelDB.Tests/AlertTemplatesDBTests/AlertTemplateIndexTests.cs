@@ -8,7 +8,6 @@ using Xunit;
 
 namespace HSMDatabase.LevelDB.Tests.AlertTemplatesDBTests;
 
-[Collection("Database collection")]
 public class AlertTemplateIndexTests : DatabaseCoreTestsBase<AlertTemplateIndexFixture>, IClassFixture<DatabaseRegisterFixture>
 {
     public AlertTemplateIndexTests(AlertTemplateIndexFixture fixture, DatabaseRegisterFixture registerFixture)

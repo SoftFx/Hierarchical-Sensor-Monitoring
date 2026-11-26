@@ -25,7 +25,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// it, so a node below the root is never renamed; a root's name is no part of a
     /// path and a root is renamed freely.
     /// </summary>
-    [Collection("Database collection")]
     public class NodeRenameTests : MonitoringCoreTestsBase<NodeRenameFixture>
     {
         private const string RefusalText = "only a root product can be renamed";

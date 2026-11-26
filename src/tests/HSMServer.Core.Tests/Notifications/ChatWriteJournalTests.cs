@@ -27,7 +27,6 @@ namespace HSMServer.Core.Tests.Notifications
     // through the management API leaves the journal records of #1828, each naming the
     // token's owner, and none carrying a webhook URL. The service's own suite runs on an
     // in-memory store where no journal exists; this one connects the two seams.
-    [Collection("Database collection")]
     public class ChatWriteJournalTests : MonitoringCoreTestsBase<ChatWriteJournalFixture>
     {
         private const string SlackUrl = "https://hooks.slack.com/services/T000/B000/secret_slack";

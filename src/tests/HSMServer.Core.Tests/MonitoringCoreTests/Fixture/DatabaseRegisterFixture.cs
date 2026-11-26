@@ -7,15 +7,15 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests.Fixture
 {
-    [CollectionDefinition("Database collection")]
-    public class DatabaseCollection : ICollectionFixture<DatabaseRegisterFixture>
-    {
-        // This class has no code, and is never created. Its purpose is simply
-        // to be the place to apply [CollectionDefinition] and all the
-        // ICollectionFixture<> interfaces.
-    }
+    // Gives every database test class (DatabaseCoreTestsBase, MonitoringCoreTestsBase) its own
+    // DatabaseRegisterFixture, so the classes no longer share one serial collection and run in
+    // parallel (#1943). A non-generic root class because a generic base cannot itself implement
+    // both IClassFixture<T> and IClassFixture<DatabaseRegisterFixture> (CS0695); xUnit reads the
+    // class fixtures from every interface a test class implements, inherited ones included.
+    public abstract class DatabaseTestClass : IClassFixture<DatabaseRegisterFixture> { }
 
 
+    // Closes the databases one test class opened and removes their folder when the class ends.
     public class DatabaseRegisterFixture : IDisposable
     {
         private readonly List<DatabaseCoreManager> _createdDatabases = new(1 << 8);

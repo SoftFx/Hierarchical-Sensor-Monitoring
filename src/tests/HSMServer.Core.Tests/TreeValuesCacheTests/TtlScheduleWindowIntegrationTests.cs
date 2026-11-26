@@ -36,7 +36,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     // reach SYNCHRONOUSLY (no confirmation period, no send schedule). The
     // marker is observable through LastTimeout, not LastValue: a timeout
     // marker leaves the newest-value cache untouched by design.
-    [Collection("Database collection")]
     // TemplateConcurrencyFixture is reused for its ProductAId/AccessKeyAId
     // wiring only — there is no template-concurrency angle in this suite.
     public class TtlScheduleWindowIntegrationTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
