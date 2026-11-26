@@ -1399,7 +1399,9 @@ namespace HSMServer.Core.Cache
                         UnindexAlias(sensor, alias.ProductId, alias.Path);
 
                         Interlocked.Increment(ref _aliasesExpired);
-                        _logger.Info($"Sensor alias removed ({(orphaned ? "product deleted" : "SelfDestroy interval elapsed")}): " +
+                        // The interval is named, so a removal by a calendar preset inherited from a folder (applied
+                        // since #1864, shown as FromFolder(...)) can be told from the others.
+                        _logger.Info($"Sensor alias removed ({(orphaned ? "product deleted" : $"SelfDestroy interval {interval} elapsed")}): " +
                                      $"{AliasFullPath(alias.ProductId, alias.Path)} -> [{sensor.Id}] {sensor.FullPath}");
 
                         changed = true;

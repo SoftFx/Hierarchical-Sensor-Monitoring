@@ -342,6 +342,124 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Single(await ReadRowsAsync(sensor));
         }
 
+        // === The history floor follows what retention applies (#1864 merged into #1882) ===
+
+        // A product that inherits a calendar preset from its folder: since #1864 the retention pass applies it, so the
+        // floor of the large files follows it. Before, it was FromFolder with 0 ticks and the floor said "never expires".
+        public static TheoryData<string, int, int> InheritedAndOwnPolicies => new()
+        {
+            // policy, how many of the three files (40, 10 and 0 days old) are gone, how many are written again
+            { "inherited month", 1, 2 },
+            { "inherited forever", 0, 3 },
+            { "own month", 1, 2 },
+            { "own day", 2, 1 },
+        };
+
+        [Theory]
+        [MemberData(nameof(InheritedAndOwnPolicies))]
+        public async Task A_pass_judges_the_files_by_the_floor_retention_applies_a_preset_inherited_from_a_folder_included(string policy, int gone, int rolled)
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var old = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-40), "old.dmp");
+            var middle = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-10), "middle.dmp");
+            var recent = await UploadAtAsync(sensor, DateTime.UtcNow, "recent.dmp");
+
+            await SetPolicyAsync(sensor, policy);
+
+            // The rows are gone and nothing told the store: the pass decides by the floor alone.
+            _databaseCoreManager.DatabaseCore.ClearSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue);
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(gone, report.FilesRemoved);
+            Assert.Equal(rolled, report.RolledForward);
+            Assert.Equal(gone == 0, Store.TryGetFile(old.FileId) is not null);
+            Assert.Equal(gone < 2, Store.TryGetFile(middle.FileId) is not null);
+            Assert.NotNull(Store.TryGetFile(recent.FileId));
+        }
+
+        [Fact]
+        public async Task Retention_of_a_month_a_product_inherits_from_its_folder_takes_the_older_file_and_keeps_the_newer()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var old = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-40), "old.dmp");
+            var middle = await UploadAtAsync(sensor, DateTime.UtcNow.AddDays(-10), "middle.dmp");
+
+            await SetPolicyAsync(sensor, "inherited month");
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.Null(Store.TryGetFile(old.FileId));
+            Assert.NotNull(Store.TryGetFile(middle.FileId));
+            Assert.Equal(middle.FileId, Assert.IsType<LargeFileValue>(Assert.Single(await ReadRowsAsync(sensor))).FileId);
+
+            // And the pass that follows agrees with what retention left.
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.Equal(0, report.RolledForward);
+        }
+
+        // On a fixed instant where a calendar month is not 31 days of ticks (a month before 2028-03-01 is 2028-02-01,
+        // 31 days before it is 2028-01-30): the floor is the calendar's, as the retention pass clears.
+        [Theory]
+        [InlineData("inherited month", "2028-02-01")]
+        [InlineData("own month", "2028-02-01")]
+        [InlineData("inherited forever", null)]
+        [InlineData("own day", "2028-02-29")]
+        public async Task The_history_floor_is_the_retention_cutoff_of_the_applied_policy(string policy, string expected)
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            await SetPolicyAsync(sensor, policy);
+
+            var now = new DateTime(2028, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+            var floor = TreeValuesCache.HistoryFloor(sensor, now);
+
+            Assert.Equal(expected is null ? DateTime.MinValue : DateTime.SpecifyKind(DateTime.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc), floor);
+            Assert.Equal(sensor.Settings.KeepHistory.Value.RetentionCutoff(now) ?? DateTime.MinValue, floor);
+        }
+
+        private async Task<LargeFileFinishResult> UploadAtAsync(BaseSensorModel sensor, DateTime time, string name)
+        {
+            _valuesCache.LargeFileClock = () => time;
+
+            try
+            {
+                return await UploadAsync(sensor, Content(Piece), name: name);
+            }
+            finally
+            {
+                _valuesCache.LargeFileClock = () => DateTime.UtcNow;
+            }
+        }
+
+        // The KeepHistory a test names: inherited from a folder (on the product, as FolderManager sets it) or the sensor's own.
+        private async Task SetPolicyAsync(BaseSensorModel sensor, string policy)
+        {
+            if (policy.StartsWith("inherited"))
+            {
+                var inherited = policy == "inherited month"
+                    ? new TimeIntervalModel(TimeInterval.Month).ToFromFolderModel()
+                    : TimeIntervalModel.None.ToFromFolderModel();
+
+                Assert.True((await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+                {
+                    Id = _product,
+                    KeepHistory = inherited,
+                    Initiator = InitiatorInfo.System,
+                })).IsOk);
+
+                Assert.True(sensor.Settings.KeepHistory.Value.IsFromFolder);
+                Assert.Equal(policy == "inherited month" ? TimeInterval.Month : null, sensor.Settings.KeepHistory.Value.FolderPreset);
+                return;
+            }
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                KeepHistory = policy == "own month" ? new TimeIntervalModel(TimeInterval.Month) : new TimeIntervalModel(TimeSpan.FromDays(1).Ticks),
+                Initiator = InitiatorInfo.System,
+            })).IsOk);
+        }
+
         [Fact]
         public async Task A_pass_removes_a_file_whose_row_is_gone_below_the_history_floor_and_writes_again_one_inside_the_kept_range()
         {
@@ -452,6 +570,124 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             // Only at start.
             Assert.Equal(0, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
+        }
+
+        // === Stopped by the shutdown (#1958 merged into #1882) ===
+
+        // The start scan reads every row of every File sensor; a stop of the server must end it inside a sensor's rows,
+        // not after them: the history read does not take the token (GetSensorValues has no cancellation), and a scan that
+        // outlives the stop of its hosted service reads the history weeks while they close.
+        [Fact]
+        public async Task A_cancelled_start_scan_stops_inside_a_sensors_rows_and_is_done_again_by_the_next_pass()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            AddRowsWithoutRecord(sensor, 20);
+            await UseTheStoreAsync();
+
+            using var cts = new CancellationTokenSource();
+            var service = new LargeFileUploadService(RowsAfterFirst.Wrap(_databaseCoreManager.DatabaseCore, cts.Cancel), _valuesCache, new LargeFileOptions { MinFreeDiskMb = 0 });
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunPassAsync(DateTime.UtcNow, atStart: true, cts.Token));
+            Assert.Equal(1, Store.Statistics.StartDisagreements);
+
+            // The scan did not complete, so the next pass of the same service does it.
+            Assert.Equal(20, (await service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
+        }
+
+        // The history weeks closed under a scan the stop had cancelled (#1958: a read that starts on a closed week gets
+        // ObjectDisposedException): the pass ends as cancelled, not as a sensor whose rows could not be compared.
+        [Fact]
+        public async Task A_history_read_disposed_after_the_stop_ends_the_scan_as_cancelled_not_as_a_failed_sensor()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            AddRowsWithoutRecord(sensor, 20);
+            await UseTheStoreAsync();
+
+            using var cts = new CancellationTokenSource();
+            var service = new LargeFileUploadService(RowsAfterFirst.Wrap(_databaseCoreManager.DatabaseCore, () =>
+            {
+                cts.Cancel();
+                throw new ObjectDisposedException("SensorValuesWeek");
+            }), _valuesCache, new LargeFileOptions { MinFreeDiskMb = 0 });
+
+            var stopped = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunPassAsync(DateTime.UtcNow, atStart: true, cts.Token));
+            Assert.IsType<ObjectDisposedException>(stopped.InnerException);
+            Assert.Equal(1, Store.Statistics.StartDisagreements);
+        }
+
+        private void AddRowsWithoutRecord(BaseSensorModel sensor, int count)
+        {
+            var start = DateTime.UtcNow.AddHours(-1);
+
+            for (var i = 0; i < count; i++)
+            {
+                var time = start.AddSeconds(i);
+                _databaseCoreManager.DatabaseCore.AddSensorValue(sensor.Id, new LargeFileValue
+                {
+                    Time = time,
+                    ReceivingTime = time,
+                    Value = [],
+                    OriginalSize = 10,
+                    FileId = Guid.NewGuid(),
+                    Hash = new byte[32],
+                    Name = $"lost{i}.dmp",
+                });
+            }
+        }
+
+        // The scan runs only on a store that ever took a file.
+        private async Task UseTheStoreAsync()
+        {
+            var plain = await CreateFileSensorAsync("plain");
+            Assert.Equal(LargeFileBeginOutcome.Started, (await BeginAsync(plain.Path, Piece, raw: true)).Outcome);
+        }
+
+        // The real database, except that a history read calls `afterFirstRow` when its reader comes back for the second row.
+        public class RowsAfterFirst : System.Reflection.DispatchProxy
+        {
+            private HSMServer.Core.DataLayer.IDatabaseCore _inner;
+            private Action _afterFirstRow;
+
+            public static HSMServer.Core.DataLayer.IDatabaseCore Wrap(HSMServer.Core.DataLayer.IDatabaseCore inner, Action afterFirstRow)
+            {
+                var database = Create<HSMServer.Core.DataLayer.IDatabaseCore, RowsAfterFirst>();
+                var proxy = (RowsAfterFirst)(object)database;
+
+                proxy._inner = inner;
+                proxy._afterFirstRow = afterFirstRow;
+
+                return database;
+            }
+
+            protected override object Invoke(System.Reflection.MethodInfo targetMethod, object[] args)
+            {
+                try
+                {
+                    var result = targetMethod.Invoke(_inner, args);
+
+                    return targetMethod.Name == nameof(HSMServer.Core.DataLayer.IDatabaseCore.GetSensorValues)
+                        ? AfterFirst((IAsyncEnumerable<byte[]>)result)
+                        : result;
+                }
+                catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is not null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException);
+                    throw;
+                }
+            }
+
+            private async IAsyncEnumerable<byte[]> AfterFirst(IAsyncEnumerable<byte[]> rows)
+            {
+                var index = 0;
+
+                await foreach (var row in rows)
+                {
+                    if (index++ == 1)
+                        _afterFirstRow();
+
+                    yield return row;
+                }
+            }
         }
 
         // === After the review of the branch ===

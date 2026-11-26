@@ -8,6 +8,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public long Ticks { get; init; }
 
+        // The calendar preset an interval inherited from a folder resolves to (#1864); absent for every other interval,
+        // so what an earlier build stored, and reads, is unchanged.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public long? FolderPreset { get; init; }
+
 
         [JsonConstructor]
         public TimeIntervalEntity(long interval, long ticks)

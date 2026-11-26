@@ -83,6 +83,11 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensorsById = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
+
+        // #1864: the products whose history (or idle sensors) a calendar preset inherited from a folder has already
+        // cleared in this process; the first such pass of a product says so in one line (see InheritedPresetCleared).
+        private readonly ConcurrentDictionary<Guid, byte> _inheritedPresetHistoryCleared = new();
+        private readonly ConcurrentDictionary<Guid, byte> _inheritedPresetSensorsRemoved = new();
         private readonly ConcurrentDictionary<Guid, AlertTemplateModel> _alertTemplates = new();
         private readonly ConcurrentDictionary<string, ProductModel> _productsByName = new(StringComparer.Ordinal);
         private readonly object _productsByNameLock = new();
@@ -125,6 +130,11 @@ namespace HSMServer.Core.Cache
 
         private readonly Task _updateTask;
         private readonly CancellationTokenSource _cts = new();
+
+        // The background history load of the sensors read at start (FillSensorsData). DisposeAsync stops it and waits
+        // for it before it closes the database: a read still running on a closed LevelDB is a native use-after-free
+        // that kills the process (the server-tests host crash of PR #1955, #1943 follow-up).
+        private Task _fillSensorsDataTask = Task.CompletedTask;
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IJournalService _journalService;
@@ -187,6 +197,16 @@ namespace HSMServer.Core.Cache
         {
             _cts?.Cancel();
 
+            // Stops between two sensors; the load of the sensor in progress ends before the database closes below.
+            try
+            {
+                await _fillSensorsDataTask;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "The history load of the sensors failed");
+            }
+
             if (_updateTask != null)
             {
                 try
@@ -199,8 +219,20 @@ namespace HSMServer.Core.Cache
                 }
             }
 
+            // A queue that does not stop in time (UpdatesQueue waits 5 s, then throws TimeoutException) must not skip
+            // the other queues and the close of the database below. What it still runs then meets a closed database:
+            // ObjectDisposedException on a history read or a put that must land, a dropped write logged once per week.
             foreach (var queue in _cache.Values)
-                await queue.Queue.DisposeAsync();
+            {
+                try
+                {
+                    await queue.Queue.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "An updates queue did not stop during disposal; the database is closed under it");
+                }
+            }
 
             _cts?.Dispose();
 
@@ -743,6 +775,9 @@ namespace HSMServer.Core.Cache
             // cancellation or an unexpected throw.
             var purgedSensorIds = new List<Guid>();
 
+            // #1864: the removals due to a calendar preset inherited from a folder, per root product.
+            var removedByInheritedPreset = new Dictionary<Guid, (ProductModel Product, int Count, TimeIntervalModel Preset)>();
+
             try
             {
                 foreach (var sensor in sensors)
@@ -789,6 +824,10 @@ namespace HSMServer.Core.Cache
 
                         if (sensor.ShouldDestroy())
                         {
+                            // Read before the removal detaches the sensor from its product.
+                            var selfDestroy = sensor.Settings.SelfDestroy.Value;
+                            var root = sensor.Root;
+
                             await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), parentId: null,
                             token: token, purgeIds: purgedSensorIds);
 
@@ -801,7 +840,15 @@ namespace HSMServer.Core.Cache
                             if (TryGetSensorById(sensor.Id, out _))
                                 notRemoved++;
                             else
+                            {
                                 removed++;
+
+                                if (selfDestroy.FolderPreset is not null && root is not null)
+                                {
+                                    var count = removedByInheritedPreset.TryGetValue(root.Id, out var counted) ? counted.Count : 0;
+                                    removedByInheritedPreset[root.Id] = (root, count + 1, counted.Preset ?? selfDestroy);
+                                }
+                            }
                         }
                         // Count only sensors the sweep could act on: SelfDestroy is None (the default)
                         // for most of the tree, and for those a failed load changes nothing.
@@ -836,6 +883,9 @@ namespace HSMServer.Core.Cache
                 if (purgedSensorIds.Count > 0)
                     PurgeChangeSets(purgedSensorIds);
             }
+
+            foreach (var (_, (product, count, preset)) in removedByInheritedPreset)
+                InheritedPresetCleared(_inheritedPresetSensorsRemoved, product, $"{count} idle sensor(s) removed by 'Remove sensor after inactivity' {preset}");
 
             _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} self-destroy-enabled (history not loaded), not removed {notRemoved}, failed {failedSweep}");
 
@@ -1689,6 +1739,8 @@ namespace HSMServer.Core.Cache
 
             int cleared = 0;
             int failed = 0;
+            int clearedByInheritedPreset = 0;
+            TimeIntervalModel inheritedPreset = null;
             foreach (var sensor in value.Sensors.Values)
             {
                 // One throwing sensor must not freeze maintenance for the whole product: without
@@ -1709,11 +1761,19 @@ namespace HSMServer.Core.Cache
 
                     var policy = sensor.Settings.KeepHistory.Value;
 
-                    if (policy.TimeIsUp(from))
+                    // The cutoff is the history floor's too (HistoryFloor: late values, large files), so what retention
+                    // removes and what they take as removed cannot drift. TimeIsUp implies a cutoff.
+                    if (policy.TimeIsUp(from) && policy.RetentionCutoff(DateTime.UtcNow) is { } cutoff)
                     {
                         _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
-                        ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                        ClearSensorHistory(new(sensor.Id, cutoff));
                         cleared++;
+
+                        if (policy.FolderPreset is not null)
+                        {
+                            clearedByInheritedPreset++;
+                            inheritedPreset ??= policy;
+                        }
                     }
                     else
                     {
@@ -1728,6 +1788,18 @@ namespace HSMServer.Core.Cache
             }
 
             _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}, failed {failed}");
+
+            if (clearedByInheritedPreset > 0)
+                InheritedPresetCleared(_inheritedPresetHistoryCleared, value.Product, $"history of {clearedByInheritedPreset} sensor(s) cleared by 'Keep sensor history' {inheritedPreset}");
+        }
+
+        // #1864: a calendar preset a product inherits from its folder used to be kept for ever, so once applied it deletes
+        // history and sensors operators have had for longer than the folder says. The first pass that does so for a
+        // product in this process says so in one Info line per product, not one per sensor.
+        private void InheritedPresetCleared(ConcurrentDictionary<Guid, byte> logged, ProductModel product, string what)
+        {
+            if (logged.TryAdd(product.Id, 0))
+                _logger.Info($"Product [{product.Id}] {product.DisplayName}: {what}, a period inherited from its folder and applied since #1864 (the first such pass for the product since the start)");
         }
 
         public async Task<TaskResult> ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
@@ -3840,12 +3912,18 @@ namespace HSMServer.Core.Cache
                 //
                 // Round-6: KeepHistory inherited from a folder reaches here as a
                 // FromFolder policy carrying the FOLDER model's ticks — Forever
-                // as long.MaxValue, the month presets as 0. The retention pass
+                // as long.MaxValue — or, for a calendar preset, the preset itself
+                // (FolderPreset, #1864: UseTicks is false, and the floor shifts by
+                // the calendar as for the preset set on the node). A calendar
+                // preset stored before #1864 and not yet resolved at start is
+                // FromFolder with 0 ticks. The retention pass
                 // (TimeIsUp) treats both as "never expires", and the floor must
                 // agree: shifting long.MaxValue throws and would abort the whole
                 // batch loop, and shifting 0 floors at UtcNow and would refuse
                 // every out-of-order value. Any ticks window too large to
                 // represent below DateTime.MinValue is the same no-floor case.
+                // The retention pass and this floor take one cutoff
+                // (TimeIntervalModel.RetentionCutoff), so they cannot drift.
                 var floor = HistoryFloor(sensor, DateTime.UtcNow);
 
                 if (lateValue.Time < floor)
@@ -4339,7 +4417,8 @@ namespace HSMServer.Core.Cache
 
             MigrateDatabseV2();
 
-            Task.Run(() => FillSensorsData()).Forget(_logger);
+            _fillSensorsDataTask = Task.Run(() => FillSensorsData(_cts.Token));
+            _fillSensorsDataTask.Forget(_logger);
 
             //_logger.Info($"{nameof(FillSensorsData)} is started");
             //FillSensorsData();
@@ -4812,12 +4891,15 @@ namespace HSMServer.Core.Cache
             return _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
         }
 
-        private ValueTask FillSensorsData()
+        private void FillSensorsData(CancellationToken token)
         {
             foreach (var sensor in GetSensors())
-                sensor.Initialize();
+            {
+                if (token.IsCancellationRequested)
+                    return;
 
-            return ValueTask.CompletedTask;
+                sensor.Initialize();
+            }
         }
 
         //private void FillSensorsData()

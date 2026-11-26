@@ -45,6 +45,9 @@ namespace HSMDatabase.LevelDB.Sealed
 
         private volatile Lease _current;
         private volatile bool _disposed;
+        private int _disposeStarted;
+        private int _closedWriteLogged;
+        private readonly ManualResetEventSlim _drained = new(false);
 
         // The database core's clock: the instances serving the week record their last reclaimable change by it (#1801).
         private readonly Func<DateTime> _utcNow;
@@ -80,6 +83,12 @@ namespace HSMDatabase.LevelDB.Sealed
         // Test seam: runs inside a range delete, under the shared gate, after it was logged and before it changes anything.
         internal Action InsideRangeDelete { get; set; }
 
+        // Test seam: runs inside a read, with the lease taken and before the instance is read.
+        internal Action InsideRead { get; set; }
+
+        /// <summary>How long <see cref="Dispose"/> waits for the reads still running on the week before it closes it anyway.</summary>
+        internal static TimeSpan ReadDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
 
         /// <param name="utcNow">The clock of the database core (null: the system clock): a sealed week opened here asks it
         /// whether its overlay still holds every row (#1805 follow-up), and every instance serving the week records its last
@@ -111,11 +120,16 @@ namespace HSMDatabase.LevelDB.Sealed
 
         #region Writes (under the shared gate)
 
+        // A write that finds the week closing is dropped (logged once per week): from Dispose on, the instances are
+        // released and closed, and a write into one would be a write into a closed native database.
         public void PutSensorValue(byte[] key, byte[] value)
         {
             _gate.EnterReadLock();
             try
             {
+                if (WriteRefused())
+                    return;
+
                 _current.Database.PutSensorValue(key, value);
             }
             finally
@@ -124,11 +138,14 @@ namespace HSMDatabase.LevelDB.Sealed
             }
         }
 
+        // Throws ObjectDisposedException once the week is closing, as a put into the closed database did before.
         public void PutSensorValueOrThrow(byte[] key, byte[] value)
         {
             _gate.EnterReadLock();
             try
             {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
                 _current.Database.PutSensorValueOrThrow(key, value);
             }
             finally
@@ -142,6 +159,9 @@ namespace HSMDatabase.LevelDB.Sealed
             _gate.EnterReadLock();
             try
             {
+                if (WriteRefused())
+                    return;
+
                 // Logged before anything changes: a commit that sees no entry knows no delete ran since its log opened.
                 lock (_deleteLogs)
                     foreach (var log in _deleteLogs)
@@ -216,6 +236,9 @@ namespace HSMDatabase.LevelDB.Sealed
 
             try
             {
+                // A step of the sealing job that starts once the week is closing would change released instances.
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
                 return action();
             }
             finally
@@ -281,25 +304,94 @@ namespace HSMDatabase.LevelDB.Sealed
         #endregion
 
 
+        // Closes the week once nothing runs on it: a native LevelDB closed under a running write or read (an open
+        // iterator) is a use-after-free that kills the process without a managed exception (the server-tests host
+        // crash, #1943 follow-up).
+        // 1. From the start of Dispose a new read throws ObjectDisposedException (Acquire), and a write or range delete
+        //    that gets the gate refuses (PutSensorValueOrThrow throws ObjectDisposedException, the others drop the change
+        //    and log once). Taking the gate exclusively once waits for the writes already past that check. The gate is
+        //    NOT held while the reads drain: a reader that holds a lease and then writes (the sensor-move merge) would
+        //    wait for the gate while Dispose waits for its lease.
+        // 2. The replaced instances drain first: after a swap the current instance owns the row database a replaced one
+        //    still reads, so the current one must not close while a read runs on a replaced one.
+        // 3. Then the handle's reference on the current instance is dropped, and Dispose waits until the last read on it
+        //    has closed it.
+        // Each wait is capped by ReadDrainTimeout: a read that outlives it (an enumeration nobody finishes) loses its
+        // instance, as every read did before, so one stuck read delays the close by up to that long per instance.
+        // When Dispose returns, every instance of the week is closed and no write runs on it; a read can still be running
+        // only if it outlived the cap. A second, concurrent Dispose waits until the first has drained.
         public void Dispose()
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposeStarted, 1) == 1)
+            {
+                _drained.Wait();
                 return;
+            }
 
-            _disposed = true;
+            try
+            {
+                _disposed = true;
 
-            _current.DisposeNow();
+                _gate.EnterWriteLock();
+                _gate.ExitWriteLock();
 
-            // At shutdown, like any database here: a read still running on a replaced instance loses it.
-            List<Lease> replaced;
+                List<Lease> replaced;
 
-            lock (_replacedLock)
-                replaced = [.. _replaced];
+                lock (_replacedLock)
+                    replaced = [.. _replaced];
 
-            foreach (var lease in replaced)
+                foreach (var lease in replaced)
+                    Drain(lease);
+
+                var current = _current;
+
+                try
+                {
+                    // The handle's reference: a replaced instance's was dropped by its swap.
+                    current.Release();
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, $"Closing the current instance of {Name} failed");
+                }
+
+                Drain(current);
+            }
+            finally
+            {
+                // The gate is not disposed: a write that waited for it at shutdown must be able to leave it.
+                _drained.Set();
+            }
+        }
+
+        // Waits until the lease is closed; past the cap, closes it under the read still running. Never throws: one
+        // instance that fails to close must not leave the others open.
+        private void Drain(Lease lease)
+        {
+            try
+            {
+                if (lease.WaitClosed(ReadDrainTimeout))
+                    return;
+
+                _logger.Error($"A read on {Name} still runs {ReadDrainTimeout.TotalSeconds:0} s after the week started closing; it is closed under it");
                 lease.DisposeNow();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Closing an instance of {Name} failed");
+            }
+        }
 
-            // The gate is not disposed: a write that is still running at shutdown must be able to leave it.
+        // Under the shared gate: true, and logged once per week, when the week is closing.
+        private bool WriteRefused()
+        {
+            if (!_disposed)
+                return false;
+
+            if (Interlocked.Exchange(ref _closedWriteLogged, 1) == 0)
+                _logger.Error($"A write to {Name} came after the week started closing (shutdown): it and every later one are dropped");
+
+            return true;
         }
 
 
@@ -328,6 +420,8 @@ namespace HSMDatabase.LevelDB.Sealed
 
             try
             {
+                InsideRead?.Invoke();
+
                 return read(lease.Database);
             }
             finally
@@ -358,6 +452,7 @@ namespace HSMDatabase.LevelDB.Sealed
         {
             private int _references = 1;
             private int _disposed;
+            private readonly ManualResetEventSlim _closed = new(false);
 
 
             public ISensorValuesDatabase Database { get; } = database;
@@ -388,9 +483,19 @@ namespace HSMDatabase.LevelDB.Sealed
                 if (Interlocked.Exchange(ref _disposed, 1) == 1)
                     return;
 
-                Database.Dispose();
-                onDisposed(this);
+                try
+                {
+                    Database.Dispose();
+                    onDisposed(this);
+                }
+                finally
+                {
+                    _closed.Set();
+                }
             }
+
+            /// <summary>Waits until the instance is closed (by the last reference or by <see cref="DisposeNow"/>).</summary>
+            public bool WaitClosed(TimeSpan timeout) => _closed.Wait(timeout);
         }
     }
 

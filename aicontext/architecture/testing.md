@@ -101,6 +101,12 @@ new push to the pull request cancels the superseded run; the trx files are uploa
 `server-test-results` artifact when the run fails. A test project added to `HSMServer.sln` runs there
 with no change to the workflow.
 
+Both workflows run `dotnet test` with `--blame-crash --blame-crash-dump-type mini`: a test host that
+dies without a managed exception ("Test host process crashed": an access violation in `leveldb.dll`, a
+stack overflow, a fail-fast) leaves a mini dump and a `Sequence_*.xml` naming the tests it was running in
+the results directory, and the `server-test-results` artifact of a failed run carries them (`server-build.yml`
+uploads it too). Open the dump with `dotnet-dump analyze` (`clrstack -all`, `pe`, `threads`).
+
 ### 3. Database Tests
 
 Location: `src/tests/HSMDatabase.LevelDB.Tests/`

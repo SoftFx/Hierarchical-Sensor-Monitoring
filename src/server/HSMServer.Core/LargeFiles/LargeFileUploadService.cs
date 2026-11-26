@@ -517,8 +517,12 @@ namespace HSMServer.Core.LargeFiles
 
                 try
                 {
-                    await foreach (var row in _database.GetSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue).WithCancellation(token))
+                    // The history read does not take the token, so it is asked at every row: a stop of the server ends the
+                    // scan inside a sensor's history, before the history weeks close under it (#1958).
+                    await foreach (var row in _database.GetSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue))
                     {
+                        token.ThrowIfCancellationRequested();
+
                         if (!LargeFileValue.IsLargeFileRow(row) || sensor.Convert(row) is not LargeFileValue value || known.Contains(value.FileId))
                             continue;
 
@@ -527,6 +531,12 @@ namespace HSMServer.Core.LargeFiles
                         _logger.Error($"The large value of sensor '{sensor.FullPath}' at {value.Time:O} names file {value.FileId:N}, which the large file store " +
                                       "does not have; the value is kept as it is and its file cannot be given out");
                     }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException && token.IsCancellationRequested)
+                {
+                    // After the stop the history weeks may be closing: a read that starts on a closed one gets
+                    // ObjectDisposedException. The scan was stopped, it did not fail; it is done again at the next start.
+                    throw new OperationCanceledException($"The scan of the large values stopped at sensor '{sensor.FullPath}'", ex, token);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

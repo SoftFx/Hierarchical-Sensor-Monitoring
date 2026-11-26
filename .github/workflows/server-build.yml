@@ -44,8 +44,22 @@ jobs:
       - name: Install dependencies
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
+      # --blame-crash: a test host that dies (an access violation in native code, a stack overflow, a
+      # fail-fast) leaves a mini dump and the Sequence_*.xml of the tests it was running in the results
+      # directory, uploaded below when the step fails.
       - name: Build & Test Solution
-        run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
+        run: >
+          dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
+          --blame-crash --blame-crash-dump-type mini
+          --results-directory ${{ runner.temp }}/test-results
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore
 
       # HSM Agent (#1167/#1298): the served exe is a *released* artifact, not something this lane
       # compiles. Download the release pinned in agent-release.txt, verify its checksum, and stage it
