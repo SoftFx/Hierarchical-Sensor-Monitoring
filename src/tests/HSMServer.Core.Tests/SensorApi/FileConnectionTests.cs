@@ -279,13 +279,8 @@ namespace HSMServer.Core.Tests.SensorApi
             for (var i = 0; i < 4; i++)
                 Assert.Equal(i + 1, (await file.SendPieceAsync(data.Piece(i), begun.Upload)).Next);
 
-            var checking = await file.EndAsync(begun.Upload, data.Hash());
-
-            Assert.Equal(202, checking.Status);
-            Assert.Equal("checking", checking.State);
-            Assert.Equal(FileConnection.CheckRetryAfterSeconds, checking.RetryAfter);
-
-            var stored = await file.EndUntilSettledAsync(begun.Upload, data.Hash());
+            // A quick check is answered with its outcome at once.
+            var stored = await file.EndAsync(begun.Upload, data.Hash());
 
             Assert.Equal(200, stored.Status);
             Assert.Equal("stored", stored.State);
@@ -310,6 +305,117 @@ namespace HSMServer.Core.Tests.SensorApi
             await file.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", Deadline());
             await TestWait.UntilAsync(() => host.Log.Matching("Collector file connection", "closed after", "pieces stored 4 (", "uploads begun 1, stored 1, discarded 0").Length == 1, "the close line");
             Assert.Single(host.Log.Matching($"upload {begun.Upload} of \"app.dmp\"", "is stored"));
+        }
+
+        // A check longer than the quick wait is answered 202, with a retry time by the file's size, and asked again.
+        [Theory]
+        [InlineData(100_000, 1)]
+        [InlineData(300L * 1024 * 1024, 2)]
+        [InlineData(64L * 1024 * 1024 * 1024, 30)]
+        public async Task ALongCheck_Is202WithARetryTimeByTheSize(long size, int retryAfter)
+        {
+            Assert.Equal(retryAfter, FileConnection.CheckRetryAfter(size));
+
+            if (size > 100_000)
+                return;
+
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", (int)size);
+            var gate = _store.FinishGate = new FakeFileUploadStore.Gate();
+
+            var begun = await file.BeginAsync(data, _path);
+
+            for (var i = 0; i < data.PieceCount; i++)
+                await file.SendPieceAsync(data.Piece(i), begun.Upload);
+
+            var checking = await file.EndAsync(begun.Upload, data.Hash());
+
+            Assert.Equal(202, checking.Status);
+            Assert.Equal("checking", checking.State);
+            Assert.Equal(retryAfter, checking.RetryAfter);
+
+            gate.Release.SetResult();
+
+            Assert.Equal("stored", (await file.EndUntilSettledAsync(begun.Upload, data.Hash())).State);
+        }
+
+        // One connection carries several files in turn: begin again after an end.
+        [Fact]
+        public async Task OneConnection_CarriesSeveralFilesInTurn()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+
+            for (var n = 0; n < 3; n++)
+                Assert.Equal("stored", (await file.UploadAsync(TestFile.Random($"f{n}.bin", 70_000, seed: n), _path)).State);
+
+            Assert.Equal(3, Enumerable.Range(0, 3).Count(n => _store.Find($"f{n}.bin")?.State == FakeFileUploadStore.State.Verified));
+            await TestWait.UntilAsync(() => _store.LiveLeases == 0, "the checks to give their leases back");
+        }
+
+        // The mark of ADR-0022 point 20: absent means secure; another mark is another upload.
+        [Theory]
+        [InlineData(null, true)]
+        [InlineData(true, true)]
+        [InlineData(false, false)]
+        public async Task TheSecureMark_ReachesTheStore_AndAbsentIsSecure(bool? sent, bool kept)
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = new TestFile { Name = "a.dmp", Bytes = new byte[70_000], PieceBytes = 64 * 1024, Secure = sent };
+
+            Assert.Equal(200, (await file.BeginAsync(data, _path)).Status);
+            Assert.Equal(kept, _store.Find("a.dmp").Key.Secure);
+        }
+
+        [Fact]
+        public async Task ABeginWithTheOtherMark_IsAnotherUpload()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var secure = TestFile.Random("a.dmp", 200_000);
+            var notSecure = new TestFile { Name = secure.Name, Bytes = secure.Bytes, PieceBytes = secure.PieceBytes, Secure = false };
+
+            var first = await file.BeginAsync(secure, _path);
+            await file.SendPieceAsync(secure.Piece(0), first.Upload);
+
+            var second = await file.BeginAsync(notSecure, _path);
+
+            Assert.Equal(0, second.Next);
+            Assert.NotEqual(first.Upload, second.Upload);
+        }
+
+        // A routed ordinary send keeps its status and comment; the store gets who sent it from where.
+        [Fact]
+        public async Task TheStatusAndCommentOfARoutedSend_AndTheSessionsClient_ReachTheStore()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = new TestFile { Name = "report.bin", Bytes = new byte[70_000], PieceBytes = 64 * 1024, Secure = false, Status = 3, Comment = "disk is full" };
+
+            Assert.Equal(200, (await file.BeginAsync(data, _path)).Status);
+
+            var entry = _store.Find("report.bin");
+
+            Assert.Equal(HSMSensorDataObjects.SensorStatus.Error, entry.Status);
+            Assert.Equal("disk is full", entry.Comment);
+            Assert.Equal(TableConnectionTestClient.ClientName, entry.ClientName);
+            Assert.Equal("127.0.0.1", entry.RemoteAddress);
+        }
+
+        [Fact]
+        public async Task ABeginWithoutStatusOrComment_IsOkWithNoComment()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+
+            Assert.Equal(200, (await file.BeginAsync(TestFile.Random("a.dmp", 70_000), _path)).Status);
+
+            var entry = _store.Find("a.dmp");
+
+            Assert.Equal(HSMSensorDataObjects.SensorStatus.Ok, entry.Status);
+            Assert.Null(entry.Comment);
         }
 
         [Fact]
@@ -682,7 +788,7 @@ namespace HSMServer.Core.Tests.SensorApi
 
             Assert.Equal(409, refused.Status);
             Assert.Equal("checking", refused.State);
-            Assert.Equal(5, refused.RetryAfter);
+            Assert.Equal(1, refused.RetryAfter);
 
             gate.Release.SetResult();
             Assert.Equal("stored", (await file.EndUntilSettledAsync(begun.Upload, data.Hash())).State);
@@ -886,6 +992,10 @@ namespace HSMServer.Core.Tests.SensorApi
             { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00\",\"pieceBytes\":65536}}", "invalid begin: modified must be a time with a UTC designator or an offset" },
             { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"source\":\"" + new string('s', 257) + "\",\"pieceBytes\":65536}}", "invalid begin: source must have 1..256 characters" },
             { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65535}}", "invalid begin: pieceBytes must be 65536.." },
+            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536,\"secure\":\"yes\"}}", "invalid begin: secure must be true or false" },
+            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536,\"status\":7}}", "invalid begin: status must be a SensorStatus number" },
+            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536,\"status\":\"Ok\"}}", "invalid begin: status must be a SensorStatus number" },
+            { "{\"id\":1,\"op\":\"begin\",\"body\":{\"path\":\"p\",\"name\":\"a\",\"size\":1,\"modified\":\"2026-11-25T10:00:00Z\",\"pieceBytes\":65536,\"comment\":\"" + new string('c', 4097) + "\"}}", "invalid begin: comment must be text of at most 4096 characters" },
         };
 
         [Theory]

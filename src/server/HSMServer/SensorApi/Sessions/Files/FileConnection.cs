@@ -1,3 +1,4 @@
+using HSMSensorDataObjects;
 using HSMServer.Middleware;
 using NLog;
 using System;
@@ -18,8 +19,13 @@ namespace HSMServer.SensorApi.Sessions.Files
     // which takes it over from the connection and gives it back whatever its outcome.
     internal sealed class FileConnection
     {
-        // How long a collector waits before it asks again about a check that is running.
-        public const int CheckRetryAfterSeconds = 5;
+        // How long `end` waits for its check before it answers 202: a small file (a routed ordinary send, a
+        // few pieces) gets its outcome in the first answer.
+        public static readonly TimeSpan QuickCheck = TimeSpan.FromSeconds(2);
+
+        // The longest a comment of `begin` may be: a begin is a text frame, and a frame above 64 KiB needs an
+        // upload the connection holds.
+        public const int MaxCommentLength = 4096;
 
         // What a collector waits after a fault of the store, or a refusal that passes with time when the
         // store names no time.
@@ -77,7 +83,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             try
             {
                 result = await _store.BeginAsync(new FileBeginRequest(caller.Product.Id, begin.Path, begin.Name, begin.Size, begin.ModifiedUtc, begin.Source,
-                    begin.PieceBytes, _maxPieceBytes), token);
+                    begin.PieceBytes, _maxPieceBytes, begin.Secure, begin.Status, begin.Comment, _session.ClientName, _session.RemoteIP), token);
             }
             catch (ArgumentException ex)
             {
@@ -127,7 +133,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                     {
                         body.WriteString("upload", upload);
                         body.WriteString("state", "checking");
-                    }, retryAfterSeconds: Seconds(result.RetryAfter, CheckRetryAfterSeconds));
+                    }, retryAfterSeconds: Seconds(result.RetryAfter, CheckRetryAfter(begin.Size)));
                     return;
 
                 case FileBeginOutcome.NoRoom:
@@ -278,7 +284,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             }
         }
 
-        public void HandleEnd(SessionRequest request, long id, ArrayBufferWriter<byte> output)
+        public async Task HandleEndAsync(SessionRequest request, long id, ArrayBufferWriter<byte> output)
         {
             if (!TryReadEnd(request, out var fileId, out var hash, out var error))
             {
@@ -313,8 +319,15 @@ namespace HSMServer.SensorApi.Sessions.Files
             _upload = null;
             _check = StartCheck(upload, hash);
 
+            // A quick check is answered with its outcome; a long one with 202, and the collector asks again.
+            await Task.WhenAny(_check.Task, Task.Delay(QuickCheck));
+
             AnswerCheck(_check, output, id);
         }
+
+        // How long a collector waits before it asks again about a running check: about the time a check reads
+        // a file of this size (256 MiB a second), 1..30 seconds.
+        internal static int CheckRetryAfter(long size) => (int)Math.Clamp((size + (256L << 20) - 1) / (256L << 20), 1, 30);
 
         // `discard` (ADR-0022 point 3): the collector gives up the upload this connection holds, because its
         // source file changed while it was sent. The part, its reservation and its slot go; the collector then
@@ -345,7 +358,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                     {
                         body.WriteString("upload", FormatId(fileId));
                         body.WriteString("state", "checking");
-                    }, error: "the end check of this upload is running", retryAfterSeconds: CheckRetryAfterSeconds);
+                    }, error: "the end check of this upload is running", retryAfterSeconds: check.RetryAfterSeconds);
                     return;
                 }
 
@@ -387,7 +400,7 @@ namespace HSMServer.SensorApi.Sessions.Files
 
         private CheckRun StartCheck(Upload upload, byte[] hash)
         {
-            var run = new CheckRun(upload.FileId, upload.Name);
+            var run = new CheckRun(upload.FileId, upload.Name, CheckRetryAfter(upload.Size));
 
             run.Task = _checks.Start(async stopping =>
             {
@@ -460,7 +473,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                 {
                     body.WriteString("upload", upload);
                     body.WriteString("state", "checking");
-                }, retryAfterSeconds: CheckRetryAfterSeconds);
+                }, retryAfterSeconds: check.RetryAfterSeconds);
                 return;
             }
 
@@ -484,7 +497,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                     {
                         body.WriteString("upload", upload);
                         body.WriteString("state", "checking");
-                    }, retryAfterSeconds: CheckRetryAfterSeconds);
+                    }, retryAfterSeconds: check.RetryAfterSeconds);
                     return;
 
                 case CheckAnswerKind.Missing:
@@ -631,7 +644,46 @@ namespace HSMServer.SensorApi.Sessions.Files
                 return false;
             }
 
-            begin = new Begin(path, name, size, modified, source, pieceBytes);
+            // Absent means secure: an older collector, or a mistake, fails closed (ADR-0022 point 20).
+            var secure = true;
+
+            if (body.TryGetProperty("secure", out var secureElement))
+            {
+                if (secureElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                {
+                    error = "invalid begin: secure must be true or false";
+                    return false;
+                }
+
+                secure = secureElement.GetBoolean();
+            }
+
+            // The status of a routed ordinary send, as the Status of a value in a list frame; absent means Ok.
+            var status = SensorStatus.Ok;
+
+            if (body.TryGetProperty("status", out var statusElement))
+            {
+                if (statusElement.ValueKind != JsonValueKind.Number || !statusElement.TryGetInt32(out var statusNumber) || !Enum.IsDefined(typeof(SensorStatus), statusNumber))
+                {
+                    error = "invalid begin: status must be a SensorStatus number";
+                    return false;
+                }
+
+                status = (SensorStatus)statusNumber;
+            }
+
+            string comment = null;
+
+            if (body.TryGetProperty("comment", out var commentElement) && commentElement.ValueKind != JsonValueKind.Null)
+            {
+                if (commentElement.ValueKind != JsonValueKind.String || (comment = commentElement.GetString()).Length > MaxCommentLength)
+                {
+                    error = $"invalid begin: comment must be text of at most {MaxCommentLength} characters";
+                    return false;
+                }
+            }
+
+            begin = new Begin(path, name, size, modified, source, pieceBytes, secure, status, comment);
             error = null;
             return true;
         }
@@ -700,7 +752,8 @@ namespace HSMServer.SensorApi.Sessions.Files
         }
 
 
-        private readonly record struct Begin(string Path, string Name, long Size, DateTime ModifiedUtc, string Source, int PieceBytes);
+        private readonly record struct Begin(string Path, string Name, long Size, DateTime ModifiedUtc, string Source, int PieceBytes, bool Secure,
+            SensorStatus Status, string Comment);
 
 
         private sealed class Upload(FileUploadLease lease, Guid fileId, long size, int pieceSize, long pieces, long next, string name)
@@ -722,11 +775,13 @@ namespace HSMServer.SensorApi.Sessions.Files
         }
 
 
-        private sealed class CheckRun(Guid fileId, string name)
+        private sealed class CheckRun(Guid fileId, string name, int retryAfterSeconds)
         {
             public Guid FileId { get; } = fileId;
 
             public string Name { get; } = name;
+
+            public int RetryAfterSeconds { get; } = retryAfterSeconds;
 
             public Task<CheckAnswer> Task { get; set; }
         }
@@ -753,7 +808,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             public static CheckAnswer From(FileFinishResult result) => result.Outcome switch
             {
                 FileFinishOutcome.Verified => new(CheckAnswerKind.Stored, result.ValueTimeUtc, 0, null),
-                FileFinishOutcome.Checking => new(CheckAnswerKind.Fault, null, 0, "the end check of this file runs elsewhere", CheckRetryAfterSeconds),
+                FileFinishOutcome.Checking => new(CheckAnswerKind.Fault, null, 0, "the end check of this file runs elsewhere", 5),
                 FileFinishOutcome.Incomplete => new(CheckAnswerKind.Missing, null, result.NextPiece, null),
                 FileFinishOutcome.Mismatch => new(CheckAnswerKind.Mismatch, null, 0, Short(result.Error)),
                 FileFinishOutcome.SensorGone => new(CheckAnswerKind.SensorGone, null, 0, Short(result.Error)),

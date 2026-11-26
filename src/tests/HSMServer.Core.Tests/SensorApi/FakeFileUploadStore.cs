@@ -100,7 +100,7 @@ namespace HSMServer.Core.Tests.SensorApi
             if (request.PieceSize < 64 * 1024 || request.PieceSize > request.MaxPieceSize)
                 return Result(FileBeginOutcome.BadPieceSize);
 
-            var key = new Key(request.ProductId, request.SensorPath, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity);
+            var key = new Key(request.ProductId, request.SensorPath, request.Name, request.Size, request.SourceModifiedUtc, request.SourceIdentity, request.Secure);
 
             if (_entries.TryGetValue(key, out var entry))
             {
@@ -131,7 +131,13 @@ namespace HSMServer.Core.Tests.SensorApi
                 if (NoRoom)
                     return Result(FileBeginOutcome.NoRoom, retryAfter: TimeSpan.FromMinutes(5));
 
-                entry = new Entry(Guid.NewGuid(), key, request.PieceSize);
+                entry = new Entry(Guid.NewGuid(), key, request.PieceSize)
+                {
+                    Status = request.Status,
+                    Comment = request.Comment,
+                    ClientName = request.ClientName,
+                    RemoteAddress = request.RemoteAddress,
+                };
                 _entries[key] = entry;
                 entry.LeaseId = Guid.NewGuid();
 
@@ -289,7 +295,7 @@ namespace HSMServer.Core.Tests.SensorApi
                 entry?.Pieces.Count ?? 0, entry?.TotalPieces ?? 0, entry?.PieceSize ?? 0, retryAfter, error);
 
 
-        internal readonly record struct Key(Guid Product, string Path, string Name, long Size, DateTime Modified, string Source);
+        internal readonly record struct Key(Guid Product, string Path, string Name, long Size, DateTime Modified, string Source, bool Secure);
 
 
         internal enum State
@@ -325,6 +331,14 @@ namespace HSMServer.Core.Tests.SensorApi
             public DateTime? ValueTimeUtc { get; set; }
 
             public string DiscardReason { get; set; }
+
+            public HSMSensorDataObjects.SensorStatus Status { get; init; }
+
+            public string Comment { get; init; }
+
+            public string ClientName { get; init; }
+
+            public string RemoteAddress { get; init; }
         }
 
 

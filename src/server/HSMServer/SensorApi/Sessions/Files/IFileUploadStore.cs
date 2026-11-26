@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMSensorDataObjects;
 
 namespace HSMServer.SensorApi.Sessions.Files
 {
@@ -35,11 +36,15 @@ namespace HSMServer.SensorApi.Sessions.Files
 
 
     // What names a file: the root product of the access key, the normalized sensor path, the file's name,
-    // its original size, the modification time of the source file (UTC) and an optional opaque identity of
-    // the source file. `PieceSize` is what the collector cuts the file into; `MaxPieceSize` is what the
-    // connection's frame allows.
+    // its original size, the modification time of the source file (UTC), an optional opaque identity of the
+    // source file and its mark (ADR-0022 point 20: a secure file is archived under the product's password, a
+    // file that is not secure without one; another mark is another upload). `PieceSize` is what the collector
+    // cuts the file into; `MaxPieceSize` is what the connection's frame allows. `Status` and `Comment` go into
+    // the value (a routed ordinary send keeps its own; a large file of the large-file API sends neither).
+    // `ClientName` and `RemoteAddress` are the server's knowledge of the session, for the record.
     public sealed record FileBeginRequest(Guid ProductId, string SensorPath, string Name, long Size, DateTime SourceModifiedUtc, string SourceIdentity,
-        int PieceSize, int MaxPieceSize);
+        int PieceSize, int MaxPieceSize, bool Secure = true, SensorStatus Status = SensorStatus.Ok, string Comment = null,
+        string ClientName = null, string RemoteAddress = null);
 
 
     public readonly record struct FileUploadLease(Guid FileId, Guid LeaseId);

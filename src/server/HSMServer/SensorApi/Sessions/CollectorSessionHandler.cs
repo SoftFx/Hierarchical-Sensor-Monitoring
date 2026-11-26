@@ -784,7 +784,7 @@ namespace HSMServer.SensorApi.Sessions
                         break;
 
                     case SessionProtocol.OpEnd when session.IsFile:
-                        session.Files.HandleEnd(request, id, output);
+                        await session.Files.HandleEndAsync(request, id, output);
                         break;
 
                     default:

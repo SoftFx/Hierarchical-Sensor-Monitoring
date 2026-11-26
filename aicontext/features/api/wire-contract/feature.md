@@ -314,11 +314,16 @@ A collector sends a large file (a dump, up to `fileLimits.maxFileBytes`, 64 GB b
 **begin** (text): names the file and how it is cut.
 
 ```json
-{"id":1,"op":"begin","body":{"path":"app/dumps","name":"app_20261125.dmp","size":123456789,"modified":"2026-11-25T10:00:00.1234567Z","source":"vol:5b2e/file:00a1","pieceBytes":4173824}}
+{"id":1,"op":"begin","body":{"path":"app/dumps","name":"app_20261125.dmp","size":123456789,"modified":"2026-11-25T10:00:00.1234567Z","source":"vol:5b2e/file:00a1","secure":true,"pieceBytes":4173824}}
+{"id":2,"op":"begin","body":{"path":"app/report","name":"report.bin","size":3145728,"modified":"2026-11-25T10:05:00Z","source":"send:5f0c3e2a9b6d4c1e8a7f2b3c4d5e6f70","secure":false,"status":3,"comment":"disk is full","pieceBytes":4173824}}
 {"ack":1,"status":200,"body":{"upload":"a3f0…32 hex","next":0,"pieces":30,"pieceBytes":4173824}}
 ```
 
-`path` is the File sensor's registered path, looked up only in the root product of the key; `name` 1..1,024 characters, shown and used as the name inside the archive, never a path on the server; `size` the original size in bytes (0 allowed: a file of no pieces); `modified` the source file's modification time with `Z` or an offset (taken as UTC); `source` optional, 1..256 characters, an opaque identity of the source file (a file id, an inode) so that two files with one name, size and time are not taken for one; `pieceBytes` 65,536..the hello's `pieceBytes`. The file is known by its sensor, name, size, `modified` and `source`, across restarts of either side.
+`path` is the File sensor's registered path, looked up only in the root product of the key; `name` 1..1,024 characters, shown and used as the name inside the archive, never a path on the server; `size` the original size in bytes (0 allowed: a file of no pieces); `modified` the source file's modification time with `Z` or an offset (taken as UTC); `source` optional, 1..256 characters, an opaque identity of the source file (a file id, an inode) so that two files with one name, size and time are not taken for one; `pieceBytes` 65,536..the hello's `pieceBytes`; **`secure`** optional, `true` or `false`, **absent means `true`** (ADR-0022 point 20: a secure file is given out as a zip under the product's dump password, a file that is not secure as the same zip without one; an older collector, or a mistake, fails closed), kept with the upload and never changed; `status` optional, the `SensorStatus` number as `Status` of a value in a `list` frame (absent: `1`, Ok); `comment` optional, text of at most 4,096 characters (absent: none). Status and comment go into the value. The file is known by its sensor, name, size, `modified`, `source` and `secure` mark, across restarts of either side: a `begin` with the other mark is another upload. A `begin` is a text frame and must fit 64 KiB (a frame above that needs an upload the connection holds); the bounds of its fields keep it well within. The server records with the upload the session's `ClientName` and the address it resolved for it; they are not fields of the request.
+
+**A routed ordinary send** (ADR-0022 point 21): a collector on a session sends the content of an ordinary file value larger than a quarter of the `maxFrameBytes` of the **session's** hello on the file connection, as a large file that is not secure, with the same requests, answers and limits. It has no file of its own, so it names `source` = `send:` and a new GUID (32 hex digits) per send, `modified` = the time of the value, and its value's `status` and `comment`; two sends of one name and size are then never one file. It is sent only after the registration of its sensor was acknowledged on the session: an unknown sensor stays `422`.
+
+**One file connection carries several files in turn**: after a file is answered (`stored`, a final refusal, `discard`), the next `begin` on the same connection starts the next one. A collector keeps the connection while files are waiting, rather than opening one per file; a `begin` on a connection that holds an upload gives that one back first, so a routed send can go ahead of a large file, which then continues from the server's piece number.
 
 | Answer | Meaning |
 |---|---|
@@ -378,13 +383,13 @@ A `400` that discards the upload removes its part from the server; the connectio
 
 ```json
 {"id":31,"op":"end","body":{"upload":"a3f0…32 hex","hash":"<64 hex>"}}
-{"ack":31,"status":202,"body":{"upload":"a3f0…","state":"checking"},"retryAfter":5}
+{"ack":31,"status":202,"body":{"upload":"a3f0…","state":"checking"},"retryAfter":30}
 {"ack":32,"status":200,"body":{"upload":"a3f0…","state":"stored","time":"2026-11-25T12:00:00.0000000Z"}}
 ```
 
 **`hash` is the SHA-256 of the pieces' SHA-256 digests**, in piece order (the 32-byte digests concatenated); of a file of no pieces, the SHA-256 of nothing. Each side can continue after a cut with a list of 32 bytes per piece instead of a running hash. The value the server records shows the SHA-256 of the original bytes, which the check computes on the way (#1883).
 
-The check reads every stored piece, checks its zstd frame again, decompresses it into a buffer of exactly its length with the window bounded as above, and compares its SHA-256 with its digest; then the hash. For a large file it takes minutes, so **`end` is answered at once with `202 checking` and `retryAfter` (5 s)**, and the collector sends the same `end` again until the answer is not `202`; pings keep the connection alive meanwhile. The check runs beside the connection and goes on if the connection closes; after a cut, or a restart of either side, the collector sends `begin` again, which answers `checking`, `stored`, or `next == pieces` (the check was cut by a restart: send `end`, it runs again).
+The check reads every stored piece, checks its zstd frame again, decompresses it into a buffer of exactly its length with the window bounded as above, and compares its SHA-256 with its digest; then the hash. For a large file it takes minutes, so **`end` waits for the check at most 2 seconds**: a check done by then is answered with its outcome (a small file, a routed send); a longer one with **`202 checking` and `retryAfter`** (about the time the check reads the file at 256 MiB a second: 1 to 30 seconds), and the collector sends the same `end` again until the answer is not `202`; pings keep the connection alive meanwhile. The check runs beside the connection and goes on if the connection closes; after a cut, or a restart of either side, the collector sends `begin` again, which answers `checking`, `stored`, or `next == pieces` (the check was cut by a restart: send `end`, it runs again).
 
 | Answer to `end` | Meaning |
 |---|---|

@@ -99,6 +99,13 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public string Source { get; init; }
 
+        // Null leaves the field out of begin (secure by default); so do a null status and comment.
+        public bool? Secure { get; init; }
+
+        public int? Status { get; init; }
+
+        public string Comment { get; init; }
+
         public long PieceCount => (Bytes.Length + PieceBytes - 1) / PieceBytes;
 
 
@@ -142,10 +149,32 @@ namespace HSMServer.Core.Tests.SensorApi
                     ["source"] = Source,
                     ["pieceBytes"] = pieceBytes ?? PieceBytes,
                 },
-            }.ToJsonString();
+            }.Also(begin =>
+            {
+                var body = begin["body"].AsObject();
+
+                if (Secure is { } secure)
+                    body["secure"] = secure;
+
+                if (Status is { } status)
+                    body["status"] = status;
+
+                if (Comment is not null)
+                    body["comment"] = Comment;
+            }).ToJsonString();
 
         public static string End(long id, string upload, string hash) =>
             new JsonObject { ["id"] = id, ["op"] = "end", ["body"] = new JsonObject { ["upload"] = upload, ["hash"] = hash } }.ToJsonString();
+    }
+
+
+    internal static class JsonNodeExtensions
+    {
+        public static T Also<T>(this T node, Action<T> change)
+        {
+            change(node);
+            return node;
+        }
     }
 
 
