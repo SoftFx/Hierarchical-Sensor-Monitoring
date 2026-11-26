@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -270,7 +270,7 @@ ADR-0022 points 17, 18. Code: `AlertState` (the variables), `FilePolicy.GetState
 
 - **The name rule** (`FileValueNameExtensions.GetDisplayName`, also the page): every file value carries its name without the extension and the extension apart, a large one too (the server splits the original name at its last dot, `StemOf`), so the shown name is the two joined: `dump` + `dmp`, `backup.tar` + `gz`, `` + `env` (a dotfile), `core` with no extension.
 - **A file name is neutralized for the message's markup** before it is substituted: `<`, `>` and `&` become look-alikes (`‹ › ＆`); line breaks, control and format characters become a space. `$value` and `$prevValue` of a file print the type name of its byte array, as before; the content never reaches a message.
-- **The link base:** `HSM_DOMAIN` (the bundled compose passes it to the app container), else `Agent.ExternalConnectionUrl`, else none: `$link` is then the path `/Home/<sensorId>` alone, which a chat does not make clickable. The server sets the process-wide `FileAlertContext` before the tree loads, so every File policy prints the link whatever created it (a registration, a load, a template, the management API, a move).
+- **The link base:** `HSM_DOMAIN` (the bundled compose passes it to the app container), else `Agent.ExternalConnectionUrl`, else none: `$link` is then the path `/Home/<sensorId>` alone, which a chat does not make clickable. `HSM_DOMAIN` is a bare name without a port, so a site served on a port other than 443 gets links without the port (`https://<HSM_DOMAIN>/Home/<sensorId>`), and whoever opens one adds it; `Agent.ExternalConnectionUrl` keeps its scheme and an explicit port. The server sets the process-wide `FileAlertContext` before the tree loads, so every File policy prints the link whatever created it (a registration, a load, a template, the management API, a move).
 - **Compatibility.** Templates are stored as raw text and parsed when a policy is loaded, so new variables need no migration. They are appended after `$target`, in the order of the `AlertState` properties and in the positional list of `BuildComment`; no variable name contains another (a template is substituted by substring), which a test guards. A stored template that happened to contain the literal text `$link`, `$fileName`, `$fileSize` or `$fileNote` now has it substituted. `AlertVariablesDocs` lists them for the management API and MCP schemas.
 
 **The default alert of a sensor registered for large files.** A registration (`AddOrUpdateSensor`, HTTP or session) carrying `DefaultAlertsOptions.LargeFiles = 4` that CREATES a File sensor gives it one policy: "new data has been received" (`NewSensorData` / `ReceivedNewValue`), status Ok, destination `FromParent` (where the product's other alerts go), template `[$product]$path new file $fileName ($fileSize) $link $fileNote`. The collectors send the flag for a sensor of `WatchLargeFiles` / `SendLargeFile` unless the application asked for the sensor without it (#1887, #1888).
