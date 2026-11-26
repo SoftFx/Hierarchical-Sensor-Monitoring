@@ -133,7 +133,7 @@ the consumer.
 | Platform | x64, MSVC, Release + Debug |
 | Transport | the collector session (WebSocket, libcurl 8.14+ with schannel TLS) by default; HTTP after `UseHttpTransport()` - libcurl shipped next to the DLL |
 | Server | HSMServer 3.43.0 or later (collector sessions); for an older server call `DataCollectorProxy::UseHttpTransport()` before `Start`. Table sensors: the first HSMServer release with the table connection (#1845), later than 3.44.0 |
-| Files | on the session a file must fit one server frame as JSON: about 1 MiB with the default 4 MiB `CollectorSessions.MaxFrameBytes` (see Transport below) |
+| Files | on the session a file above a quarter of the server frame (1 MiB with the default 4 MiB `CollectorSessions.MaxFrameBytes`) goes on the file connection since 2.1.0 (see Transport below) |
 
 ## Layout
 
@@ -175,14 +175,18 @@ must keep talking to an older server calls `proxy.UseHttpTransport()` before `St
 or `StartAsync` it throws `hsm::collector::Error` until a stop has finished). There is no automatic fallback:
 against a server without sessions a host on the default sends nothing.
 
-**Files on the session.** `SendFileAsync` sends a file as one element of a session frame, each file byte
+**Files on the session (2.1.0).** A file of up to a quarter of the server's `CollectorSessions.MaxFrameBytes`
+(1 MiB with the default 4 MiB) goes as one element of a session frame. A larger one, up to the 10 MiB cap,
+travels on the session's file connection as a large file value that is not secure (a zip without a password
+on the server), when the server has file connections. Against a server without them the frame is the limit,
+as in 2.0.0: `SendFileAsync` sends a file as one element of a session frame, each file byte
 written as a decimal number and a comma (2 to 4 JSON bytes per byte). With the server's default
 `CollectorSessions.MaxFrameBytes` of 4 MiB the largest file is about **1 MiB** (1.0 MiB worst case),
 although the wrapper accepts up to 10 MiB. A larger file is dropped: logged as "Dropped a value of N
 bytes: it is larger than a collector session frame (M bytes)." (in `.module/Collector errors`) and
 counted in `Queue overflow`. Over HTTP files up to 10 MiB are posted. If your host sends larger files,
-raise `CollectorSessions.MaxFrameBytes` on the server (up to 64 MiB; 42 MiB covers 10 MiB files) or call
-`proxy.UseHttpTransport()`. Large files as a feature: HSM epic #1882.
+turn the server's file connections on or call `proxy.UseHttpTransport()` (raising `MaxFrameBytes` helps
+little: the collector uses at most 8 MiB of a frame, about 2 MiB of file in the worst case). Large files as a feature: HSM epic #1882.
 
 **Table sensors** come through `proxy.Native()`: `#include <hsm_collector/tables.hpp>` and call
 `proxy.Native().CreateTableSensor(path, options)`. They need the session and a server with the table
