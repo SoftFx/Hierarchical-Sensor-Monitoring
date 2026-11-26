@@ -515,6 +515,49 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
+        public async Task A_refused_step_is_not_tried_again_after_a_pass_that_skipped_its_product()
+        {
+            var (s, r) = await CopySetupAsync();
+            var before = All(s, r);
+
+            var week52 = _server.Batches.WeekPath(_product, WeekStart, 52);
+            await RestartAsync(crash: false, beforeOpen: _ =>
+            {
+                using var db = new global::LevelDB.DB(week52, new global::LevelDB.Options());
+                db.Delete(TableBatchDatabase.HourKey(Hour0.AddHours(1).Ticks, TableBatchDatabase.TagMark), new global::LevelDB.WriteOptions { Sync = true });
+            });
+
+            var stats = _server.Batches.MergeStatistics;
+            Pass(MoveAt);
+            Assert.Equal((1, 1), (stats.MoveStepsRefused, stats.MoveStepsRefusedNow));
+
+            // The next pass skips the product: its recovery cannot clear the record the refused step left.
+            _server.Batches.Checkpoint = p =>
+            {
+                if (p == "move-writing")
+                    throw new IOException("the disk refused the write");
+            };
+            Pass(MoveAt.AddMinutes(1));
+            _server.Batches.Checkpoint = null;
+            Assert.Equal(1, stats.MoveFaults);
+
+            // The product is back: the refused step is still remembered, so it is not tried again.
+            var recorded = 0;
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "move-recorded")
+                    recorded++;
+            };
+            Pass(MoveAt.AddMinutes(2));
+            Pass(MoveAt.AddMinutes(3));
+            _server.Job.Checkpoint = null;
+
+            Assert.Equal(0, recorded);
+            Assert.Equal((1, 1), (stats.MoveStepsRefused, stats.MoveStepsRefusedNow));
+            Assert.Equal(before, All(s, r));
+        }
+
+        [Fact]
         public async Task With_too_little_free_disk_no_copy_step_runs_while_expired_steps_do_and_the_next_pass_with_disk_copies()
         {
             var s = await RegisterAsync("s", keep: KeepP52);

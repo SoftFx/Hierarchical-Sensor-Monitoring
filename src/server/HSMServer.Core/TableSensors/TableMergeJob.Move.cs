@@ -145,7 +145,10 @@ namespace HSMServer.Core.TableSensors
                 // 3. The steps. A step the store refused, or whose target retention dropped, is not tried again in this
                 //    process while it stays the same step: a change of the placement or of the period makes another step.
                 var steps = SelectSteps(products, unreconciled, faulted, utcNow, held);
-                _refusedSteps.IntersectWith(steps.Select(KeyOf));
+                // Only a product this pass looked at forgets its refused steps that are no longer selected; one that was
+                // skipped (not reconciled, its recovery faulted) keeps them, or a single skipped pass would try them again.
+                var selected = steps.Select(KeyOf).ToHashSet();
+                _refusedSteps.RemoveWhere(k => !unreconciled.Contains(k.Product) && !faulted.Contains(k.Product) && !selected.Contains(k));
                 var diskShort = false;
 
                 foreach (var step in steps.Where(s => s.Expired).Concat(steps.Where(s => !s.Expired && !lagging.Contains(s.Product))))
