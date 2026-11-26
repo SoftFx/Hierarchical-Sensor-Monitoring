@@ -184,7 +184,8 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
 
             // A packed record always names its archive (and, when secure, its password version); one that does not is a
             // store defect and is not served.
-            if (file.ArchiveId != archiveId || !IsPackedRecordWhole(file) || file.ArchiveLength is not { } archiveLength)
+            if (file.ArchiveId != archiveId || !IsPackedRecordWhole(file) || file.ArchiveLength is not { } archiveLength ||
+                ArchiveRelativePath(file, archiveId) is not { } relativePath)
                 return LargeFileDownloadDecision.NotFound;
 
             var passwordVersion = CarriedVersion(file);
@@ -200,7 +201,7 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
                 PasswordVersion = passwordVersion,
                 PasswordSetUtc = passwordVersion is int version ? _passwords.GetVersion(file.ProductId, version)?.SetUtc : null,
                 FileName = LargeFileNames.DownloadFileName(file.Name, file.Extension),
-                RelativePath = LargeArchivePaths.RelativeArchivePath(file.ProductId, archiveId),
+                RelativePath = relativePath,
                 LastModifiedUtc = TryGetArchiveTime(file),
             };
 
@@ -389,6 +390,33 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
             var token = tokenClaim is null ? null : _tokens.GetToken(tokenClaim);
 
             return new DownloadCaller(DownloadChannel.Api, ownerId, _users[ownerId]?.Name, token?.EntityId, token?.Name, caller.ClientIp);
+        }
+
+        // The path the bundled Caddy serves, relative to the archives folder it mounts. Taken from the store's own path of
+        // the archive, so the hand-over and the store cannot drift apart, and accepted only when it is the form made of the
+        // two GUIDs of the record (LargeArchivePaths): nothing a client sent ever reaches the path. Null otherwise, logged.
+        private string ArchiveRelativePath(LargeArchiveFile file, Guid archiveId)
+        {
+            var expected = LargeArchivePaths.RelativeArchivePath(file.ProductId, archiveId);
+            string relative;
+
+            try
+            {
+                relative = Path.GetRelativePath(_store.ArchivesFolder, _store.ArchivePath(file)).Replace(Path.DirectorySeparatorChar, '/');
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning("The path of the archive {ArchiveId} of the large file {FileId} could not be read: {ErrorType}: {Error}",
+                    archiveId, file.FileId, ex.GetType().Name, ex.Message);
+                return null;
+            }
+
+            if (string.Equals(relative, expected, StringComparison.Ordinal))
+                return relative;
+
+            _logger.LogError("The store places the archive {ArchiveId} of the large file {FileId} at {Path}, not at {Expected} under its archives folder",
+                archiveId, file.FileId, relative, expected);
+            return null;
         }
 
         private DateTime? TryGetArchiveTime(LargeArchiveFile file)

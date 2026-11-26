@@ -417,6 +417,39 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             _world.Log.Verify(l => l.Record(It.IsAny<DownloadCaller>(), It.IsAny<DownloadTarget>(), It.IsAny<DateTime>()), Times.Once);
         }
 
+        // The hand-over path is the store's own path of the archive under the folder Caddy mounts, accepted only as the two
+        // GUIDs: a store that places the archive elsewhere is never handed over, nor served, and answers the same 404.
+        [Theory]
+        [InlineData("elsewhere")]
+        [InlineData("outside")]
+        [InlineData("unreadable")]
+        public async Task AnArchiveTheStoreDoesNotPlaceAtTheGuidPath_IsNeitherHandedOverNorServed(string where)
+        {
+            _world.TrustProxies();
+            _world.Store.ArchivePathOverride = file => where switch
+            {
+                "elsewhere" => Path.Combine(_world.Store.Root, "other", $"{file.ArchiveId:N}.zip"),
+                "outside" => Path.Combine(Path.GetTempPath(), $"{file.ProductId:N}", $"{file.ArchiveId:N}.zip"),
+                _ => throw new IOException("the store cannot tell"),
+            };
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ManagerA));
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
+            request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
+            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            var handedOver = await Snapshot(client.SendAsync(request));
+            var served = await Snapshot(client.GetAsync(Url(_file)));
+            var unknown = await Snapshot(client.GetAsync(LargeFileDownloadService.ApiDownloadPath(Guid.NewGuid(), _file.ArchiveId.Value)));
+
+            Assert.Equal(404, handedOver.Status);
+            Assert.Equal(unknown, handedOver);
+            Assert.Equal(unknown, served);
+            Assert.DoesNotContain(LargeFileDownloadResult.ArchiveHeader, handedOver.Headers);
+            _world.Log.Verify(l => l.Record(It.IsAny<DownloadCaller>(), It.IsAny<DownloadTarget>(), It.IsAny<DateTime>()), Times.Never);
+        }
+
         [Theory]
         [InlineData(false, true)]  // the marker without a configured trusted proxy
         [InlineData(true, false)]  // trusted proxies configured, but the request did not come through one

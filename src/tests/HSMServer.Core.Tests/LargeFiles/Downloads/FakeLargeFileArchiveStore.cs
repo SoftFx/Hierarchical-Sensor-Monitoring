@@ -26,6 +26,9 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
         public string ArchivesFolder => Root;
 
+        /// <summary>The path ArchivePath answers instead of the layout's; null: the layout's. The open still reads the layout's.</summary>
+        public Func<LargeArchiveFile, string> ArchivePathOverride { get; set; }
+
         /// <summary>An exception the open of an archive throws instead of opening it; null: none.</summary>
         public Func<Guid, Exception> OpenFault { get; set; }
 
@@ -98,11 +101,10 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             var file = TryGetFile(fileId) ?? throw new FileNotFoundException("unknown file");
 
-            return new FileStream(ArchivePath(file), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+            return new FileStream(LayoutPath(file), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         }
 
-        public string ArchivePath(LargeArchiveFile file) =>
-            Path.Combine(Root, LargeArchivePaths.RelativeArchivePath(file.ProductId, file.ArchiveId ?? Guid.Empty));
+        public string ArchivePath(LargeArchiveFile file) => ArchivePathOverride?.Invoke(file) ?? LayoutPath(file);
 
         public Stream OpenPart(Guid fileId) => throw new NotSupportedException();
 
@@ -132,6 +134,9 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
 
+        private string LayoutPath(LargeArchiveFile file) =>
+            Path.Combine(Root, LargeArchivePaths.RelativeArchivePath(file.ProductId, file.ArchiveId ?? Guid.Empty));
+
         private LargeArchiveFile WriteArchive(LargeArchiveFile file, Guid archiveId, byte[] archive, int? passwordVersion)
         {
             var packed = file with
@@ -143,7 +148,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
                 ArchiveSha256 = SHA256.HashData(archive),
             };
 
-            var path = ArchivePath(packed);
+            var path = LayoutPath(packed);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path, archive);
 
