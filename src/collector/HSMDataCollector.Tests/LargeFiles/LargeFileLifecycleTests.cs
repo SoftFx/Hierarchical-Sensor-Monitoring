@@ -421,7 +421,6 @@ namespace HSMDataCollector.Tests.LargeFiles
                     var held = other.Watch("dumps", h.Folder, "*.dmp", null);
 
                     Assert.True(LargeFileHarness.Until(() => Directory.Exists(h.DataFolder) && Directory.GetFiles(h.DataFolder, "watch-*.lock").Length == 1));
-                    Thread.Sleep(200);
 
                     h.Start();
                     var watch = h.Service.Watch("dumps", h.Folder, "*.dmp", null);

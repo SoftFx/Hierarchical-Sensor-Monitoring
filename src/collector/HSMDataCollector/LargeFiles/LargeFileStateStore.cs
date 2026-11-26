@@ -166,7 +166,7 @@ namespace HSMDataCollector.LargeFiles
             }
             catch (Exception ex)
             {
-                note = $"The data folder of large files cannot be found from CollectorOptions.DataFolder '{options.DataFolder}' ({ex.Message}): watched folders and handed-over large files are unavailable, and file values above a quarter of the session frame go the ordinary way.";
+                note = $"The data folder of large files cannot be found from CollectorOptions.DataFolder '{options.DataFolder}' ({ex.Message}): watched folders and handed-over large files are unavailable (file values above a quarter of the session frame do not use it and still go on the file connection).";
                 return null;
             }
         }
@@ -310,16 +310,6 @@ namespace HSMDataCollector.LargeFiles
 
             reason = usable ? null : _unusable;
             return usable;
-        }
-
-        /// <summary>True once a probe found the data folder unusable (no probe is made here: a routed send never makes it).</summary>
-        internal bool KnownUnusable
-        {
-            get
-            {
-                lock (_made)
-                    return _tried && _usable == null;
-            }
         }
 
         /// <summary>The keys of every upload record in the data folder, for the sweep of records whose file changed or went.</summary>
