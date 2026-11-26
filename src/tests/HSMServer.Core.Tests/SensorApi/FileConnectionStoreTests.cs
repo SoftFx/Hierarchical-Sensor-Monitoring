@@ -14,6 +14,7 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using Xunit;
 
 namespace HSMServer.Core.Tests.SensorApi
@@ -84,12 +85,14 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("disk is full", value.Comment);
             Assert.Equal(DateTime.Parse((string)stored.Body["time"]).ToUniversalTime(), value.Time);
 
-            // The check gave its lease back, and a begin of the same file says it is stored.
+            // A begin of the same file says it is stored.
             Assert.Equal("stored", (await file.BeginAsync(data, sensor.Path)).State);
         }
 
         [Fact]
-        public async Task ACutAndAContinueOnANewConnection_AndAfterARestartOfTheHost_StoreTheFileWhole()
+        // The store itself is not restarted here (its reload from the disk is #1883's test): the web host is, with its
+        // sessions and connections.
+        public async Task ACutAndAContinueOnANewConnection_AndAfterARestartOfTheWebHost_StoreTheFileWhole()
         {
             var sensor = await CreateFileSensorAsync("dumps");
             var data = TestFile.Random("app.dmp", 4 * 64 * 1024 + 5, seed: 5);
@@ -223,6 +226,20 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.StartsWith("the sensor cannot take the file: ", unknown.Error);
         }
 
+
+        // A removal of an empty part that fails at Release does not reach the connection, where it would drop it.
+        [Fact]
+        public void AReleaseTheStoreCannotComplete_DoesNotFault()
+        {
+            var uploads = new Mock<ILargeFileUploads>();
+            uploads.Setup(u => u.Release(It.IsAny<UploadLease>())).Throws(new LargeFileStoreException("the part is held by another process"));
+
+            var store = new LargeFileUploadStore(uploads.Object, 1);
+
+            store.Release(new FileUploadLease(Guid.NewGuid(), Guid.NewGuid()));
+
+            uploads.Verify(u => u.Release(It.IsAny<UploadLease>()), Times.Once);
+        }
 
         private static TestFile Routed(TestFile file) =>
             new() { Name = file.Name, Bytes = file.Bytes, PieceBytes = file.PieceBytes, Secure = false, Status = 3, Comment = "disk is full", Source = $"send:{Guid.NewGuid():N}" };

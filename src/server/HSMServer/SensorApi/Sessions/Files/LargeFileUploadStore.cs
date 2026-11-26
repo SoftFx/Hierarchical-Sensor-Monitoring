@@ -14,6 +14,9 @@ namespace HSMServer.SensorApi.Sessions.Files
     // the connection's end check.
     public sealed class LargeFileUploadStore(ILargeFileUploads uploads, long maxFileBytes) : IFileUploadStore
     {
+        private static readonly NLog.Logger _logger = NLog.LogManager.GetLogger("LargeFiles");
+
+
         public long MaxFileBytes { get; } = maxFileBytes;
 
 
@@ -47,7 +50,19 @@ namespace HSMServer.SensorApi.Sessions.Files
 
         public Task DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct) => Faults(() => uploads.DiscardAsync(Lease(lease), reason, ct));
 
-        public void Release(FileUploadLease lease) => uploads.Release(Lease(lease));
+        // Release does not fault for its caller: it gives an empty part back by removing it, and a removal that fails
+        // (a file held by another process) leaves the part to the store's own pass, which removes it later.
+        public void Release(FileUploadLease lease)
+        {
+            try
+            {
+                uploads.Release(Lease(lease));
+            }
+            catch (LargeFileStoreException ex)
+            {
+                _logger.Warn($"The lease of large file {lease.FileId:N} was given back, but its empty part could not be removed now (the store's pass removes it): {ex.Message}");
+            }
+        }
 
         public async Task<FileFinishResult> FinishAsync(FileUploadLease lease, byte[] wholeHash, IFilePartChecker checker, CancellationToken ct)
         {
