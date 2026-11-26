@@ -97,8 +97,13 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<HSMServer.Core.LargeFiles.ILargeFileUploads>(provider => provider.GetRequiredService<HSMServer.Core.LargeFiles.LargeFileUploadService>());
 
             // The store the file connection (#1884) uploads into; without it file connections answer 404.
-            services.AddSingleton<SensorApi.Sessions.Files.IFileUploadStore>(provider => new SensorApi.Sessions.Files.LargeFileUploadStore(
-                provider.GetRequiredService<HSMServer.Core.LargeFiles.ILargeFileUploads>(), (config.LargeFiles ?? new LargeFilesConfig()).ToOptions().MaxFileSizeBytes));
+            services.AddSingleton<SensorApi.Sessions.Files.IFileUploadStore>(provider =>
+            {
+                var options = (config.LargeFiles ?? new LargeFilesConfig()).ToOptions();
+
+                return new SensorApi.Sessions.Files.LargeFileUploadStore(provider.GetRequiredService<HSMServer.Core.LargeFiles.ILargeFileUploads>(),
+                    options.MaxFileSizeBytes, TimeSpan.FromSeconds(options.LeaseTimeoutSeconds));
+            });
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.

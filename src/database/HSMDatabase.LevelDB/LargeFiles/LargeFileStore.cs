@@ -555,7 +555,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         // === Discard, release, finish ===
 
-        public void Discard(UploadLease lease, string reason)
+        public bool Discard(UploadLease lease, string reason)
         {
             Entry entry;
 
@@ -565,10 +565,11 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                 if (!_files.TryGetValue(lease.FileId, out entry) || entry.Removed || entry.LeaseId != lease.LeaseId ||
                     entry.Record.State != LargeFileState.Uploading)
-                    return;
+                    return false;
             }
 
             RemoveEntry(entry, $"discarded: {reason}", force: true);
+            return true;
         }
 
         public void Release(UploadLease lease)
@@ -1759,11 +1760,16 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             var start = BinaryPrimitives.ReadInt64LittleEndian(entry.AsSpan(4));
 
                             if (start != offset || stored == 0 || offset + stored > Record.PartLength)
-                                throw new LargeFileStoreException($"The index of large file {Record.FileId:N} does not match its part at piece {number}.");
+                                throw new LargeFilePartDefectException(number, $"The index of large file {Record.FileId:N} does not match its part at piece {number}.");
 
                             bytes = new byte[stored];
                             await part.ReadExactlyAsync(bytes, ct);
                             offset += stored;
+                        }
+                        catch (EndOfStreamException ex)
+                        {
+                            // The index or the part ends before the record does: what was stored is not there to read.
+                            throw new LargeFilePartDefectException(number, $"The part of large file {Record.FileId:N} ends before piece {number}.", ex);
                         }
                         catch (Exception ex) when (IsFileError(ex))
                         {

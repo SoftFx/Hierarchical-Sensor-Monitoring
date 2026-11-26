@@ -402,7 +402,7 @@ namespace HSMServer.SensorApi.Sessions
                     kind);
 
                 if (isFile)
-                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger, FileQuickCheck);
+                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger, FileQuickCheck, _time);
 
                 SessionProtocol.MarkUpgraded(context);
 

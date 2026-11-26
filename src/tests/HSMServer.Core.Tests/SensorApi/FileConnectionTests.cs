@@ -864,6 +864,76 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.Equal("the collector discarded it: its source file changed", entry.DiscardReason);
         }
 
+        // A discard with a stale lease (another connection holds the upload now) removes nothing and says so.
+        [Fact]
+        public async Task ADiscardWithAStaleLease_Is404_AndRemovesNothing()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+            await file.SendPieceAsync(data.Piece(0), begun.Upload);
+
+            _store.TakeLease("a.dmp");
+
+            Assert.Equal(404, (await file.DiscardAsync(begun.Upload)).Status);
+            Assert.Single(_store.Find("a.dmp").Pieces);
+        }
+
+        // An append answered with a lost lease gives the lease back at once.
+        [Fact]
+        public async Task APieceAnsweredLeaseLost_ReleasesTheLease()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+            _store.TakeLease("a.dmp");
+            var releases = _store.Releases;
+
+            Assert.Equal(404, (await file.SendPieceAsync(data.Piece(0), begun.Upload)).Status);
+            Assert.Equal(releases + 1, _store.Releases);
+        }
+
+        // The memory bound of file frames holds after a lease expires: a connection that sent nothing for the store's
+        // lease timeout no longer holds its upload, and a frame above 64 KiB closes it with 1002.
+        [Fact]
+        public async Task AnUploadWhoseLeaseExpired_IsForgotten_AndALargeFrameCloses1002()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+            Assert.Equal(1, (await file.SendPieceAsync(data.Piece(0), begun.Upload)).Next);
+
+            host.Time.Advance(_store.LeaseTimeout);
+
+            await file.SendBinaryAsync(data.Piece(1).Frame(9, begun.Upload));
+
+            Assert.Equal(WebSocketCloseStatus.ProtocolError, await file.ExpectCloseAsync());
+            await TestWait.UntilAsync(() => _store.LiveLeases == 0, "the expired lease to be given back");
+        }
+
+        [Fact]
+        public async Task AnUploadWhoseLeaseIsAlive_KeepsTakingPieces()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+
+            host.Time.Advance(_store.LeaseTimeout - TimeSpan.FromSeconds(5));
+            Assert.Equal(1, (await file.SendPieceAsync(data.Piece(0), begun.Upload)).Next);
+
+            // A stored piece renews it.
+            host.Time.Advance(_store.LeaseTimeout - TimeSpan.FromSeconds(5));
+            Assert.Equal(2, (await file.SendPieceAsync(data.Piece(1), begun.Upload)).Next);
+        }
+
         // A discard that does not complete (cut short, faulted) still gives the lease back: a lease left
         // behind would hold an upload slot and make the file busy until the store's lease timeout.
         [Fact]

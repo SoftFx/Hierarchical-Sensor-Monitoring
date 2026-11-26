@@ -93,8 +93,11 @@ namespace HSMServer.Core.LargeFiles
         /// </summary>
         Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct);
 
-        /// <summary>Removes the upload (part, index, record), releases its lease and reservation; logged and counted. A stale lease is ignored.</summary>
-        Task DiscardAsync(UploadLease lease, string reason, CancellationToken ct);
+        /// <summary>
+        /// Removes the upload (part, index, record), releases its lease and reservation; logged and counted. False when
+        /// nothing was removed: a stale lease (another connection holds the upload) or an unknown upload.
+        /// </summary>
+        Task<bool> DiscardAsync(UploadLease lease, string reason, CancellationToken ct);
 
         /// <summary>Ends a lease when the connection ends; idempotent; a stale lease is ignored.</summary>
         void Release(UploadLease lease);
@@ -201,12 +204,7 @@ namespace HSMServer.Core.LargeFiles
             return Task.FromResult(Store.Append(lease, pieceNumber, storedBytes.Span, digest.Span));
         }
 
-        public Task DiscardAsync(UploadLease lease, string reason, CancellationToken ct)
-        {
-            Store.Discard(lease, reason);
-
-            return Task.CompletedTask;
-        }
+        public Task<bool> DiscardAsync(UploadLease lease, string reason, CancellationToken ct) => Task.FromResult(Store.Discard(lease, reason));
 
         public void Release(UploadLease lease) => Store.Release(lease);
 

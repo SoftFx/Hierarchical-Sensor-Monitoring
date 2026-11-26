@@ -42,6 +42,11 @@ namespace HSMServer.SensorApi.Sessions.Files
         private readonly int _maxPieceBytes;
         private readonly Logger _logger;
         private readonly TimeSpan _quickCheck;
+        private readonly TimeProvider _time;
+
+        // How long the connection counts on its lease without an append: the store's lease timeout, less a second for
+        // the time between the store's touch and the answer that brings it here.
+        private readonly TimeSpan _leaseLife;
 
         // The upload this connection holds; null when it holds none. Changed by the loop only.
         private volatile Upload _upload;
@@ -50,7 +55,8 @@ namespace HSMServer.SensorApi.Sessions.Files
         private CheckRun _check;
 
 
-        public FileConnection(CollectorSession session, IFileUploadStore store, FileChecks checks, int maxPieceBytes, Logger logger, TimeSpan? quickCheck = null)
+        public FileConnection(CollectorSession session, IFileUploadStore store, FileChecks checks, int maxPieceBytes, Logger logger, TimeSpan? quickCheck = null,
+            TimeProvider time = null)
         {
             _session = session;
             _store = store;
@@ -58,11 +64,15 @@ namespace HSMServer.SensorApi.Sessions.Files
             _maxPieceBytes = maxPieceBytes;
             _logger = logger;
             _quickCheck = quickCheck ?? DefaultQuickCheck;
+            _time = time ?? TimeProvider.System;
+            _leaseLife = store.LeaseTimeout - TimeSpan.FromSeconds(1);
         }
 
 
-        // True while the connection holds an upload: only then may a frame be larger than 64 KiB.
-        public bool HoldsUpload => _upload is not null;
+        // True while the connection holds an upload whose lease is alive: only then may a frame be larger than 64 KiB. A
+        // lease the store let expire (no append within its lease timeout) may be held by another connection now: the
+        // connection forgets it, so its frames are bounded by the uploads in progress again.
+        public bool HoldsUpload => Current() is not null;
 
 
         public async Task HandleBeginAsync(PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output, CancellationToken token)
@@ -109,7 +119,8 @@ namespace HSMServer.SensorApi.Sessions.Files
                     var pieceSize = result.PieceSize > 0 ? result.PieceSize : begin.PieceBytes;
                     var pieces = FilePiece.PieceCount(begin.Size, pieceSize);
 
-                    _upload = new Upload(result.Lease, result.FileId, begin.Size, pieceSize, pieces, result.NextPiece, CollectorSession.Printable(begin.Name));
+                    _upload = new Upload(result.Lease, result.FileId, begin.Size, pieceSize, pieces, result.NextPiece, CollectorSession.Printable(begin.Name),
+                        _time.GetTimestamp());
                     _session.CountUploadBegun();
 
                     _logger.Info($"Collector file connection {_session.ShortId}: upload {upload} of \"{_upload.Name}\" ({begin.Size} bytes, {pieces} pieces of {pieceSize}) " +
@@ -182,7 +193,7 @@ namespace HSMServer.SensorApi.Sessions.Files
         public async Task HandlePieceAsync(FilePiece header, ReadOnlyMemory<byte> frame, ArrayBufferWriter<byte> output, CancellationToken token)
         {
             var id = header.Id;
-            var upload = _upload;
+            var upload = Current();
 
             if (upload is null || header.UploadId != upload.FileId)
             {
@@ -260,6 +271,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                 case FileAppendOutcome.Stored:
                     _session.CountPieceStored(payload.Length);
                     upload.Next = result.NextPiece;
+                    upload.Touched = _time.GetTimestamp();
                     Next(output, id, SessionProtocol.StatusOk, result.NextPiece, reason: null);
                     return;
 
@@ -280,9 +292,11 @@ namespace HSMServer.SensorApi.Sessions.Files
                     return;
 
                 default:
-                    // The lease was lost or the upload removed: the collector begins again.
+                    // The lease was lost or the upload removed: the collector begins again. Released here too, so an
+                    // empty part goes at once.
                     _session.CountPieceRefused();
                     ForgetUpload(upload);
+                    _store.Release(upload.Lease);
                     Refuse(output, id, SessionProtocol.StatusNotFound, "the upload is no longer held by this connection: begin again");
                     return;
             }
@@ -296,7 +310,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                 return;
             }
 
-            var upload = _upload;
+            var upload = Current();
 
             // A repeat of an end this connection already sent, with no new begin of that file since: answered
             // from its check.
@@ -359,7 +373,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                 return;
             }
 
-            var upload = _upload;
+            var upload = Current();
 
             if (upload is null || upload.FileId != fileId)
             {
@@ -380,9 +394,11 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             const string reason = "the collector discarded it: its source file changed";
 
+            bool removed;
+
             try
             {
-                await _store.DiscardAsync(upload.Lease, reason, CancellationToken.None);
+                removed = await _store.DiscardAsync(upload.Lease, reason, CancellationToken.None);
             }
             catch (Exception ex) when (ex is FileUploadStoreException or OperationCanceledException)
             {
@@ -395,6 +411,13 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             // A discard ends the lease; Release is idempotent.
             _store.Release(upload.Lease);
+
+            if (!removed)
+            {
+                // Its lease was stale: another connection holds the upload now, and nothing was removed.
+                Refuse(output, id, SessionProtocol.StatusNotFound, "the upload is no longer held by this connection: begin it first");
+                return;
+            }
 
             _session.CountUploadDiscarded();
             _logger.Info($"Collector file connection {_session.ShortId}: upload {FormatId(upload.FileId)} of \"{upload.Name}\" is discarded: {reason}.");
@@ -561,6 +584,22 @@ namespace HSMServer.SensorApi.Sessions.Files
             _logger.Info($"Collector file connection {_session.ShortId}: upload {FormatId(upload.FileId)} of \"{upload.Name}\" is discarded: {reason}.");
 
             Refuse(output, id, SessionProtocol.StatusBadRequest, $"{reason}: the upload is discarded");
+        }
+
+        // The upload this connection holds, while its lease is alive; one whose lease expired is forgotten and given back.
+        private Upload Current()
+        {
+            var upload = _upload;
+
+            if (upload is null || _time.GetElapsedTime(upload.Touched) < _leaseLife)
+                return upload;
+
+            ForgetUpload(upload);
+            _store.Release(upload.Lease);
+
+            _logger.Debug($"Collector file connection {_session.ShortId}: the lease of upload {FormatId(upload.FileId)} expired; the connection no longer holds it.");
+
+            return null;
         }
 
         private void ReleaseUpload()
@@ -769,8 +808,11 @@ namespace HSMServer.SensorApi.Sessions.Files
             SensorStatus Status, string Comment);
 
 
-        private sealed class Upload(FileUploadLease lease, Guid fileId, long size, int pieceSize, long pieces, long next, string name)
+        private sealed class Upload(FileUploadLease lease, Guid fileId, long size, int pieceSize, long pieces, long next, string name, long touched)
         {
+            // When the store last renewed the lease, as this connection saw it: the begin, a stored piece.
+            public long Touched { get; set; } = touched;
+
             public FileUploadLease Lease { get; } = lease;
 
             public Guid FileId { get; } = fileId;
