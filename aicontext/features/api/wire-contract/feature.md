@@ -347,7 +347,7 @@ A connection holds one upload: a `begin` on a connection that holds one gives th
 | 2 | 2 | reserved, `0` |
 | 4 | 4 | header length (u32): where the zstd frame starts; `88` in version 1; the server accepts up to 1,024 and skips the rest |
 | 8 | 8 | request id (i64), echoed as `ack` |
-| 16 | 16 | upload id: the 16 bytes whose lower-case hex is the `upload` of the begin answer |
+| 16 | 16 | upload id: the 16 bytes whose lower-case hex is the `upload` of the begin answer (the server's log lines name the upload by the same 32 hex digits) |
 | 32 | 8 | piece number (i64): piece `n` holds bytes `n × pieceBytes ..` of the file |
 | 40 | 4 | decompressed length (u32): `pieceBytes`, the last piece the remainder |
 | 44 | 4 | compressed length (u32): the bytes after the header |

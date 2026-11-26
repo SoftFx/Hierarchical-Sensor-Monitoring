@@ -917,6 +917,29 @@ namespace HSMServer.Core.Tests.SensorApi
             await TestWait.UntilAsync(() => _store.LiveLeases == 0, "the expired lease to be given back");
         }
 
+        // A full disk in the middle, retried on the same connection across the lease timeout: the store renews the lease
+        // at each try, and so does the connection.
+        [Fact]
+        public async Task PiecesRetriedAfter503sAcrossTheLeaseTimeout_KeepTheUpload()
+        {
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("a.dmp", 200_000);
+
+            var begun = await file.BeginAsync(data, _path);
+            _store.FaultWrites = true;
+
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.Equal(503, (await file.SendPieceAsync(data.Piece(0), begun.Upload)).Status);
+                host.Time.Advance(TimeSpan.FromSeconds(70));
+            }
+
+            _store.FaultWrites = false;
+
+            Assert.Equal(1, (await file.SendPieceAsync(data.Piece(0), begun.Upload)).Next);
+        }
+
         [Fact]
         public async Task AnUploadWhoseLeaseIsAlive_KeepsTakingPieces()
         {

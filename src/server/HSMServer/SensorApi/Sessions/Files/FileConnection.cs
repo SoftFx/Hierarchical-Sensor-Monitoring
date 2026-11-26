@@ -252,7 +252,9 @@ namespace HSMServer.SensorApi.Sessions.Files
             }
             catch (FileUploadStoreException ex)
             {
-                // Nothing was acknowledged: the collector sends the same piece again.
+                // Nothing was acknowledged: the collector sends the same piece again. The store renewed the lease before
+                // its write failed, so a collector that retries a full disk on this connection keeps its upload.
+                upload.Touched = _time.GetTimestamp();
                 _logger.Debug($"Collector file connection {_session.ShortId}: the store could not write piece {header.Number} of upload {FormatId(upload.FileId)}: {ex.Message}");
                 _session.CountPieceRefused();
                 Refuse(output, id, SessionProtocol.StatusUnavailable, "the large file store could not write the piece", FaultRetryAfterSeconds);

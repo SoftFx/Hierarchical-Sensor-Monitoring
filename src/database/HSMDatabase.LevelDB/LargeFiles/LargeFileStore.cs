@@ -1759,7 +1759,8 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             var stored = BinaryPrimitives.ReadUInt32LittleEndian(entry);
                             var start = BinaryPrimitives.ReadInt64LittleEndian(entry.AsSpan(4));
 
-                            if (start != offset || stored == 0 || offset + stored > Record.PartLength)
+                            // A length no piece of this record can have is damage too, and is not allocated.
+                            if (start != offset || stored == 0 || stored > MaxStoredPieceBytes(Record.PieceSize) || offset + stored > Record.PartLength)
                                 throw new LargeFilePartDefectException(number, $"The index of large file {Record.FileId:N} does not match its part at piece {number}.");
 
                             bytes = new byte[stored];

@@ -297,6 +297,7 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
         [Theory]
         [InlineData("short part")]
         [InlineData("index mismatch")]
+        [InlineData("length past any piece")]
         public void A_part_that_cannot_give_back_a_piece_is_a_defect_at_that_piece(string damage)
         {
             var store = Open();
@@ -310,18 +311,25 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
                 using var part = new FileStream(PathOf(begin.FileId, ".part"), FileMode.Open);
                 part.SetLength(part.Length - 1);
             }
-            else
+            else if (damage == "index mismatch")
             {
                 // The offset of piece 1 in the index no longer follows piece 0.
                 using var index = new FileStream(PathOf(begin.FileId, ".idx"), FileMode.Open);
                 index.Position = 44 + 4;
                 index.WriteByte(0x7F);
             }
+            else
+            {
+                // Piece 0 claims a length within the part but larger than any piece of this record can be.
+                using var index = new FileStream(PathOf(begin.FileId, ".idx"), FileMode.Open);
+                var length = BitConverter.GetBytes((uint)(LargeFileStore.MaxStoredPieceBytes(Piece) + 1));
+                index.Write(length);
+            }
 
             var ticket = store.StartFinish(begin.Lease);
             var defect = Assert.Throws<LargeFilePartDefectException>(() => ReadPieces(ticket.Reader));
 
-            Assert.Equal(damage == "short part" ? 2 : 1, defect.Piece);
+            Assert.Equal(damage switch { "short part" => 2, "index mismatch" => 1, _ => 0 }, defect.Piece);
             Assert.IsAssignableFrom<LargeFileStoreException>(defect);
 
             store.EndFinish(begin.Lease);

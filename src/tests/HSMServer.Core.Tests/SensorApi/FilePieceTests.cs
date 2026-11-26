@@ -42,6 +42,10 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             var id = Guid.NewGuid();
 
+            // One form everywhere: the wire's text is the "N" form the log lines use, and the header's bytes are its hex.
+            Assert.Equal(id.ToString("N"), FilePiece.FormatUploadId(id));
+            Assert.Equal(id.ToString("N"), Convert.ToHexString(TestPiece.Of(0, new byte[10]).Frame(1, id.ToString("N")).AsSpan(16, 16)).ToLowerInvariant());
+
             Assert.True(FilePiece.TryParseUploadId(FilePiece.FormatUploadId(id), out var parsed));
             Assert.Equal(id, parsed);
             Assert.False(FilePiece.TryParseUploadId("zz" + new string('0', 30), out _));
