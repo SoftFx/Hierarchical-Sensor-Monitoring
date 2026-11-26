@@ -568,7 +568,7 @@ Collectors that share one access key and send large messages (over 64 KiB) take 
 - **Waiting for the table connection.** A message waits at most 15 s per attempt and three connections, then it is "not delivered" and goes again with the next tick.
 - **A logger that disposes the collector** from inside the stop line deadlocks (managed); a native logger must not call start, stop or dispose from lifecycle lines.
 - **Native on Windows with TLS:** since 0.15.2 every send is bounded, so a stop no longer waits for a large message the server stopped reading. Two limits remain: a rare TLS message from the server can hold a send or a receive inside libcurl for up to 60 s (a stop's cancel is expected to end it within about a second; not tested), and the bound rests on how Windows was measured to behave, not on a documented guarantee.
-- **Native:** no run against a real server is part of the tests of 0.15.1 or 0.15.2; the table connection is tested against a second, independent test server. While a registration or a message waits for its answer, the native collector sends no heartbeat.
+- **Native:** the tests run the native collector's table sensors against a real server built from the same source (the rows read back exactly, a lost connection, a refused registration, HTTP), on Linux with the distribution's libcurl; the details of the table connection are tested against a second, independent test server. While a registration or a message waits for its answer, the native collector sends no heartbeat.
 
 ---
 

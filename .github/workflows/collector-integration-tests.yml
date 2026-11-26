@@ -7,6 +7,8 @@ on:
       - 'src/collector/**'
       - 'src/api/**'
       - 'src/collector/HSMDataCollector.IntegrationTests/**'
+      # The native collector's table sensors against the same server (NativeTableSensorEndToEndTests).
+      - 'src/native/collector/**'
   pull_request:
     # ready_for_review is required so tests run when a draft is marked ready
     # (marking ready does not emit a synchronize event).
@@ -27,10 +29,15 @@ env:
   # drop that coverage). tests/conformance/** and .gitattributes are inputs too:
   # WireFormatGoldenLockTests reads tests/conformance/collector/golden/*.golden
   # byte for byte, so a PR that regenerates a golden must re-run the .NET side.
+  # src/native/collector/** is an input too (#1848 step 6): NativeTableSensorEndToEndTests builds
+  # the native collector's table driver from the branch (tests/server_e2e/Dockerfile, Debian 13 with
+  # the distribution's libcurl) and runs it against the same server image, so a PR touching the native
+  # collector runs this lane as well.
   # '.github/**' is always included by the detection action, and
   # push/schedule/workflow_dispatch always run the full lane.
   LANE_PATHS: |
     src/collector/**
+    src/native/collector/**
     src/api/**
     src/server/**
     src/database/**
@@ -85,6 +92,9 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerImageName=${{ env.SERVER_REPOSITORY }}
 
+      # NativeTableSensorEndToEndTests (#1848 step 6) is part of this run: it builds the native
+      # collector's table driver with `docker build` (Debian 13, the distribution's libcurl, zstd and
+      # zlib) and runs it on the fixture's network against this server image.
       - name: Run Integration Tests
         if: steps.changes.outputs.run == 'true'
         run: dotnet test src/collector/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"
