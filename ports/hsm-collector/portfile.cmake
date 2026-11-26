@@ -10,8 +10,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO SoftFx/Hierarchical-Sensor-Monitoring
-    REF collector-v0.15.2
-    SHA512 abdb9df829f72e8dd6b216121f0923c87b81a7e65f5e91d55b76f6f98b5f459d75e56732c6586e0e68b0386b0036d77d60801baefa2d206e6154c2dd79a4a879
+    REF collector-v0.16.0
+    SHA512 54cf95c14b21cdfe17b108b2c43b620533be3c5c7c5ed06014b11504c5dcc479338f8f314bbe976476cd9277efc68d1d36e0b9411d305c5634bed1d94ad636d5
     HEAD_REF master
 )
 
