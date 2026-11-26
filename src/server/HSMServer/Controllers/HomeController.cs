@@ -1028,7 +1028,7 @@ namespace HSMServer.Controllers
             }
 
             // A table sensor has no values to edit (#1844).
-            if (_treeViewModel.Sensors.TryGetValue(modal.SensorId, out var edited) && edited.IsTableSensor)
+            if (sensor.IsTableSensor)
                 return BadRequest("Table sensors have no values to edit.");
 
             var comment = modal.Comment;
