@@ -11,10 +11,12 @@ cmake_minimum_required(VERSION 3.16)
 # packaging/README.md, "Versioning"). Independent of the native collector's HSM_COLLECTOR_VERSION.
 # 2.0.0: the default transport became the collector session (a server without sessions receives
 # nothing from a host that does not call DataCollectorProxy::UseHttpTransport), a breaking change.
+# 2.1.0: native collector 0.16.0 (large files, #1887): the .def exports its new functions, and a file
+# send above a quarter of the session frame limit travels on the file connection.
 #
 # Dependencies come from vcpkg manifest mode (vcpkg.json next to this file, pinned by its
 # builtin-baseline): curl with WebSocket for the session, zstd and zlib for table sensors.
-project(HSMCppWrapper VERSION 2.0.0 LANGUAGES CXX)
+project(HSMCppWrapper VERSION 2.1.0 LANGUAGES CXX)
 
 if(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 17)

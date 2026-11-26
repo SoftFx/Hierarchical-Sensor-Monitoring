@@ -22,8 +22,8 @@
 # The scripted server offers file connections only after file_server_accept_upgrades (without it, it is a server older
 # than large files, as in every other fixture): each case here says so after create_collector_on_session.
 #
-# The managed collector implements it (4.2.0); the native collector gets large files with #1887: its driver marks every
-# verb below CONFORMANCE-UNSUPPORTED (#1887) and does not register this fixture until then.
+# Both collectors implement it: the managed collector since 4.2.0 (#1888), the native collector since 0.16.0 (#1887). The
+# native driver runs it in builds with large files (HSM_COLLECTOR_HTTP and HSM_COLLECTOR_TABLES).
 #
 # Verbs (sources and calls):
 # large_file_create|name|size|seed[|modified]      writes a source file into the case's folder

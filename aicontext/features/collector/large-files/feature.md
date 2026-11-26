@@ -153,7 +153,7 @@ every new session and every 30 minutes; `409` waits for the next session; others
 - **Given up**: 3 discards, 10 checksum mismatches, 3 protocol closes of one file — persisted in the state, said again at
   every Start (the file still sits unsent), offered again only when it changes.
 
-## Routed sends (ADR-0022 point 21)
+## Routed sends (ADR-0022 point 20)
 
 On a session, a file value of `SendFile`, `SendFileAsync` or a string content whose bytes are more than the session
 hello's `maxFrameBytes / 4` (1 MiB by default; no setting) is taken by the uploader instead of a `list` frame
@@ -244,5 +244,5 @@ on Windows, the speed limit, Stop and Dispose in the middle, thread safety of th
 the HTTP transport, a disposed collector.
 
 Conformance: [`tests/conformance/collector/large_file_contract.hsmtest`](../../../../tests/conformance/collector/large_file_contract.hsmtest)
-(the piece protocol, refusals, a continue, a changed file, the mask, settle, order). The native driver marks its verbs
-`CONFORMANCE-UNSUPPORTED (#1887)` and does not register it until #1887.
+(the piece protocol, refusals, a continue, a changed file, the mask, settle, order). Both drivers run it (managed 4.2.0;
+native 0.16.0, in builds with `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES`; [`native-collector.md`](./native-collector.md)).
