@@ -214,8 +214,20 @@ namespace HSMServer.Core.Cache
                 }
             }
 
+            // A queue that does not stop in time (UpdatesQueue waits 5 s, then throws TimeoutException) must not skip
+            // the other queues and the close of the database below. What it still runs then meets a closed database:
+            // ObjectDisposedException on a history read or a put that must land, a dropped write logged once per week.
             foreach (var queue in _cache.Values)
-                await queue.Queue.DisposeAsync();
+            {
+                try
+                {
+                    await queue.Queue.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "An updates queue did not stop during disposal; the database is closed under it");
+                }
+            }
 
             _cts?.Dispose();
 
