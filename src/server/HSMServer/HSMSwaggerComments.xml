@@ -4,6 +4,21 @@
         <name>HSMServer</name>
     </assembly>
     <members>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiConverters.Convert(HSMCommon.Model.LargeFileValue,HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore)">
+            <summary>
+            A large file value (#1885): its description with the kind and the state from the store, and never its content
+            (<c>Value</c> stays empty). An access key never downloads the file.
+            </summary>
+        </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiConverters.Convert(System.Collections.Generic.List{HSMCommon.Model.BaseValue},HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore)">
+            <summary>The history values for the Sensor API; a large file value is described from <paramref name="largeFiles"/>.</summary>
+        </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.ConvertToCsv(System.Collections.Generic.List{HSMCommon.Model.BaseValue},HSMServer.ApiObjectsConverters.ExportOptions,HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore)">
+            <summary>
+            The values as CSV. A large file value has an empty content column and its description in the last column, with
+            the kind and the state read from <paramref name="largeFiles"/> when it is given.
+            </summary>
+        </member>
         <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
@@ -1028,7 +1043,8 @@
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest)">
             <summary>
-            Get history [from, to] or [from - count] for some sensor
+            Get history [from, to] or [from - count] for some sensor. A large file value of a File sensor is described
+            (LargeFile: file id, name, extension, size, secure, state) and its content is never part of the answer.
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.TableHistory(HSMSensorDataObjects.HistoryRequests.TableHistoryRequest)">
@@ -1040,7 +1056,8 @@
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.FileHistoryRequest)">
             <summary>
-            Get file (csv or txt) history [from, to] or [from - count] for some sensor
+            Get file (csv or txt) history [from, to] or [from - count] for some sensor. A large file value has an empty
+            content column and its description in a last "Large file" column.
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorRequests.AddOrUpdateSensorRequest)">
