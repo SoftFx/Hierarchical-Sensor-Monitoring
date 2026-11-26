@@ -2,12 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Folders;
+using HSMServer.Model.Authentication;
 using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Http;
 using Moq;
@@ -47,8 +51,20 @@ namespace HSMServer.Core.Tests.Mcp
         }
 
 
+        private readonly Mock<IChatDelivery> _delivery = new();
+        private readonly Mock<IUserManager> _users = new();
+
+        // The write trio of #1829 has its own suite (ChatsMcpWriteToolsTests); this read
+        // and verification suite only needs a writer to construct the tools.
+        private readonly Mock<IFolderManager> _folders = new();
+        private readonly Mock<IChatSensorUsageCalculator> _usage = new();
+
         private ChatsMcpTools CreateTools() =>
-            new(new ChatsReadService(_chats.Object, _authorization.Object), AccessorOf());
+            new(new ChatsReadService(_chats.Object, _authorization.Object),
+                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object),
+                new ChatWriteService(_chats.Object, new ChatAdministrationService(_chats.Object, _folders.Object),
+                    _authorization.Object, _folders.Object, _users.Object, _usage.Object),
+                AccessorOf());
 
         private static IHttpContextAccessor AccessorOf() =>
             new HttpContextAccessor
@@ -63,14 +79,18 @@ namespace HSMServer.Core.Tests.Mcp
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private static Chat BuildChat(string name, params Guid[] folders)
+        private static Chat BuildChat(string name, Action<ChatEntity> configure = null, params Guid[] folders)
         {
-            var chat = new Chat(new ChatEntity
+            var entity = new ChatEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
                 Name = name,
                 CreationDate = DateTime.UtcNow.Ticks,
-            });
+            };
+
+            configure?.Invoke(entity);
+
+            var chat = new Chat(entity);
 
             foreach (var folder in folders)
                 chat.Folders.Add(folder);
@@ -107,7 +127,7 @@ namespace HSMServer.Core.Tests.Mcp
             _store.AddRange(
             [
                 BuildChat("global"),
-                BuildChat("bound-visible", folders: visibleFolder),
+                BuildChat("bound-visible", folders: [visibleFolder]),
                 BuildChat("bound-hidden", folders: Guid.NewGuid()),
             ]);
 
@@ -191,7 +211,7 @@ namespace HSMServer.Core.Tests.Mcp
         [Fact]
         public void GetChat_Visible_MapsDto()
         {
-            var chat = BuildChat("ops", Guid.NewGuid());
+            var chat = BuildChat("ops", folders: [Guid.NewGuid()]);
             _store.Add(chat);
 
             var dto = CreateTools().GetChat(chat.Id);
@@ -217,7 +237,7 @@ namespace HSMServer.Core.Tests.Mcp
         {
             // The anti-enumeration rule of the REST area, carried into MCP: an
             // invisible chat and an unknown id answer the SAME text.
-            var chat = BuildChat("secret", folders: Guid.NewGuid());
+            var chat = BuildChat("secret", folders: [Guid.NewGuid()]);
             _store.Add(chat);
 
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
@@ -227,6 +247,47 @@ namespace HSMServer.Core.Tests.Mcp
                 () => CreateTools().GetChat(chat.Id));
 
             Assert.Equal("The requested resource was not found.", error.Message);
+        }
+
+        [Fact]
+        public async Task SendChatTestMessage_AnswersTheDeliveryOutcome()
+        {
+            var chat = BuildChat("ops", e => e.SlackWebhookUrl = "https://hooks.slack.com/services/X");
+            _store.Add(chat);
+
+            _delivery.Setup(d => d.SendTestAsync(chat, ChatChannel.Slack))
+                .ReturnsAsync(ChatDeliveryResult.Ok());
+
+            var answer = await CreateTools().SendChatTestMessage(chat.Id, "slack");
+
+            Assert.True(answer.Delivered);
+            Assert.Null(answer.Error);
+        }
+
+        [Fact]
+        public async Task SendChatTestMessage_ChannelNotCarried_IsAToolErrorNamingTheChannel()
+        {
+            var chat = BuildChat("ops");
+            _store.Add(chat);
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                () => CreateTools().SendChatTestMessage(chat.Id, "telegram"));
+
+            Assert.Contains("no Telegram", error.Message);
+        }
+
+        [Fact]
+        public async Task CreateChatTelegramInvitation_BotNotRunning_IsAToolErrorPointingAtTheBotCredential()
+        {
+            var chat = BuildChat("ops");
+            _store.Add(chat);
+
+            _delivery.SetupGet(d => d.IsTelegramBotRunning).Returns(false);
+
+            var error = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+                () => CreateTools().CreateChatTelegramInvitation(chat.Id, "direct"));
+
+            Assert.Contains("update_telegram_bot", error.Message);
         }
     }
 }

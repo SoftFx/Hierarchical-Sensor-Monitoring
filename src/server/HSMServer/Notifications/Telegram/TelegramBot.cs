@@ -98,13 +98,42 @@ namespace HSMServer.Notifications
 
         internal async ValueTask SendTestMessageAsync(ChatId chatId, string message)
         {
-            //if (IsBotRunning)
-            //    _bot.SendMessage(chatId, message, cancellationToken: _tokenSource.Token);
-
             var chat = _chatsManager.GetChatByChatId(chatId);
 
             if (chat != null)
                 await SendMessageAsync(chat, message);
+        }
+
+        // A test message answers its outcome (#1826): ONE attempt, no retry loop — a broken
+        // binding must report fast, not page for minutes like the delivery path.
+        internal async Task<ChatDeliveryResult> SendTestWithResultAsync(Chat chat)
+        {
+            if (chat.TelegramChatId is null)
+                return ChatDeliveryResult.Fail("The chat has no Telegram binding.");
+
+            if (!CanSendNotifications)
+                return ChatDeliveryResult.Fail(BotIsNotRunningError);
+
+            try
+            {
+                MessageSending?.Invoke();
+
+                const string testMessage = "Test message from HSM";
+
+                await _bot.SendMessage(chat.TelegramChatId, MarkdownHelper.ConvertToMarkdownV2(testMessage), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2);
+
+                MessageSended?.Invoke(chat.Name, testMessage);
+                _logger.Info("TSend: test message is sent");
+
+                return ChatDeliveryResult.Ok();
+            }
+            catch (Exception ex)
+            {
+                var error = $"Send telegram: An error ({ex.Message}) has been occurred while sending the test message [{chat.Name}]";
+                OnErrorHandled(error);
+
+                return ChatDeliveryResult.Fail(error);
+            }
         }
 
         // The one place the real Telegram client is built.

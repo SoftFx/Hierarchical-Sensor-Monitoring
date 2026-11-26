@@ -27,6 +27,8 @@ HSMServer (ASP.NET Core MVC)     API Controllers (/api/sensors/*)
 ### TreeValuesCache
 In-memory tree of Products -> Nodes -> Sensors. Source of truth for current sensor state. Backed by LevelDB for persistence across restarts.
 
+A sensor's path is not stored: it is the chain of node names from the root product down (`BaseNodeModel.Path`, root-relative), built from each entity's parent id and `DisplayName`. Ingestion finds a sensor through an index from that path to the sensor, one per root product (`CachedValue.Sensors`, keyed by the root's id), filled when the tree is loaded and kept by sensor creation, removal and move. A name that is a path segment therefore changes only together with the index: a sensor is renamed by a sensor move, and a node below the root is never renamed (`UpdateProductAsync` refuses it, see `sensor-move/feature.md`). A root product's name is no part of a root-relative path, so a root rename leaves the index as it is. The full path does change, for every sensor of the product at once, so the rename re-evaluates their alert templates and offers them to the dashboard subscriptions (a root's change of folder, the other thing templates and subscriptions match, does the same), and the by-name index of root products (`_productsByName`) follows the name the model took; the self-monitoring product, which the server finds by its name, is not renamed (see the same doc).
+
 ### UpdatesQueue
 `System.Threading.Channels`-based async queue for processing incoming sensor value updates. Decouples HTTP request handling from sensor model updates.
 
@@ -78,7 +80,7 @@ Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for pro
 ### Background Services
 - Data collection (self-monitoring)
 - Database snapshots
-- Data cleanup/retention
+- Data cleanup/retention (hourly `ClearDatabaseService`: history older than `KeepHistory`, sensors idle for longer than `SelfDestroy`, old empty nodes). A new root product and a new folder get `KeepHistory` and `SelfDestroy` = 3 months (`TreeValuesCache.DefaultRetention`, 1 month before 2026-11-25); the value is stored with them, so the default never changes an existing product or folder. A stored folder with no period still reads as 1 month.
 - Notification delivery (Telegram, email)
 - Database backups (local + SFTP), self-monitored — see `database-backup-monitoring/`
 - Large file archives: packing, re-encryption and the download log's retention — see `large-file-download/`
@@ -103,14 +105,60 @@ TypeScript 5.3 + Webpack 5:
   a top-level cross-site GET. Removing a product or node (`ProductController.RemoveProduct`,
   `HomeController.RemoveNode`) requires Manager of the node's ROOT product or admin — the removal is
   recursive and irreversible (#1512; `ProductControllerTests`).
+- The tree page and the history routes resolve every sensor, node or folder id from the client through `UserTreeAccess`: an entity of a product the user has no role on is answered like an unknown id. Names, paths and file content from collectors and users are output as text. Both rules: `web-ui-access/feature.md`.
+- Product roles are held per ROOT product (`User.ProductsRoles`); a node below the root has no roles
+  of its own. Six writes of `ProductController` go through one gate (`DenyUnlessManager`): the
+  caller must be an admin or a Manager of the root product of the posted id; an id that is not in
+  the tree is answered 404, everyone else 403, and a role entry on a nested node's own id counts for
+  nothing. The six are the product edit form (`EditProduct` POST: name, description, default
+  chats), the Members table (`AddUserRight`, `EditUserRole`, `RemoveUserRole`), the move between
+  folders (`MoveProduct`) and the removal. `UpdateSensorGroups` is guarded separately, by
+  `ProductRoleFilterBySensorGroups`, which compares the posted id with the caller's roles as it
+  is, without resolving the root. Past the gate the role actions answer 400 for a JSON body that
+  cannot be read and 404 for an unknown user (an empty user id on `AddUserRight` is answered 200
+  after a validation message is put into `TempData`), and they look the user up only after the
+  caller has passed, so a refused caller cannot probe user ids. `MoveProduct` is POST only: a move
+  changes roles (the users of the folder the product leaves lose the folder role they hold on it;
+  the users of the folder it enters who hold no role on the product yet receive theirs).
+  Antiforgery is validated on `EditProduct`, `MoveProduct` and `RemoveProduct`, whose callers send
+  the token; the role actions take a JSON body, which a cross-site form cannot send, and their
+  callers send none. `ProductControllerTests` covers admin, Manager, Viewer, a user with no role, a
+  Manager of another product, an unknown id, and a node one and two levels below the root.
+- A folder's Chats tab (`FoldersController.UpdateChats`) requires Manager of that folder or admin,
+  like the other writes of the folder edit page; an unknown folder id is answered 404
+  (`FoldersControllerUpdateChatsTests`). It validates no antiforgery token: the page replaces the
+  form's content with the saved partial, which drops the token the form was rendered with.
 - Access keys authenticate DataCollector instances (no user session needed)
+- A role is checked on the entity that is written, not on an id the form carries next to it. The
+  access key dialog posts the key's id and a product id; `AccessKeysController.ModifyAccessKey`
+  (POST) looks the STORED key up by its id and requires admin or Manager of the root product of the
+  node that key was issued for. A master key belongs to no product and a key whose product is gone
+  has no Manager: both are the admins' alone. An unknown key id is answered 404 and a caller who
+  may not change the key 403, both before the form's validity is looked at; the posted product id is
+  replaced with the stored key's, so the answer (the key list of a product, or the dialog again) is
+  built for the key's own product (`AccessKeysControllerModifyTests`).
+- A folder's product list is a list of role grants: every user of a folder receives their folder
+  role on a product that enters it (unless they already hold a role on that product) and loses it
+  when the product leaves (`FolderManager.AddProductToFolder`, `RemoveProductFromFolder`). So the
+  save of the folder page's General tab (`FoldersController.EditFolder` POST) requires more than
+  Manager of the folder (or admin; an unknown folder id is 404): each product that enters or leaves
+  must be one the caller manages, as an admin or as a Manager of that product, and a product may
+  enter only as a root product that sits in no other folder. A request that names a product the
+  caller does not manage is answered 403, one with a product that cannot enter 400, and in both
+  cases nothing of the request is applied, the rename and the other products included; an id that
+  is not in the tree is left out, as before. The page follows the same rule: it offers to add only
+  the folderless products the caller manages and shows "Exclude from folder" only for the products
+  they manage. Creating a folder (`AddFolder`) is for admins only, 403 for everyone else, with the
+  same rule for the products it starts with (`FoldersControllerProductsTests`). These two test
+  classes run the role filter attributes declared on an action before the action
+  (`Infrastructure/DeclaredFilters`): a direct call of the method would skip them.
 
 ## Feature Folders To Add Here
 
 - `ingestion/` - receiving and validating collector data.
 - `alerts/` - alert conditions, templates, schedules, notification triggers. See `alerts/feature.md` for the canonical model: global alerts via `AlertTemplate` plus per-sensor editor; node-level alerting on Folders/Products was removed in #1142.
 - `notifications/` - Telegram/email delivery, retries, failure handling.
-- `dashboards/` - server-owned dashboard behavior and data shaping.
+- `dashboards/` - server-owned dashboard behavior and data shaping; today it documents the panel subscriptions: how a path template adds sources by a scan and for a new or moved sensor, and when the dashboard is stored.
 - `bar-stddev/` - per-bar standard deviation (#1509): storage (MemoryPack, appended field), exact compression of σ, Sensor API / Grafana / CSV output, the sensor page's Candlestick / Mean ± σ view and the dashboard `StdDev (σ)` property; also why the server builds against the in-repo DTO (`src/Directory.Build.targets`).
 - `authentication/` - authentication surfaces: the persisted Data Protection key ring behind cookie sessions and antiforgery tokens (#1633); bearer tokens live in `api-tokens/`.
 - `sso-login/` - the optional OpenID Connect sign-in of the web UI (#1782): `Oidc` settings with an environment-only client secret, provider username = HSM login, auto-created users without roles, `IsAdmin` from an optional provider group, absolute cookie lifetime, local logout.
@@ -128,6 +176,7 @@ TypeScript 5.3 + Webpack 5:
 - `linux-probe-download/` - its Linux sibling (#1424): per-product probe `.tar.gz` with `install.sh`, staged from `probe-release.txt`.
 - `large-file-download/` - how a large file value leaves the server (#1885, ADR-0022): the AES-256 zip built once and re-encrypted per password version, the web and `/api/v1` download with its order of checks, the hand-over to the bundled Caddy, the download log and their self-monitoring.
 - `dump-password/` - the password of a root product under which its large file values are given out (#1885): set and seen by a Manager of the product or an admin on the settings page, generated or typed, versioned, never in an API answer, a log or a journal value.
+- `web-ui-access/` - which sensors, nodes and folders a web user can address by id in the tree page, the history routes and the per-node journal (`UserTreeAccess`), and how collector- and user-supplied text is put into pages (encoding rules for views and scripts, file previews).
 - `background-services/` - hosted services, queue workers, startup/shutdown.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.

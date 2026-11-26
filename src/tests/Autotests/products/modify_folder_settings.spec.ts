@@ -46,11 +46,15 @@ test('Modify Folder Settings', async ({ page }) => {
 
   await page.getByRole('tab', { name: 'Settings' }).click();
   
-  // Modify settings
+  // A new folder keeps history and removes idle sensors after three months.
   const selectLocator = page.locator('select[name="SavedHistoryPeriod.Interval"]');
   await expect(selectLocator).toBeVisible();
-  await selectLocator.selectOption('ThreeMonths');
-  await page.selectOption('select[name="SelfDestoryPeriod.Interval"]', 'ThreeMonths');
+  await expect(selectLocator).toHaveValue('ThreeMonths');
+  await expect(page.locator('select[name="SelfDestoryPeriod.Interval"]')).toHaveValue('ThreeMonths');
+
+  // Modify settings: away from the defaults, so the check below proves the save.
+  await selectLocator.selectOption('SixMonths');
+  await page.selectOption('select[name="SelfDestoryPeriod.Interval"]', 'SixMonths');
   await page.selectOption('select[name="ExpectedUpdateInterval.Interval"]', 'Month');
   
   //Safe and check
@@ -63,8 +67,8 @@ test('Modify Folder Settings', async ({ page }) => {
   //Check than all settings applied
   await page.getByRole('tab', { name: 'Settings' }).click();
   await expect(selectLocator).toBeVisible();
-  await expect(page.locator('select[name="SavedHistoryPeriod.Interval"]')).toHaveValue('ThreeMonths');
-  await expect(page.locator('select[name="SelfDestoryPeriod.Interval"]')).toHaveValue('ThreeMonths');
+  await expect(page.locator('select[name="SavedHistoryPeriod.Interval"]')).toHaveValue('SixMonths');
+  await expect(page.locator('select[name="SelfDestoryPeriod.Interval"]')).toHaveValue('SixMonths');
   await expect(page.locator('select[name="ExpectedUpdateInterval.Interval"]')).toHaveValue('Month');
   
   //Remove folder

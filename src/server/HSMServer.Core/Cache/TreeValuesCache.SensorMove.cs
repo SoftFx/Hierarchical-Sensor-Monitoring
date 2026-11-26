@@ -1023,6 +1023,10 @@ namespace HSMServer.Core.Cache
         // alerting side by side), as one pass in template-id order did
         // whenever a new template's id sorted first. A detach that fails
         // leaves its template attached until the next re-evaluation.
+        //
+        // Also run for every sensor of a root product whose name or folder
+        // changed (FollowRootNameOrFolderChange): a template's match changed
+        // there too.
         private void ReevaluateTemplates(BaseSensorModel sensor)
         {
             var attached = sensor.Policies.Select(p => p.TemplateId)
@@ -1060,7 +1064,7 @@ namespace HSMServer.Core.Cache
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Template {template.Id} {phase} failed while re-evaluating moved sensor {sensor.Id}");
+                _logger.Error(ex, $"Template {template.Id} {phase} failed while re-evaluating sensor {sensor.Id}");
             }
         }
 

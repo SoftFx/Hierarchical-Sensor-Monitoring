@@ -416,6 +416,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public bool? SensorEntityExists(Guid sensorId) => _environmentDatabase.SensorEntityExists(sensorId.ToString());
+        public bool EntityExists(Guid id) => _environmentDatabase.EntityExists(id.ToString());
 
         public void RemoveSensorWithMetadata(Guid sensorId)
         {

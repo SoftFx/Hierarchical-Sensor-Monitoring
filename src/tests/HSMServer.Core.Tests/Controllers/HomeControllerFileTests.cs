@@ -573,7 +573,7 @@ namespace HSMServer.Core.Tests.Controllers
                 _folders.Object, _schedules.Object, recorder);
 
             return new HomeController(_cache.Object, _folders.Object,
-                new TreeViewModel(_cache.Object, _folders.Object, _users.Object),
+                new UserTreeAccess(new TreeViewModel(_cache.Object, _folders.Object, _users.Object), _folders.Object),
                 _users.Object, new Mock<IJournalService>().Object, _chats.Object, new Mock<IDatabaseCore>().Object,
                 _schedules.Object, policyWriter,
                 new SensorMoveAdministrationService(_cache.Object, _tokenAuthorization.Object, _users.Object),

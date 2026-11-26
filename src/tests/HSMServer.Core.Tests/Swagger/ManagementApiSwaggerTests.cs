@@ -390,6 +390,21 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(ChatsApiController), nameof(ChatsApiController.GetChats))] = [400, 401, 403, 500],
             [(typeof(ChatsApiController), nameof(ChatsApiController.GetChat))] = [401, 403, 404, 500],
 
+            // The chat verification surface (#1826): the test message answers
+            // its delivery outcome (200 with delivered/error), the invitation
+            // the issued value; both carry the detail gate's 403, the 404
+            // anti-enumeration split and the field-keyed 422s.
+            [(typeof(ChatsApiController), nameof(ChatsApiController.PostTestMessage))] = [400, 401, 403, 404, 422, 500],
+            [(typeof(ChatsApiController), nameof(ChatsApiController.PostTelegramInvitation))] = [400, 401, 403, 404, 422, 500],
+
+            // The chat write surface (#1829): the creation is admin-only (403, never a
+            // 404 — a creation has no target to enumerate), the update and the delete
+            // carry the 404/403 split; every problem of a request answers one 422, and a
+            // write that did not land is the fixed-message 409.
+            [(typeof(ChatsApiController), nameof(ChatsApiController.CreateChat))] = [400, 401, 403, 409, 422, 500],
+            [(typeof(ChatsApiController), nameof(ChatsApiController.UpdateChat))] = [400, 401, 403, 404, 409, 422, 500],
+            [(typeof(ChatsApiController), nameof(ChatsApiController.DeleteChat))] = [400, 401, 403, 404, 409, 500],
+
             // The folder read surface (the folderId source for template
             // writes): the templates read pattern — no caller-wide gate, the
             // list answers an empty page for an unsighted owner (no 403 path

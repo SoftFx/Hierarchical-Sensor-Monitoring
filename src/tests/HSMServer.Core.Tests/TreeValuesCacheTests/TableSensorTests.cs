@@ -287,9 +287,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 var result = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = node.Id, Name = "renamed" }, default);
 
+                // No node below a root is renamed (#1881), so the node above a table sensor is refused by
+                // that rule, which names the node, not the table sensor.
                 AssertRefusal(result);
-                Assert.Contains(table.FullPath, result.Error);
-                Assert.Contains(table.Id.ToString(), result.Error);
+                Assert.Contains(node.FullPath, result.Error);
+                Assert.Contains("only a root product can be renamed", result.Error);
             }
 
             Assert.Equal("inner", inner.DisplayName);

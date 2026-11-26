@@ -384,6 +384,27 @@ namespace HSMServer.Mcp
 
 
     /// <summary>
+    /// Result envelope of the delete_chat tool (#1829): exactly one arm per call —
+    /// <c>value</c> after an applied deletion (the removed id, the MCP stand-in
+    /// for REST's 204) or <c>preview</c> after a dry run (how many sensors'
+    /// alerts reference the chat, and the folder bindings the deletion would
+    /// take with it). The McpSensorDeleteResult shape with a TYPED preview arm,
+    /// so the tool's static output schema shows the chat-specific members.
+    /// </summary>
+    [Description("Result of the delete_chat tool: `value` names the deleted chat id after an applied deletion, `preview` carries the usage report after a dry run — exactly one of the two per call.")]
+    public sealed record McpChatDeleteResult
+    {
+        /// <summary>The deleted chat id after an applied deletion; null (absent) after a dry run.</summary>
+        [Description("The deleted chat id after an applied deletion. Absent after a dry run.")]
+        public McpDeletedResult Value { get; init; }
+
+        /// <summary>The dry-run preview (nothing was removed); null (absent) after an applied deletion.</summary>
+        [Description("The dry-run preview: how many sensors' alerts reference the chat, and the folder bindings the deletion would take with it. Nothing was removed. Absent after an applied deletion.")]
+        public ChatDeletePreviewDto Preview { get; init; }
+    }
+
+
+    /// <summary>
     /// Result envelope of the move_sensors tool (#1721): exactly one arm per
     /// call — <c>value</c> with every sensor's outcome after an applied move,
     /// or <c>preview</c> with every sensor's prediction after a dry run. The

@@ -32,7 +32,7 @@ namespace HSMServer.BackgroundServices
     {
         private const string SelfCollectorName = "Self monitoring";
         internal const string OpenSessionsSensorName = "Open sessions";
-        public const string SelfMonitoringProductName = "HSM Server Monitoring";
+        public const string SelfMonitoringProductName = CommonConstants.SelfMonitoringProductName;
 
         private readonly IDataCollector _collector;
 
@@ -260,7 +260,9 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        private static Guid GetSelfMonitoringKeyAsync(ITreeValuesCache cache)
+        // Found by name, created when the name is not there: the reason the cache
+        // refuses to rename this product (TreeValuesCache.RenameRefusal).
+        internal static Guid GetSelfMonitoringKeyAsync(ITreeValuesCache cache)
         {
             var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
             selfMonitoring ??= cache.AddProductAsync(SelfMonitoringProductName, Guid.Empty).Result;

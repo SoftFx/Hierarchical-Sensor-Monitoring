@@ -60,7 +60,7 @@ namespace HSMServer.Core.Tests.Controllers
         private HomeController CreateController() =>
             new(_cacheMock.Object,
                 _folderManagerMock.Object,
-                _treeViewModel,
+                new UserTreeAccess(_treeViewModel, _folderManagerMock.Object),
                 _userManagerMock.Object,
                 _journalMock.Object,
                 _chatsMock.Object,
@@ -69,7 +69,17 @@ namespace HSMServer.Core.Tests.Controllers
                 CreatePolicyWriter(),
                 new HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService(
                     _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object),
-                new HSMServer.Model.FileSensors.FileSensorPageService(_cacheMock.Object));
+                new HSMServer.Model.FileSensors.FileSensorPageService(_cacheMock.Object))
+            {
+                // The actions resolve ids for the current user; alert authoring here is an admin's.
+                ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+                {
+                    HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+                    {
+                        User = new HSMServer.Model.Authentication.User("admin") { IsAdmin = true },
+                    },
+                },
+            };
 
 
         // #1249: Any-template TTL rows route type=AlertKey; BuildAlertCondition must return a

@@ -32,6 +32,12 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         /// <summary>A sensor moved (#1718); the Guid is its old parent node id.</summary>
         event Action<BaseSensorModel, Guid> SensorMovedEvent;
+        /// <summary>
+        /// A root product took a new name (the full path of every sensor under it starts with
+        /// it) or a new folder: what path templates match for its sensors changed. The list
+        /// is the sensors of the product as the update saw them.
+        /// </summary>
+        event Action<ProductModel, IReadOnlyList<BaseSensorModel>> RootProductNameOrFolderChangedEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         event Action<string, int, int> RequestProcessed;
 

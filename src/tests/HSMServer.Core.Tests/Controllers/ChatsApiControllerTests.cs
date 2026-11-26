@@ -3,18 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
+using HSMServer.Folders;
+using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Model.Authentication;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
+using HSMServer.ServerConfiguration;
+using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using Xunit;
 
@@ -55,6 +63,13 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        private static ClaimsPrincipal BuildPrincipalOf(Guid ownerId) =>
+            new(new ClaimsIdentity(
+            [
+                new Claim(HsmApiTokenClaims.OwnerUserId, ownerId.ToString()),
+                new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
+            ], HsmApiTokenDefaults.AuthenticationScheme));
+
         private static ClaimsPrincipal BuildPrincipal() =>
             new(new ClaimsIdentity(
             [
@@ -62,12 +77,25 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private ChatsApiController CreateController() =>
-            new(new ChatsReadService(_chats.Object, _authorization.Object))
+        private readonly Mock<IChatDelivery> _delivery = new();
+        private readonly Mock<IUserManager> _users = new();
+
+        // The write half of the controller (#1829) has its own suite
+        // (ChatsApiControllerWriteTests); this read suite only needs a writer to build it.
+        private readonly Mock<IFolderManager> _folders = new();
+        private readonly Mock<IChatSensorUsageCalculator> _usage = new();
+
+        private ChatsApiController CreateController() => CreateControllerWith(BuildPrincipal());
+
+        private ChatsApiController CreateControllerWith(ClaimsPrincipal principal) =>
+            new(new ChatsReadService(_chats.Object, _authorization.Object),
+                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object),
+                new ChatWriteService(_chats.Object, new ChatAdministrationService(_chats.Object, _folders.Object),
+                    _authorization.Object, _folders.Object, _users.Object, _usage.Object))
             {
                 ControllerContext = new ControllerContext
                 {
-                    HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
+                    HttpContext = new DefaultHttpContext { User = principal },
                 },
             };
 
@@ -446,6 +474,129 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.NotNull(page);
             var dto = Assert.Single(page.Items);
             Assert.Equal([visibleFolder], dto.Folders);
+        }
+
+
+        // #1826: the two POST actions render the verification service's envelope through the
+        // area's uniform contract; the service itself carries the semantics (ChatVerificationServiceTests).
+
+        [Fact]
+        public async Task PostTestMessage_AnswersTheDeliveryOutcome()
+        {
+            var chat = BuildChat("ops", e => e.SlackWebhookUrl = "https://hooks.slack.com/services/X");
+            _store.Add(chat);
+
+            _delivery.Setup(d => d.SendTestAsync(chat, ChatChannel.Slack))
+                .ReturnsAsync(ChatDeliveryResult.Fail("Slack POST to ops returned terminal status NotFound; giving up"));
+
+            var answer = await CreateController().PostTestMessage(chat.Id, new ChatTestMessageRequestDto { Channel = "slack" });
+
+            var ok = Assert.IsType<OkObjectResult>(answer);
+            var dto = Assert.IsType<ChatTestMessageResultDto>(ok.Value);
+            Assert.False(dto.Delivered);
+            Assert.Contains("terminal status NotFound", dto.Error);
+        }
+
+        [Fact]
+        public async Task PostTestMessage_UnknownChat_AnswersTheUniform404()
+        {
+            var answer = await CreateController().PostTestMessage(Guid.NewGuid(), new ChatTestMessageRequestDto { Channel = "slack" });
+
+            Assert.Equal(404, StatusCodeOf(answer));
+        }
+
+        [Fact]
+        public async Task PostTelegramInvitation_AnswersValueExpiryAndSteps()
+        {
+            var chat = BuildChat("ops", null);
+            _store.Add(chat);
+
+            _delivery.SetupGet(d => d.IsTelegramBotRunning).Returns(true);
+
+            var owner = new User("admin") { Id = Guid.NewGuid() };
+            _users.Setup(u => u[owner.Id]).Returns(owner);
+            _chats.Setup(c => c.GetChatInvitationLink(chat.Id, owner, ChatVerificationService.InvitationLifetime))
+                .Returns("https://t.me/hsm_alerts_bot?start=abc");
+
+            var principal = BuildPrincipalOf(owner.Id);
+            var answer = await CreateControllerWith(principal).PostTelegramInvitation(chat.Id, new ChatInvitationRequestDto { Kind = "direct" });
+
+            var ok = Assert.IsType<OkObjectResult>(answer);
+            var dto = Assert.IsType<ChatInvitationDto>(ok.Value);
+            Assert.Equal("direct", dto.Kind);
+            Assert.Equal("https://t.me/hsm_alerts_bot?start=abc", dto.Value);
+            Assert.NotEmpty(dto.NextSteps);
+        }
+
+        [Fact]
+        public async Task PostTelegramInvitation_BotNotRunning_Answers422WithTheRemedy()
+        {
+            var chat = BuildChat("ops", null);
+            _store.Add(chat);
+
+            _delivery.SetupGet(d => d.IsTelegramBotRunning).Returns(false);
+
+            var answer = await CreateController().PostTelegramInvitation(chat.Id, new ChatInvitationRequestDto { Kind = "direct" });
+
+            Assert.Equal(422, StatusCodeOf(answer));
+        }
+
+
+        // === The DI composition is load-bearing (#1841 review, P0) ===
+
+        // ChatVerificationService asks for the IChatDelivery SEAM, so the
+        // registration must map that interface to the NotificationsCenter
+        // adapter. The concrete-only registration of the finding left
+        // IChatDelivery unresolvable: every action of this controller — the
+        // new POSTs AND the pre-existing GET surface alert/template writes
+        // resolve chat ids through — answered 500, and every MCP chat tool
+        // failed the same way. The provider below is the real
+        // AddApplicationServices registration (which also carries
+        // AddHsmMcpServer's tool types and the HTTP context accessor); the
+        // storage managers and the delivery seam are replaced by this
+        // suite's mocks so no LevelDB or live channel is touched — the
+        // SensorPoliciesApiControllerTests precedent.
+        [Fact]
+        public void AddApplicationServices_ResolvesTheChatSurfaceThroughTheIChatDeliverySeam()
+        {
+            // AddApplicationServices registers config.ApiTokens as an instance
+            // at registration time — it must be non-null (everything else is
+            // only resolved lazily and is replaced below anyway).
+            var config = new Mock<IServerConfig>();
+            config.Setup(c => c.ApiTokens).Returns(new ApiTokensConfig());
+
+            var services = new ServiceCollection()
+                .AddApplicationServices(config.Object);
+
+            // The pin itself: the seam is registered, and it maps to the
+            // adapter over NotificationsCenter's concrete channels.
+            Assert.Equal(typeof(NotificationsCenterChatDelivery),
+                services.FirstOrDefault(d => d.ServiceType == typeof(IChatDelivery))?.ImplementationType);
+
+            services.Replace(ServiceDescriptor.Singleton(_chats.Object));
+            services.Replace(ServiceDescriptor.Singleton(_authorization.Object));
+            services.Replace(ServiceDescriptor.Singleton(_users.Object));
+            services.Replace(ServiceDescriptor.Singleton(_delivery.Object));
+            // The write surface (#1829) scopes the folder bindings through the folder
+            // manager and reads the usage count through the calculator's seam: both are
+            // replaced too — the real folder manager would build the live cache, which
+            // only disposes asynchronously.
+            services.Replace(ServiceDescriptor.Singleton(new Mock<IFolderManager>().Object));
+            services.Replace(ServiceDescriptor.Singleton(new Mock<IChatSensorUsageCalculator>().Object));
+
+            using var provider = services.BuildServiceProvider();
+
+            Assert.NotNull(provider.GetRequiredService<ChatVerificationService>());
+            Assert.NotNull(provider.GetRequiredService<ChatWriteService>());
+
+            // MVC builds controllers through the type activator over the
+            // request provider, and the MCP SDK constructs tool instances the
+            // same way in the request scope (WithTools reflects over the
+            // type; it does not register the class itself as a service) —
+            // so both are resolved through ActivatorUtilities here, the
+            // construction path each transport really takes.
+            Assert.NotNull(ActivatorUtilities.CreateInstance<ChatsApiController>(provider));
+            Assert.NotNull(ActivatorUtilities.CreateInstance<ChatsMcpTools>(provider));
         }
     }
 }
