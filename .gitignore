@@ -172,6 +172,7 @@ CMakeUserPresets.json
 /CaddyCertificates/
 /Databases/
 /DatabasesBackups/
+/LargeFiles/
 
 # docker-compose.yml settings (HSM_DOMAIN), machine-local
 /.env

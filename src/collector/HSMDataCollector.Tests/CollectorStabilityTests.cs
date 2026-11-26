@@ -106,6 +106,12 @@ namespace HSMDataCollector.Tests
                 e.SetObserved();
             };
 
+            // Only what this test leaves counts: faulted tasks that earlier tests left for the finalizer (the .NET Framework
+            // HttpListener behind the scripted session server leaves some of its own when a connection is cut) are
+            // finalized before the handler is attached.
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
             TaskScheduler.UnobservedTaskException += handler;
 
             try

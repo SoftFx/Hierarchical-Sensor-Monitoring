@@ -196,7 +196,8 @@ namespace HSMServer.Core.Tests.Controllers
         public HomeController Home(User user) =>
             new(Cache.Object, Folders.Object, Access, Users.Object, Journal, Chats.Object,
                 new Mock<IDatabaseCore>().Object, Schedules.Object, PolicyWriter(),
-                new SensorMoveAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object))
+                new SensorMoveAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object),
+                new HSMServer.Model.FileSensors.FileSensorPageService(Cache.Object))
             {
                 ControllerContext = Context(user),
             };
@@ -298,6 +299,16 @@ namespace HSMServer.Core.Tests.Controllers
 
         private static ProductModel BuildProduct(string name, Guid? folderId) =>
             new(EntitiesFactory.BuildProductEntity(name: name) with { Id = Guid.NewGuid().ToString(), FolderId = folderId?.ToString() });
+
+        // A sensor of the own product holding the history given (the export tests, #1886).
+        public BaseSensorModel AddOwnSensor(string name, SensorType type, List<BaseValue> history)
+        {
+            var sensor = AddSensor(Own, name, type);
+            _history[sensor.Id] = history;
+            Cache.Raise(c => c.ChangeSensorEvent += null, sensor, ActionType.Add);
+
+            return sensor;
+        }
 
         private BaseSensorModel AddSensor(ProductModel product, string name, SensorType type)
         {

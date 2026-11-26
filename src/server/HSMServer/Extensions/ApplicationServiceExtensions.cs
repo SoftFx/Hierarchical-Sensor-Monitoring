@@ -67,7 +67,8 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(config);
 
             services.AddSingleton<IDatabaseCore, DatabaseCore>()
-                    .AddSingleton<IDatabaseSettings, DatabaseSettings>()
+                    // The large file store's folder (#1883) is the one setting of the databases the configuration gives.
+                    .AddSingleton<IDatabaseSettings>(_ => new DatabaseSettings { LargeFilesFolder = config.LargeFiles?.Folder ?? DatabaseSettings.DefaultLargeFilesFolder })
                     .AddSingleton<ChatMigrator>()
                     .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
@@ -88,6 +89,21 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(_ => new HSMServer.Core.TableSensors.TableReadGate(config.TableSensors.MaxConcurrentReads));
 
             services.AddTableFeedSensors();
+
+            // The archive side of large files (#1885): archives, dump passwords, the download log and its routes.
+            services.AddLargeFileArchives(config);
+            // The uploads of large files (#1883), for the file connection of step 2 (#1884), and the store's pass
+            // (LargeFileMaintenanceService). The constructor opens and creates nothing.
+            var largeFileOptions = LargeFileOptionsFor(config);
+
+            services.AddSingleton(provider => new HSMServer.Core.LargeFiles.LargeFileUploadService(
+                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), largeFileOptions));
+            services.AddSingleton<HSMServer.Core.LargeFiles.ILargeFileUploads>(provider => provider.GetRequiredService<HSMServer.Core.LargeFiles.LargeFileUploadService>());
+
+            // The store the file connection (#1884) uploads into; without it file connections answer 404.
+            services.AddSingleton<SensorApi.Sessions.Files.IFileUploadStore>(provider => new SensorApi.Sessions.Files.LargeFileUploadStore(
+                provider.GetRequiredService<HSMServer.Core.LargeFiles.ILargeFileUploads>(), largeFileOptions.MaxFileSizeBytes,
+                TimeSpan.FromSeconds(largeFileOptions.LeaseTimeoutSeconds)));
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
@@ -210,6 +226,23 @@ namespace HSMServer.ServiceExtensions
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
 
+            // What the self-monitoring of large files (#1886) asks the archive side, resolved at each sample: the builder
+            // reports to the collector wrapper, so the wrapper must not build it.
+            services.AddSingleton(provider => new LargeFileArchiveSide(provider));
+
+            // The file values of a File sensor for its page (#1886); stateless over the cache.
+            // Scoped: it reads the download step's description (LargeFileDownloadService is scoped).
+            services.AddScoped<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.LargeFilePageSource>();
+            services.AddScoped<HSMServer.Model.FileSensors.FileSensorPageService>();
+
+            // The alert variables of File sensors (#1886): the link to the sensor page and whether a secure large file waits
+            // for its product's dump password (#1885). Resolved at the call: the password service needs the tree.
+            services.AddSingleton<HSMServer.Core.Model.Policies.IFileAlertContext>(provider =>
+                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, (productId, fileId) =>
+                    HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(
+                        provider.GetRequiredService<IDatabaseCore>().LargeFiles,
+                        provider.GetRequiredService<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>(), productId, fileId)));
+
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its
             // readers; every stateful collaborator it touches (the journal,
@@ -306,6 +339,7 @@ namespace HSMServer.ServiceExtensions
                     .AddHostedService<BackgroundServices.DatabaseServices.HistoryCompactionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistorySealingService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.TableMergeService>()
+                    .AddHostedService<BackgroundServices.DatabaseServices.LargeFileMaintenanceService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>
@@ -417,8 +451,13 @@ namespace HSMServer.ServiceExtensions
         {
             // Behind the bundled Caddy (#1427): restore the client address first, so token
             // audit, the invalid-attempt limiter and key telemetry see the client, not the proxy.
+            // ConnectionPeerMiddleware first: it records the connection's own peer, which UseForwardedHeaders replaces,
+            // and whether it is a trusted proxy of the same options (the large file hand-over reads it).
             if (forwardedHeaders is not null)
+            {
+                applicationBuilder.UseMiddleware<ConnectionPeerMiddleware>(forwardedHeaders);
                 applicationBuilder.UseForwardedHeaders(forwardedHeaders);
+            }
 
             if (isDevelopment)
                 applicationBuilder.UseDeveloperExceptionPage();
@@ -488,6 +527,9 @@ namespace HSMServer.ServiceExtensions
 
         public static async Task InitStorages(this IServiceProvider services)
         {
+            // Before the tree loads: every File policy reads it, whatever creates the policy.
+            HSMServer.Core.Model.Policies.FileAlertContext.Use(services.GetRequiredService<HSMServer.Core.Model.Policies.IFileAlertContext>());
+
             services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
 
             foreach (var type in _asyncStorageTypes)
@@ -513,6 +555,26 @@ namespace HSMServer.ServiceExtensions
             _asyncStorageTypes.Add(typeof(TService));
 
             return services.AddSingleton<TService, TImplementation>();
+        }
+    
+        // The options of the large file store, with a lease at least as long as the collector sessions' silence limit
+        // (#1884), which is a frame's deadline. A frame that began under a live lease may outlast it and still arrive
+        // within its deadline after the store gave the upload to another connection; a lease never shorter than that
+        // deadline keeps the frames in flight to at most twice LargeFiles.MaxUploadsInProgress. A shorter setting is
+        // raised, and the log says so.
+        internal static HSMServer.Core.LargeFiles.LargeFileOptions LargeFileOptionsFor(IServerConfig config)
+        {
+            var options = (config.LargeFiles ?? new LargeFilesConfig()).ToOptions();
+            var silenceSeconds = (int)Math.Ceiling((config.CollectorSessions ?? new CollectorSessionsConfig()).SilenceLimit.TotalSeconds);
+
+            if (options.LeaseTimeoutSeconds >= silenceSeconds)
+                return options;
+
+            NLog.LogManager.GetLogger("LargeFiles").Warn($"LargeFiles.LeaseTimeoutSeconds = {options.LeaseTimeoutSeconds} is shorter than the collector sessions' silence limit " +
+                                                        $"({silenceSeconds} s, three heartbeats): the lease is raised to {silenceSeconds} s, a frame's deadline, so the file frames in flight stay at most twice LargeFiles.MaxUploadsInProgress " +
+                                                        "(a frame that began under a live lease may still outlast it).");
+
+            return options with { LeaseTimeoutSeconds = silenceSeconds };
         }
     }
 }

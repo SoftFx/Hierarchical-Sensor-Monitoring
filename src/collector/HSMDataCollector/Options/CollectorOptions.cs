@@ -95,6 +95,23 @@ namespace HSMDataCollector.Core
         public long MaxTableBacklogBytes { get; set; } = 64L * 1024 * 1024;
 
         /// <summary>
+        /// The folder where the collector keeps what must survive a restart: today the state of large file uploads (which
+        /// files were delivered, the upload in progress and its piece digests). The collector keeps its files in a
+        /// subfolder named after its identity (the server, the port, the access key, the computer, the module and the
+        /// executable, hashed), so collectors of other applications or products never share them; a state file in use is
+        /// locked against other processes. Null (the default) takes the user's local application data folder
+        /// (<c>%LOCALAPPDATA%\HSMDataCollector</c> on Windows, <c>~/.local/share/HSMDataCollector</c> elsewhere), or the
+        /// temporary folder when the user has none (a service without a loaded profile): that is said once. A folder this
+        /// account cannot write makes the large file calls Unavailable (said once, naming the folder). Only watched and
+        /// handed-over files use it: file values above a quarter of the session frame keep no state there and go on the file
+        /// connection whatever the folder.
+        /// </summary>
+        public string DataFolder { get; set; }
+
+        /// <summary>For tests: the large file uploader's clock, scan trigger and waits; null takes the real ones.</summary>
+        internal LargeFiles.LargeFileTimings LargeFileTimings { get; set; }
+
+        /// <summary>
         /// For tests: no scheduled table tick; a test drives the tick through the collector's internal hook, and the
         /// tick then waits for the registration and the delivery it starts.
         /// </summary>

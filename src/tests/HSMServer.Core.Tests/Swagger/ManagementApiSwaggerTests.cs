@@ -434,6 +434,8 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500, 503],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensorHistory))] = [400, 401, 403, 404, 500],
+            [(typeof(LargeFilesApiController), nameof(LargeFilesApiController.GetLargeFile))] = [401, 404, 500],
+            [(typeof(LargeFilesApiController), nameof(LargeFilesApiController.DownloadArchive))] = [401, 404, 409, 500, 503],
 
             // The sensor-deletion write (#1637): the honest-verification 409
             // (a removal that never reached the cache answers Conflict, not a

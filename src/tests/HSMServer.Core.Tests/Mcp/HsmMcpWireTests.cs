@@ -77,6 +77,7 @@ namespace HSMServer.Core.Tests.Mcp
             "get_chat",
             "get_folder",
             "get_journal_record",
+            "get_large_file",
             "get_node",
             "get_sensor",
             "get_sensor_history",
@@ -551,7 +552,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(48, tools.Count);
+                Assert.Equal(49, tools.Count);
 
                 foreach (var tool in tools)
                 {

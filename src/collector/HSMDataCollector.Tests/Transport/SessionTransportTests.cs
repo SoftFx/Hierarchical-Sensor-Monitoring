@@ -886,9 +886,15 @@ namespace HSMDataCollector.Tests.Transport
                     Assert.True(await WaitForAsync(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[97,102,116,101,114]"))),
                                 "The file after the dropped one never arrived.");
 
+                    // Since 4.2.0 a file above a quarter of the frame is offered to the file connection first (ADR-0022
+                    // point 21); this server has none, so it comes back to the ordinary path, where it is dropped.
+                    Assert.True(await WaitForAsync(() => logger.Errors.Any(e => e.Contains("session/huge-file") && e.Contains("larger than a collector session frame"))),
+                                "The file larger than a frame was not dropped.");
+
                     await collector.Stop();
                 }
 
+                Assert.Equal(1, server.RefusedFileUpgrades);
                 Assert.DoesNotContain(server.Requests, r => r.Frame.Contains("120,120,120,120"));
                 Assert.DoesNotContain(server.Requests, r => r.Frame.Length > 2048);
             }

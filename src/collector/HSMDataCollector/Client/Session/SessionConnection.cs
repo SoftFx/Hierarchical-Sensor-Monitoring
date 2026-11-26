@@ -165,6 +165,9 @@ namespace HSMDataCollector.Client.Session
         /// <summary>True while a session is up: the hello arrived and nothing has ended it.</summary>
         internal bool IsUp => _session != null;
 
+        /// <summary>The frame limit of the session that is up (its hello's <c>maxFrameBytes</c>); 0 while none is up.</summary>
+        internal int MaxFrameBytes => IsUp ? Volatile.Read(ref _maxFrameBytes) : 0;
+
         /// <summary>
         /// The largest body a request may carry on the current session: the server's frame limit
         /// less the envelope. 0 while no session is up.

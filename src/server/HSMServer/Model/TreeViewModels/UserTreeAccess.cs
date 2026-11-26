@@ -153,6 +153,15 @@ namespace HSMServer.Model.TreeViewModel
             return sensors;
         }
 
+        /// <summary>
+        /// The visibility rule by the id of a root product, for a surface that resolves the root itself from the cache
+        /// (the large file downloads and the dump password section, #1885).
+        /// </summary>
+        public static bool IsRootProductVisibleTo(User user, Guid rootProductId) => user is not null && HasProduct(user, rootProductId);
+
+        /// <summary>The managing rule by the id of a root product (see <see cref="IsRootProductVisibleTo"/>).</summary>
+        public static bool CanManageRootProduct(User user, Guid rootProductId) => user is not null && ManagesProduct(user, rootProductId);
+
         private static bool HasProduct(User user, Guid productId) =>
             user.IsAdmin || (user.ProductsRoles is not null && user.IsProductAvailable(productId));
 

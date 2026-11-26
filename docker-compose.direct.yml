@@ -27,3 +27,4 @@ services:
       - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
       - ./Databases:/app/Databases             # embedded LevelDB (sensor history + metadata)
       - ./DatabasesBackups:/app/DatabasesBackups
+      - '${HSM_LARGE_FILES:-./LargeFiles}:/app/LargeFiles'   # large file values: uploads and archives (#1882)

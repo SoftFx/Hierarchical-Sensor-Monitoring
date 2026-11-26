@@ -9,6 +9,7 @@
 #include "hsm_collector/enums.hpp"
 #include "hsm_collector/error.hpp"
 #include "hsm_collector/hsm_collector.h"
+#include "hsm_collector/large_files.hpp"
 #include "hsm_collector/options.hpp"
 #include "hsm_collector/sensors.hpp"
 #include "hsm_collector/tables.hpp"
@@ -621,6 +622,46 @@ namespace hsm::collector
             Check(hsm_collector_create_table_sensor(handle_, path.c_str(), columns.data(), columns.size(), &native, &sensor),
                   "Failed to create table sensor.");
             return TableSensor(sensor, std::move(types));
+        }
+
+        // ---- Large files (since 0.16.0, #1887) ------------------------------------------------
+
+        /// Where the collector keeps the state of large files; empty restores the default. Applies to
+        /// the watches and files made afterwards.
+        void SetDataFolder(const std::string& folder)
+        {
+            Check(hsm_collector_set_data_folder(handle_, folder.empty() ? nullptr : folder.c_str()), "Failed to set the data folder.");
+        }
+
+        /// Watches a folder and uploads every settled file matching `mask` as a large value of the File
+        /// sensor at `sensor_path`. Throws Error for a mistake of the call (and after dispose); a collector
+        /// that cannot send large files gives a watch in state Unavailable instead. The returned watch
+        /// stops watching when destroyed.
+        [[nodiscard]] LargeFileWatch WatchLargeFiles(const std::string& sensor_path, const std::string& folder, const std::string& mask,
+                                                     const LargeFileOptions& options = {})
+        {
+            const auto native = detail::ToNative(options);
+            hsm_large_file_watch_t* watch = nullptr;
+            Check(hsm_collector_watch_large_files(handle_, sensor_path.c_str(), folder.c_str(), mask.c_str(), &native, &watch), "Failed to watch large files.");
+            return LargeFileWatch(watch);
+        }
+
+        /// As WatchLargeFiles, for the life of the collector (no handle).
+        void WatchLargeFilesForLife(const std::string& sensor_path, const std::string& folder, const std::string& mask, const LargeFileOptions& options = {})
+        {
+            const auto native = detail::ToNative(options);
+            Check(hsm_collector_watch_large_files(handle_, sensor_path.c_str(), folder.c_str(), mask.c_str(), &native, nullptr), "Failed to watch large files.");
+        }
+
+        /// Uploads one complete file as a large value of the File sensor at `sensor_path`; returns at
+        /// once, the outcome is read from the handle. Throws Error for a mistake of the call (and after
+        /// dispose); a collector that cannot send large files gives the outcome Unavailable instead.
+        LargeFile SendLargeFile(const std::string& sensor_path, const std::string& file_path, const LargeFileOptions& options = {})
+        {
+            const auto native = detail::ToNative(options);
+            hsm_large_file_t* file = nullptr;
+            Check(hsm_collector_send_large_file(handle_, sensor_path.c_str(), file_path.c_str(), &native, &file), "Failed to send a large file.");
+            return LargeFile(file);
         }
 
         // ---- Alerts -------------------------------------------------------------------------

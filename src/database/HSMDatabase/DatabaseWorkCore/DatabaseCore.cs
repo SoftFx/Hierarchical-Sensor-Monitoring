@@ -37,6 +37,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IDatabaseSettings _settings;
         private readonly HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase _tableBlocks;
         private readonly HSMDatabase.LevelDB.TableBatches.TableBatchDatabase _tableBatches;
+        private readonly HSMDatabase.LevelDB.LargeFiles.LargeFileStore _largeFiles;
 
         private readonly DashboardCollection _dashboards;
         private readonly ChangeSetCollection _changeSets;
@@ -44,6 +45,10 @@ namespace HSMDatabase.DatabaseWorkCore
         public IDashboardCollection Dashboards => _dashboards;
 
         public IChangeSetCollection ChangeSets => _changeSets;
+
+        private readonly DownloadLogCollection _downloadLog;
+
+        public IDownloadLogStore DownloadLog => _downloadLog;
 
         public ISnapshotDatabase Snapshots { get; }
 
@@ -107,6 +112,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long TableBlocksDbSize => _settings.PathToTableBlocks.GetSize();
 
+        public HSMDatabase.AccessManager.LargeFiles.ILargeFileStore LargeFiles => _largeFiles;
+
         public long BackupsSize => _settings.DatabaseBackupsFolder.GetSize();
 
         public List<ISensorValuesDatabase> SensorValuesDatabases => [.. _sensorValuesDatabases.OrderBy(x => x.From)];
@@ -143,9 +150,15 @@ namespace HSMDatabase.DatabaseWorkCore
             _dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
             _changeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
 
+            // No IO here: the download log opens on its first use (ADR-0022 point 15).
+            _downloadLog = new DownloadLogCollection(_settings.PathToDownloadLogDb);
+
             // No IO here: the store opens on its first use (#1844).
             _tableBlocks = new HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase(_settings.PathToTableBlocks);
             _tableBatches = new HSMDatabase.LevelDB.TableBatches.TableBatchDatabase(_settings.PathToTableBlocks);
+
+            // No IO here either: the records are read at the first call that needs them, the folder created by the first upload (#1883).
+            _largeFiles = new HSMDatabase.LevelDB.LargeFiles.LargeFileStore(_settings.PathToLargeFiles, _settings.PathToLargeFilesUsedMark);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
@@ -170,6 +183,18 @@ namespace HSMDatabase.DatabaseWorkCore
                     if (value is not null)
                         return value;
                 }
+
+            return null;
+        }
+
+        public byte[] GetSensorValue(Guid sensorId, long ticks)
+        {
+            // The whole key as the prefix: the row at exactly this tick, never the next one.
+            var key = new DbKey(sensorId, ticks).ToBytes();
+
+            foreach (var database in _sensorValuesDatabases)
+                if (database.Overlaps(ticks, ticks + 1))
+                    return database.Get(key, key);
 
             return null;
         }
@@ -393,6 +418,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return (totalDataCnt, totalKeySize, totalValueSize);
         }
 
+        public bool? SensorEntityExists(Guid sensorId) => _environmentDatabase.SensorEntityExists(sensorId.ToString());
         public bool EntityExists(Guid id) => _environmentDatabase.EntityExists(id.ToString());
 
         public void RemoveSensorWithMetadata(Guid sensorId)
@@ -688,6 +714,16 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit) =>
             _environmentDatabase.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
+
+        #endregion
+
+        #region Dump passwords
+
+        public DumpPasswordRows GetAllDumpPasswords() => _environmentDatabase.ReadAllDumpPasswords();
+
+        public void PutDumpPasswords(ProductDumpPasswordsEntity entity) => _environmentDatabase.PutDumpPasswords(entity);
+
+        public void RemoveDumpPasswords(Guid productId) => _environmentDatabase.RemoveDumpPasswords(productId);
 
         #endregion
 
@@ -1777,6 +1813,11 @@ namespace HSMDatabase.DatabaseWorkCore
             // Left open before #1943 found it: their folders stayed locked until the process exited.
             Close(_settings.PathToServerLayoutDb, _dashboards);
             Close(_settings.PathToChangeSetsDb, _changeSets);
+
+            // Large files (ADR-0022): the download log is a LevelDB opened on first use; the store
+            // keeps no file open between calls, its Dispose only refuses new work.
+            Close(_settings.PathToDownloadLogDb, _downloadLog);
+            Close(_settings.PathToLargeFiles, _largeFiles);
 
             _logger.Info($"{nameof(DatabaseCore)} disposed");
         }

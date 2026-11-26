@@ -1655,6 +1655,9 @@ namespace HSMServer.Core.Cache
                 _database.RemoveSensorWithMetadata(sensorId);
                 removedFromDatabase = true;
 
+                // Its large files go with it (#1883), as with a clear; the store's pass is the backstop.
+                RemoveLargeFilesOfSensor(sensor);
+
                 if (sensor is TableSensorModel && !tableMarked)
                     ConfirmTableRemoval([sensor.Id], []);
 
@@ -1758,10 +1761,12 @@ namespace HSMServer.Core.Cache
 
                     var policy = sensor.Settings.KeepHistory.Value;
 
-                    if (policy.TimeIsUp(from))
+                    // The cutoff is the history floor's too (HistoryFloor: late values, large files), so what retention
+                    // removes and what they take as removed cannot drift. TimeIsUp implies a cutoff.
+                    if (policy.TimeIsUp(from) && policy.RetentionCutoff(DateTime.UtcNow) is { } cutoff)
                     {
                         _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
-                        ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                        ClearSensorHistory(new(sensor.Id, cutoff));
                         cleared++;
 
                         if (policy.FolderPreset is not null)
@@ -1862,6 +1867,10 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id, from, to);
+
+            // The files of the large values just erased (#1883): removed now, not left to the store's pass, whose floor
+            // (HistoryClearedTo) is not kept across a restart.
+            RemoveLargeFilesOfClearedRange(sensor, from, to);
 
             // The retention-floor half for late values: everything up to the clear
             // was just erased on purpose — an out-of-order write must not re-fill
@@ -3790,6 +3799,12 @@ namespace HSMServer.Core.Cache
                 case SensorMergeRefreshRequest request:
                     RefreshMergedSensor(request);
                     break;
+                case LargeFileValueRequest request:
+                    AddLargeFileValue(request);
+                    break;
+                case LargeFileCheckRequest request:
+                    CheckLargeFiles(request);
+                    break;
             }
 
             queue.Stopwatch.Stop();
@@ -3907,12 +3922,9 @@ namespace HSMServer.Core.Cache
                 // batch loop, and shifting 0 floors at UtcNow and would refuse
                 // every out-of-order value. Any ticks window too large to
                 // represent below DateTime.MinValue is the same no-floor case.
-                var keepPolicy = sensor.Settings.KeepHistory.Value;
-                var keepFloor = keepPolicy.IsNone || (keepPolicy.UseTicks && (keepPolicy.Ticks <= 0L || keepPolicy.Ticks >= DateTime.UtcNow.Ticks))
-                    ? DateTime.MinValue
-                    : keepPolicy.GetShiftedTime(DateTime.UtcNow, -1);
-                var clearFloor = sensor.HistoryClearedTo ?? DateTime.MinValue;
-                var floor = keepFloor > clearFloor ? keepFloor : clearFloor;
+                // The retention pass and this floor take one cutoff
+                // (TimeIntervalModel.RetentionCutoff), so they cannot drift.
+                var floor = HistoryFloor(sensor, DateTime.UtcNow);
 
                 if (lateValue.Time < floor)
                 {
@@ -4675,6 +4687,13 @@ namespace HSMServer.Core.Cache
 
                 //sensor.Policies.AddDefault(options);
 
+                // A File sensor created by a registration for large files (#1886) gets "new data has been received". Only
+                // at creation: a sensor that exists already gets nothing from a later registration with the flag.
+                // Journaled below, once the sensor is stored: a creation that fails leaves no record of its alert.
+                var largeFileAlert = type is SensorType.File && options.HasFlag(DefaultAlertsOptions.LargeFiles)
+                    ? sensor.Policies.AddLargeFileAlert()
+                    : null;
+
                 // Persist first so a DB failure can't leave an orphan in the in-memory
                 // caches. Any later failure (ChangeSensorEvent, ApplyTemplateToSensor,
                 // UpdateProduct, journal) must roll the row back too — tracked by
@@ -4703,6 +4722,9 @@ namespace HSMServer.Core.Cache
                     Kind = JournalKinds.TreeCrud,
                     ProductId = sensor.Root?.Id.ToString(),
                 });
+
+                if (largeFileAlert is not null)
+                    sensor.Policies.JournalAddedPolicy(largeFileAlert, server is null ? InitiatorInfo.System : InitiatorInfo.AsSystemInfo(server.Initiator));
 
                 return true;
             }

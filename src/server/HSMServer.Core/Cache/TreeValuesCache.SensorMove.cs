@@ -70,12 +70,18 @@ namespace HSMServer.Core.Cache
                 if (sensor is TableSensorModel)
                     return TableSensorNotMoved(sensor);
 
+                if (sensor.Root.Id != destinationProductId && LargeFilesNotMoved(sensor) is { } notMoved)
+                    return notMoved;
+
                 SensorAbsorbRequest absorb = null;
 
                 if (onConflict is SensorMoveConflict.Merge && TryGetOccupant(sensorId, destinationProductId, destinationPath, out var occupant, out var occupantPath))
                 {
                     if (occupant.Type != sensor.Type)
                         return TypeConflict(occupant, sensor, $"{occupant.RootProductName}/{occupantPath}");
+
+                    if (LargeFilesNotMerged(sensor, occupant) is { } notMerged)
+                        return notMerged;
 
                     // Merge (#1720), step 1 on the occupant's own queue. Not
                     // cancellable from here on: a merge is not left half-done
@@ -121,6 +127,9 @@ namespace HSMServer.Core.Cache
             if (sensor is TableSensorModel)
                 return new SensorMovePreview(SensorMoveOutcome.NotSupported, TableSensorNotMoved(sensor).Error) { OldPath = sensor.FullPath };
 
+            if (sensor.Root.Id != destinationProductId && LargeFilesNotMoved(sensor) is { } notMoved)
+                return new SensorMovePreview(SensorMoveOutcome.NotSupported, notMoved.Error) { OldPath = sensor.FullPath };
+
             var check = new SensorPathCheck(destinationProductId, destinationPath ?? string.Empty);
 
             if (!check.TryCheckRequest(out var pathError))
@@ -148,6 +157,10 @@ namespace HSMServer.Core.Cache
 
                 if (occupant.Type != sensor.Type)
                     return new SensorMovePreview(SensorMoveOutcome.Conflict, TypeConflict(occupant, sensor, newPath).Error)
+                    { OldPath = oldPath, NewPath = newPath, OccupantId = occupantId };
+
+                if (LargeFilesNotMerged(sensor, occupant) is { } notMerged)
+                    return new SensorMovePreview(SensorMoveOutcome.NotSupported, notMerged.Error)
                     { OldPath = oldPath, NewPath = newPath, OccupantId = occupantId };
 
                 outcome = SensorMoveOutcome.Merged;
@@ -573,6 +586,14 @@ namespace HSMServer.Core.Cache
                     continue;
                 }
 
+                // A merge of a File sensor with large files is refused (#1883); a plain move inside the product is not.
+                if (TryGetSensorFromCache(productId, target.Path, out var mergeTarget) && mergeTarget.Id != old.Id &&
+                    LargeFilesNotMerged(old, mergeTarget) is { } notMerged)
+                {
+                    _logger.Warn($"Previous path {previousPath} of {target.Path} skipped: {notMerged.Error}");
+                    continue;
+                }
+
                 if (TryGetSensorFromCache(productId, target.Path, out var occupant) && occupant.Id != old.Id && !arrived.Contains(occupant.Id))
                 {
                     // The batch names the occupant's path as a previous path: it is another
@@ -729,6 +750,36 @@ namespace HSMServer.Core.Cache
             new(SensorMoveOutcome.NotSupported,
                 $"Sensor '{sensor.FullPath}' (id {sensor.Id}) is a table sensor: table sensors cannot be moved, renamed or merged.")
             { OldPath = sensor.FullPath };
+
+        // A File sensor with large values never moves to another product in the first version (ADR-0022, #1883): its
+        // archives lie under the first product's password. A move inside the product keeps the sensor's id and is allowed.
+        // Null when the move may go on; a File sensor is refused too when the store cannot tell.
+        private SensorMoveResult LargeFilesNotMoved(BaseSensorModel sensor) =>
+            HasLargeFiles(sensor, out var error) switch
+            {
+                false => null,
+                true => new(SensorMoveOutcome.NotSupported,
+                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) holds large files: it cannot be moved to another product. The files leave with the sensor's history period or with clear-history.") { OldPath = sensor.FullPath },
+                null => new(SensorMoveOutcome.NotSupported,
+                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) is a File sensor and the large file store cannot be read ({error}): it is not moved to another product until it can.") { OldPath = sensor.FullPath },
+            };
+
+        // A merge copies rows to another sensor id, which the records of its large files do not follow (#1883). Null when the
+        // merge may go on.
+        private SensorMoveResult LargeFilesNotMerged(BaseSensorModel sensor, BaseSensorModel occupant)
+        {
+            var first = HasLargeFiles(sensor, out var error);
+            var second = HasLargeFiles(occupant, out var otherError);
+
+            if (first == false && second == false)
+                return null;
+
+            return first == true || second == true
+                ? new(SensorMoveOutcome.NotSupported,
+                    $"Sensor '{sensor.FullPath}' (id {sensor.Id}) or '{occupant.FullPath}' (id {occupant.Id}) holds large files: sensors with large files are never merged. The files leave with the sensor's history period or with clear-history.") { OldPath = sensor.FullPath }
+                : new(SensorMoveOutcome.NotSupported,
+                    $"Sensors '{sensor.FullPath}' and '{occupant.FullPath}' are File sensors and the large file store cannot be read ({error ?? otherError}): they are not merged until it can.") { OldPath = sensor.FullPath };
+        }
 
         private static SensorMoveResult TypeConflict(BaseSensorModel occupant, BaseSensorModel sensor, string fullPath) =>
             new(SensorMoveOutcome.Conflict,
@@ -898,6 +949,10 @@ namespace HSMServer.Core.Cache
 
                 if (oldRoot.Id == destinationRoot.Id && string.Equals(oldPath, newPath, StringComparison.Ordinal))
                     return (new SensorMoveResult(SensorMoveOutcome.Unchanged) { OldPath = oldFullPath, NewPath = newFullPath }, null);
+
+                // Again on the queue: an upload may have begun since the caller looked (#1883).
+                if (oldRoot.Id != destinationRoot.Id && LargeFilesNotMoved(sensor) is { } notMoved)
+                    return (notMoved, null);
 
                 var destinationCache = GetOrAddCachedValue(destinationRoot);
 
@@ -1144,6 +1199,14 @@ namespace HSMServer.Core.Cache
                 {
                     request.Error = TypeConflict(occupant, survivor, occupant.FullPath).Error;
                     request.Conflict = SensorMoveOutcome.Conflict;
+                    return;
+                }
+
+                // Again on the queue: an upload may have begun since the caller looked (#1883).
+                if (LargeFilesNotMerged(survivor, occupant) is { } notMerged)
+                {
+                    request.Error = notMerged.Error;
+                    request.Conflict = SensorMoveOutcome.NotSupported;
                     return;
                 }
 

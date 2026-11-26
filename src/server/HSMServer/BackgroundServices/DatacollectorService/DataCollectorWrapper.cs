@@ -75,6 +75,9 @@ namespace HSMServer.BackgroundServices
 
         internal TableBlockSensors TableBlockSensors { get; }
 
+        // The large file store (#1883) and the archive side (#1885): archive builds and the download log, with default alerts.
+        internal LargeFileSensors LargeFileSensors { get; }
+
         private readonly IDatabaseCore _database;
 
         internal BackupSensors BackupSensors { get; }
@@ -88,7 +91,8 @@ namespace HSMServer.BackgroundServices
         internal MattermostChannelStatistics MattermostChannelStatistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens, IUserManager users, CollectorSessionRegistry sessions)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens, IUserManager users, CollectorSessionRegistry sessions,
+            LargeFileArchiveSide largeFileArchiveSide = null)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
@@ -125,6 +129,10 @@ namespace HSMServer.BackgroundServices
             _database = db;
             HistorySealingSensors = new HistorySealingSensors(_collector);
             TableBlockSensors = new TableBlockSensors(_collector, db.TableBlocks, db.TableBatches);
+            LargeFileSensors = new LargeFileSensors(_collector, db.LargeFiles);
+
+            if (largeFileArchiveSide is not null)
+                LargeFileSensors.UseArchiveSide(largeFileArchiveSide.FailedBuilds, largeFileArchiveSide.HasDumpPassword);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
             _openSessions = _collector.CreateIntSensor($"Clients/{ClientStatisticsSensors.TotalGroup}/{OpenSessionsSensorName}", new InstantSensorOptions
             {
@@ -235,6 +243,8 @@ namespace HSMServer.BackgroundServices
             HistorySealingSensors.SendInfo(_database.LastHistorySealingPass);
 
             TableBlockSensors.SendInfo();
+
+            LargeFileSensors.SendInfo();
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
 

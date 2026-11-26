@@ -12,6 +12,9 @@ namespace HSMServer.SensorApi.Sessions
         ValueTask<byte[]> RentAsync(int size, CancellationToken token);
 
         void Return(byte[] buffer);
+
+        // The frame is done: whatever it held for its buffers goes back.
+        void EndFrame() { }
     }
 
 

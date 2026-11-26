@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-8 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-9 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
 Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
@@ -281,14 +281,20 @@ services:
       # SSO client secret (#1782), read from the environment only; empty = unused. SSO itself is
       # switched on in the Oidc section of Config/appsettings.json.
       Oidc__ClientSecret: '${HSM_OIDC_CLIENT_SECRET:-}'
+      # The address of the web UI in alert messages: $link of a File sensor (#1886) is https://<HSM_DOMAIN>/Home/<id>.
+      HSM_DOMAIN: '${HSM_DOMAIN:-}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
+      # Large file values (#1882): HSM keeps uploads and finished archives here. Caddy reads
+      # its archives/ subtree (below); both mounts come from HSM_LARGE_FILES, so they cannot
+      # point at different folders.
+      - '${HSM_LARGE_FILES:-./LargeFiles}:/app/LargeFiles'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-8'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-9'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -311,6 +317,9 @@ services:
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro
+      # Finished large file archives, read-only: Caddy serves one only when HSM answers a
+      # checked download with an instruction naming it (#1885).
+      - '${HSM_LARGE_FILES:-./LargeFiles}/archives:/srv/hsm-archives:ro'
 ```
 
 What must stay as it is, if you ever adapt it:
@@ -326,7 +335,7 @@ What must stay as it is, if you ever adapt it:
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-8 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; supports the stub-zone DNS-01 override (#1585); users do not build locally. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-9 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; supports the stub-zone DNS-01 override (#1585); serves large file archives on HSM's answer from a read-only view of the archives folder (#1885); users do not build locally. |
 | Published ports 80, 443 | 443 is the one address for everything (web UI, ingestion, downloads); 80 serves the ACME HTTP-01 challenge and the redirect to HTTPS. Downloaded agent bundles point at 443. |
 
 ### Internal DNS name
@@ -373,6 +382,7 @@ docker run -u 0 -d \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
   -v /host/path/DatabasesBackups:/app/DatabasesBackups \
+  -v /host/path/LargeFiles:/app/LargeFiles \
   -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -388,6 +398,7 @@ docker run -u 0 -d ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^
   -v C:\HSM\DatabasesBackups:/app/DatabasesBackups ^
+  -v C:\HSM\LargeFiles:/app/LargeFiles ^
   -p 443:443 ^
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -429,6 +440,7 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
+| `./LargeFiles` | `/app/LargeFiles` | Large files of File sensors (dumps): not a database and not in the backups |
 
 > The `Databases` volume is the most critical — it contains all sensor history and configuration. Never remove it without a backup.
 

@@ -15,6 +15,13 @@ turns that feature on by itself (it is declared before `project()`), so
 `-DVCPKG_MANIFEST_FEATURES=tables`). Without vcpkg, install the distribution packages (`libzstd-dev
 zlib1g-dev pkg-config` on Debian/Ubuntu); the asan/tsan presets build with tables ON.
 
+Large files (#1887) are built when both `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES` are ON. They hash with
+SHA-256 from the system on Windows (CNG, `bcrypt`) and from OpenSSL's libcrypto elsewhere: the vcpkg feature
+`tables` brings `openssl` off Windows, and without vcpkg add `libssl-dev`. A libcurl built with GnuTLS (Debian's
+`libcurl4-gnutls-dev`) does not bring libcrypto along, so `libssl-dev` is needed there too. The asan/tsan presets
+build without HTTP, so they do not compile large files; run those tests under the sanitizers in a Linux build with
+HTTP and tables ON (Debian 13 has a libcurl with WebSocket).
+
 ## Versioning — the native collector's own version
 
 The native collector has **one** version: `HSM_COLLECTOR_VERSION_{MAJOR,MINOR,PATCH}` in

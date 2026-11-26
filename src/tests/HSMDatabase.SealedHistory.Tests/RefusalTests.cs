@@ -25,6 +25,18 @@ namespace HSMDatabase.SealedHistory.Tests
         }
 
         [Fact]
+        public void Large_file_values_are_file_values_and_never_sealed()
+        {
+            // #1883: a large value is a FileValue under its own union tag; a week holding it is never sealed either.
+            var rows = new List<HistoryRow>
+            {
+                RoundTripTests.Row(0, new LargeFileValue { Value = [], Name = "a.dmp", Extension = "dmp", OriginalSize = 1L << 33, FileId = Guid.NewGuid(), Hash = new byte[32] }),
+            };
+
+            AssertRefused(rows, ChunkRefusalReason.UnsupportedValueType, 0);
+        }
+
+        [Fact]
         public void A_subclass_of_a_value_record_is_refused()
         {
             var rows = new List<HistoryRow> { RoundTripTests.Row(0, new NotCompressedValue<double>(new DoubleBarValue())) };

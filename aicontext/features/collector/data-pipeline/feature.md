@@ -26,6 +26,20 @@ Rewritten in the #1071–#1075 lifecycle refactor (PR #1080) and hardened by #10
 - Bar values with `Count <= 0` are filtered out at package build (`GetPackage`).
 - Each queue has its own `QueueState` (Stopped/Running/Stopping) state machine with restart-after-unexpected-exit handling; `_acceptingWritesFlag` closes public writes the moment StopAsync commits.
 
+### File values on the file connection (4.2.0)
+
+On a session, the file queue's `SendFileAsync` hands a file value above a quarter of the session frame to the large file
+uploader (`../large-files/feature.md`, "Routed sends") and counts it as delivered; the uploader keeps it, bounded to 64 MiB in
+memory (past it a value is not taken and goes the ordinary way). A value the uploader cannot
+store is said and counted under the file queue (`DataProcessor.ReportDroppedFileValues`); one it cannot send because the
+server has no file connection is given back to the file queue (`DataProcessor.RequeueFile`) and goes the ordinary way.
+So is one a stop or dispose finds without an answered `begin`: the file queue takes a given-back value whatever the
+collector's state (`QueueProcessorBase.EnqueueGivenBack`, as a retry: on a full queue the given-back value is the one
+dropped, and counted), and the stop drains the file queue only once the uploader's stop has given its values back (not
+after the close of the file connection, which runs beside the drains), so the drain sends it. A start rollback clears the
+queues first: a value given back after it waits in the file queue for the next Start. At `DataProcessor.Dispose` whatever
+the file queue still holds is dropped, said in one line with the count and counted under the file queue.
+
 ## Enqueue results
 
 `EnqueueResult` (`SyncQueue/Data/EnqueueResult.cs`): `Accepted(+DroppedCount)`, `RejectedCollectorNotAcceptingData` (collector lifecycle gate), `RejectedQueueStopped` (queue gate). The two rejection statuses exist for test observability only — producers must not branch on the distinction (#1087 B). `DataProcessor.HandleEnqueueResult` treats both as silent rejection and feeds `DroppedCount` into `QueueOverflowSensor` (with a self-loop guard when the sender IS the overflow sensor).

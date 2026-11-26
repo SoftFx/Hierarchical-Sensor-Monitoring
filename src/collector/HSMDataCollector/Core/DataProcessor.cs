@@ -60,6 +60,18 @@ namespace HSMDataCollector.Core
         private TablePipeline _tables;
 
         /// <summary>
+        /// The large files of the collector (ADR-0022, #1888): null until the first watch or hand-over, so a collector without
+        /// large files has no thread and no state of them. Set by the collector under its lifecycle gate.
+        /// </summary>
+        internal HSMDataCollector.LargeFiles.LargeFileService LargeFiles
+        {
+            get => Volatile.Read(ref _largeFiles);
+            set => Volatile.Write(ref _largeFiles, value);
+        }
+
+        private HSMDataCollector.LargeFiles.LargeFileService _largeFiles;
+
+        /// <summary>
         /// Per-collector scheduler used by sensors and the message deduplicator. Owned by the
         /// outer <see cref="DataCollector"/>; disposed there.
         /// </summary>
@@ -135,6 +147,9 @@ namespace HSMDataCollector.Core
             // Never throws: a table pipeline that cannot start says so through its sensors and reports.
             Tables?.Start();
 
+            // Never throws: uploads of large files may run from now on.
+            LargeFiles?.Start();
+
             return true;
         }
 
@@ -152,13 +167,39 @@ namespace HSMDataCollector.Core
             // After all phases attempt to stop, rethrow as AggregateException so the caller knows the stop was degraded.
             var failures = new List<Exception>();
 
+            // An upload of a large file is cut, not waited for (ADR-0022): it continues after the next Start. The cut runs
+            // beside the value drain and is over (bounded, a few seconds at most) before this stop returns, so the file
+            // connection is closed before the session.
+            // The file queue's drain waits only until the routed values no begin was answered for are back in it (as in the
+            // native collector, whose stop gives them back before its drain), not for the close of the file connection.
+            // A start rollback clears the queues without counting: there the large files' stop starts only after that, so a
+            // value it gives back waits in the file queue for the next Start.
+            var largeFiles = LargeFiles;
+            var flush = mode.FlushAcceptedWork();
+            var routedReleased = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var largeFilesStop = largeFiles != null && flush
+                ? Task.Run(() => largeFiles.Stop(() => routedReleased.TrySetResult(true)))
+                : Task.CompletedTask;
+
+            if (largeFiles == null || !flush)
+                routedReleased.TrySetResult(true);
+
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
 
-            if (mode.FlushAcceptedWork())
-                await StopWithFlushAsync(mode, failures).ConfigureAwait(false);
+            if (flush)
+            {
+                await StopWithFlushAsync(mode, Task.WhenAny(routedReleased.Task, largeFilesStop), failures).ConfigureAwait(false);
+            }
             else
+            {
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
+
+                if (largeFiles != null)
+                    largeFilesStop = Task.Run(() => largeFiles.Stop());
+            }
+
+            await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
 
             ReportUnreportedOverflow();
 
@@ -166,7 +207,7 @@ namespace HSMDataCollector.Core
                 throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
         }
 
-        private async Task StopWithFlushAsync(ShutdownMode mode, List<Exception> failures)
+        private async Task StopWithFlushAsync(ShutdownMode mode, Task routedReleased, List<Exception> failures)
         {
             // Stop all queues so their processing loops exit; items remain in each queue's buffer
             // ready for a bounded flush. Each StopAsync returns whether the loop actually exited
@@ -239,6 +280,12 @@ namespace HSMDataCollector.Core
                 // later restart would otherwise see stale stop-cycle telemetry as the first emitted values.
                 Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
 
+                // The large files' stop gives the routed values no begin was answered for back to the file queue (as in the
+                // native collector, whose stop does it before its drain): its drain waits for that (the end of the upload
+                // in progress, cut, at most 1 s), not for the close of the file connection. It ran beside the drains above; its failures are collected
+                // where StopAsync awaits it.
+                await routedReleased.ConfigureAwait(false);
+
                 if (fileStopped)
                     await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures, valuesFailed).ConfigureAwait(false);
 
@@ -310,6 +357,21 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            LargeFiles?.Dispose();
+
+            // What is still in the file queue is lost with it: a value given back to it by a stop that had no drain (a
+            // Dispose after a failed Start) or by the large files' Dispose. Said and counted once.
+            var lost = 0;
+
+            try { lost = _fileQueue?.ClearQueue() ?? 0; }
+            catch (Exception) { }
+
+            if (lost > 0)
+            {
+                _logger.Error($"{lost} file value(s) were dropped: the collector was disposed before they were sent.");
+                EmitOverflowDrops(_fileQueue.QueueName, lost);
+            }
+
             Tables?.Dispose();
             _messageDeduplicator?.Dispose();
             SensorStorage?.Dispose();
@@ -353,6 +415,23 @@ namespace HSMDataCollector.Core
         {
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
         }
+
+        /// <summary>
+        /// A file value the large file uploader gave back (#1888: the file connection turned out to be missing on this
+        /// session, its registration failed, or a stop came before its upload began): it goes the way of any file value again.
+        /// Taken whatever the collector's state, as in the native collector, so the stop drain sends what a stop gave back.
+        /// One the queue cannot take is dropped and counted under the file queue (the queue reports an overflow itself).
+        /// </summary>
+        internal void RequeueFile(FileSensorValue file)
+        {
+            var result = _fileQueue.EnqueueGivenBack(file);
+
+            if (!result.IsAccepted)
+                EmitOverflowDrops(_fileQueue.QueueName, 1 + result.DroppedCount);
+        }
+
+        /// <summary>A file value sent on the file connection that was not stored: counted where a dropped file value is.</summary>
+        internal void ReportDroppedFileValues(int count) => EmitOverflowDrops(_fileQueue.QueueName, count);
 
         /// <summary>
         /// True when this collector sends over a transport another collector owns (it was
@@ -517,6 +596,20 @@ namespace HSMDataCollector.Core
             var sensor = DefaultSensors?.QueueOverflowSensor;
 
             return sensor != null && rows <= int.MaxValue && sensor.TryAddValue(TablePipeline.DroppedRowsQueueName, (int)rows);
+        }
+
+        /// <summary>
+        /// A large file not sent (refused, given up, unreadable) goes to the <c>Queue overflow</c> sensor under the queue
+        /// "Large files" while that sensor takes values; it is said through the errors either way.
+        /// </summary>
+        internal bool TryReportDroppedLargeFiles(long files)
+        {
+            if (files <= 0)
+                return true;
+
+            var sensor = DefaultSensors?.QueueOverflowSensor;
+
+            return sensor != null && files <= int.MaxValue && sensor.TryAddValue(HSMDataCollector.LargeFiles.LargeFileService.DroppedFilesQueueName, (int)files);
         }
 
         private void EmitOverflowDrops(string queueName, int droppedCount)

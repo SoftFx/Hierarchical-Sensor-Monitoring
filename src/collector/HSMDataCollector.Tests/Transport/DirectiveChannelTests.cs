@@ -206,14 +206,17 @@ namespace HSMDataCollector.Tests.Transport
 
                 using (var together = new Barrier(threads))
                 {
-                    var senders = Enumerable.Range(0, threads).Select(thread => Task.Run(() =>
+                    // Threads of their own, not the pool's: eight senders that wait for each other at the barrier would hold
+                    // every pool thread of a small runner until the pool grew, and stall the tests that run beside this one
+                    // (#1925: a table connection test lost its reconnect within its wait).
+                    var senders = Enumerable.Range(0, threads).Select(thread => Task.Factory.StartNew(() =>
                     {
                         together.SignalAndWait();
 
                         // Names of this thread alone: more new names arrive at once than there is room for.
                         for (var i = 0; i < namesPerThread; i++)
                             directives.Receive($"name-{thread}-{i}");
-                    })).ToArray();
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
 
                     Task.WaitAll(senders);
                 }

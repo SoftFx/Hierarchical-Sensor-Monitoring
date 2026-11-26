@@ -4,7 +4,16 @@ set -eu
 image="${1:-hsm-caddy:test}"
 tmp="$(mktemp -d)"
 reload_container="hsm-caddy-reload-$$"
-trap 'docker rm -f "$reload_container" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
+archive_network="hsm-caddy-archives-$$"
+archive_upstream="hsm-caddy-upstream-$$"
+archive_proxy="hsm-caddy-proxy-$$"
+archive_client="hsm-caddy-client-$$"
+cleanup() {
+    docker rm -f "$reload_container" "$archive_upstream" "$archive_proxy" "$archive_client" >/dev/null 2>&1 || true
+    docker network rm "$archive_network" >/dev/null 2>&1 || true
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
 
 modules="$(docker run --rm --entrypoint caddy "$image" list-modules)"
 printf '%s\n' "$modules" | grep -Fx 'dns.providers.cloudflare' >/dev/null
@@ -128,6 +137,47 @@ host_hits="$(grep -oF '"Host":["{http.request.hostport}"]' "$tmp/no-vl-routes.js
     echo "expected 2 Host header_up passthroughs, got $host_hits" >&2
     exit 1
 }
+
+# Large file archives (#1885, ADR-0022 point 15): HSM decides, Caddy gives out. Both proxies
+# carry the hand-over: the marker header is SET (replacing a client's value, not appended),
+# and an answer with X-Hsm-Archive is consumed by a handle_response route that serves the
+# named file from the read-only archives folder. file_server appears only inside those
+# routes: no route of its own reaches the folder.
+count_in() {
+    grep -oF "$2" "$1" | wc -l | tr -d ' '
+}
+expect_count() {
+    file="$1"
+    expected="$2"
+    needle="$3"
+    got="$(count_in "$file" "$needle")"
+    [ "$got" -eq "$expected" ] || {
+        echo "expected $expected x $needle in $(basename "$file"), got $got" >&2
+        exit 1
+    }
+}
+archives_json="$tmp/self-signed.json"
+expect_count "$archives_json" 2 '"set":{"Host":["{http.request.hostport}"],"X-Hsm-Serve-Archives":["1"]}'
+expect_count "$archives_json" 2 '"handle_response":[{"match":{"headers":{"X-Hsm-Archive":["*"]}}'
+expect_count "$archives_json" 2 '"root":"/srv/hsm-archives"'
+expect_count "$archives_json" 2 '"uri":"/{http.reverse_proxy.header.X-Hsm-Archive}"'
+expect_count "$archives_json" 2 '"include":["Content-Disposition","Repr-Digest","X-Hsm-Password-Version","Cache-Control"]'
+expect_count "$archives_json" 2 '"handle_response"'
+expect_count "$archives_json" 2 '"handler":"file_server"'
+expect_count "$archives_json" 2 '"root":'
+# Each file_server sits in the routes of a handle_response. The adapted JSON is one line
+# with sorted keys, so a proxy's "handle_response" array is the last thing before its
+# "handler":"reverse_proxy" key: cut the line at every such key and drop each piece's
+# handle_response tail; no file_server may remain in what is left.
+if awk '{ gsub(/,"handler":"reverse_proxy"/, "\n"); print }' "$archives_json" \
+    | sed 's/"handle_response":.*$//' | grep -F 'file_server' >/dev/null; then
+    echo 'a file_server is reachable outside the archive handle_response' >&2
+    exit 1
+fi
+if grep -F '"logs"' "$archives_json" >/dev/null; then
+    echo 'the archive hand-over enabled Caddy access logs' >&2
+    exit 1
+fi
 
 # One port (#1590, aliases removed in #1696): the only HTTPS listener is :443 and every
 # site forwards to the app's one listener on 443. Neither a listener nor an upstream of
@@ -259,5 +309,231 @@ reject blank-cloudflare-token 'CF_API_TOKEN is required' -e HSM_DOMAIN=hsm.examp
 reject missing-custom-files 'custom mode requires readable /certs/cert.pem' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=custom
 reject invalid-domain 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM_DOMAIN=https://hsm.example.com' -e HSM_CERTIFICATE=self-signed
 reject domain-with-port 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM_DOMAIN=hsm.example.com:443' -e HSM_CERTIFICATE=self-signed
+
+
+# Large file archives at runtime (#1885, ADR-0022 point 15). A fake HSM upstream answers
+# like HSM: an instruction (503 + X-Hsm-Archive naming <productId:N>/<archiveId:N>.zip)
+# for a checked download, its own 404 for a refused one, an ordinary page otherwise, and
+# an echo of the marker header it received. The image under test fronts it with the
+# archives in a read-only mount; a curl container is the client.
+archive_product='0b0c7c5e6a0f4d8a9f7e3c2b1a000001'
+archive_id='5d41402abc4b2a76b9719d911017c592'
+archive_missing_id='5d41402abc4b2a76b9719d911017dead'
+archive_name="$archive_product/$archive_id.zip"
+archive_digest='sha-256=:dGhlIGZha2UgdXBzdHJlYW0gc2VuZHMgdGhpcyB2ZXJiYXRpbQ==:'
+curl_image='curlimages/curl:8.23.0'
+mkdir -p "$tmp/archives/$archive_product" "$tmp/archive-run"
+archive_file="$tmp/archives/$archive_name"
+dd if=/dev/urandom of="$archive_file" bs=1048576 count=8 2>/dev/null
+chmod -R a+rX "$tmp/archives"
+archive_sha="$(sha256sum "$archive_file" | cut -d' ' -f1)"
+archive_size="$(wc -c <"$archive_file" | tr -d ' ')"
+range_sha="$(dd if="$archive_file" bs=1 skip=100 count=100 2>/dev/null | sha256sum | cut -d' ' -f1)"
+
+cat >"$tmp/upstream.Caddyfile" <<EOF
+{
+	persist_config off
+	local_certs
+	skip_install_trust
+}
+https://app:443, https://hsm.example.com:443, https://proxy:443 {
+	tls internal
+	handle /ok {
+		header X-Hsm-Archive "$archive_name"
+		header Content-Disposition "attachment; filename=\"dump.dmp.zip\""
+		header Repr-Digest "$archive_digest"
+		header X-Hsm-Password-Version "3"
+		header Cache-Control "private, no-store"
+		respond "This answer is an instruction for the bundled Caddy." 503
+	}
+	handle /missing {
+		header X-Hsm-Archive "$archive_product/$archive_missing_id.zip"
+		respond "This answer is an instruction for the bundled Caddy." 503
+	}
+	handle /deny {
+		respond "not found by hsm" 404
+	}
+	handle /noheader {
+		respond "plain hsm page" 200
+	}
+	handle /marker {
+		respond "marker={header.X-Hsm-Serve-Archives}" 200
+	}
+	handle {
+		respond "app page {path}" 200
+	}
+}
+EOF
+
+docker network create "$archive_network" >/dev/null
+docker run -d --name "$archive_upstream" --network "$archive_network" --network-alias app \
+    -v "$tmp/upstream.Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.4 >/dev/null
+docker run -d --name "$archive_proxy" --network "$archive_network" \
+    --network-alias hsm.example.com --network-alias proxy \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -v "$tmp/archives:/srv/hsm-archives:ro" "$image" >/dev/null
+docker run -d --name "$archive_client" --network "$archive_network" \
+    --entrypoint sleep "$curl_image" 600 >/dev/null
+
+hsm_url='https://hsm.example.com'
+ready=false
+attempt=1
+while [ "$attempt" -le 30 ]; do
+    code="$(docker exec "$archive_client" curl -sk --max-time 5 -o /dev/null -w '%{http_code}' \
+        "$hsm_url/noheader" 2>/dev/null || true)"
+    if [ "$code" = 200 ]; then
+        ready=true
+        break
+    fi
+    sleep 1
+    attempt=$((attempt + 1))
+done
+if [ "$ready" != true ]; then
+    echo 'the archive hand-over stack did not start' >&2
+    docker logs "$archive_proxy" >&2
+    docker logs "$archive_upstream" >&2
+    exit 1
+fi
+
+hand_over_fail() {
+    echo "archive hand-over: $*" >&2
+    exit 1
+}
+# fetch NAME CURL-ARGS...: headers to $tmp/archive-run/NAME.h, the body stays in the client.
+fetch() {
+    name="$1"
+    shift
+    docker exec "$archive_client" curl -sk --max-time 60 -D "/tmp/$name.h" -o "/tmp/$name.b" "$@" \
+        || hand_over_fail "$name: curl failed"
+    docker exec "$archive_client" cat "/tmp/$name.h" | tr -d '\r' >"$tmp/archive-run/$name.h"
+}
+status_of() {
+    sed -n '1s/^HTTP\/[0-9.]* \([0-9]*\).*$/\1/p' "$tmp/archive-run/$1.h"
+}
+header_of() {
+    grep -i "^$2:" "$tmp/archive-run/$1.h" | head -n 1 | sed 's/^[^:]*: *//'
+}
+body_sha() {
+    docker exec "$archive_client" sha256sum "/tmp/$1.b" | cut -d' ' -f1
+}
+body_size() {
+    docker exec "$archive_client" sh -c "wc -c < /tmp/$1.b" | tr -d ' '
+}
+body_text() {
+    docker exec "$archive_client" cat "/tmp/$1.b"
+}
+expect_status() {
+    got="$(status_of "$1")"
+    [ "$got" = "$2" ] || hand_over_fail "$1: status $got, expected $2"
+}
+expect_header() {
+    got="$(header_of "$1" "$2")"
+    [ "$got" = "$3" ] || hand_over_fail "$1: $2 is '$got', expected '$3'"
+}
+expect_body() {
+    got="$(body_text "$1")"
+    [ "$got" = "$2" ] || hand_over_fail "$1: body is '$got', expected '$2'"
+}
+expect_file() {
+    got="$(body_sha "$1")"
+    [ "$got" = "$archive_sha" ] || hand_over_fail "$1: body SHA-256 $got, expected the archive's $archive_sha"
+}
+expect_not_file() {
+    size="$(body_size "$1")"
+    [ "$size" -lt "$archive_size" ] || hand_over_fail "$1: the client received $size bytes, the archive's size"
+}
+no_instruction() {
+    if grep -i '^X-Hsm-Archive:' "$tmp/archive-run/$1.h" >/dev/null; then
+        hand_over_fail "$1: the X-Hsm-Archive instruction reached the client"
+    fi
+}
+
+# A checked download: the file itself, with its validators and HSM's chosen headers, and
+# without the instruction header.
+fetch full "$hsm_url/ok"
+expect_status full 200
+expect_file full
+expect_header full Content-Length "$archive_size"
+expect_header full Accept-Ranges bytes
+expect_header full Content-Disposition 'attachment; filename="dump.dmp.zip"'
+expect_header full Repr-Digest "$archive_digest"
+expect_header full X-Hsm-Password-Version 3
+expect_header full Cache-Control 'private, no-store'
+no_instruction full
+archive_etag="$(header_of full ETag)"
+[ -n "$archive_etag" ] || hand_over_fail 'full: no ETag'
+
+# The catch-all site (clients by IP or another name) carries the same hand-over.
+fetch catch-all https://proxy/ok
+expect_status catch-all 200
+expect_file catch-all
+no_instruction catch-all
+
+fetch range -H 'Range: bytes=100-199' "$hsm_url/ok"
+expect_status range 206
+expect_header range Content-Range "bytes 100-199/$archive_size"
+[ "$(body_sha range)" = "$range_sha" ] || hand_over_fail 'range: wrong bytes for 100-199'
+no_instruction range
+
+# A cut download continued where it stopped, guarded by the ETag.
+docker exec "$archive_client" curl -sk --limit-rate 1M --max-time 2 -o /tmp/resume.b "$hsm_url/ok" \
+    >/dev/null 2>&1 || true
+cut_size="$(body_size resume)"
+[ "$cut_size" -gt 0 ] && [ "$cut_size" -lt "$archive_size" ] \
+    || hand_over_fail "resume: the cut download holds $cut_size of $archive_size bytes"
+fetch resume -C - -H "If-Range: $archive_etag" "$hsm_url/ok"
+expect_status resume 206
+expect_file resume
+
+# A stale validator gets the whole file again, not a range of a different one.
+fetch stale -H 'Range: bytes=100-199' -H 'If-Range: "stale"' "$hsm_url/ok"
+expect_status stale 200
+expect_file stale
+
+fetch head -I "$hsm_url/ok"
+expect_status head 200
+expect_header head Content-Length "$archive_size"
+expect_header head ETag "$archive_etag"
+no_instruction head
+
+# HSM's refusal reaches the client as HSM gave it.
+fetch deny "$hsm_url/deny"
+expect_status deny 404
+expect_body deny 'not found by hsm'
+
+# Forgery: an X-Hsm-Archive the CLIENT sends is never an instruction.
+fetch forged-deny -H "X-Hsm-Archive: $archive_name" "$hsm_url/deny"
+expect_status forged-deny 404
+expect_body forged-deny 'not found by hsm'
+fetch forged-page -H "X-Hsm-Archive: $archive_name" "$hsm_url/noheader"
+expect_status forged-page 200
+expect_body forged-page 'plain hsm page'
+
+# Forgery: the marker is Caddy's, whatever the client sends; on both sites.
+fetch marker "$hsm_url/marker"
+expect_body marker 'marker=1'
+fetch forged-marker -H 'X-Hsm-Serve-Archives: 0' -H 'X-Hsm-Serve-Archives: 0' "$hsm_url/marker"
+expect_body forged-marker 'marker=1'
+fetch forged-marker-catch-all -H 'X-Hsm-Serve-Archives: 0' https://proxy/marker
+expect_body forged-marker-catch-all 'marker=1'
+
+# No route of its own reaches the folder: these paths go to HSM.
+fetch by-name "$hsm_url/$archive_name"
+expect_status by-name 200
+expect_body by-name "app page /$archive_name"
+fetch by-folder "$hsm_url/srv/hsm-archives/$archive_name"
+expect_status by-folder 200
+expect_body by-folder "app page /srv/hsm-archives/$archive_name"
+
+# An instruction naming a file that is not there: 404 and no bytes.
+fetch missing "$hsm_url/missing"
+expect_status missing 404
+[ "$(body_size missing)" -eq 0 ] || hand_over_fail "missing: the client received $(body_size missing) bytes"
+no_instruction missing
+expect_not_file deny
+expect_not_file forged-deny
+expect_not_file forged-page
+
+echo 'hsm-caddy archive hand-over tests passed'
 
 echo 'hsm-caddy runtime configuration tests passed'

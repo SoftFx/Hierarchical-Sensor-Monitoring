@@ -69,6 +69,25 @@
 	header_up Host {hostport}
 	# Wait for HSM while it starts (database load) instead of answering 502.
 	lb_try_duration 30s
+	# Large file archives (#1885, ADR-0022 point 15): HSM decides, Caddy gives out. This
+	# marker tells HSM that the request came through the bundled Caddy (HSM honours it only
+	# on a connection from a trusted proxy); it is set here, so a value sent by the client
+	# is replaced.
+	header_up X-Hsm-Serve-Archives 1
+	# An archive is served only as HSM's answer to a request it has checked: HSM names the
+	# file in X-Hsm-Archive, Caddy consumes that answer and serves the file with byte ranges
+	# and an ETag instead. The instruction header never reaches the client, and no route
+	# of its own reaches the folder: a request path naming an archive goes to HSM like any
+	# other. The folder holds finished archives only and is mounted read-only.
+	@hsm_archive header X-Hsm-Archive *
+	handle_response @hsm_archive {
+		root * /srv/hsm-archives
+		rewrite * /{rp.header.X-Hsm-Archive}
+		copy_response_headers {
+			include Content-Disposition Repr-Digest X-Hsm-Password-Version Cache-Control
+		}
+		file_server
+	}
 }
 
 # The primary address (#1590): one port, 443, serving the Web UI and the Sensor API

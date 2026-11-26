@@ -8,6 +8,8 @@ using System.Text.Json.Serialization;
 using HSMCommon.Model;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.LargeFiles;
+using HSMServer.Core.LargeFiles.Archives;
 
 
 namespace HSMServer.ApiObjectsConverters
@@ -108,6 +110,10 @@ namespace HSMServer.ApiObjectsConverters
             new(nameof(SensorValueBase.Comment)),
         };
 
+        // The description of a large file value (#1885), appended LAST and only when the values hold a large one, so the
+        // columns of an ordinary File sensor stay what they were; empty for an ordinary file value.
+        private static readonly Header _largeFileHeader = new("Large file", nameof(Core.Model.HistoryValues.FileSensorHistory.LargeFile));
+
         private static readonly HashSet<string> _validProperties = new()
         {
             nameof(DoubleBarValue.Time),
@@ -123,7 +129,11 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        internal static string ConvertToCsv(this List<BaseValue> values, ExportOptions options = ExportOptions.Hidden)
+        /// <summary>
+        /// The values as CSV for <paramref name="reader"/>. A large file value has an empty content column and its
+        /// description in the last column, with the kind and the state read from <paramref name="largeFiles"/> when it is given.
+        /// </summary>
+        internal static string ConvertToCsv(this List<BaseValue> values, CsvReader reader, ExportOptions options = ExportOptions.Hidden, ILargeFileArchiveStore largeFiles = null)
         {
             if ((values?.Count ?? 0) == 0)
                 return string.Empty;
@@ -141,10 +151,17 @@ namespace HSMServer.ApiObjectsConverters
 
                 foreach (var column in header)
                 {
+                    if (ReferenceEquals(column, _largeFileHeader))
+                    {
+                        var description = value is LargeFileValue large ? LargeFileValueDescriptions.ToText(LargeFileValueDescriptions.Describe(large, largeFiles)) : string.Empty;
+                        rowValues.Add(CsvCell(description));
+                        continue;
+                    }
+
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
-                    rowValues.Add(GetCsvValue(column, value, propValue));
+                    rowValues.Add(GetCsvValue(column, value, propValue, reader));
                 }
 
                 content.AppendLine(rowValues.BuildRow());
@@ -168,9 +185,10 @@ namespace HSMServer.ApiObjectsConverters
                 return propValue;
             }
 
-            static string GetCsvValue(Header column, BaseValue value, string propValue) => $"""
-                                                                                            "{GetTransformedValue(column, value, propValue)}"
-                                                                                            """;
+            static string GetCsvValue(Header column, BaseValue value, string propValue, CsvReader reader) =>
+                reader == CsvReader.Spreadsheet && IsFreeText(column, value)
+                    ? CsvTextCell(GetTransformedValue(column, value, propValue))
+                    : CsvCell(GetTransformedValue(column, value, propValue));
         }
 
         private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)
@@ -181,11 +199,55 @@ namespace HSMServer.ApiObjectsConverters
                     _simpleSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
                 IntegerBarValue or DoubleBarValue =>
                     _barSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
+                FileValue when values.Any(value => value is LargeFileValue) => [.. _fileSensorHeader, _largeFileHeader],
                 FileValue => _fileSensorHeader,
                 _ => new List<Header>()
             };
         }
 
         private static string BuildRow(this List<string> values) => string.Join(_columnSeparator, values);
+
+        /// <summary>
+        /// One CSV cell as it is: quoted, a quote doubled. Every cell for a script; for a spreadsheet, the typed values and
+        /// the base64 content of a file.
+        /// </summary>
+        internal static string CsvCell(string text) => $"\"{(text ?? string.Empty).Replace("\"", "\"\"")}\"";
+
+        /// <summary>
+        /// One CSV cell of free text a collector sent (a name, an extension, a comment, a string value), written as text for a
+        /// spreadsheet: the bidirectional control characters neutralized, a text that a spreadsheet would read as a formula
+        /// (it starts with = + - @, a tab or a carriage return) prefixed with an apostrophe, then quoted.
+        /// </summary>
+        internal static string CsvTextCell(string text)
+        {
+            text = (text ?? string.Empty).WithoutBidiControls();
+
+            if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
+                text = "'" + text;
+
+            return CsvCell(text);
+        }
+
+        // The columns that carry a collector's free text; every other column is a typed value or a file's base64 content.
+        private static bool IsFreeText(Header column, BaseValue value) => column.PropertyName switch
+        {
+            nameof(FileSensorValue.Name) or nameof(FileSensorValue.Extension) or nameof(BaseValue.Comment) => true,
+            nameof(StringValue.Value) => value is StringValue,
+            _ => false,
+        };
+    }
+
+    /// <summary>Who reads an export of sensor values (#1886).</summary>
+    internal enum CsvReader
+    {
+        /// <summary>A script, through the Sensor API: every value as it is stored, quoted, a quote doubled.</summary>
+        Script,
+
+        /// <summary>
+        /// A person who opens the web UI's download in a spreadsheet: a collector's free text (a name, an extension, a
+        /// comment, a string value) written as text, so a spreadsheet never reads it as a formula, and without
+        /// bidirectional control characters.
+        /// </summary>
+        Spreadsheet,
     }
 }

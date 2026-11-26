@@ -48,12 +48,12 @@ namespace HSMServer.Model.Agent
         /// deployment (docker-compose.yml, #1427) Caddy terminates the client's TLS with a public
         /// certificate and re-encrypts to Kestrel, which still serves the bundled default. A request that
         /// arrived through a configured trusted proxy is therefore proxy-terminated, whatever Kestrel did
-        /// on its own hop. <paramref name="forwardedByTrustedProxy"/> is the forwarded-headers middleware's
-        /// own verdict (it moves the consumed X-Forwarded-For into X-Original-For), and it counts only when
-        /// a trusted proxy is configured at all, so a header invented by a direct caller changes nothing.
+        /// on its own hop. <paramref name="cameThroughTrustedProxy"/> is
+        /// <see cref="HSMServer.Middleware.ConnectionPeerMiddleware.CameThroughTrustedProxy"/>: the connection's
+        /// own peer is one of the configured trusted proxies.
         /// </summary>
-        public static bool ServerTerminatesClientTls(bool kestrelHandshake, bool trustedProxyConfigured, bool forwardedByTrustedProxy) =>
-            kestrelHandshake && !(trustedProxyConfigured && forwardedByTrustedProxy);
+        public static bool ServerTerminatesClientTls(bool kestrelHandshake, bool cameThroughTrustedProxy) =>
+            kestrelHandshake && !cameThroughTrustedProxy;
 
         /// <summary>
         /// Pure decision. Behind a TLS-terminating proxy (plain-HTTP mode, Caddy + Let's Encrypt) the

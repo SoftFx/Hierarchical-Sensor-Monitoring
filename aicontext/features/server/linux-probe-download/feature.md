@@ -74,9 +74,11 @@ The input is **whose TLS the probe will verify**, not merely whether the downloa
 the request arrived through a configured trusted proxy. In the reference deployment (`docker-compose.yml`,
 #1427) Caddy terminates the client's TLS with a public certificate and re-encrypts to Kestrel, which still
 serves the bundled default — so the Kestrel handshake there is the proxy hop, not the probe's. The proxy hop
-is recognised from `Kestrel.TrustedProxies` being set **and** the forwarded-headers middleware having
-consumed that proxy's `X-Forwarded-For` (it moves it to `X-Original-For`), so a header invented by a direct
-caller changes nothing.
+is recognised the one way the server tells a trusted proxy: `ConnectionPeerMiddleware.CameThroughTrustedProxy`,
+true when the connection's own peer address is one of `Kestrel.TrustedProxies` (recorded before
+`UseForwardedHeaders` replaces it). Request headers do not enter the decision. The web Downloads page
+(`AgentController.LinuxInstaller`) and the agent-installer API and MCP tool
+(`InstallerRequestContext.CameThroughTrustedProxy`) use it alike.
 
 - **Include** when Kestrel itself terminated the client's TLS with an admin-configured certificate. Content: the public part
   (`ExportCertificatePem`) of the **same `X509Certificate2` instance Kestrel installed at startup**
@@ -247,7 +249,7 @@ and the pin now names `probe-v0.13.0` (server 3.43.0, #1733; the collector sessi
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Downloads page card (#1550) | `Views/Downloads/Index.cshtml`; page logic in `Model/Agent/DownloadsViewModel.cs` (`DownloadsPageBuilder`) — see `../agent-download/feature.md` → *Downloads page* |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
-| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the top disk I/O step (top-level-only `topDiskIo` pattern, never matched by a generated config; `hsm-linux-probe-io.service` enabled and restarted only from an enabling host config after `daemon-reload`, stopped, disabled and its snapshot deleted otherwise and by uninstall, no output but a WARNING for a package without the unit, no drop-in and no capability for the probe), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
+| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, the top disk I/O step (top-level-only `topDiskIo` pattern, never matched by a generated config; `hsm-linux-probe-io.service` enabled and restarted only from an enabling host config after `daemon-reload`, stopped, disabled and its snapshot deleted otherwise and by uninstall, no output but a WARNING for a package without the unit, no drop-in and no capability for the probe), tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS, behind the trusted proxy and from a direct client with an `X-Original-For` header) + `Controllers/AgentInstallerApiControllerTests.cs` (the same two cases through the agent-installer API) |
 
 `install.sh`/`uninstall.sh` were also checked with shellcheck and smoke-run in a systemd `debian:13`
 container against a throwaway dummy `.deb` (fresh install from an empty apt index, non-root refusal, key
