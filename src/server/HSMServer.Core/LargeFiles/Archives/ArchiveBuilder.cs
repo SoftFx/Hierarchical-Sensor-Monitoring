@@ -354,8 +354,7 @@ namespace HSMServer.Core.LargeFiles.Archives
                 if (target.ExpectedArchiveId != expected)
                 {
                     // Another archive was committed between the read of the record and the begin: look at the file again.
-                    AbandonQuietly(target);
-                    target = null;
+                    AbandonQuietly(ref target);
                     Requeue(fileId, productId, "the record changed before the build began");
                     return;
                 }
@@ -384,13 +383,13 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                AbandonQuietly(target);
+                AbandonQuietly(ref target);
                 Requeue(fileId, productId, "the pass was cancelled");
                 throw;
             }
             catch (Exception ex)
             {
-                AbandonQuietly(target);
+                AbandonQuietly(ref target);
 
                 if (IsGone(fileId, item.Kind))
                     Forget(fileId, "the file was removed during the build");
@@ -399,6 +398,10 @@ namespace HSMServer.Core.LargeFiles.Archives
             }
             finally
             {
+                // A build that began and did not reach the commit always gives its temporary archive and the store's
+                // reservation back, whatever ended it.
+                AbandonQuietly(ref target);
+
                 foreach (var version in inFlight)
                     _inFlight.TryRemove(version, out _);
             }
@@ -741,6 +744,17 @@ namespace HSMServer.Core.LargeFiles.Archives
             {
                 return false;
             }
+        }
+
+        // Abandons once: the target is cleared, so a later call (the finally of the build) does nothing.
+        private void AbandonQuietly(ref LargeArchiveTarget target)
+        {
+            if (target is null)
+                return;
+
+            var abandoned = target;
+            target = null;
+            AbandonQuietly(abandoned);
         }
 
         private void AbandonQuietly(LargeArchiveTarget target)

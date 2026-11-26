@@ -229,6 +229,34 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
         [Fact]
+        public async Task CommitFault_DuringAReencryption_AbandonsTheBuild_KeepsTheOldArchive_AndIsRetried()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var content = TestContent.Compressible(120_000);
+            var file = _h.Store.AddVerified(_h.Product, content);
+            await _h.Run();
+            var first = _h.Store.TryGetFile(file.FileId).ArchiveId;
+
+            _h.Passwords.Set(_h.Product, Password2);
+            _h.Store.BeforeCommit = _ => throw new IOException("the rename failed");
+
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.Failed, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Single(_h.Store.Abandoned); // the store's reservation and temporary file go with it
+            Assert.Empty(_h.Store.TempFiles());
+            Assert.Equal(first, _h.Store.TryGetFile(file.FileId).ArchiveId);
+            Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
+
+            _h.Store.BeforeCommit = null;
+            _h.Advance(TimeSpan.FromMinutes(1));
+            await _h.Run();
+
+            Assert.NotEqual(first, _h.Store.TryGetFile(file.FileId).ArchiveId);
+            Assert.Equal(content, _h.ReadArchive(file.FileId, Password2));
+        }
+
+        [Fact]
         public async Task FileRemovedDuringTheBuild_TheCommitSaysRemoved_AndTheFileIsDroppedWithoutRetry()
         {
             _h.Passwords.Set(_h.Product, Password1);
