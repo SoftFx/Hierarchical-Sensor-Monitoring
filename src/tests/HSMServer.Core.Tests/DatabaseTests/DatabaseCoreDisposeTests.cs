@@ -27,6 +27,10 @@ namespace HSMServer.Core.Tests.DatabaseTests
                 core.AddSensorValue(Guid.NewGuid(), new IntegerValue { Value = 1, Time = DateTime.UtcNow });
                 core.Dashboards.AddEntity(new DashboardEntity { Id = Guid.NewGuid().ToByteArray(), Name = "dispose" });
                 core.ChangeSets.AddEntity(new ChangeSetEntity { Id = Guid.NewGuid().ToByteArray(), Author = "dispose" });
+                // The download log of large files (ADR-0022) opens its LevelDB on the first record.
+                core.DownloadLog.Put(new DownloadRecordEntity { Id = Guid.NewGuid(), TimeTicks = DateTime.UtcNow.Ticks, FileName = "dispose" });
+
+                Assert.True(Directory.Exists(core.DatabaseSettings.PathToDownloadLogDb));
 
                 core.Dispose();
 
