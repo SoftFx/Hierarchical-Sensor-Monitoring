@@ -1679,8 +1679,7 @@ namespace
             return true;
         }
 
-        if (action == "file_server_answer_begin_next" || action == "file_server_answer_piece_next" || action == "file_server_answer_end_next" ||
-            action == "file_server_answer_discard_next")
+        if (action == "file_server_answer_begin_next" || action == "file_server_answer_piece_next" || action == "file_server_answer_end_next")
         {
             args(1);
             auto& script = FileScriptOf(state, action);
@@ -1689,10 +1688,8 @@ namespace
                 script.AnswerBeginNext(std::move(answer));
             else if (action == "file_server_answer_piece_next")
                 script.AnswerPieceNext(std::move(answer));
-            else if (action == "file_server_answer_end_next")
-                script.AnswerEndNext(std::move(answer));
             else
-                script.AnswerDiscardNext(std::move(answer));
+                script.AnswerEndNext(std::move(answer));
             return true;
         }
 

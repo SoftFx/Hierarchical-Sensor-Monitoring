@@ -71,8 +71,8 @@ x64 configs, runs the in-process ABI smoke, and packs the bundle.
   so a Release asset is the clean cross-host channel):
 
   ```
-  git tag wrapper-v2.0.0
-  git push origin wrapper-v2.0.0
+  git tag wrapper-v2.1.0
+  git push origin wrapper-v2.1.0
   ```
 
 - **Dry-run bundle without a release** — run the workflow via **Actions -> hsm-wrapper-release ->
@@ -98,7 +98,7 @@ cmake -S src/wrapper -B build/wrapper `
 cmake --build build/wrapper --config Release
 cmake --build build/wrapper --config Debug
 pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 2.1.0
-# -> dist/HSMCppWrapper-2.0.0.zip
+# -> dist/HSMCppWrapper-2.1.0.zip
 ```
 
 ## Versioning
