@@ -91,6 +91,16 @@ namespace HSMDatabase.AccessManager.TableBatches
     public sealed record TableMoveInFlight(Guid SensorId, long WeekStartTicks, int FromClass, int ToClass, long FirstHour, long EndHour);
 
 
+    /// <summary>
+    /// A removal the tree recorded (#1850 part 4d): of a table sensor (<see cref="SensorId"/>, of the root product
+    /// <see cref="ProductId"/>, <see cref="Guid.Empty"/> when the tree did not know it) or of a root product
+    /// (<see cref="SensorId"/> null), whose stored rows the merge job deletes once it is gone from the tree.
+    /// <see cref="Earlier"/>: read from the store's record at its load, so written by an earlier run of the server; false for
+    /// a mark written in this run (a removal the tree may still be making: the mark is written before the entity goes).
+    /// </summary>
+    public sealed record TableRemoval(Guid ProductId, Guid? SensorId, bool Earlier);
+
+
     /// <summary>A fault of the batch store (disk, LevelDB): a repeat can cure it. A write that throws it is not committed.</summary>
     public sealed class TableBatchStoreException(string message, Exception inner = null) : Exception(message, inner);
 
@@ -204,6 +214,17 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long DatabasesCompacted;
         /// <summary>Copy steps that first deleted rows of the sensor a move had left in their target (a move whose in-flight record was lost).</summary>
         public long MoveLeftoversCleaned;
+
+        // The removal of table sensors and products (#1850 part 4d).
+
+        /// <summary>Removals of table sensors and root products completed: every stored row deleted and the record of the removal cleared.</summary>
+        public long RemovalsDone;
+        /// <summary>
+        /// Gauge: placements whose sensor is not in the tree and has no record of its removal (a record that could not be
+        /// written, a sensor whose entity does not load), at the end of the last pass. Their rows are kept, never deleted by
+        /// the job; logged as a warning once a day with the ids.
+        /// </summary>
+        public long OrphanPlacements;
 
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
 
@@ -471,5 +492,45 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// record only names the other class that may hold a copy.
         /// </summary>
         void SetMoveInFlight(Guid productId, TableMoveInFlight record);
+
+
+        // === The removal of table sensors and root products (#1850 part 4d) ===
+
+        /// <summary>
+        /// Records the removal of table sensors (each with its root product, <see cref="Guid.Empty"/> when not known) and of
+        /// root products, durably, in one write (the store-wide file <c>Removed</c>, written atomically and synced, strict), and
+        /// then in memory. The tree calls it before it removes the entities: a crash in between leaves a mark of a sensor or
+        /// product that is still in the tree, which the merge job clears without deleting anything. A sensor marked again
+        /// keeps the product named before when this call does not know it. Throws <see cref="TableBatchStoreException"/> on a
+        /// fault (a file that cannot be written, or a record that cannot be read: it is never written over unread), with
+        /// nothing changed: the caller logs it and goes on with the removal, whose rows are then kept and reported as an
+        /// orphan placement.
+        /// </summary>
+        void MarkRemoved(IReadOnlyCollection<(Guid Product, Guid Sensor)> sensors, IReadOnlyCollection<Guid> products);
+
+        /// <summary>
+        /// The removals recorded and not cleared: root products first, then sensors, each by id. Read from the file once, at
+        /// the first call; a file that cannot be read is a <see cref="TableBatchStoreException"/> at every call until it can
+        /// (nothing is taken as removed while the record is not known). A line that does not read is logged as an Error and
+        /// skipped.
+        /// </summary>
+        IReadOnlyList<TableRemoval> GetRemovals();
+
+        /// <summary>
+        /// Clears removals, durably, then in memory: each one only while it is the same mark (a sensor marked again since,
+        /// in this run, keeps its new mark). Throws <see cref="TableBatchStoreException"/> on a fault, with nothing changed.
+        /// </summary>
+        void ClearRemovals(IReadOnlyCollection<TableRemoval> removals);
+
+        /// <summary>
+        /// Removes a product's batches whole: from the call on, a read finds nothing of it (as for a product without a
+        /// folder) and a write into it is refused for the rest of the process; every week database of it is closed once the
+        /// reads that hold it end, and its <c>Hours</c> and <c>Placements</c>; then its folder is renamed to
+        /// <c>&lt;product&gt;.removed-&lt;ticks&gt;</c> (atomic, never listed as a product) and deleted. A renamed folder whose
+        /// delete fails, or that a crash left, is deleted by the store's first listing of its products in a later run. A
+        /// product without a folder: nothing on disk. Throws <see cref="TableBatchStoreException"/> when the rename fails (the
+        /// folder stays; a repeat renames it).
+        /// </summary>
+        void RemoveProduct(Guid productId);
     }
 }
