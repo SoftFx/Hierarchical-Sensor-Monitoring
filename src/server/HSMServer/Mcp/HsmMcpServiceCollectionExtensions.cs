@@ -49,6 +49,7 @@ namespace HSMServer.Mcp
                 .WithTools<SensorMuteMcpTools>()
                 .WithTools<SensorDeletionMcpTools>()
                 .WithTools<SensorMoveMcpTools>()
+                .WithTools<TelegramBotMcpTools>()
                 .Services;
         }
     }

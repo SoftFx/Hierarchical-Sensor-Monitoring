@@ -60,6 +60,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "get_node",
                 "get_sensor",
                 "get_sensor_history",
+                "get_telegram_bot",
                 "list_access_keys",
                 "list_alert_schedules",
                 "list_alert_templates",
@@ -81,6 +82,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "update_chat",
                 "update_sensor_policy",
                 "update_sensor_ttl_policy",
+                "update_telegram_bot",
             ], names);
         }
 
@@ -144,7 +146,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(46, tools.Count);
+            Assert.Equal(48, tools.Count);
             Assert.All(tools, tool =>
             {
                 var schema = tool.ProtocolTool.OutputSchema;

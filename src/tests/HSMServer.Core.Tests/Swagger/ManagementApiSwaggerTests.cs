@@ -405,6 +405,13 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(ChatsApiController), nameof(ChatsApiController.UpdateChat))] = [400, 401, 403, 404, 409, 422, 500],
             [(typeof(ChatsApiController), nameof(ChatsApiController.DeleteChat))] = [400, 401, 403, 404, 409, 500],
 
+            // The bot-credential surface (#1830) — the first server-settings surface. The
+            // settings are one well-known block, so neither action answers a 404: the status
+            // carries the admin gate's 403; the update adds the field-keyed 422s of a refused
+            // token or name and the fixed-message 409 of a Telegram that could not be reached.
+            [(typeof(TelegramBotApiController), nameof(TelegramBotApiController.GetTelegramBot))] = [401, 403, 500],
+            [(typeof(TelegramBotApiController), nameof(TelegramBotApiController.UpdateTelegramBot))] = [400, 401, 403, 409, 422, 500],
+
             // The folder read surface (the folderId source for template
             // writes): the templates read pattern — no caller-wide gate, the
             // list answers an empty page for an unsighted owner (no 403 path

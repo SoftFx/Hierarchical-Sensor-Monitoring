@@ -80,7 +80,7 @@ namespace HSMServer.Mcp
             McpToolWriteErrors.Unwrap(await _verification.SendTestMessageAsync(chatId, channel, User));
 
         [McpServerTool(Name = "create_chat_telegram_invitation", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Issues a ONE-SHOT Telegram invitation for a chat, valid 10 minutes: the link for a direct chat or the /start@bot command for a group, plus the steps a PERSON performs inside Telegram — the orchestrator cannot press Start itself. The binding lands when that person completes it; read get_chat's telegramChatId afterwards. Requires the Telegram bot to be running (see update_telegram_bot).")]
+        [Description("Issues a ONE-SHOT Telegram invitation for a chat, valid 10 minutes: the link for a direct chat or the /start@bot command for a group, plus the steps a PERSON performs inside Telegram — the orchestrator cannot press Start itself. The binding lands when that person completes it; read get_chat's telegramChatId afterwards. Requires the Telegram bot to be running — update_telegram_bot with the bot token starts it; a bot whose token is stored but which is not running needs the web Configuration page's Restart.")]
         public async Task<ChatInvitationDto> CreateChatTelegramInvitation(
             [Description("Chat id.")] Guid chatId,
             [Description("The invitation kind: \"direct\" (a link to open and press Start) or \"group\" (a command to post into the group after adding the bot with admin rights).")] string kind) =>
