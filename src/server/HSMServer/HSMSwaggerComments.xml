@@ -85,6 +85,12 @@
             two builder runs never overlap, and signals that arrive during a run coalesce into one more run.
             </summary>
         </member>
+        <member name="P:HSMServer.BackgroundServices.LargeFileArchiveBackgroundService.OnWaitingForPeriod">
+            <summary>
+            Test seam: called each time the loop goes idle until its period or a signal, with true when a wake-up is
+            already pending (the next run then starts at once).
+            </summary>
+        </member>
         <member name="M:HSMServer.BackgroundServices.LargeFileArchiveBackgroundService.Signal">
             <summary>Asks for a builder run as soon as the current one (if any) ends. Never blocks.</summary>
         </member>
