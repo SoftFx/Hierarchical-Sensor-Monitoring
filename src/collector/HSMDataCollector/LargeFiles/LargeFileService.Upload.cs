@@ -370,7 +370,9 @@ namespace HSMDataCollector.LargeFiles
                         return;
                     }
 
-                    if (!_sweptThisRun)
+                    // A watched or handed-over file sweeps; a routed value does not use the data folder at all (as in the
+                    // native collector), so a collector that only routes never probes it.
+                    if (!job.IsRouted && !_sweptThisRun)
                     {
                         _sweptThisRun = true;
                         SweepStaleRecords(job);

@@ -102,8 +102,9 @@ namespace HSMDataCollector.Core
         /// locked against other processes. Null (the default) takes the user's local application data folder
         /// (<c>%LOCALAPPDATA%\HSMDataCollector</c> on Windows, <c>~/.local/share/HSMDataCollector</c> elsewhere), or the
         /// temporary folder when the user has none (a service without a loaded profile): that is said once. A folder this
-        /// account cannot write makes the large file calls Unavailable (said once, naming the folder); file values above a
-        /// quarter of the session frame then go the ordinary way.
+        /// account cannot write makes the large file calls Unavailable (said once, naming the folder). Only watched and
+        /// handed-over files use it: file values above a quarter of the session frame keep no state there and go on the file
+        /// connection whatever the folder.
         /// </summary>
         public string DataFolder { get; set; }
 

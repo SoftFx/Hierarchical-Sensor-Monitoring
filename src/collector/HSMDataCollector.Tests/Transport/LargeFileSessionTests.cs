@@ -158,16 +158,32 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        // A late ack under load is not read as no ack (which would send the frame again, at-least-once, #1925): these tests
+        // count list frames.
+        private static CollectorOptions Unhurried(CollectorOptions options)
+        {
+            options.RequestTimeout = TimeSpan.FromMinutes(10);
+            return options;
+        }
+
         // A file value above a quarter of the session frame (65536 / 4) that still fits a frame: 20000 bytes of 'a' are 60000
         // bytes of JSON.
         private static int ListFramesWithTheValue(ScriptedSessionServer server) =>
             server.Accepted.Count(r => r.Op == "list" && r.Body.Contains("\"Value\":[97,97,97,97,97,97,97,97"));
 
+        // A second, small value of the same sensor sent after the first reached a list frame: a value given back to the file
+        // queue goes to its back, so a duplicate of the first would reach a list frame before this one does.
+        private static void SendBarrierAndWait(ScriptedSessionServer server, IFileSensor file)
+        {
+            file.AddValue("b");
+            Assert.True(SpinWait.SpinUntil(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[98]")), Patience));
+        }
+
         [Fact]
         public void A_routed_value_whose_registration_came_back_with_an_error_is_sent_in_a_list_frame_once()
         {
             using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
-            using (var collector = new DataCollector(OptionsFor(server)))
+            using (var collector = new DataCollector(Unhurried(OptionsFor(server))))
             {
                 server.AcceptFileUpgrades();
                 server.RefuseRegistrationOf("host/module/session/quarter", "not this time");
@@ -179,8 +195,9 @@ namespace HSMDataCollector.Tests.Transport
 
                 file.AddValue(new string('a', 20000));
 
-                Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) == 1, Patience));
-                Thread.Sleep(1000);
+                // The value reaching a list frame is the proof: a value handed back to the route again would never get there.
+                Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) >= 1, Patience));
+                SendBarrierAndWait(server, file);
 
                 Assert.Equal(1, ListFramesWithTheValue(server));
                 Assert.Equal(1, collector.LargeFileService.RoutesTaken);
@@ -195,7 +212,7 @@ namespace HSMDataCollector.Tests.Transport
 
             using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
             {
-                var options = OptionsFor(server);
+                var options = Unhurried(OptionsFor(server));
 
                 options.LargeFileTimings = timings;
 
@@ -223,8 +240,8 @@ namespace HSMDataCollector.Tests.Transport
                     for (var i = 0; i < 40 && ListFramesWithTheValue(server) == 0; i++)
                         timings.Step(collector.LargeFileService.Wake);
 
-                    Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) == 1, Patience));
-                    Thread.Sleep(1000);
+                    Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) >= 1, Patience));
+                    SendBarrierAndWait(server, file);
 
                     Assert.Equal(1, ListFramesWithTheValue(server));
                     Assert.Equal(1, collector.LargeFileService.RoutesTaken);

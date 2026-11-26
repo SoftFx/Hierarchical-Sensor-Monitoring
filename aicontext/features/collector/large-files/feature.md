@@ -136,8 +136,8 @@ every new session and every 30 minutes; `409` waits for the next session; others
   connection that holds the upload (a `404` to it: `begin` with the original facts, then `discard`), the file taken again
   when it has settled (a new upload from 0). The in-progress record goes only when the server confirmed the discard (or
   a `begin` with the original facts answered `stored`); otherwise it stays, and a file that changed while the collector was
-  down is begun under its original facts and discarded first. Once a run, the first upload sweeps the records whose file
-  is gone or changed the same way. `400 unknown op` (an older server): said once, the part expires. Not counted as a loss.
+  down is begun under its original facts and discarded first. Once a run, the first upload of a watched or handed-over file
+  sweeps the records whose file is gone or changed the same way (a routed value does not). `400 unknown op` (an older server): said once, the part expires. Not counted as a loss.
 - **Stored**: the delivered entry is written to the state first (and dropped again once the source is deleted: it only
   covers the moment between the two); then, with `DeleteAfterUpload`, the facts are compared
   again and the file is deleted through the open handle on Windows (`SetFileInformationByHandle(FileDispositionInfo)`:
@@ -200,8 +200,9 @@ once, when the user has none) / **identity** / `large-files`. The identity is th
 
 The folder is made and written (a probe file) at the first watch or hand-over after each Start, so a folder fixed between a Stop and a Start is noticed; a probe that was written but cannot be deleted leaves the folder usable (said once): a folder this account cannot write
 is told apart from a lock another process holds. Unwritable: watches are `Unavailable` and hand-overs complete
-`Unavailable`, with a reason that names the folder, said once; routed sends go the ordinary way. A routed-only collector
-never makes or probes the folder.
+`Unavailable`, with a reason that names the folder, said once. Only watched and handed-over files use the folder: routed
+sends keep no state file and no record, so they go on the file connection whether the folder can be written or not (as in
+the native collector). A routed-only collector never makes or probes the folder.
 
 | File | Holds | Lock |
 |---|---|---|

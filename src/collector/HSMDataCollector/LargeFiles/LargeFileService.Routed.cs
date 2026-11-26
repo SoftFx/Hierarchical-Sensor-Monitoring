@@ -104,9 +104,9 @@ namespace HSMDataCollector.LargeFiles
         /// </summary>
         internal bool Route(FileSensorValue value)
         {
-            // Nothing goes on the file connection before the next Start after a 1008, nor a value the uploader gave back, nor
-            // anything while the data folder cannot be written: the ordinary path takes it.
-            if (value == null || _transport == null || _keyRefused != null || _givenBack.TryGetValue(value, out _) || _store.KnownUnusable)
+            // Nothing goes on the file connection before the next Start after a 1008, nor a value the uploader gave back: the
+            // ordinary path takes it. The data folder does not matter here: a routed value keeps no state file and no record.
+            if (value == null || _transport == null || _keyRefused != null || _givenBack.TryGetValue(value, out _))
                 return false;
 
             var size = value.Value?.Count ?? 0;
