@@ -1,6 +1,6 @@
 # DataCollector Table Sensors
 
-> **Draft, not released yet.** This page describes the table sensors branch (`feature/1842-table-sensors`, epic #1842): the managed collector HSMDataCollector 4.1.0 (`4.1.0-preview` in the branch), the native collector 0.15.1, the C++ wrapper 2.0.0, and a server later than 3.44.0. The released server 3.44.0 has no table sensors.
+> **Draft, not released yet.** This page describes the table sensors branch (`feature/1842-table-sensors`, epic #1842): the managed collector HSMDataCollector 4.1.0 (`4.1.0-preview` in the branch), the native collector 0.15.2, the C++ wrapper 2.0.0, and a server later than 3.44.0. The released server 3.44.0 has no table sensors.
 
 This page is for a developer who sends rows from an application. What a table sensor is, what the site shows and how to read rows back is on [Table Sensors](Table-Sensors). All kinds of sensors are compared on [Sensor Types](Sensor-types).
 
@@ -14,7 +14,7 @@ In short: you declare a table sensor with its columns, add rows from any thread,
 |---|---|
 | Server | the first release with table sensors, later than 3.44.0, with collector sessions and table connections on (both are on by default) |
 | Managed collector (C#) | HSMDataCollector 4.1.0 (`4.1.0-preview` in the branch), .NET 6+ or .NET Framework 4.7.2+ |
-| Native collector (C, C++) | 0.15.1, built with `HSM_COLLECTOR_TABLES=ON` and `HSM_COLLECTOR_HTTP=ON`, and libcurl 8.14.0 or later with WebSocket support |
+| Native collector (C, C++) | 0.15.2 (table sensors are delivered since 0.15.1), built with `HSM_COLLECTOR_TABLES=ON` and `HSM_COLLECTOR_HTTP=ON`, and libcurl 8.14.0 or later with WebSocket support |
 | Legacy C++ wrapper | HSMCppWrapper 2.0.0 |
 | Transport | **the collector session** (the default of the managed collector since 4.0.0 and of the wrapper since 2.0.0; the native collector needs `UseSessionTransport()`) |
 
@@ -567,8 +567,8 @@ Collectors that share one access key and send large messages (over 64 KiB) take 
 - **More than 100 refused tables in one message.** The server lists at most 100; rows of the rest are reported in the log, not in each sensor's `RowsDropped`.
 - **Waiting for the table connection.** A message waits at most 15 s per attempt and three connections, then it is "not delivered" and goes again with the next tick.
 - **A logger that disposes the collector** from inside the stop line deadlocks (managed); a native logger must not call start, stop or dispose from lifecycle lines.
-- **Native on Windows with TLS:** a stop can wait for a large message the server stopped reading, longer than the stop budget (a libcurl limit; open).
-- **Native:** no run against a real server is part of 0.15.1's tests; it is tested against a second, independent test server.
+- **Native on Windows with TLS:** since 0.15.2 every send is bounded, so a stop no longer waits for a large message the server stopped reading. Two limits remain: a rare TLS message from the server can hold a send or a receive inside libcurl for up to 60 s (a stop's cancel is expected to end it within about a second; not tested), and the bound rests on how Windows was measured to behave, not on a documented guarantee.
+- **Native:** no run against a real server is part of the tests of 0.15.1 or 0.15.2; the table connection is tested against a second, independent test server. While a registration or a message waits for its answer, the native collector sends no heartbeat.
 
 ---
 
