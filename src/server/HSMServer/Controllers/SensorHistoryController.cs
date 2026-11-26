@@ -483,7 +483,10 @@ namespace HSMServer.Controllers
             Response.Headers["Content-Disposition"] = $"attachment;filename={fileName}";
 
             var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
-            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
+            // A large file value's row names its file, its size, its kind and its state (#1886), read from the store.
+            var largeFiles = HttpContext?.RequestServices?.GetService(typeof(HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore))
+                as HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore;
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions, largeFiles));
 
             return File(content, fileName.GetContentType(), fileName);
         }

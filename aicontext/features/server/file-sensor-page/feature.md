@@ -20,7 +20,7 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 - The list reads the sensor's history directly (`FileSensorPageService`), not through the user's History tab state, which belongs to whichever sensor the user selected last.
 - Every file action (`GetFile`, `GetFileStream`, `GetFileInfo`, `GetRecentFilesView`, `GetFilesPage`) answers an unknown sensor and a sensor of a product the user may not see the same way (404); it relies on the web UI access-check work.
 - Nothing a client sent (a file name, an extension, a comment, an application, a host) goes into a script or an event attribute: rows carry it as HTML-encoded text and `data-*` attributes, element ids are made of the value's time only, and the handlers in `_SensorFileContent.cshtml` read the attributes.
-- A large value never reaches the text preview or the content download of an ordinary file: both answer 404 for it.
+- A large value never reaches the text preview or the content download of an ordinary file, whatever its extension and size (a routed `SendFile` of a small txt included): the row offers no Preview and only the archive's download, and `GetFile` / `GetFileStream` answer 404 for it.
 - The download log of a file is shown to a Manager of the product and an admin only, and read only when they ask for it in the row (`GetLargeFileDownloads`), never with a page: the log is not read on every view.
 
 ## Primary Workflows
@@ -46,6 +46,10 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 | the store cannot be read now | state cannot be read now (no button, no kind); the uploads are not listed; ordinary values are shown as usual |
 
 There is no "removed by retention" state: retention removes a value's row by its key range and the store's pass then removes the file, so a large value leaves the list with its history, as any value does. The password notice appears only when a secure large file is listed. The texts of why a file cannot be downloaded are step 3's (`LargeFileDto.notReadyReason`). Where the store has no application or host, the row shows `—`.
+
+## History export
+
+The CSV export of the History tab (`SensorHistoryController.ExportHistory`) and of the Sensor API history write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
 
 ## API / Public Contracts
 

@@ -449,6 +449,33 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Null(unreadableRow.DownloadUrl);
         }
 
+        // A routed SendFile above the frame quarter arrives as a not secure large value: whatever its extension and size,
+        // no preview and no content download, only its archive.
+        [Theory]
+        [InlineData("notes.txt", 3L * 1024 * 1024)]
+        [InlineData("small.txt", 100L * 1024)]
+        [InlineData("table.csv", 2L * 1024 * 1024)]
+        public async Task ALargeTextFile_HasNoPreview_OnlyItsArchive(string name, long size)
+        {
+            var routed = AddLarge(_sensor, name, size);
+            AddValues(_sensor, 1);
+
+            _largeFiles.Files[routed.FileId] = new LargeFileStoredFacts
+            {
+                FileId = routed.FileId, SensorId = _sensor.Id, State = "packed", IsSecure = false, DownloadUrl = "/LargeFiles/Download/f/a",
+            };
+
+            var row = PageOf(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor))).Rows.Single(r => r.TimeTicks == routed.Time.Ticks);
+
+            Assert.True(row.IsLarge);
+            Assert.False(row.IsPreviewEnabled);
+            Assert.Equal("/LargeFiles/Download/f/a", row.DownloadUrl);
+            Assert.Equal(name, row.Name);
+
+            // The ordinary actions never give it out, whatever its size.
+            Assert.IsType<NotFoundResult>(await Controller(Viewer()).GetFileStream(Encode(_sensor), routed.Time.Ticks));
+        }
+
         [Fact]
         public void TheDownloadsOfAFile_AreReadOnRequest_ForAManagerOrAnAdmin_OfThisSensorsFilesOnly()
         {
