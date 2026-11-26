@@ -1377,7 +1377,7 @@ namespace
     // nothing deadlocks; the upload goes on.
     void NativeLargeFileLifecycleFromTheLoggerIsRefused()
     {
-        Rig rig;
+        // Declared before the rig: the logger reads it until the collector is destroyed.
         struct Calls
         {
             hsm_collector_t* collector = nullptr;
@@ -1385,6 +1385,7 @@ namespace
             std::atomic<int> stop_result{ -1 };
             LogLines* log = nullptr;
         } calls;
+        Rig rig;
         calls.collector = rig.collector;
         calls.log = &rig.log;
         hsm_collector_set_logger(
