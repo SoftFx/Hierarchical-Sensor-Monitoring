@@ -1296,28 +1296,39 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
 
         // A scan failure throws (the caller cannot tell an unreadable table from an empty one otherwise); a row that cannot be
-        // parsed is skipped and logged by its key, which names the product only.
-        public List<ProductDumpPasswordsEntity> ReadAllDumpPasswords()
+        // parsed is not returned, is logged by its key, which names the product only, and its product is reported, so the
+        // row is never taken for "no password" and overwritten.
+        public DumpPasswordRows ReadAllDumpPasswords()
         {
             var entities = new List<ProductDumpPasswordsEntity>();
+            var unreadable = new List<Guid>();
 
             foreach (var (key, value) in _database.GetAllKeyValuePairsStartingWith(Encoding.UTF8.GetBytes(DumpPasswordsPrefix)))
             {
+                var keyText = Encoding.UTF8.GetString(key);
+
                 try
                 {
                     var entity = JsonSerializer.Deserialize<ProductDumpPasswordsEntity>(value);
 
                     if (entity is not null)
+                    {
                         entities.Add(entity);
+                        continue;
+                    }
                 }
                 catch (Exception)
                 {
                     // The exception itself is not logged: a parser message may quote a part of the row.
-                    _logger.Error($"Failed to read the dump passwords row {Encoding.UTF8.GetString(key)}, row skipped");
                 }
+
+                _logger.Error($"Failed to read the dump passwords row {keyText}: the row is kept as it is and the product's passwords are unavailable");
+
+                if (Guid.TryParse(keyText.AsSpan(DumpPasswordsPrefix.Length), out var productId))
+                    unreadable.Add(productId);
             }
 
-            return entities;
+            return new DumpPasswordRows(entities, unreadable);
         }
 
         public void PutDumpPasswords(ProductDumpPasswordsEntity entity)

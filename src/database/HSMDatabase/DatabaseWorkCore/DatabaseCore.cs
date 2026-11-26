@@ -715,7 +715,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Dump passwords
 
-        public List<ProductDumpPasswordsEntity> GetAllDumpPasswords() => _environmentDatabase.ReadAllDumpPasswords();
+        public DumpPasswordRows GetAllDumpPasswords() => _environmentDatabase.ReadAllDumpPasswords();
 
         public void PutDumpPasswords(ProductDumpPasswordsEntity entity) => _environmentDatabase.PutDumpPasswords(entity);
 

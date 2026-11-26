@@ -80,6 +80,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
         public bool HasPassword(Guid productId) => GetCurrent(productId) is not null;
 
+        public bool IsUnreadable(Guid productId) => false;
+
         public DumpPasswordSetResult SetPassword(Guid productId, string password, bool generated, InitiatorInfo initiator)
         {
             int version;

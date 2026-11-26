@@ -2061,6 +2061,9 @@
         <member name="P:HSMServer.Model.LargeFiles.DumpPasswordViewModel.ProductId">
             <summary>The root product the password belongs to.</summary>
         </member>
+        <member name="P:HSMServer.Model.LargeFiles.DumpPasswordViewModel.IsUnreadable">
+            <summary>The stored passwords of the product cannot be read: unavailable, not unset, and no new one is saved.</summary>
+        </member>
         <member name="P:HSMServer.Model.LargeFiles.DumpPasswordViewModel.CanManage">
             <summary>A Manager of the product or an admin: sees the versions and may show, generate and set.</summary>
         </member>

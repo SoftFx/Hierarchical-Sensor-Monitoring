@@ -52,7 +52,7 @@ namespace HSMDatabase.LevelDB.Tests.EnvironmentDBTests
 
             Assert.Equal([Key(productId)], _adapter.SyncedPuts);
             Assert.Empty(_adapter.PlainPuts);
-            Assert.Equal(3, _worker.ReadAllDumpPasswords().Single(e => e.ProductId == productId).Versions.Single().Version);
+            Assert.Equal(3, _worker.ReadAllDumpPasswords().Rows.Single(e => e.ProductId == productId).Versions.Single().Version);
         }
 
         [Fact]
@@ -65,7 +65,22 @@ namespace HSMDatabase.LevelDB.Tests.EnvironmentDBTests
 
             Assert.Equal([Key(productId)], _adapter.SyncedDeletes);
             Assert.Empty(_adapter.PlainDeletes);
-            Assert.DoesNotContain(_worker.ReadAllDumpPasswords(), e => e.ProductId == productId);
+            Assert.DoesNotContain(_worker.ReadAllDumpPasswords().Rows, e => e.ProductId == productId);
+        }
+
+
+        [Fact]
+        public void ARowThatCannotBeParsed_IsNotReturned_ButItsProductIsReported()
+        {
+            var readable = Guid.NewGuid();
+            var unreadable = Guid.NewGuid();
+            _worker.PutDumpPasswords(Row(readable, 2));
+            _adapter.Put(Encoding.UTF8.GetBytes(Key(unreadable)), [0x7B, 0x22, 0xFF, 0x00]);
+
+            var read = _worker.ReadAllDumpPasswords();
+
+            Assert.Equal([readable], read.Rows.Select(e => e.ProductId));
+            Assert.Equal([unreadable], read.UnreadableProductIds);
         }
 
 

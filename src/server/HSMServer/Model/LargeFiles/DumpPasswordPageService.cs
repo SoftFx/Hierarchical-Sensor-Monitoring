@@ -21,6 +21,9 @@ namespace HSMServer.Model.LargeFiles
 
         public bool HasPassword { get; init; }
 
+        /// <summary>The stored passwords of the product cannot be read: unavailable, not unset, and no new one is saved.</summary>
+        public bool IsUnreadable { get; init; }
+
         /// <summary>A Manager of the product or an admin: sees the versions and may show, generate and set.</summary>
         public bool CanManage { get; init; }
 
@@ -62,6 +65,10 @@ namespace HSMServer.Model.LargeFiles
     {
         internal const string SavedMessage = "Saved: dump password version {0}. The kept secure archives of the product are re-encrypted with it in the background.";
 
+        internal const string UnreadableMessage =
+            "The stored dump passwords of this product cannot be read, so a new password is not saved over them. " +
+            "An administrator must look at the configuration database.";
+
         internal static readonly string TooLongMessage = $"The password is too long: at most {DumpPasswordRules.MaxLength} characters.";
 
         private readonly ITreeValuesCache _cache;
@@ -90,6 +97,7 @@ namespace HSMServer.Model.LargeFiles
             {
                 ProductId = rootId,
                 HasPassword = _passwords.HasPassword(rootId),
+                IsUnreadable = _passwords.IsUnreadable(rootId),
                 CanManage = canManage,
                 Versions = canManage
                     ? ListVersions(rootId, version => new DumpPasswordVersionViewModel(version.Version, version.SetUtc, version.SetBy,
@@ -143,6 +151,7 @@ namespace HSMServer.Model.LargeFiles
                 DumpPasswordSetOutcome.NotPrintableAscii => DumpPasswordPageResult<int>.Fail(DumpPasswordPageOutcome.Invalid,
                     "The password may contain only printable ASCII characters: Latin letters, digits, punctuation and spaces."),
                 DumpPasswordSetOutcome.TooLong => DumpPasswordPageResult<int>.Fail(DumpPasswordPageOutcome.Invalid, TooLongMessage),
+                DumpPasswordSetOutcome.StoredRowUnreadable => DumpPasswordPageResult<int>.Fail(DumpPasswordPageOutcome.Invalid, UnreadableMessage),
                 // ProductUnknown (removed meanwhile) and NotRootProduct (cannot happen: the root id is passed) answer 404.
                 _ => DumpPasswordPageResult<int>.Fail(DumpPasswordPageOutcome.NotFound),
             };

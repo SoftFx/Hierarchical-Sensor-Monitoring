@@ -208,6 +208,7 @@ namespace HSMServer.Core.Tests.Controllers
         [InlineData(DumpPasswordSetOutcome.TooLong, 400, "at most 256 characters")]
         [InlineData(DumpPasswordSetOutcome.ProductUnknown, 404, null)]
         [InlineData(DumpPasswordSetOutcome.NotRootProduct, 404, null)]
+        [InlineData(DumpPasswordSetOutcome.StoredRowUnreadable, 400, "cannot be read")]
         public void EveryRefusedSet_HasItsAnswer(DumpPasswordSetOutcome outcome, int status, string message)
         {
             _passwords.Setup(p => p.SetPassword(_root.Id, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<InitiatorInfo>()))
@@ -247,6 +248,20 @@ namespace HSMServer.Core.Tests.Controllers
 
             // The service writes the journal record from the initiator; nothing of the value goes with it.
             Assert.DoesNotContain(CurrentValue, initiator.ToString());
+        }
+
+        [Fact]
+        public void ASectionOfAProductWhosePasswordsCannotBeRead_SaysSo()
+        {
+            _passwords.Setup(p => p.HasPassword(_root.Id)).Returns(false);
+            _passwords.Setup(p => p.IsUnreadable(_root.Id)).Returns(true);
+            var service = new DumpPasswordPageService(_cache.Object, _passwords.Object, _config.Object);
+
+            Assert.True(service.GetSection(Manager(), _root.Id).IsUnreadable);
+            Assert.True(service.GetSection(Viewer(), _nested.Id).IsUnreadable);
+
+            _passwords.Setup(p => p.IsUnreadable(_root.Id)).Returns(false);
+            Assert.False(service.GetSection(Viewer(), _root.Id).IsUnreadable);
         }
 
         [Fact]

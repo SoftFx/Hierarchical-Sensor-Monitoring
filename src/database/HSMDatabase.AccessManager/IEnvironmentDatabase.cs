@@ -94,7 +94,7 @@ namespace HSMDatabase.AccessManager
 
         // The dump passwords of products (ADR-0022 point 13), one row per product. Unlike products, the writes THROW on
         // failure so a change of a password fails visibly; nothing here logs the value.
-        List<ProductDumpPasswordsEntity> ReadAllDumpPasswords();
+        DumpPasswordRows ReadAllDumpPasswords();
         void PutDumpPasswords(ProductDumpPasswordsEntity entity);
         void RemoveDumpPasswords(Guid productId);
 
