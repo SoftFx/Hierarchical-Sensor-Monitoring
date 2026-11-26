@@ -127,6 +127,68 @@ namespace HSMDataCollector.Tests.LargeFiles
             }
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void A_routed_value_that_has_not_begun_goes_back_to_the_file_queue_at_a_stop_or_dispose(bool dispose)
+        {
+            var (h, requeued, dropped) = Routing();
+
+            using (h)
+            {
+                // Its sensor's registration is not acknowledged yet: no begin.
+                h.Transport.Registration = _ => null;
+
+                var value = FileValue(Piece + 1);
+
+                Assert.True(h.Service.Route(value));
+                h.Steps(5);
+                Assert.Equal(0, h.Store.BeginCount("report.txt"));
+
+                if (dispose)
+                    h.Service.Dispose();
+                else
+                    h.Service.Stop();
+
+                // As in the native collector: the stop drain sends it the ordinary way, and it never takes the route again.
+                Assert.Same(value, requeued.Single());
+                Assert.Empty(dropped);
+                Assert.DoesNotContain(h.Errors, e => e.Contains("dropped"));
+                Assert.False(h.Service.Route(value));
+            }
+        }
+
+        [Fact]
+        public void At_a_stop_a_routed_value_whose_upload_began_is_dropped_and_counted_and_the_one_behind_it_goes_back()
+        {
+            var (h, requeued, dropped) = Routing();
+
+            using (h)
+            {
+                var hold = new ManualResetEventSlim(false);
+
+                h.Transport.FakeChannel.BeforePieceAnswer = n => { if (n == 1) h.Transport.FakeChannel.HoldPieces = hold; };
+
+                var began = FileValue(Piece * 3);
+                var behind = FileValue(Piece + 1);
+
+                Assert.True(h.Service.Route(began));
+                Assert.True(h.AdvanceUntil(() => h.Store.PieceNumbersSnapshot().Count >= 2));
+                Assert.True(h.Service.Route(behind));
+
+                h.Service.Stop();
+                hold.Set();
+                h.Transport.FakeChannel.BeforePieceAnswer = null;
+                h.Transport.FakeChannel.HoldPieces = null;
+
+                Assert.Same(behind, requeued.Single());
+                lock (dropped)
+                    Assert.Equal(1, dropped.Sum());
+                Assert.Contains(h.Errors, e => e.Contains("dropped") && e.Contains("report.txt") && e.Contains((Piece * 3).ToString()));
+                Assert.Equal(0, h.Store.StoredCount("report.txt"));
+            }
+        }
+
         [Fact]
         public void A_refused_routed_value_is_a_dropped_file_value()
         {

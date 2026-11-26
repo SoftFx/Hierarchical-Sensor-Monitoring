@@ -33,6 +33,9 @@ uploader (`../large-files/feature.md`, "Routed sends") and counts it as delivere
 memory (past it a value is not taken and goes the ordinary way). A value the uploader cannot
 store is said and counted under the file queue (`DataProcessor.ReportDroppedFileValues`); one it cannot send because the
 server has no file connection is given back to the file queue (`DataProcessor.RequeueFile`) and goes the ordinary way.
+So is one a stop or dispose finds without an answered `begin`: the file queue takes a given-back value whatever the
+collector's state (`QueueProcessorBase.EnqueueGivenBack`, as a retry), and the stop drains the file queue only after the
+uploader's stop, so the drain sends it.
 
 ## Enqueue results
 

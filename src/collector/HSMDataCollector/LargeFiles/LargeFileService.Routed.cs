@@ -76,6 +76,16 @@ namespace HSMDataCollector.LargeFiles
 
         private static readonly object Marked = new object();
 
+        /// <summary>For tests: the routed values waiting for the file connection (taken, not yet stored, given back or dropped).</summary>
+        internal int RoutedValuesWaiting
+        {
+            get
+            {
+                lock (_gate)
+                    return _routed.Count;
+            }
+        }
+
         /// <summary>For tests: how many values the route took.</summary>
         internal long RoutesTaken => Interlocked.Read(ref _routesTaken);
 
@@ -236,21 +246,31 @@ namespace HSMDataCollector.LargeFiles
                 CountDroppedFile(job.Routed, reason);
         }
 
-        private void DropAllRouted(string why)
+        // A stop or dispose, once the thread is over (so no begin is answered after this). Routed sends are values: one no
+        // begin was answered for goes back to the file queue, whose stop drain sends it the ordinary way (a list frame where
+        // it fits, else dropped and counted), so a server without file connections loses nothing it got before large files.
+        // One whose upload had begun is dropped, said and counted, as a value queue drops what it could not send at a stop.
+        // The same in the native collector.
+        private void ReleaseAllRouted(string why)
         {
-            List<Routed> dropped;
+            List<Routed> all;
 
             lock (_gate)
             {
-                dropped = _routed.ToList();
+                all = _routed.ToList();
                 _routed.Clear();
                 _routedBytes = 0;
             }
 
+            foreach (var item in all.Where(r => !r.Began))
+                GiveBack(item);
+
+            var dropped = all.Where(r => r.Began).ToList();
+
             if (dropped.Count == 0)
                 return;
 
-            Report($"{dropped.Count} file value(s) larger than a quarter of a session frame were dropped: {why} before they were stored ({string.Join("; ", dropped.Take(5))}{(dropped.Count > 5 ? "; ..." : string.Empty)}).");
+            Report($"{dropped.Count} file value(s) larger than a quarter of a session frame were dropped: {why} while they were sent on the file connection ({string.Join("; ", dropped.Take(5))}{(dropped.Count > 5 ? "; ..." : string.Empty)}).");
 
             try { _countDroppedFileValues?.Invoke(dropped.Count); }
             catch (Exception) { }

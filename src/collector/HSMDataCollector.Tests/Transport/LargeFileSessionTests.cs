@@ -250,6 +250,34 @@ namespace HSMDataCollector.Tests.Transport
         }
 
         [Fact]
+        public void A_routed_value_that_has_not_begun_at_a_stop_goes_in_a_list_frame_of_the_stop_drain()
+        {
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
+            using (var collector = new DataCollector(Unhurried(OptionsFor(server))))
+            {
+                server.AcceptFileUpgrades();
+
+                // Every registration faults: the routed value waits for its acknowledgement and never begins.
+                server.AckWith("commands", 500);
+
+                var file = collector.CreateFileSensor("session/quarter", "report");
+
+                collector.Start().Wait();
+                Assert.True(SpinWait.SpinUntil(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/quarter")), Patience));
+
+                file.AddValue(new string('a', 20000));
+
+                Assert.True(SpinWait.SpinUntil(() => collector.LargeFileService != null && collector.LargeFileService.RoutesTaken == 1, Patience));
+                Assert.Equal(0, ListFramesWithTheValue(server));
+
+                collector.Stop().Wait();
+
+                Assert.Equal(1, ListFramesWithTheValue(server));
+                Assert.Equal(0, server.Files.BeginCount("report.txt"));
+            }
+        }
+
+        [Fact]
         public void A_collector_on_http_cannot_send_large_files_and_says_so()
         {
             var options = new CollectorOptions { AccessKey = "k", ServerAddress = "https://localhost", Port = 44399, Transport = CollectorTransport.Http };

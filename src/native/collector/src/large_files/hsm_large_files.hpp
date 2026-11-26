@@ -266,6 +266,8 @@ namespace hsm::collector::large_files
         /// The bound of the routed sends waiting in memory, instead of 64 MiB, when positive.
         std::atomic<std::int64_t> max_routed_bytes_for_tests{ 0 };
         bool UploaderAliveForTests() const;
+        /// The routed sends waiting for the file connection: taken, and not yet stored, given back or dropped.
+        std::size_t RoutedWaitingForTests() const;
 
     private:
         void MakeThread();

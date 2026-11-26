@@ -387,10 +387,10 @@ namespace HSMDataCollector.LargeFiles
                 _wake.Set();
             }
 
-            DropAllRouted("the collector stopped");
-
             // A routed upload that was cut discards its part on this connection first (its thread, within the wait below).
             WaitForThread(thread);
+
+            ReleaseAllRouted("the collector stopped");
 
             try { _transport?.Channel.Close("the collector stopped"); }
             catch (Exception) { }
@@ -425,8 +425,6 @@ namespace HSMDataCollector.LargeFiles
             foreach (var item in handed)
                 item.Complete(new LargeFileResult(LargeFileOutcome.Cancelled, "the collector is disposed"));
 
-            DropAllRouted("the collector was disposed");
-
             // Handed-over files are not kept across a restart: the ones still waiting are lost to this collector.
             if (handed.Count > 0)
             {
@@ -443,6 +441,9 @@ namespace HSMDataCollector.LargeFiles
             catch (Exception) { }
 
             WaitForThread(thread);
+
+            // Before the file queue is disposed (DataProcessor.Dispose disposes this service first).
+            ReleaseAllRouted("the collector was disposed");
 
             foreach (var watch in watches)
                 ReleaseWatchLockIfIdle(watch);

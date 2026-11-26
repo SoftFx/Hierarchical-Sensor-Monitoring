@@ -177,11 +177,14 @@ namespace HSMDataCollector.Core
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
 
             if (mode.FlushAcceptedWork())
-                await StopWithFlushAsync(mode, failures).ConfigureAwait(false);
+            {
+                await StopWithFlushAsync(mode, largeFilesStop, failures).ConfigureAwait(false);
+            }
             else
+            {
+                await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
-
-            await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
+            }
 
             ReportUnreportedOverflow();
 
@@ -189,7 +192,7 @@ namespace HSMDataCollector.Core
                 throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
         }
 
-        private async Task StopWithFlushAsync(ShutdownMode mode, List<Exception> failures)
+        private async Task StopWithFlushAsync(ShutdownMode mode, Task largeFilesStop, List<Exception> failures)
         {
             // Stop all queues so their processing loops exit; items remain in each queue's buffer
             // ready for a bounded flush. Each StopAsync returns whether the loop actually exited
@@ -261,6 +264,11 @@ namespace HSMDataCollector.Core
                 // have nowhere safe to land — the data queue is no longer accepting writes, and a
                 // later restart would otherwise see stale stop-cycle telemetry as the first emitted values.
                 Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
+
+                // The large files' stop gives the routed values no begin was answered for back to the file queue (as in the
+                // native collector, whose stop does it before its drain): its drain waits for that. Bounded, and it ran beside
+                // the drains above.
+                await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
 
                 if (fileStopped)
                     await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures, valuesFailed).ConfigureAwait(false);
@@ -379,18 +387,17 @@ namespace HSMDataCollector.Core
         }
 
         /// <summary>
-        /// A file value the large file uploader gave back (#1888, amendment: the file connection turned out to be missing
-        /// on this session): it goes the way of any file value again. One the queue no longer takes (a stop) is dropped and
-        /// counted under the file queue.
+        /// A file value the large file uploader gave back (#1888: the file connection turned out to be missing on this
+        /// session, its registration failed, or a stop came before its upload began): it goes the way of any file value again.
+        /// Taken whatever the collector's state, as in the native collector, so the stop drain sends what a stop gave back.
+        /// One the queue cannot take is dropped and counted under the file queue (the queue reports an overflow itself).
         /// </summary>
         internal void RequeueFile(FileSensorValue file)
         {
-            var result = EnqueueGated(_fileQueue, file);
+            var result = _fileQueue.EnqueueGivenBack(file);
 
-            if (result.DroppedCount > 0)
-                EmitOverflowDrops(_fileQueue.QueueName, result.DroppedCount);
-            else if (!result.IsAccepted)
-                EmitOverflowDrops(_fileQueue.QueueName, 1);
+            if (!result.IsAccepted)
+                EmitOverflowDrops(_fileQueue.QueueName, 1 + result.DroppedCount);
         }
 
         /// <summary>A file value sent on the file connection that was not stored: counted where a dropped file value is.</summary>

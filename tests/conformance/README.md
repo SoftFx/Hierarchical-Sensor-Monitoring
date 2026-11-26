@@ -330,7 +330,8 @@ each followed by a handshake: the step waits until the uploader has looked at th
 server decides (an ack-deadline seam). Each case has its own data folder, so `large_file_restart` finds that case's state.
 The scripted server offers file connections only after `file_server_accept_upgrades`: without it, it stands for a server
 older than large files, so `session_transport_contract`'s `file_larger_than_a_frame_is_dropped` keeps its meaning in both
-drivers (no file connection: the file is dropped), and `large_file_contract` pins the routed send of such a file.
+drivers (no file connection: the file is dropped), and `large_file_contract` pins the routed send of such a file and its
+return to the stop drain when a stop comes before its upload began.
 
 The verbs and the answers each `file_server_answer_*_next` takes are listed in the fixture's header. Both drivers
 implement every verb (managed 4.2.0, #1888; native 0.16.0, #1887); the native driver runs the fixture in builds with
