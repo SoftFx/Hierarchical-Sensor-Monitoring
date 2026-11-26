@@ -170,25 +170,26 @@ namespace HSMServer.Core.Tests.Views
         public async Task RecentFiles_KeepTheFileExtensionOutOfScript()
         {
             // An extension is free text from the collector. It used to be written into inline handlers as a
-            // quoted script string; now it travels as a data attribute, which is only ever read as text.
+            // quoted script string; now it travels as a data attribute, which is only ever read as text. The list is a
+            // page of the File sensor page (#1886): its handlers live in _SensorFileContent and read the attributes.
             const string extension = "x'+alert(1)+'";
 
-            var table = new HistoryTableViewModel(_file);
+            var page = new HSMServer.Model.FileSensors.FileValuesPageViewModel
+            {
+                EncodedId = _file.Id.ToString(),
+                Rows =
+                [
+                    HSMServer.Model.FileSensors.FileValueRowViewModel.From(new FileValue { Name = "first", Extension = "txt", Value = [], Time = DateTime.UtcNow }),
+                    HSMServer.Model.FileSensors.FileValueRowViewModel.From(new FileValue { Name = "second", Extension = extension, Value = [], Time = DateTime.UtcNow.AddSeconds(1) }),
+                ],
+            };
 
-            table.Pages.Add(
-            [
-                new FileValue { Name = "first", Extension = "txt", Value = [], Time = DateTime.UtcNow },
-                new FileValue { Name = "second", Extension = extension, Value = [], Time = DateTime.UtcNow },
-            ]);
+            var html = await Render("~/Views/Home/_FileAccordions.cshtml", page);
 
-            var html = await Render("~/Views/Home/_FileAccordions.cshtml", table);
+            Assert.Contains("data-extension='x&#x27;&#x2B;alert(1)&#x2B;&#x27;'", html);
 
-            Assert.Contains("data-extension=\"x&#x27;&#x2B;alert(1)&#x2B;&#x27;\"", html);
-            Assert.Contains("this.dataset.extension", html);
-
-            // No handler attribute carries the extension any more.
-            foreach (var handler in html.Split("onclick=\"").Skip(1).Select(h => h[..h.IndexOf('"')]))
-                Assert.DoesNotContain("alert", handler);
+            // No handler attribute at all, so none carries the extension.
+            Assert.DoesNotContain("onclick", html);
         }
 
 
