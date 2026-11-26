@@ -1,0 +1,60 @@
+name: Server tests
+
+# The server test projects of HSMServer.sln (HSMServer.Core.Tests, HSMDatabase.LevelDB.Tests,
+# HSMDatabase.SealedHistory.Tests, HSMTableBlocks.Tests) on every pull request. Before this lane they ran
+# only inside the release build (server-build.yml, push to master/develop), so a red server test showed up
+# after the merge. #1943 made the run short enough for a pull request; server-build.yml keeps its own run.
+# The test steps mirror the "build" job of server-build.yml: same runner, SDK, Node, restore and test
+# command (Node because building HSMServer runs its webpack bundle).
+
+# No paths filter on pull_request: a path-filtered check never reports on other PRs, so it could
+# not be made a required check.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same pull request cancels the run it supersedes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
+
+jobs:
+  server-tests:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build & Test Solution
+        run: >
+          dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
+          --logger "console;verbosity=minimal"
+          --logger trx
+          --results-directory ${{ runner.temp }}/test-results
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore

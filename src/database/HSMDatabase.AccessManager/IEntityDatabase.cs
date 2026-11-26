@@ -1,8 +1,10 @@
 ﻿using HSMCommon.TaskResult;
+using System;
 
 namespace HSMDatabase.AccessManager
 {
-    public interface IEntityDatabase
+    // Disposing it closes the database and releases its files.
+    public interface IEntityDatabase : IDisposable
     {
         bool TryRead(byte[] key, out byte[] value);
 

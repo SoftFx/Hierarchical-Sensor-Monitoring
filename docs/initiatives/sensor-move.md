@@ -60,5 +60,5 @@ HSM cannot move a sensor. A collector that changes its layout leaves the old sen
 ## Verification
 
 - xUnit in `HSMServer.Core.Tests`: same/cross-product move, history and policies intact, settings re-parented, templates re-evaluated, conflict, aliases (redirect, cross-product queue hop, persistence across restart, sweep, displacement), journal records.
-- Server tests run locally (they are not gated on PRs).
+- Server tests run locally (when this was written they were not gated on PRs; since #1943 `server-tests.yml` runs them on every pull request).
 - Feature doc `aicontext/features/server/sensor-move/feature.md` updated with every step.
