@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,7 +29,7 @@ namespace HSMServer.Core.Tests.Notifications
         private const string Token = "110201543:AAE-token-value-zzzzzzzzzzzzzzzzzzzzzzzzz";
         private const string OtherToken = "220301543:AAE-other-token-yyyyyyyyyyyyyyyyyyyy";
 
-        private readonly MemoryTarget _memory = new() { Layout = "${message}" };
+        private readonly MemoryTarget _memory = new() { Layout = "${level:uppercase=true}|${message}" };
         private readonly LoggingConfiguration _previous = LogManager.Configuration;
 
         private readonly Mock<IChatsManager> _chats = new();
@@ -47,6 +48,29 @@ namespace HSMServer.Core.Tests.Notifications
 
 
         private string Logs => string.Join('\n', _memory.Logs);
+
+        // What a refusal or a failure leaves behind. A start that disposing the bot ended is
+        // neither, and must leave none.
+        private string[] ErrorLines => [.. _memory.Logs.Where(line => line.StartsWith("Error|"))];
+
+        // Two chats bound to Telegram: the start's name synchronization asks about each.
+        private void BindTwoChats()
+        {
+            static HSMServer.Notifications.Chats.Chat Bound(string name)
+            {
+                var chat = new HSMServer.Notifications.Chats.Chat(new HSMDatabase.AccessManager.DatabaseEntities.ChatEntity
+                {
+                    Id = Guid.NewGuid().ToByteArray(),
+                    Name = name,
+                });
+
+                chat.UpdateChatId(new ChatId(-1001234567));
+
+                return chat;
+            }
+
+            _chats.Setup(c => c.GetValues()).Returns([Bound("ops"), Bound("on-call")]);
+        }
 
         private static TelegramConfig ConfigWith(string token) =>
             new() { BotName = "hsm_alerts_bot", BotToken = token, IsRunning = true };
@@ -259,9 +283,10 @@ namespace HSMServer.Core.Tests.Notifications
 
 
         [Fact]
-        public async Task StartBotAsync_AStartTelegramRefuses_RemembersNoUsername()
+        public async Task StartBotAsync_AStartTelegramRefuses_RemembersNoUsername_AndDisposesItsClient()
         {
             var client = new Mock<ITelegramBotClient>();
+            var owned = client.As<IDisposable>();
             AnswerTheStart(client);
             FailGetMe(client, new ApiRequestException("Unauthorized", 401));
             await using var bot = CreateBot(ConfigWith(Token), client.Object);
@@ -270,6 +295,7 @@ namespace HSMServer.Core.Tests.Notifications
 
             Assert.False(bot.IsBotRunning);
             Assert.Null(bot.UsernameOfRunningBot(Token));
+            owned.Verify(d => d.Dispose(), Times.Once);
         }
 
         [Fact]
@@ -279,6 +305,7 @@ namespace HSMServer.Core.Tests.Notifications
             // running and receives nothing: the status the management surface echoes would
             // then be a lie.
             var client = new Mock<ITelegramBotClient>();
+            var owned = client.As<IDisposable>();
             AnswerGetMe(client, new User { Username = "hsm_alerts_bot" });
             client.Setup(c => c.SendRequest<bool>(It.IsAny<IRequest<bool>>(), It.IsAny<CancellationToken>()))
                 .Throws(new ApiRequestException($"Request failed for {Token}", 500));
@@ -290,6 +317,7 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Contains("error", message, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(Token, message);
             Assert.DoesNotContain(Token, Logs);
+            owned.Verify(d => d.Dispose(), Times.Once);
         }
 
 
@@ -301,6 +329,7 @@ namespace HSMServer.Core.Tests.Notifications
             // on the gate until Telegram answers or the request times out.
             var asking = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var client = new Mock<ITelegramBotClient>();
+            var owned = client.As<IDisposable>();
             AnswerTheStart(client);
             client.Setup(c => c.SendRequest<User>(It.IsAny<IRequest<User>>(), It.IsAny<CancellationToken>()))
                 .Returns(async (IRequest<User> _, CancellationToken cancellation) =>
@@ -320,7 +349,48 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(TelegramBot.BotIsDisposedError, await start.WaitAsync(TimeSpan.FromSeconds(5)));
 
             // The end of the bot is no refusal of its credentials: nothing of the kind is logged.
-            Assert.DoesNotContain("Invalid credentials", Logs);
+            Assert.Empty(ErrorLines);
+
+            // The start's client did not come up: it is disposed, not left for the collector.
+            owned.Verify(d => d.Dispose(), Times.Once);
+        }
+
+
+        [Fact]
+        public async Task DisposeAsync_DuringTheNameSynchronization_OfAStart_EndsTheStartQuietly()
+        {
+            // A start syncs the names of the bound chats before it begins receiving. Disposing
+            // in the middle of that cancels the sync: the pass ends at once, not with an error
+            // line per remaining chat, and the start answers "disposed" — not the text of a
+            // null reference to a client a stop has just cleared.
+            BindTwoChats();
+
+            var syncing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var client = new Mock<ITelegramBotClient>();
+            var owned = client.As<IDisposable>();
+            AnswerTheStart(client);
+            AnswerGetMe(client, new User { Username = "hsm_alerts_bot" });
+            client.Setup(c => c.SendRequest<ChatFullInfo>(It.IsAny<IRequest<ChatFullInfo>>(), It.IsAny<CancellationToken>()))
+                .Returns(async (IRequest<ChatFullInfo> _, CancellationToken cancellation) =>
+                {
+                    syncing.TrySetResult();
+                    await Task.Delay(Timeout.Infinite, cancellation);
+                    return new ChatFullInfo();
+                });
+            var bot = CreateBot(ConfigWith(Token), client.Object);
+
+            var start = bot.StartBotAsync();
+            await syncing.Task;
+
+            await bot.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(TelegramBot.BotIsDisposedError, await start.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.False(bot.IsBotRunning);
+            Assert.Empty(ErrorLines);
+
+            // The first chat only: the cancelled pass does not go on to the second.
+            client.Verify(c => c.SendRequest<ChatFullInfo>(It.IsAny<IRequest<ChatFullInfo>>(), It.IsAny<CancellationToken>()), Times.Once);
+            owned.Verify(d => d.Dispose(), Times.Once);
         }
 
 
@@ -408,19 +478,29 @@ namespace HSMServer.Core.Tests.Notifications
         public async Task GetBotUsernameAsync_DisposesTheClientItBuilt_AndLeavesTheRunningOneAlone()
         {
             // The probe's client is used once: it takes its HttpClient with it. The running
-            // client stays for as long as the bot runs.
-            var client = new Mock<ITelegramBotClient>();
-            var owned = client.As<IDisposable>();
-            AnswerTheStart(client);
-            AnswerGetMe(client, new User { Username = "hsm_alerts_bot" });
-            await using var bot = CreateBot(ConfigWith(Token), client.Object);
+            // client is another one, and it stays for as long as the bot runs.
+            var running = new Mock<ITelegramBotClient>();
+            var runningOwned = running.As<IDisposable>();
+            AnswerTheStart(running);
+            AnswerGetMe(running, new User { Username = "hsm_alerts_bot" });
+
+            var probes = new Mock<ITelegramBotClient>();
+            var probeOwned = probes.As<IDisposable>();
+            AnswerGetMe(probes, new User { Username = "other_bot" });
+
+            await using var bot = CreateBot(ConfigWith(Token), token => token == Token ? running.Object : probes.Object);
             await bot.StartBotAsync();
-            owned.Verify(d => d.Dispose(), Times.Never);
 
-            await bot.GetBotUsernameAsync(OtherToken);
+            var probe = await bot.GetBotUsernameAsync(OtherToken);
 
-            owned.Verify(d => d.Dispose(), Times.Once);
+            Assert.Equal(TelegramTokenVerdict.Accepted, probe.Verdict);
+            probeOwned.Verify(d => d.Dispose(), Times.Once);
+            runningOwned.Verify(d => d.Dispose(), Times.Never);
+
+            // The running client is the one that answered the start, and nothing else was
+            // asked of it since.
             Assert.True(bot.IsBotRunning);
+            running.Verify(c => c.SendRequest<bool>(It.IsAny<IRequest<bool>>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
 

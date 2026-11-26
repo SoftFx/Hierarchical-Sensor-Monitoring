@@ -2064,10 +2064,10 @@
             configured holds nulls, and the form posts an empty field as an empty string.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.Model.Configuration.TelegramBotSettings,HSMServer.Model.Configuration.TelegramBotSettings)">
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.Model.Configuration.TelegramBotSettingsDiff,HSMServer.Model.Configuration.TelegramBotSettings,HSMServer.Model.Configuration.TelegramBotSettings)">
             <inheritdoc cref="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.ServerConfiguration.TelegramConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel)"/>
         </member>
-        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Apply(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramBotSettings,HSMServer.Model.Configuration.TelegramBotSettings)">
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Apply(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramBotSettingsDiff,HSMServer.Model.Configuration.TelegramBotSettings)">
             <summary>
             Applies a save to the configuration and persists it. Only a setting that changes
             is written: one that keeps its value is not saved over, so a writer of another

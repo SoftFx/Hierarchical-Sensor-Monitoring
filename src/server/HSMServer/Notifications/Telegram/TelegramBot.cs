@@ -209,8 +209,9 @@ namespace HSMServer.Notifications
 
         // The library's client over the HttpClient it was built on. ITelegramBotClient has
         // no Dispose, so this is what lets a dropped client take its HttpClient with it: the
-        // probe's does; the running one is dropped as it always was — disposing it under the
-        // receiving loop's feet is not worth the handler it frees. Internal for its own test.
+        // probe's does, and so does the client of a start that does not complete. The running
+        // one is dropped as it always was — disposing it under the receiving loop's feet is
+        // not worth the handler it frees. Internal for its own test.
         internal sealed class OwnedClient(ITelegramBotClient client, HttpClient http) : ITelegramBotClient, IDisposable
         {
             public bool LocalBotServer => client.LocalBotServer;
@@ -297,25 +298,28 @@ namespace HSMServer.Notifications
             // The token THIS start is attempted with: the redaction below must target it even when
             // the saved token changes while the request is in flight.
             var token = BotToken;
-            _bot = _clientFactory(token);
+            var client = _clientFactory(token);
+            _bot = client;
             _running = new RunningBot(token, Username: null);
 
+            // The start addresses its client through the local reference: disposing the bot
+            // while the start is in flight clears the field.
             try
             {
-                var me = await _bot.GetMe(_tokenSource.Token);
+                var me = await client.GetMe(_tokenSource.Token);
 
                 _running = new RunningBot(token, me.Username);
             }
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
             {
                 // Disposing the bot ended this start: no refusal happened, and none is logged.
-                DropTheClient();
+                DropTheClient(client);
 
                 return BotIsDisposedError;
             }
             catch (Exception exc)
             {
-                DropTheClient();
+                DropTheClient(client);
 
                 // #1824: the token is a secret — the log says the credentials failed, never the
                 // value, and third-party text (the exception) is scrubbed of it too.
@@ -327,16 +331,24 @@ namespace HSMServer.Notifications
 
             try
             {
-                await _bot.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
+                await client.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
 
                 await ChatNamesSynchronization();
 
-                _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
+                // The synchronization ends quietly when the bot is being disposed.
+                if (_lifetime.IsCancellationRequested)
+                {
+                    DropTheClient(client);
+
+                    return BotIsDisposedError;
+                }
+
+                client.StartReceiving(_updateHandler, _options, _tokenSource.Token);
             }
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
             {
                 // Disposing the bot ended this start: no refusal happened, and none is logged.
-                DropTheClient();
+                DropTheClient(client);
 
                 return BotIsDisposedError;
             }
@@ -345,6 +357,7 @@ namespace HSMServer.Notifications
                 // A start that breaks off after GetMe must not leave a client that counts as
                 // running and receives nothing: it is stopped, and reported like a refusal.
                 await StopBotAsync();
+                DropTheClient(client);
 
                 _logger.Error(RedactToken(exc.ToString(), token));
 
@@ -355,11 +368,18 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
-        // Forgets the client of a start that will not complete.
-        private void DropTheClient()
+        // Ends a start that will not complete: its client is disposed — nothing receives on
+        // it, so nothing is pulled from under anything — and forgotten, whether a stop that
+        // ran meanwhile got to the field first or not.
+        private void DropTheClient(ITelegramBotClient client)
         {
-            _bot = null;
-            _running = null;
+            (client as IDisposable)?.Dispose();
+
+            if (ReferenceEquals(_bot, client))
+            {
+                _bot = null;
+                _running = null;
+            }
         }
 
         // Asks Telegram who owns a token — the check of a bot credential BEFORE anything is
@@ -523,42 +543,54 @@ namespace HSMServer.Notifications
 
         internal async Task ChatNamesSynchronization()
         {
-            if (IsBotRunning)
+            // One reference for the whole pass: a stop that runs while it is in flight clears
+            // the field.
+            var bot = _bot;
+
+            if (bot is null)
+                return;
+
+            var cancellation = _tokenSource.Token;
+
+            foreach (var chat in _chatsManager.GetValues())
             {
-                foreach (var chat in _chatsManager.GetValues())
+                if (chat.TelegramChatId is null)
+                    continue;
+
+                try
                 {
-                    if (chat.TelegramChatId is null)
-                        continue;
+                    ChatFullInfo telegramChat = await bot.GetChat(chat.TelegramChatId, cancellation);
 
-                    try
+                    if (ShouldGroupBeDeleted(telegramChat))
                     {
-                        ChatFullInfo telegramChat = await _bot.GetChat(chat.TelegramChatId, _tokenSource.Token);
-
-                        if (ShouldGroupBeDeleted(telegramChat))
-                        {
-                            if (await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System)))
-                                continue;
-                        }
-
-                        var chatName = chat.TelegramType is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
-                        var chatDescription = telegramChat.Description;
-
-                        if (chat.TelegramChatTitle != chatName || chat.TelegramChatDescription != chatDescription)
-                        {
-                            var update = new ChatUpdate()
-                            {
-                                Id = chat.Id,
-                                TelegramChatTitle = chatName,
-                                TelegramChatDescription = chatDescription,
-                            };
-
-                            await _chatsManager.TryUpdate(update);
-                        }
+                        if (await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System)))
+                            continue;
                     }
-                    catch (Exception ex)
+
+                    var chatName = chat.TelegramType is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
+                    var chatDescription = telegramChat.Description;
+
+                    if (chat.TelegramChatTitle != chatName || chat.TelegramChatDescription != chatDescription)
                     {
-                        _logger.Error($"Telegram chat '{chat.Id}' (title='{chat.TelegramChatTitle}') sync failed - {ex}");
+                        var update = new ChatUpdate()
+                        {
+                            Id = chat.Id,
+                            TelegramChatTitle = chatName,
+                            TelegramChatDescription = chatDescription,
+                        };
+
+                        await _chatsManager.TryUpdate(update);
                     }
+                }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                    // The bot is stopping, or being disposed. What is left of the pass is no
+                    // error: one line per remaining chat would be.
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Telegram chat '{chat.Id}' (title='{chat.TelegramChatTitle}') sync failed - {ex}");
                 }
             }
         }

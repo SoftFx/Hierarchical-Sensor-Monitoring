@@ -955,12 +955,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         // constrains writes only, as everywhere in the area.
 
         [Fact]
-        public void ServerSettingsRead_AdminOwner_ReadOnlyToken_Allowed()
+        public void ServerSettingsRead_AdminOwner_ReadOnlyToken_Allowed_AndRecordsNothing()
         {
             _owner.IsAdmin = true;
             _info = BuildInfo(readOnly: true);
 
-            Assert.Equal(ApiTokenAuthorization.Allowed, CreateService().AuthorizeServerSettingsRead(Principal()));
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Allowed, service.AuthorizeServerSettingsRead(Principal()));
+
+            // Allowed decisions are not per-request events, here as everywhere.
+            Assert.Empty(events);
         }
 
 

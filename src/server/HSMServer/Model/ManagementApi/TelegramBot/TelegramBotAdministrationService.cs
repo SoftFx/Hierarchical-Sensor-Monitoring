@@ -117,7 +117,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             //    changes nothing, and the working bot keeps running.
             string newBotsUsername = null;
 
-            if (diff.BotToken)
+            if (diff.TokenChanged)
             {
                 var (username, refusal) = await AskTelegramAsync(target.BotToken, TokenRejectedMessage, TokenUnreachableMessage);
 
@@ -131,9 +131,9 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             //    that was passed must be the bot of the effective token (the new one when
             //    there is one, otherwise the stored one); after a token change the stored
             //    name must be too, for an omitted field does not change.
-            if (nameGiven || diff.BotToken)
+            if (nameGiven || diff.TokenChanged)
             {
-                var effectiveToken = diff.BotToken ? target.BotToken : current.BotToken;
+                var effectiveToken = diff.TokenChanged ? target.BotToken : current.BotToken;
 
                 // A new token was just asked about. The stored one is known to the running
                 // bot from its start: a name that matches needs no call to Telegram.
@@ -141,7 +141,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
 
                 if (!IsTheNameOf(target.BotName, username))
                 {
-                    if (diff.BotToken)
+                    if (diff.TokenChanged)
                         // Telegram has just answered, and the name is not the one it reported.
                         return Refused("botName", string.Format(NameMismatchMessage, "new", username));
 
@@ -163,15 +163,15 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             if (!diff.Any)
                 return PolicyWriteResult<TelegramBotDto>.Ok(Status());
 
-            var changes = TelegramSettingsChanges.Between(current, target);
-            TelegramSettingsChanges.Apply(_config, current, target);
+            var changes = TelegramSettingsChanges.Between(diff, current, target);
+            TelegramSettingsChanges.Apply(_config, diff, target);
 
             var initiator = ChangeSetRecorder.InitiatorOf(caller, _users);
             TelegramSettingsChanges.Write(changes, _journal, initiator);
             _logger.Info(TelegramSettingsChanges.Describe(changes, initiator.Info));
 
             // Only a token change restarts the bot: the name and the switch are read live.
-            if (diff.BotToken)
+            if (diff.TokenChanged)
             {
                 // The save has landed. A start that fails — or throws — must not turn this
                 // into a failure the caller would read as "not saved" (the same call again

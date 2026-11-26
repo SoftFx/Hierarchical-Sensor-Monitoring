@@ -27,14 +27,14 @@ namespace HSMServer.Model.Configuration
     /// are the same value: a server that was never configured holds nulls, and the web form
     /// posts an empty field as an empty string.
     /// </summary>
-    internal readonly record struct TelegramBotSettingsDiff(bool IsEnabled, bool BotToken, bool BotName)
+    internal readonly record struct TelegramBotSettingsDiff(bool EnabledChanged, bool TokenChanged, bool NameChanged)
     {
-        internal bool Any => IsEnabled || BotToken || BotName;
+        internal bool Any => EnabledChanged || TokenChanged || NameChanged;
 
         internal static TelegramBotSettingsDiff Between(TelegramBotSettings current, TelegramBotSettings posted) => new(
-            IsEnabled: current.IsEnabled != posted.IsEnabled,
-            BotToken: JournalAppender.Change.SecretChanged(current.BotToken ?? string.Empty, posted.BotToken ?? string.Empty),
-            BotName: (current.BotName ?? string.Empty) != (posted.BotName ?? string.Empty));
+            EnabledChanged: current.IsEnabled != posted.IsEnabled,
+            TokenChanged: JournalAppender.Change.SecretChanged(current.BotToken ?? string.Empty, posted.BotToken ?? string.Empty),
+            NameChanged: (current.BotName ?? string.Empty) != (posted.BotName ?? string.Empty));
     }
 
 
@@ -69,12 +69,16 @@ namespace HSMServer.Model.Configuration
         internal static IReadOnlyList<Change> Save(IServerConfig config, TelegramSettingsViewModel posted, string userName,
             JournalAppender journal)
         {
-            var changes = Between(config.Telegram, posted);
+            var current = TelegramBotSettings.Of(config.Telegram);
+            var target = TelegramBotSettings.Of(posted);
+            var diff = TelegramBotSettingsDiff.Between(current, target);
 
-            if (changes.Count == 0)
-                return changes;
+            if (!diff.Any)
+                return [];
 
-            Apply(config, TelegramBotSettings.Of(config.Telegram), TelegramBotSettings.Of(posted));
+            var changes = Between(diff, current, target);
+
+            Apply(config, diff, target);
 
             Write(changes, journal, InitiatorInfo.AsUser(userName));
 
@@ -86,24 +90,28 @@ namespace HSMServer.Model.Configuration
         /// absent and an empty value are the same setting: a server that was never
         /// configured holds nulls, and the form posts an empty field as an empty string.
         /// </summary>
-        internal static List<Change> Between(TelegramConfig current, TelegramSettingsViewModel posted) =>
-            Between(TelegramBotSettings.Of(current), TelegramBotSettings.Of(posted));
+        internal static List<Change> Between(TelegramConfig current, TelegramSettingsViewModel posted)
+        {
+            var currentSettings = TelegramBotSettings.Of(current);
+            var postedSettings = TelegramBotSettings.Of(posted);
+
+            return Between(TelegramBotSettingsDiff.Between(currentSettings, postedSettings), currentSettings, postedSettings);
+        }
 
         /// <inheritdoc cref="Between(TelegramConfig, TelegramSettingsViewModel)"/>
-        internal static List<Change> Between(TelegramBotSettings current, TelegramBotSettings posted)
+        internal static List<Change> Between(TelegramBotSettingsDiff diff, TelegramBotSettings current, TelegramBotSettings posted)
         {
             var changes = new List<Change>();
-            var diff = TelegramBotSettingsDiff.Between(current, posted);
 
-            if (diff.IsEnabled)
+            if (diff.EnabledChanged)
                 changes.Add(new(new("Enable messages", $"{current.IsEnabled}", $"{posted.IsEnabled}"),
                     $"IsRunning: {current.IsEnabled} -> {posted.IsEnabled}"));
 
-            if (diff.BotToken)
+            if (diff.TokenChanged)
                 changes.Add(new(JournalAppender.Change.OfSecret("Bot token", current.BotToken, posted.BotToken),
                     "BotToken: changed"));
 
-            if (diff.BotName)
+            if (diff.NameChanged)
             {
                 var currentName = current.BotName ?? string.Empty;
                 var postedName = posted.BotName ?? string.Empty;
@@ -119,17 +127,15 @@ namespace HSMServer.Model.Configuration
         /// is written: one that keeps its value is not saved over, so a writer of another
         /// setting racing this one is not overwritten.
         /// </summary>
-        internal static void Apply(IServerConfig config, TelegramBotSettings current, TelegramBotSettings target)
+        internal static void Apply(IServerConfig config, TelegramBotSettingsDiff diff, TelegramBotSettings target)
         {
-            var diff = TelegramBotSettingsDiff.Between(current, target);
-
-            if (diff.IsEnabled)
+            if (diff.EnabledChanged)
                 config.Telegram.IsRunning = target.IsEnabled;
 
-            if (diff.BotToken)
+            if (diff.TokenChanged)
                 config.Telegram.BotToken = target.BotToken;
 
-            if (diff.BotName)
+            if (diff.NameChanged)
                 config.Telegram.BotName = target.BotName;
 
             config.ResaveSettings();
