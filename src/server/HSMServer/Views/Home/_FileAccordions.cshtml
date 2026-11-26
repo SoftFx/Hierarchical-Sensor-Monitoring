@@ -116,18 +116,11 @@
                                 }
                             </div>
                         </div>
-                        @if (row.Downloads is not null)
+                        @if (row.ShowsDownloads)
                         {
-                            <div class="pt-2 large-file-downloads" style="font-size: smaller">
-                                <div class="fw-bold">Downloads</div>
-                                @if (row.Downloads.Count == 0)
-                                {
-                                    <div class="text-muted">Nobody has downloaded this file.</div>
-                                }
-                                @foreach (var download in row.Downloads)
-                                {
-                                    <div>@download.TimeUtc.ToDefaultFormat() · @download.Who · @download.Channel</div>
-                                }
+                            <div class="pt-2 large-file-downloads" style="font-size: smaller" data-file="@row.FileId">
+                                <button type="button" class="btn btn-link btn-sm p-0 large-file-downloads-show">Who downloaded it</button>
+                                <div class="large-file-downloads-list"></div>
                             </div>
                         }
                     }

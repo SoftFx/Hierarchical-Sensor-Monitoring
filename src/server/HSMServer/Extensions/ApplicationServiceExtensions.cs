@@ -190,13 +190,17 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<PolicyAdministrationService>();
 
             // The file values of a File sensor for its page (#1886); stateless over the cache.
-            services.AddSingleton<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.StoreLargeFilePageSource>();
-            services.AddSingleton<HSMServer.Model.FileSensors.FileSensorPageService>();
+            // Scoped: it reads the download step's description (LargeFileDownloadService is scoped).
+            services.AddScoped<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.LargeFilePageSource>();
+            services.AddScoped<HSMServer.Model.FileSensors.FileSensorPageService>();
 
-            // The alert variables of File sensors (#1886): the link to the sensor page and whether a product's large
-            // files wait for its dump password (the dump password arrives with the download step, #1885).
+            // The alert variables of File sensors (#1886): the link to the sensor page and whether a secure large file waits
+            // for its product's dump password (#1885). Resolved at the call: the password service needs the tree.
             services.AddSingleton<HSMServer.Core.Model.Policies.IFileAlertContext>(provider =>
-                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, (_, _) => false));
+                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, (productId, fileId) =>
+                    HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(
+                        provider.GetRequiredService<IDatabaseCore>().LargeFiles,
+                        provider.GetRequiredService<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>(), productId, fileId)));
 
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its
@@ -474,6 +478,13 @@ namespace HSMServer.ServiceExtensions
         {
             // Before the tree loads: every File policy reads it, whatever creates the policy.
             HSMServer.Core.Model.Policies.FileAlertContext.Use(services.GetRequiredService<HSMServer.Core.Model.Policies.IFileAlertContext>());
+
+            // The self-monitoring of large files (#1886) counts the builder's failed builds and asks for the dump password;
+            // both are built after the collector wrapper that holds the sensors, so they are handed over here.
+            if (services.GetService<HSMServer.Core.LargeFiles.Archives.IArchiveBuilder>() is { } builder &&
+                services.GetService<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>() is { } passwords &&
+                services.GetService<DataCollectorWrapper>() is { } wrapper)
+                wrapper.LargeFileSensors.UseArchiveSide(() => System.Threading.Interlocked.Read(ref builder.Statistics.Failed), passwords.HasPassword);
 
             services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
 

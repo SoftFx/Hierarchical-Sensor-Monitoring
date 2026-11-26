@@ -216,6 +216,32 @@ namespace HSMServer.Core.Tests.Model.Policies
         }
 
         [Fact]
+        public void OnlyASecureFileOfAProductWithoutAPassword_Waits_AndAFaultOfTheStoreSaysNothing()
+        {
+            var productWith = Guid.NewGuid();
+            var productWithout = Guid.NewGuid();
+            var secure = Guid.NewGuid();
+            var notSecure = Guid.NewGuid();
+            var broken = Guid.NewGuid();
+
+            var store = new Moq.Mock<HSMDatabase.AccessManager.LargeFiles.ILargeFileStore>();
+            store.Setup(s => s.TryGetFile(secure)).Returns(new HSMDatabase.AccessManager.LargeFiles.LargeFileRecord { FileId = secure, Secure = true });
+            store.Setup(s => s.TryGetFile(notSecure)).Returns(new HSMDatabase.AccessManager.LargeFiles.LargeFileRecord { FileId = notSecure, Secure = false });
+            store.Setup(s => s.TryGetFile(broken)).Throws(new HSMDatabase.AccessManager.LargeFiles.LargeFileStoreException("disk gone"));
+
+            var passwords = new Moq.Mock<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>();
+            passwords.Setup(p => p.HasPassword(productWith)).Returns(true);
+
+            bool Waits(Guid product, Guid file) => HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(store.Object, passwords.Object, product, file);
+
+            Assert.True(Waits(productWithout, secure));
+            Assert.False(Waits(productWith, secure));
+            Assert.False(Waits(productWithout, notSecure));
+            Assert.True(Waits(productWithout, Guid.NewGuid()));
+            Assert.False(Waits(productWithout, broken));
+        }
+
+        [Fact]
         public void LinkBase_IsTheDomain_ThenTheAgentsUrl_ThenThePathAlone()
         {
             var agent = new HSMServer.ServerConfiguration.AgentConfig();

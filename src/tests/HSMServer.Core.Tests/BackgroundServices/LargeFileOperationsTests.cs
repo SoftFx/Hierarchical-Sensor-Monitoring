@@ -127,7 +127,7 @@ public sealed class LargeFileOperationsTests : IDisposable
         sensors.SendInfo();
 
         Assert.True(sensors.IsCreated);
-        Assert.Equal(12, _sensors.Count);
+        Assert.Equal(13, _sensors.Count);
         Assert.Single(_doubles);
         Assert.All(_sensors.Keys.Concat(_doubles.Keys), k => Assert.StartsWith("Large files/", k));
         Assert.Equal((0, SensorStatus.Ok), Single("Refused for space"));
@@ -220,6 +220,25 @@ public sealed class LargeFileOperationsTests : IDisposable
         ], product => product == withPassword);
 
         Assert.Equal(new LargeFileSensors.Gauges(UploadsInProgress: 1, FilesStored: 4, BytesStored: 100 * 4 + 1000, WaitingForPassword: 1), gauges);
+    }
+
+    [Fact]
+    public void The_failed_builds_counter_reads_the_archive_side_once_it_is_handed_over_and_warns_when_it_grows()
+    {
+        var sensors = new LargeFileSensors(_collector.Object, _store);
+        long failed = 0;
+
+        Assert.Equal(LargeFileBeginOutcome.Started,
+            _store.Begin(new LargeFileUploadKey(Guid.NewGuid(), Guid.NewGuid(), "a", 10, DateTime.UtcNow, null), null, 65_536, 65_536).Outcome);
+
+        // Before the archive side is built: 0.
+        sensors.SendInfo();
+
+        sensors.UseArchiveSide(() => failed, _ => true);
+        failed = 2;
+        sensors.SendInfo();
+
+        Assert.Equal([(0, SensorStatus.Ok), (2, SensorStatus.Error)], Values("Archive builds failed"));
     }
 
     [Fact]

@@ -681,6 +681,16 @@ namespace HSMServer.Controllers
             return PartialView("_FileAccordions", await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan, CurrentUser));
         }
 
+        // Who downloaded a large file of the sensor, for a Manager of the product or an admin, read when the row asks for it.
+        [HttpGet]
+        public IActionResult GetLargeFileDownloads([FromQuery] string fileId, [FromQuery] Guid file)
+        {
+            if (!TryGetSensor(fileId, out var sensor) || _files.GetDownloads(sensor.Id, file, CurrentUser) is not { } downloads)
+                return NotFound();
+
+            return PartialView("_LargeFileDownloads", downloads);
+        }
+
         // Folds into the shared helper of the web UI access-check work when it reaches this branch: the sensor exists and
         // the user may see its product, or the action answers as for an unknown id.
         private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor)

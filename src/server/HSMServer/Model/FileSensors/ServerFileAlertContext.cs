@@ -35,6 +35,26 @@ namespace HSMServer.Model.FileSensors
         public bool WaitsForDumpPassword(Guid productId, Guid fileId) => _waitsForDumpPassword(productId, fileId);
 
 
+        /// <summary>
+        /// A secure file (as its record says; a file the store cannot tell about counts as secure) of a product without a
+        /// dump password. A fault of the store answers false: a message without the note, never no message.
+        /// </summary>
+        public static bool WaitsForPassword(HSMDatabase.AccessManager.LargeFiles.ILargeFileStore store,
+            HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService passwords, Guid productId, Guid fileId)
+        {
+            try
+            {
+                var secure = store?.TryGetFile(fileId)?.Secure ?? true;
+
+                return secure && passwords is not null && !passwords.HasPassword(productId);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+
         /// <summary>Scheme, host and an explicit port, without a trailing slash; empty when none is known.</summary>
         internal string BaseAddress() => FromDomain(_domain()) ?? FromUrl(_config?.Agent?.ExternalConnectionUrl) ?? string.Empty;
 

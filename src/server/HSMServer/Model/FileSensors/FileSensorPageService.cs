@@ -132,6 +132,27 @@ namespace HSMServer.Model.FileSensors
 
         public const string NotSecureKind = "not secure";
 
+        /// <summary>
+        /// Who downloaded a large file of the sensor and when, for a Manager of the product or an admin; null when the user
+        /// may not see it or the file is not one of this sensor's. Read only when the user asks: the log is not read with a page.
+        /// </summary>
+        public LargeFileDownloadsViewModel GetDownloads(Guid sensorId, Guid fileId, User user)
+        {
+            var sensor = _cache.GetSensor(sensorId);
+            var productId = sensor?.Root?.Id ?? Guid.Empty;
+
+            if (sensor is null || user is null || !user.IsManager(productId) || _largeFiles.Describe(fileId)?.SensorId != sensorId)
+                return null;
+
+            var downloads = _largeFiles.GetDownloads(productId, fileId, MaxDownloadsShown + 1);
+
+            return new LargeFileDownloadsViewModel
+            {
+                Downloads = downloads.Take(MaxDownloadsShown).ToList(),
+                IsCut = downloads.Count > MaxDownloadsShown,
+            };
+        }
+
         /// <summary>The settings page of a product, where its dump password is set.</summary>
         public static string ProductSettingsPath(Guid productId) => $"/Product/EditProduct?Product={productId}";
 
@@ -201,7 +222,8 @@ namespace HSMServer.Model.FileSensors
                 SourceModified = file.LargeFileSourceModifiedOrDefault(),
                 Application = Shown(facts?.Application),
                 Host = Shown(facts?.Host),
-                Downloads = canManage ? _largeFiles.GetDownloads(productId, fileId, MaxDownloadsShown) : null,
+                FileId = fileId,
+                ShowsDownloads = canManage,
             };
         }
 

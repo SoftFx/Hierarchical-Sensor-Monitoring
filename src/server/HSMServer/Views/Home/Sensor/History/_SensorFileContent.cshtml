@@ -145,6 +145,7 @@
         const encodedId = '@sensorId';
         const container = $('#recentValues_' + encodedId);
         const filesPageAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetFilesPage), "Home")';
+        const downloadsAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetLargeFileDownloads), "Home")';
 
         function rowOf(element) {
             return $(element).closest('.file-row')[0];
@@ -195,6 +196,19 @@
                 return;
 
             previewFile(viewFileAction, row.id, row.dataset.extension, row.dataset.time, encodedId);
+        });
+
+        container.on('click.fileRows', '.large-file-downloads-show', function () {
+            const block = $(this).closest('.large-file-downloads');
+
+            $.ajax({
+                type: 'GET',
+                url: downloadsAction + '?fileId=' + encodeURIComponent(encodedId) + '&file=' + encodeURIComponent(block[0].dataset.file),
+                cache: false,
+                success: function (response) {
+                    block.find('.large-file-downloads-list').html(response);
+                }
+            });
         });
 
         container.on('click.fileRows', '.file-page-older', function () {

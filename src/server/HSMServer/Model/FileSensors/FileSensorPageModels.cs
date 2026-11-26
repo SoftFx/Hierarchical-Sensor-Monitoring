@@ -106,8 +106,11 @@ namespace HSMServer.Model.FileSensors
 
         public string Host { get; init; } = Unknown;
 
-        /// <summary>Who downloaded the file and when; null for a user who is not a Manager of the product or an admin.</summary>
-        public IReadOnlyList<LargeFileDownloadFacts> Downloads { get; init; }
+        /// <summary>The id of a large value's file in the store; null for an ordinary value.</summary>
+        public Guid? FileId { get; init; }
+
+        /// <summary>The user may see who downloaded the file (a Manager of the product or an admin): the row offers it.</summary>
+        public bool ShowsDownloads { get; init; }
 
         public bool CanDownload => IsLarge ? DownloadUrl is not null : true;
 
@@ -151,6 +154,16 @@ namespace HSMServer.Model.FileSensors
         public string Application { get; init; }
 
         public string Host { get; init; }
+    }
+
+
+    /// <summary>Who downloaded one large file and when, newest first (the download log, #1885).</summary>
+    public sealed class LargeFileDownloadsViewModel
+    {
+        public IReadOnlyList<LargeFileDownloadFacts> Downloads { get; init; } = [];
+
+        /// <summary>The list holds the most recent records only.</summary>
+        public bool IsCut { get; init; }
     }
 
 

@@ -1,99 +1,120 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using HSMDatabase.AccessManager.LargeFiles;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.LargeFiles.Downloads;
+using HSMServer.Core.LargeFiles.DumpPasswords;
+using HSMServer.Model.ManagementApi.LargeFiles;
 
 namespace HSMServer.Model.FileSensors
 {
-    /// <summary>An upload of a File sensor that is not a value yet: its part in the large file store.</summary>
-    public sealed record LargeFileUploadFacts
-    {
-        public Guid FileId { get; init; }
-
-        /// <summary>The original file name, as the collector named it.</summary>
-        public string Name { get; init; }
-
-        public long Size { get; init; }
-
-        public DateTime SourceModifiedUtc { get; init; }
-
-        public DateTime StartedUtc { get; init; }
-
-        public long PiecesReceived { get; init; }
-
-        public long PiecesTotal { get; init; }
-
-        /// <summary>The end check of the upload is running (or every piece is in and the file is not verified yet).</summary>
-        public bool IsChecking { get; init; }
-
-        /// <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
-        public bool IsSecure { get; init; } = true;
-
-        /// <summary>The collector's client name; null when the record has none.</summary>
-        public string Application { get; init; }
-
-        /// <summary>The address the collector connected from; null when the record has none.</summary>
-        public string Host { get; init; }
-    }
-
-
     /// <summary>
-    /// A verified or packed large file, in the vocabulary of the download (#1885): <see cref="State"/> "verified" or
-    /// "packed", <see cref="BuildState"/> "none", "queued", "building", "waitingForPassword", "waitingForRoom" or "failed".
+    /// What the sensor page reads about large files: the uploads of a sensor and the origin of a file from the large file
+    /// store (#1883); the state, the kind, the reason and the archive of a file in the download step's own words
+    /// (<see cref="LargeFileDownloadService.DescribeFile"/>), the product's dump password and the download log (#1885).
+    /// Without the archive side (a test, a tool) it answers from the store alone: nothing packed, nothing downloaded.
     /// </summary>
-    public sealed record LargeFileStoredFacts
+    public sealed class LargeFilePageSource : ILargeFilePageSource
     {
-        public Guid FileId { get; init; }
-
-        public string State { get; init; }
-
-        public string BuildState { get; init; }
-
-        /// <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
-        public bool IsSecure { get; init; } = true;
-
-        /// <summary>Why the file cannot be downloaded yet; null when it can.</summary>
-        public string NotReadyReason { get; init; }
-
-        /// <summary>The web download link of the current archive; null until the file is packed.</summary>
-        public string DownloadUrl { get; init; }
-
-        public string Application { get; init; }
-
-        public string Host { get; init; }
-    }
+        private readonly IDatabaseCore _database;
+        private readonly LargeFileDownloadService _downloads;
+        private readonly IDumpPasswordService _passwords;
+        private readonly IDownloadLog _log;
 
 
-    /// <summary>One allowed download of a file, from the download log.</summary>
-    public sealed record LargeFileDownloadFacts(DateTime TimeUtc, string Who, string Channel);
+        public LargeFilePageSource(IDatabaseCore database, LargeFileDownloadService downloads, IDumpPasswordService passwords, IDownloadLog log)
+        {
+            _database = database;
+            _downloads = downloads;
+            _passwords = passwords;
+            _log = log;
+        }
 
 
-    /// <summary>
-    /// What the sensor page reads about large files (#1886) from the large file store (#1883), the archive builder, the
-    /// dump passwords and the download log (#1885). The caller has checked that the user may see the product.
-    /// </summary>
-    public interface ILargeFilePageSource
-    {
-        /// <summary>The uploads of the sensor that are not values yet, newest first.</summary>
-        IReadOnlyList<LargeFileUploadFacts> GetUploads(Guid sensorId);
-
-        /// <summary>The state of the file of a large value; null when the store has no record of it.</summary>
-        LargeFileStoredFacts Describe(Guid fileId);
-
-        bool HasDumpPassword(Guid productId);
-
-        /// <summary>The downloads of one file, newest first.</summary>
-        IReadOnlyList<LargeFileDownloadFacts> GetDownloads(Guid productId, Guid fileId, int limit);
-    }
+        // A server that never took a large file has no store content: nothing is opened for a page view.
+        private ILargeFileStore Store => _database.LargeFiles is { HasContent: true } store ? store : null;
 
 
-    /// <summary>A server without the large file store: no uploads, no records.</summary>
-    public sealed class NoLargeFilePageSource : ILargeFilePageSource
-    {
-        public IReadOnlyList<LargeFileUploadFacts> GetUploads(Guid sensorId) => [];
+        public IReadOnlyList<LargeFileUploadFacts> GetUploads(Guid sensorId)
+        {
+            if (Store is not { } store)
+                return [];
 
-        public LargeFileStoredFacts Describe(Guid fileId) => null;
+            return store.GetFiles(LargeFileState.Uploading)
+                        .Where(record => record.SensorId == sensorId)
+                        .OrderByDescending(record => record.CreatedUtc)
+                        .Select(record => new LargeFileUploadFacts
+                        {
+                            FileId = record.FileId,
+                            Name = record.Name,
+                            Size = record.Size,
+                            SourceModifiedUtc = record.SourceModifiedUtc,
+                            StartedUtc = record.CreatedUtc,
+                            PiecesReceived = record.PieceCount,
+                            PiecesTotal = record.TotalPieces,
+                            IsChecking = store.IsChecking(record.FileId),
+                            IsSecure = record.Secure,
+                            Application = record.ClientName,
+                            Host = record.RemoteAddress,
+                        })
+                        .ToList();
+        }
 
-        public bool HasDumpPassword(Guid productId) => true;
+        public LargeFileStoredFacts Describe(Guid fileId)
+        {
+            // The origin is the store's record alone; the download step's own store sees the same files.
+            var record = Store?.TryGetFile(fileId);
 
-        public IReadOnlyList<LargeFileDownloadFacts> GetDownloads(Guid productId, Guid fileId, int limit) => [];
+            if (_downloads is not null)
+            {
+                // Null when the file is unknown, still uploading, or its sensor is gone or moved.
+                if (_downloads.DescribeFile(fileId, baseUrl: null) is not { } description)
+                    return null;
+
+                return new LargeFileStoredFacts
+                {
+                    FileId = description.FileId,
+                    SensorId = description.SensorId,
+                    State = description.State,
+                    BuildState = description.BuildState,
+                    IsSecure = description.Secure,
+                    NotReadyReason = description.NotReadyReason,
+                    DownloadUrl = description.Archive is { } archive ? LargeFileDownloadService.WebDownloadPath(fileId, archive.Id) : null,
+                    Application = record?.ClientName,
+                    Host = record?.RemoteAddress,
+                };
+            }
+
+            if (record is not { State: LargeFileState.Verified or LargeFileState.Packed })
+                return null;
+
+            return new LargeFileStoredFacts
+            {
+                FileId = record.FileId,
+                SensorId = record.SensorId,
+                State = record.State == LargeFileState.Packed ? "packed" : "verified",
+                BuildState = "none",
+                IsSecure = record.Secure,
+                Application = record.ClientName,
+                Host = record.RemoteAddress,
+            };
+        }
+
+        public bool HasDumpPassword(Guid productId) => _passwords?.HasPassword(productId) ?? true;
+
+        public IReadOnlyList<LargeFileDownloadFacts> GetDownloads(Guid productId, Guid fileId, int limit)
+        {
+            if (_log is null)
+                return [];
+
+            return _log.ReadFile(productId, fileId, limit)
+                       .Select(record => new LargeFileDownloadFacts(record.TimeUtc, Who(record), record.Channel == DownloadChannel.Api ? "API" : "web"))
+                       .ToList();
+        }
+
+
+        private static string Who(DownloadRecord record) =>
+            record.TokenId is null ? record.UserName : $"{record.UserName} (token {record.TokenName})";
     }
 }
