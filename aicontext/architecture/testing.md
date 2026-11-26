@@ -56,10 +56,12 @@ of that state is shared between classes:
 - each test's databases carry a process-wide number in their names (`DatabaseCoreManager`);
 - each class has its own `DatabaseRegisterFixture` (a class fixture, through the non-generic
   `DatabaseTestClass` root), which closes the class's databases and removes its folder when the class
-  ends. The removal is one attempt: `DatabaseCore.Dispose` leaves the Dashboards (ServerLayout) and
-  ChangeSets databases open, so their files stay locked until the test host exits, and
-  `FileManager.SafeRemoveFolder` would spend 5 × 5 s retrying each folder. The fixture of the next run
-  removes what is left.
+  ends. The removal is one attempt and a failure is an error: `DatabaseCore.Dispose` closes every
+  database it opened, so a folder that cannot be removed means something still holds one of its files
+  (a database the test opened past the core, a handle leaked by the product). The fixture's `Dispose`
+  then throws, and xUnit reports a "Test Class Cleanup Failure" against the tests of that class only,
+  which turns the run red. Until #1943 `DatabaseCore.Dispose` left the Dashboards and ChangeSets
+  databases open and the removal was silent; `DatabaseCoreDisposeTests` pins the fix.
 
 The test host starts with at least 128 worker and I/O pool threads (`Infrastructure/TestThreadPool.cs`, a
 module initializer): when dozens of classes start at once and block pool threads, a pool that grows by

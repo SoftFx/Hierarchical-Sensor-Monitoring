@@ -25,7 +25,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
 
 
-    internal abstract class EntityCollection<T> : IEntityCollection<T> where T : class, IBaseEntity
+    internal abstract class EntityCollection<T> : IEntityCollection<T>, IDisposable where T : class, IBaseEntity
     {
         private static readonly JsonSerializerOptions _options = new()
         {
@@ -123,6 +123,9 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public TaskResult<string> Backup(string backupPath) => _database.Backup(backupPath);
+
+        // Closes the database (DatabaseCore.Dispose): its files stay locked while it is open.
+        public void Dispose() => _database.Dispose();
 
 
         private void RegisterId(Guid id)
