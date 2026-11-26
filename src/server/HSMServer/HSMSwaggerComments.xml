@@ -2013,6 +2013,22 @@
             ones from the stored settings.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramBotSettingsDiff">
+            <summary>
+            Which of the three bot settings a save changes — the one definition of it, so what is
+            journaled and what is applied cannot drift apart. An absent and an empty token or name
+            are the same value: a server that was never configured holds nulls, and the web form
+            posts an empty field as an empty string.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramBotSettingsDiff.#ctor(System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Which of the three bot settings a save changes — the one definition of it, so what is
+            journaled and what is applied cannot drift apart. An absent and an empty token or name
+            are the same value: a server that was never configured holds nulls, and the web form
+            posts an empty field as an empty string.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges">
             <summary>
             One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
@@ -2053,9 +2069,9 @@
         </member>
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Apply(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramBotSettings,HSMServer.Model.Configuration.TelegramBotSettings)">
             <summary>
-            Applies a save to the configuration and persists it. Only a setting whose value
-            changes is written: one that keeps its value is not saved over, so a writer of
-            another setting racing this one is not overwritten.
+            Applies a save to the configuration and persists it. Only a setting that changes
+            is written: one that keeps its value is not saved over, so a writer of another
+            setting racing this one is not overwritten.
             </summary>
         </member>
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">

@@ -104,68 +104,66 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
                 BotName: request.BotName?.Trim() ?? current.BotName,
                 BotToken: request.BotToken?.Trim() ?? current.BotToken,
                 IsEnabled: request.IsEnabled ?? current.IsEnabled);
-            var tokenChanges = JournalAppender.Change.SecretChanged(current.BotToken, target.BotToken);
-            var changes = TelegramSettingsChanges.Between(current, target);
+            var diff = TelegramBotSettingsDiff.Between(current, target);
             var nameGiven = request.BotName is not null;
 
             // An update that changes nothing does nothing: no probe, no save, no restart. A
             // name that was passed is still checked — a caller repeating a stored typo is
             // told it is one.
-            if (changes.Count == 0 && !nameGiven)
+            if (!diff.Any && !nameGiven)
                 return PolicyWriteResult<TelegramBotDto>.Ok(Status());
 
             // 1. A new token is asked of Telegram BEFORE anything is saved: a rejected token
             //    changes nothing, and the working bot keeps running.
-            string username = null;
+            string newBotsUsername = null;
 
-            if (tokenChanges)
+            if (diff.BotToken)
             {
-                var probe = await _bot.GetBotUsernameAsync(target.BotToken);
+                var (username, refusal) = await AskTelegramAsync(target.BotToken, TokenRejectedMessage, TokenUnreachableMessage);
 
-                if (probe.Verdict == TelegramTokenVerdict.Rejected)
-                    return Refused("botToken", string.Format(TokenRejectedMessage, probe.Reason));
+                if (refusal is not null)
+                    return refusal;
 
-                if (probe.Verdict == TelegramTokenVerdict.Unreachable)
-                    return PolicyWriteResult<TelegramBotDto>.Fail(PolicyWriteOutcome.Conflict, message: TokenUnreachableMessage);
-
-                username = probe.Username;
+                newBotsUsername = username;
             }
 
             // 2. The name goes with the token — invitation links are built from it. A name
             //    that was passed must be the bot of the effective token (the new one when
             //    there is one, otherwise the stored one); after a token change the stored
             //    name must be too, for an omitted field does not change.
-            if (nameGiven || tokenChanges)
+            if (nameGiven || diff.BotToken)
             {
-                var effectiveToken = tokenChanges ? target.BotToken : current.BotToken;
+                var effectiveToken = diff.BotToken ? target.BotToken : current.BotToken;
 
-                // The running bot was told its username when it started on this very token:
-                // then Telegram need not be asked.
-                username ??= _bot.UsernameOfRunningBot(effectiveToken);
+                // A new token was just asked about. The stored one is known to the running
+                // bot from its start: a name that matches needs no call to Telegram.
+                var username = newBotsUsername ?? _bot.UsernameOfRunningBot(effectiveToken);
 
-                if (username is null)
+                if (!IsTheNameOf(target.BotName, username))
                 {
+                    if (diff.BotToken)
+                        // Telegram has just answered, and the name is not the one it reported.
+                        return Refused("botName", string.Format(NameMismatchMessage, "new", username));
+
                     if (string.IsNullOrEmpty(effectiveToken))
                         return Refused("botToken", NoTokenForTheNameMessage);
 
-                    var probe = await _bot.GetBotUsernameAsync(effectiveToken);
+                    // The bot may not be running, or may remember a name BotFather has since
+                    // changed: Telegram itself has the last word.
+                    var (fresh, refusal) = await AskTelegramAsync(effectiveToken, CurrentTokenRejectedMessage, NameUnreachableMessage);
 
-                    if (probe.Verdict == TelegramTokenVerdict.Rejected)
-                        return Refused("botToken", string.Format(CurrentTokenRejectedMessage, probe.Reason));
+                    if (refusal is not null)
+                        return refusal;
 
-                    if (probe.Verdict == TelegramTokenVerdict.Unreachable)
-                        return PolicyWriteResult<TelegramBotDto>.Fail(PolicyWriteOutcome.Conflict, message: NameUnreachableMessage);
-
-                    username = probe.Username;
+                    if (!IsTheNameOf(target.BotName, fresh))
+                        return Refused("botName", string.Format(NameMismatchMessage, "current", fresh));
                 }
-
-                if (!IsTheNameOf(target.BotName, username))
-                    return Refused("botName", string.Format(NameMismatchMessage, tokenChanges ? "new" : "current", username));
             }
 
-            if (changes.Count == 0)
+            if (!diff.Any)
                 return PolicyWriteResult<TelegramBotDto>.Ok(Status());
 
+            var changes = TelegramSettingsChanges.Between(current, target);
             TelegramSettingsChanges.Apply(_config, current, target);
 
             var initiator = ChangeSetRecorder.InitiatorOf(caller, _users);
@@ -173,7 +171,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             _logger.Info(TelegramSettingsChanges.Describe(changes, initiator.Info));
 
             // Only a token change restarts the bot: the name and the switch are read live.
-            if (tokenChanges)
+            if (diff.BotToken)
             {
                 // The save has landed. A start that fails — or throws — must not turn this
                 // into a failure the caller would read as "not saved" (the same call again
@@ -191,6 +189,23 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             }
 
             return PolicyWriteResult<TelegramBotDto>.Ok(Status());
+        }
+
+        // Asks Telegram who owns a token. Answers the username when it gave one; otherwise no
+        // username and the refusal of the write — under botToken, the field whose value
+        // Telegram judged or could not check — with the message of the caller's situation.
+        private async Task<(string Username, PolicyWriteResult<TelegramBotDto> Refusal)> AskTelegramAsync(
+            string token, string rejectedMessage, string unreachableMessage)
+        {
+            var probe = await _bot.GetBotUsernameAsync(token);
+
+            return probe.Verdict switch
+            {
+                TelegramTokenVerdict.Rejected => (null, Refused("botToken", string.Format(rejectedMessage, probe.Reason))),
+                TelegramTokenVerdict.Unreachable => (null,
+                    PolicyWriteResult<TelegramBotDto>.Fail(PolicyWriteOutcome.Conflict, message: unreachableMessage)),
+                _ => (probe.Username, null),
+            };
         }
 
         // Telegram usernames are case-insensitive; an absent username matches no name.

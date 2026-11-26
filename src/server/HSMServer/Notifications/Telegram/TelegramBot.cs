@@ -1,9 +1,12 @@
 ﻿using System;
+using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using Telegram.Bot.Args;
 using Telegram.Bot.Polling;
+using Telegram.Bot.Requests.Abstractions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Exceptions;
 using HSMServer.Core.Managers;
@@ -55,13 +58,14 @@ namespace HSMServer.Notifications
         // surface's token change can ask together, and two clients receiving at once would
         // answer every Telegram update twice. Held for a whole start, the stop of the
         // previous client included. Not reentrant: nothing under it may wait for it again.
-        private readonly SemaphoreSlim _lifecycle = new(1, 1);
+        private readonly SemaphoreSlim _startGate = new(1, 1);
 
-        // The bot that is running: the token it was started with and the username Telegram
-        // reported for it then (#1830). The pair is kept, not read back from the
-        // configuration — the saved token may change under a running bot (the web page
-        // saves and restarts in two steps). Set by the start after its GetMe and cleared by
-        // the stop, both under the gate above; read by anyone, as the one reference it is.
+        // The client that is up, or is being started: the token it was built for, and the
+        // username Telegram reported for it once its GetMe answered (#1830). The pair is
+        // kept, not read back from the configuration — the saved token may change under a
+        // running bot (the web page saves and restarts in two steps). Written when the client
+        // is built and when GetMe answers, dropped by every stop; read by anyone, as the one
+        // reference it is.
         private volatile RunningBot _running;
 
 
@@ -73,10 +77,11 @@ namespace HSMServer.Notifications
         public bool IsBotRunning => _bot is not null;
 
         // The username Telegram reported for the running bot, when it runs on exactly this
-        // token; null otherwise, and the caller asks Telegram itself (GetBotUsernameAsync).
+        // token and has been told one; null otherwise, and the caller asks Telegram itself
+        // (GetBotUsernameAsync).
         internal string UsernameOfRunningBot(string token) =>
-            _running is { } running && string.Equals(running.Token, token, StringComparison.Ordinal)
-                ? running.Username
+            _running is { Username: { } username } running && string.Equals(running.Token, token, StringComparison.Ordinal)
+                ? username
                 : null;
 
         public event Action<string> ErrorHandled;
@@ -111,7 +116,7 @@ namespace HSMServer.Notifications
             // own token by then is stopped under the gate, before the gate goes away.
             await StopBotAsync();
 
-            await _lifecycle.WaitAsync();
+            await _startGate.WaitAsync();
 
             try
             {
@@ -119,10 +124,10 @@ namespace HSMServer.Notifications
             }
             finally
             {
-                _lifecycle.Release();
+                _startGate.Release();
             }
 
-            _lifecycle.Dispose();
+            _startGate.Dispose();
             _lifetime.Dispose();
         }
 
@@ -194,10 +199,55 @@ namespace HSMServer.Notifications
                 SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
             };
 
-            return new TelegramBotClient(token, new HttpClient(clientHandler))
+            var http = new HttpClient(clientHandler);
+
+            return new OwnedClient(new TelegramBotClient(token, http)
             {
                 Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
-            };
+            }, http);
+        }
+
+        // The library's client over the HttpClient it was built on. ITelegramBotClient has
+        // no Dispose, so this is what lets a dropped client take its HttpClient with it: the
+        // probe's does; the running one is dropped as it always was — disposing it under the
+        // receiving loop's feet is not worth the handler it frees. Internal for its own test.
+        internal sealed class OwnedClient(ITelegramBotClient client, HttpClient http) : ITelegramBotClient, IDisposable
+        {
+            public bool LocalBotServer => client.LocalBotServer;
+
+            public long BotId => client.BotId;
+
+            public TimeSpan Timeout { get => client.Timeout; set => client.Timeout = value; }
+
+            public IExceptionParser ExceptionsParser { get => client.ExceptionsParser; set => client.ExceptionsParser = value; }
+
+
+            public event AsyncEventHandler<ApiRequestEventArgs> OnMakingApiRequest
+            {
+                add => client.OnMakingApiRequest += value;
+                remove => client.OnMakingApiRequest -= value;
+            }
+
+            public event AsyncEventHandler<ApiResponseEventArgs> OnApiResponseReceived
+            {
+                add => client.OnApiResponseReceived += value;
+                remove => client.OnApiResponseReceived -= value;
+            }
+
+
+            public Task<TResponse> SendRequest<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken) =>
+                client.SendRequest(request, cancellationToken);
+
+            public Task<bool> TestApi(CancellationToken cancellationToken) => client.TestApi(cancellationToken);
+
+            public Task DownloadFile(string filePath, Stream destination, CancellationToken cancellationToken) =>
+                client.DownloadFile(filePath, destination, cancellationToken);
+
+            public Task DownloadFile(TGFile file, Stream destination, CancellationToken cancellationToken) =>
+                client.DownloadFile(file, destination, cancellationToken);
+
+
+            public void Dispose() => http.Dispose();
         }
 
         // Wipes the given token from third-party text (an exception message) before the text
@@ -213,7 +263,7 @@ namespace HSMServer.Notifications
             if (_lifetime.IsCancellationRequested)
                 return BotIsDisposedError;
 
-            await _lifecycle.WaitAsync();
+            await _startGate.WaitAsync();
 
             try
             {
@@ -221,18 +271,20 @@ namespace HSMServer.Notifications
             }
             finally
             {
-                _lifecycle.Release();
+                _startGate.Release();
             }
         }
 
-        // The body of a start, run with the lifecycle gate held.
+        // The body of a start, run with the start gate held.
         private async Task<string> StartUnderGateAsync()
         {
             if (IsBotRunning)
             {
-                var message = await StopBotAsync();
-                if (!string.IsNullOrEmpty(message))
-                    return message;
+                // The previous client is dropped whatever Telegram answers to its goodbye — a
+                // token revoked before it was replaced here gets a 401 — so the start on the
+                // stored token never depends on it.
+                if (await StopBotAsync() is { Length: > 0 } notClean)
+                    _logger.Warn($"The previous Telegram client did not stop cleanly; the bot starts again anyway: {notClean}");
             }
 
             if (!_config.IsValid)
@@ -246,6 +298,7 @@ namespace HSMServer.Notifications
             // the saved token changes while the request is in flight.
             var token = BotToken;
             _bot = _clientFactory(token);
+            _running = new RunningBot(token, Username: null);
 
             try
             {
@@ -253,9 +306,16 @@ namespace HSMServer.Notifications
 
                 _running = new RunningBot(token, me.Username);
             }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+                // Disposing the bot ended this start: no refusal happened, and none is logged.
+                DropTheClient();
+
+                return BotIsDisposedError;
+            }
             catch (Exception exc)
             {
-                _bot = null;
+                DropTheClient();
 
                 // #1824: the token is a secret — the log says the credentials failed, never the
                 // value, and third-party text (the exception) is scrubbed of it too.
@@ -273,6 +333,13 @@ namespace HSMServer.Notifications
 
                 _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
             }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+                // Disposing the bot ended this start: no refusal happened, and none is logged.
+                DropTheClient();
+
+                return BotIsDisposedError;
+            }
             catch (Exception exc)
             {
                 // A start that breaks off after GetMe must not leave a client that counts as
@@ -286,6 +353,13 @@ namespace HSMServer.Notifications
             }
 
             return string.Empty;
+        }
+
+        // Forgets the client of a start that will not complete.
+        private void DropTheClient()
+        {
+            _bot = null;
+            _running = null;
         }
 
         // Asks Telegram who owns a token — the check of a bot credential BEFORE anything is
@@ -322,6 +396,12 @@ namespace HSMServer.Notifications
                 // No road to Telegram, a timeout, a rate limit: the token was not judged.
                 return ProbeFailure(TelegramTokenProbe.Unreachable(RedactToken(ex.Message, token)));
             }
+            finally
+            {
+                // The probe's client is used once, so it takes what it owns with it. The real
+                // one does; a test's bare mock has nothing to dispose.
+                (client as IDisposable)?.Dispose();
+            }
         }
 
         // Logs an attempt that ended in no username; the text is the bot's own, with the
@@ -338,6 +418,7 @@ namespace HSMServer.Notifications
             await _tokenSource.CancelAsync();
 
             var bot = _bot;
+            var token = _running?.Token;
             _bot = null;
             _running = null;
 
@@ -350,7 +431,9 @@ namespace HSMServer.Notifications
                 }
                 catch (Exception ex)
                 {
-                    return $"An error ({ex.Message}) has been occurred while stopping the Bot. The current state of the Bot is stopped. Try to restart Bot again.";
+                    // The text reaches the log and, through a start's answer, a caller: the
+                    // token of the client that failed to say goodbye never does (#1824).
+                    return RedactToken("An error (" + ex.Message + ") has been occurred while stopping the Bot. The client is dropped either way.", token);
                 }
             }
 

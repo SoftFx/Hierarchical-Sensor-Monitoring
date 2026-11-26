@@ -22,6 +22,23 @@ namespace HSMServer.Model.Configuration
 
 
     /// <summary>
+    /// Which of the three bot settings a save changes — the one definition of it, so what is
+    /// journaled and what is applied cannot drift apart. An absent and an empty token or name
+    /// are the same value: a server that was never configured holds nulls, and the web form
+    /// posts an empty field as an empty string.
+    /// </summary>
+    internal readonly record struct TelegramBotSettingsDiff(bool IsEnabled, bool BotToken, bool BotName)
+    {
+        internal bool Any => IsEnabled || BotToken || BotName;
+
+        internal static TelegramBotSettingsDiff Between(TelegramBotSettings current, TelegramBotSettings posted) => new(
+            IsEnabled: current.IsEnabled != posted.IsEnabled,
+            BotToken: JournalAppender.Change.SecretChanged(current.BotToken ?? string.Empty, posted.BotToken ?? string.Empty),
+            BotName: (current.BotName ?? string.Empty) != (posted.BotName ?? string.Empty));
+    }
+
+
+    /// <summary>
     /// One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
     /// of the save and its journal records. The bot token is a secret: the log and the
     /// journal say THAT it changed, never the old or the new value. Shared by the settings
@@ -76,40 +93,43 @@ namespace HSMServer.Model.Configuration
         internal static List<Change> Between(TelegramBotSettings current, TelegramBotSettings posted)
         {
             var changes = new List<Change>();
-            var currentToken = current.BotToken ?? string.Empty;
-            var postedToken = posted.BotToken ?? string.Empty;
-            var currentName = current.BotName ?? string.Empty;
-            var postedName = posted.BotName ?? string.Empty;
+            var diff = TelegramBotSettingsDiff.Between(current, posted);
 
-            if (current.IsEnabled != posted.IsEnabled)
+            if (diff.IsEnabled)
                 changes.Add(new(new("Enable messages", $"{current.IsEnabled}", $"{posted.IsEnabled}"),
                     $"IsRunning: {current.IsEnabled} -> {posted.IsEnabled}"));
 
-            if (JournalAppender.Change.SecretChanged(currentToken, postedToken))
-                changes.Add(new(JournalAppender.Change.OfSecret("Bot token", currentToken, postedToken),
+            if (diff.BotToken)
+                changes.Add(new(JournalAppender.Change.OfSecret("Bot token", current.BotToken, posted.BotToken),
                     "BotToken: changed"));
 
-            if (currentName != postedName)
-                changes.Add(new(new("Bot name", currentName, postedName),
-                    $"BotName: {currentName} -> {postedName}"));
+            if (diff.BotName)
+            {
+                var currentName = current.BotName ?? string.Empty;
+                var postedName = posted.BotName ?? string.Empty;
+
+                changes.Add(new(new("Bot name", currentName, postedName), $"BotName: {currentName} -> {postedName}"));
+            }
 
             return changes;
         }
 
         /// <summary>
-        /// Applies a save to the configuration and persists it. Only a setting whose value
-        /// changes is written: one that keeps its value is not saved over, so a writer of
-        /// another setting racing this one is not overwritten.
+        /// Applies a save to the configuration and persists it. Only a setting that changes
+        /// is written: one that keeps its value is not saved over, so a writer of another
+        /// setting racing this one is not overwritten.
         /// </summary>
         internal static void Apply(IServerConfig config, TelegramBotSettings current, TelegramBotSettings target)
         {
-            if (current.IsEnabled != target.IsEnabled)
+            var diff = TelegramBotSettingsDiff.Between(current, target);
+
+            if (diff.IsEnabled)
                 config.Telegram.IsRunning = target.IsEnabled;
 
-            if ((current.BotToken ?? string.Empty) != (target.BotToken ?? string.Empty))
+            if (diff.BotToken)
                 config.Telegram.BotToken = target.BotToken;
 
-            if ((current.BotName ?? string.Empty) != (target.BotName ?? string.Empty))
+            if (diff.BotName)
                 config.Telegram.BotName = target.BotName;
 
             config.ResaveSettings();

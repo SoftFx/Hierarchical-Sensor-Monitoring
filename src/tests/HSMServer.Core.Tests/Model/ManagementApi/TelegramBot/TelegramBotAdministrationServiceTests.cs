@@ -232,7 +232,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
             Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
             Assert.Equal(["The bot name does not match the bot of the current token; Telegram reports 'hsm_alerts_bot'."],
                 result.Failure.Errors["botName"]);
-            Assert.Empty(_world.Steps);
+
+            // The running bot's memory does not vouch for the name: Telegram itself is asked.
+            Assert.Equal(["probe"], _world.Steps);
             Assert.Equal("hsm_alerts_bot", _world.Telegram.BotName);
         }
 
@@ -249,7 +251,29 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
             Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
             Assert.Equal(["The bot name does not match the bot of the current token; Telegram reports 'hsm_alerts_bot'."],
                 result.Failure.Errors["botName"]);
-            Assert.Empty(_world.Steps);
+            Assert.Equal(["probe"], _world.Steps);
+        }
+
+
+        [Fact]
+        public async Task Update_OnlyTheName_TheBotWasRenamedInBotFather_IsAskedOfTelegram_AndTheNewNamePasses()
+        {
+            // BotFather can rename a bot. The username a running bot remembers from its
+            // start is then stale: a name that does not match it is asked of Telegram itself,
+            // and Telegram's answer is the one that counts — both ways.
+            _world.TelegramAnswers(_ => "hsm_renamed_bot");
+
+            var accepted = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { BotName = "hsm_renamed_bot" }, _world.Caller);
+
+            Assert.True(accepted.Success);
+            Assert.Equal("hsm_renamed_bot", _world.Telegram.BotName);
+            _world.Bot.Verify(b => b.GetBotUsernameAsync(TelegramBotHarness.OldToken), Times.Once);
+            Assert.Equal(["probe", "save"], _world.Steps);
+
+            var refused = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { BotName = "typo_bot" }, _world.Caller);
+
+            Assert.Equal(["The bot name does not match the bot of the current token; Telegram reports 'hsm_renamed_bot'."],
+                refused.Failure.Errors["botName"]);
         }
 
 
@@ -444,17 +468,20 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
 
 
         [Fact]
-        public async Task Update_ARestartThatThrows_StillAnswersTheSavedCredential()
+        public async Task Update_ARestartThatThrows_StillAnswersTheSavedCredential_AndTheEchoSaysTheBotIsNotRunning()
         {
-            // The restart is the bot's to fail: whatever it throws, the save has landed, and
-            // the answer must not read as "not saved".
+            // The restart is the bot's to fail: whatever it throws, the save has landed, the
+            // answer must not read as "not saved" — and a start that throws leaves no bot up.
             _world.TelegramAnswers(_ => "hsm_alerts_bot");
-            _world.Bot.Setup(b => b.RestartAsync()).ThrowsAsync(new InvalidOperationException("the bot's internals"));
+            _world.RestartThrows(new InvalidOperationException("the bot's internals"));
 
             var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { BotToken = TelegramBotHarness.NewToken }, _world.Caller);
 
             Assert.True(result.Success);
             Assert.Equal(TelegramBotHarness.NewToken, _world.Telegram.BotToken);
+            Assert.Equal(
+                new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = false },
+                result.Value);
         }
     }
 }

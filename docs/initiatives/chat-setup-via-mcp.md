@@ -193,12 +193,15 @@ journal and the API surface; 6 is the web half and the orchestrator half of the 
 
 Steps 1, 2a, 3–4 and 6a have no blockers and start in parallel.
 
-Step 5 as landed (#1830) settled four points the table above leaves open:
+Step 5 as landed (#1830) settled five points the table above leaves open:
 
 - The name of a token change is checked against the `GetMe` of the probe itself. A name passed
   without a token change is checked against the username the running bot remembers from its start —
-  one `GetMe` with the stored token only when the bot is stopped, or runs a token the settings have
-  since left behind.
+  one `GetMe` with the stored token only when nothing vouches for the name: the bot is stopped, runs
+  a token the settings have since left behind, or was renamed in BotFather after its start.
+- A restart does not depend on the previous client's goodbye. A token revoked before it is replaced
+  answers 401 when the old client says goodbye; the bot starts on the stored token all the same —
+  here nothing but a restart brings it back, where the web page needed a second click.
 - After a token change the STORED name must match the new token's bot too: an omitted field does not
   change, so a stored name of another bot is refused with the right name in the message, rather than
   silently rewritten or left to break invitation links.

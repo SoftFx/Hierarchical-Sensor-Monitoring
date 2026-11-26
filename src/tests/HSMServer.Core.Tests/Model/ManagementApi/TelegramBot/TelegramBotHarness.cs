@@ -100,6 +100,15 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
         // The restart ends with the bot stopped and answers the bot's own error text.
         public void RestartFails(string error) => RestartAnswers(error);
 
+        // The restart blows up before the bot is up: a start that throws leaves no bot running.
+        public void RestartThrows(Exception failure) =>
+            Bot.Setup(b => b.RestartAsync()).Returns(() =>
+            {
+                Steps.Add("restart");
+                IsRunning = false;
+                return Task.FromException<string>(failure);
+            });
+
         private void RestartAnswers(string answer) =>
             Bot.Setup(b => b.RestartAsync()).Returns(() =>
             {
