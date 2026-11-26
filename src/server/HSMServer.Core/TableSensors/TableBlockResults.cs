@@ -53,6 +53,21 @@ namespace HSMServer.Core.TableSensors
         /// bounds the time of a read, not its memory.
         /// </summary>
         public long MaxChartScanRows { get; init; } = DefaultMaxChartScanRows;
+
+        public const int DefaultMoveSecondsPerPass = 10;
+        public const int DefaultMoveMegabytesPerPass = 256;
+
+        /// <summary>
+        /// The time the move between period classes (#1850 part 4c) may take in one merge pass, measured by a stopwatch; at
+        /// least one step runs in a pass when there is work.
+        /// </summary>
+        public int MoveSecondsPerPass { get; init; } = DefaultMoveSecondsPerPass;
+
+        /// <summary>
+        /// The bytes of batches the move may copy in one merge pass (at least one step a pass with work). The compaction of
+        /// at most one week database a pass runs after retention and is not bounded by it.
+        /// </summary>
+        public int MoveMegabytesPerPass { get; init; } = DefaultMoveMegabytesPerPass;
     }
 
 

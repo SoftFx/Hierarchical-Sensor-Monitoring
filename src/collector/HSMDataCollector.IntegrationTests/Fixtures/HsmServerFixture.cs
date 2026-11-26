@@ -63,6 +63,12 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
         public ushort MappedServerPort { get; private set; }
         public string AccessKey => _accessKey;
 
+        // A container on the fixture's network (the native collector's end-to-end driver) reaches the server
+        // through the proxy by its name on that network, so the proxy's network failures reach it too.
+        public string NetworkName => _network.Name;
+        public const string ProxyHost = "toxiproxy";
+        public const int ProxyPort = AppPort;
+
         public async Task InitializeAsync()
         {
             _tempConfigDir = PrepareConfigDirectory();

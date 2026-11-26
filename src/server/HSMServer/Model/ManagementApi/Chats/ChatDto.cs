@@ -53,8 +53,8 @@ namespace HSMServer.Model.ManagementApi.Chats
         [Description("Whether this chat currently receives messages (the admin enable/disable switch). Detail field: null unless the owner is an admin or a manager of a bound folder.")]
         public bool? SendMessages { get; init; }
 
-        /// <summary>Delay (seconds) messages of one sensor are aggregated for before sending. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
-        [Description("Delay (seconds) messages of one sensor are aggregated for before sending. Detail field: null unless the owner is an admin or a manager of a bound folder.")]
+        /// <summary>Delay (seconds) messages of one sensor are aggregated for before sending; 0 sends every message at once. Detail field: null unless the owner is an admin or a manager of a bound folder.</summary>
+        [Description("Delay (seconds) messages of one sensor are aggregated for before sending (0 sends every message at once). Detail field: null unless the owner is an admin or a manager of a bound folder.")]
         public int? MessagesAggregationTimeSec { get; init; }
 
         /// <summary>Telegram chat id (for a direct chat, the person's Telegram user id). Detail field: null unless the owner is an admin or a manager of a bound folder — the web UI shows it in the clear only to admins/PMs.</summary>

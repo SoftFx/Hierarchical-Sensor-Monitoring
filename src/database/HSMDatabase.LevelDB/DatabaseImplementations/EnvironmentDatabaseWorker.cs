@@ -405,6 +405,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public bool EntityExists(string id)
+        {
+            try
+            {
+                return _database.TryRead(Encoding.UTF8.GetBytes(id), out _);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read the entity {id}; taken as present");
+                return true;
+            }
+        }
+
         public SensorEntity GetSensorEntity(string sensorId)
         {
             var bytesKey = Encoding.UTF8.GetBytes(sensorId);

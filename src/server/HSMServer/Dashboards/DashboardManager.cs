@@ -13,6 +13,7 @@ namespace HSMServer.Dashboards
     {
         private readonly IDashboardCollection _dbCollection;
         private readonly ITreeValuesCache _cache;
+        private readonly object _storeLock = new();
 
 
         protected override Action<DashboardEntity> AddToDb => _dbCollection.AddEntity;
@@ -38,6 +39,16 @@ namespace HSMServer.Dashboards
             dashboard = new Dashboard(dashboardAdd, _cache);
 
             return TryAdd(dashboard);
+        }
+
+        // A dashboard is stored whole, as a snapshot, from request threads (a
+        // user's edit) and from the cache's thread (a source a panel subscription
+        // adds). The snapshot and its write are one step: otherwise an older
+        // snapshot that is written later replaces a newer one in the store.
+        public override Task<bool> TryUpdate(Dashboard value)
+        {
+            lock (_storeLock)
+                return base.TryUpdate(value);
         }
 
         protected override Dashboard FromEntity(DashboardEntity entity) => new(entity, _cache);

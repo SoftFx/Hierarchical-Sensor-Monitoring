@@ -1,0 +1,4 @@
+# The context is src/native/collector: leave out local build trees (the presets build under build/).
+build
+out
+.vs

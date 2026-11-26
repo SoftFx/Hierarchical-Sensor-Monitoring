@@ -161,6 +161,7 @@ Projects that build against the collector project reference `HSMTableBlocks` exp
 | `src/collector/HSMDataCollector.Tests/Transport/TableRegistrationSessionTests.cs` | Registration over a real session |
 | `src/collector/HSMDataCollector.Tests/Transport/TableConnectionTests.cs`, `ScriptedSessionServer.Tables.cs` | The table connection against the scripted server, and that server's table side |
 | `src/collector/HSMDataCollector.IntegrationTests/Tests/TableSensorEndToEndTests.cs` | Rows through the real server and back through `tableHistory` |
+| `src/collector/HSMDataCollector.IntegrationTests/Tests/NativeTableSensorEndToEndTests.cs`, `src/native/collector/tests/server_e2e/` | The native collector's rows through the real server: the driver `hsm_table_e2e` and its Debian 13 image |
 | `tests/conformance/collector/table_sensor_contract.hsmtest`, `table_connection_contract.hsmtest` | The portable behaviour (rule 9) |
 
 ## Data Flow
@@ -433,6 +434,8 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
   state; no table connection object without a table sensor.
 - End to end, net8.0, the Docker-backed lane: `TableSensorEndToEndTests` registers a table sensor on the real server,
   delivers rows at a tick and in the stop drain, and reads them back through `POST api/sensors/tableHistory`.
+  `NativeTableSensorEndToEndTests` does the same for the native collector on the same server (see "Native collector",
+  "End to end against the real server").
 - Conformance: `tests/conformance/collector/table_sensor_contract.hsmtest` through the .NET driver and, since 0.15.0,
   the native driver (tables build; see "Native collector"); `table_connection_contract.hsmtest` through both drivers
   on their scripted session servers (the native driver since 0.15.1, in builds with the session transport and table
@@ -670,6 +673,31 @@ the next connection, up to three per put, then answers "not delivered" and the b
 rows are counted once as not delivered at stop. A frame cut short is never stored by the server (it reads whole
 messages). Measured on the final code (Windows, Schannel, a peer that reads nothing, 10 runs each): the 16 MiB write
 ended at 2000–2014 ms; `docs/test/NativeWsStalledPeer.md` has the rest.
+
+**End to end against the real server (#1848 step 6).** `NativeTableSensorEndToEndTests`
+(`src/collector/HSMDataCollector.IntegrationTests`, the `collector-integration-tests.yml` lane, on its server image built
+from the branch) runs the native driver `src/native/collector/tests/server_e2e/hsm_table_e2e.cpp`: a program over the
+C++ API of `tables.hpp` that takes commands on stdin (make a collector on the session or on HTTP, a table sensor, add
+rows one by one or all at once, start, stop, read a sensor's state) and answers each with a line, its collectors' log
+lines in between; it checks nothing itself. The test builds it with `docker build` from
+`tests/server_e2e/Dockerfile` (Debian 13 with the distribution's libcurl 8.14, zstd, zlib and nlohmann-json: the
+Linux agent's stack, no vcpkg) and runs it on the fixture's Docker network, where it reaches the server through the
+fixture's proxy with TLS to the server's self-signed certificate (`allow_untrusted_server_certificate`). Two runs:
+a sensor registers; 300 rows added one by one are stored at a tick; the proxy is cut, the collector reports its
+session ended, 200 rows are added at once and a reconnect attempt fails (the outage is real; whether a tick packs the
+rows before the proxy is back is not controlled); the proxy is back and the 500 rows are stored; 100 more are sent by
+the stop at the latest; the 600 rows read back as CSV (the whole text, compared with the expected one) and as JSON (each time to 100 ns
+with 87 ns given and rounded down, each double bit for bit, each empty cell, the order) are exactly the rows sent,
+none twice, none lost, `rows_dropped` 0. And: a second collector registering the same path with other columns is
+`Refused` with the server's reason, its rows dropped and counted; a collector on HTTP has its table sensor
+`Unavailable` ("table sensors need the collector session transport (hsm_collector_use_session_transport)") from the
+creation, its rows dropped and counted. Every wait is for a state (the sensor out of Pending, a log line, the stored
+row count) and bounded at 60 s, which only fails a run. With `HSM_NATIVE_TABLE_E2E_BIN` set to a built driver the test
+runs that one on the machine instead (a Windows build with Schannel, say). The lane runs for a pull request touching
+`src/native/collector/**` too. Run by hand on 2026-11-26 against a server of the branch, on Windows (Schannel) and in
+Debian 13: the same, a server stopped (`docker stop`, close `1001`) and killed (`docker kill`) with rows added while it
+was down (650 and 2,000 rows, each stored once), 99,000 rows, and the two samples of the user page
+(`wiki-draft/DataCollector-Table-Sensors.md`, C and C++: 600 rows each, the empty `ask` of row 300).
 
 **Known limits of the table connection (0.15.2).**
 

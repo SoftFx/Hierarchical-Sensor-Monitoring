@@ -119,9 +119,11 @@
     }
 
     function removeFolder() {
+        const folderName = escapeHtml(@Json.Serialize(Model.Name));
+
         showConfirmationModal(
-            `Removing folder '@Model.Name'`,
-            `Do you really want to remove folder '@Model.Name'? All products from this folder will be moved to products without folder.`,
+            `Removing folder '${folderName}'`,
+            `Do you really want to remove folder '${folderName}'? All products from this folder will be moved to products without folder.`,
             function () {
                 $.ajax({
                     type: 'POST',

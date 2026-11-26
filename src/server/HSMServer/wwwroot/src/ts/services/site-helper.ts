@@ -17,8 +17,9 @@ export namespace SiteHelper {
     }
 
     export function showToast(message: string, header = 'Info') {
-        document.getElementById('toast_body').innerHTML = message;
-        document.getElementById('toast_header').innerHTML = header;
+        // Same rule as window.showToast (site.js): ready HTML in, scripts and event handlers out.
+        document.getElementById('toast_body').innerHTML = DOMPurify.sanitize(message ?? '', { ADD_ATTR: ['target'] });
+        document.getElementById('toast_header').innerHTML = DOMPurify.sanitize(header ?? '', { ADD_ATTR: ['target'] });
         let currentToast = document.getElementById('liveToast')
         // @ts-ignore
         let currentToastInstance = bootstrap.Toast.getOrCreateInstance(currentToast)

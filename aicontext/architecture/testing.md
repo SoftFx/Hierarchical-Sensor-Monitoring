@@ -134,7 +134,9 @@ therefore gets these checks green in seconds; a PR touching a lane's paths runs 
   integration — the collector unit set (incl. `tests/conformance/**`: `WireFormatGoldenLockTests`
   reads the golden files there byte for byte, and `.gitattributes` fixes their line endings) plus
   `src/server/**`, `src/database/**`, `src/lib/**` (the lane builds the server image from branch
-  source). Each also lists its own workflow file.
+  source) and `src/native/collector/**` (`NativeTableSensorEndToEndTests` builds the native
+  collector's table driver from branch source and runs it against that server). Each also lists its
+  own workflow file.
 - Always the full lane: any change under `.github/**`, every `push` / `workflow_dispatch` /
   `schedule` run, and any doubt (HEAD not a two-parent merge commit, `git diff` failure) —
   detection fails open.
