@@ -378,7 +378,8 @@ namespace HSMServer.Controllers
                 if (coreRequest.IsOk)
                 {
                     var historyValues = await _cache.GetSensorValues(coreRequest.Value).Flatten();
-                    var response = historyValues.ConvertToCsv(largeFiles: _largeFiles);
+                    // Scripts parse this export: the values as they are stored (#1886).
+                    var response = historyValues.ConvertToCsv(CsvReader.Script, largeFiles: _largeFiles);
 
                     return request.IsZipArchive
                            ? File(response.CompressToZip(request.FileName, request.Extension), $"{request.FileName}.zip".GetContentType())

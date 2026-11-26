@@ -13,20 +13,36 @@
         <member name="M:HSMServer.ApiObjectsConverters.ApiConverters.Convert(System.Collections.Generic.List{HSMCommon.Model.BaseValue},HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore)">
             <summary>The history values for the Sensor API; a large file value is described from <paramref name="largeFiles"/>.</summary>
         </member>
-        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.ConvertToCsv(System.Collections.Generic.List{HSMCommon.Model.BaseValue},HSMServer.ApiObjectsConverters.ExportOptions,HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore)">
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.ConvertToCsv(System.Collections.Generic.List{HSMCommon.Model.BaseValue},HSMServer.ApiObjectsConverters.CsvReader,HSMServer.ApiObjectsConverters.ExportOptions,HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore)">
             <summary>
-            The values as CSV. A large file value has an empty content column and its description in the last column, with
-            the kind and the state read from <paramref name="largeFiles"/> when it is given.
+            The values as CSV for <paramref name="reader"/>. A large file value has an empty content column and its
+            description in the last column, with the kind and the state read from <paramref name="largeFiles"/> when it is given.
             </summary>
         </member>
         <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvCell(System.String)">
-            <summary>One CSV cell as it is: quoted, a quote doubled. For typed values and the base64 content of a file.</summary>
+            <summary>
+            One CSV cell as it is: quoted, a quote doubled. Every cell for a script; for a spreadsheet, the typed values and
+            the base64 content of a file.
+            </summary>
         </member>
         <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvTextCell(System.String)">
             <summary>
-            One CSV cell of free text a collector sent (a name, an extension, a comment, a string value), written as text:
-            the bidirectional control characters neutralized, a text that a spreadsheet would read as a formula (it starts
-            with = + - @, a tab or a carriage return) prefixed with an apostrophe, then quoted.
+            One CSV cell of free text a collector sent (a name, an extension, a comment, a string value), written as text for a
+            spreadsheet: the bidirectional control characters neutralized, a text that a spreadsheet would read as a formula
+            (it starts with = + - @, a tab or a carriage return) prefixed with an apostrophe, then quoted.
+            </summary>
+        </member>
+        <member name="T:HSMServer.ApiObjectsConverters.CsvReader">
+            <summary>Who reads an export of sensor values (#1886).</summary>
+        </member>
+        <member name="F:HSMServer.ApiObjectsConverters.CsvReader.Script">
+            <summary>A script, through the Sensor API: every value as it is stored, quoted, a quote doubled.</summary>
+        </member>
+        <member name="F:HSMServer.ApiObjectsConverters.CsvReader.Spreadsheet">
+            <summary>
+            A person who opens the web UI's download in a spreadsheet: a collector's free text (a name, an extension, a
+            comment, a string value) written as text, so a spreadsheet never reads it as a formula, and without
+            bidirectional control characters.
             </summary>
         </member>
         <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">

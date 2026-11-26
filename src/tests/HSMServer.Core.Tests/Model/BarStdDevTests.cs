@@ -184,7 +184,7 @@ namespace HSMServer.Core.Tests.Model
                 ([new IntegerBarValue { Count = 4, Mean = 5, StdDev = 1.5, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1) }], "\"1.5\""),
             })
             {
-                var lines = values.ConvertToCsv().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+                var lines = values.ConvertToCsv(CsvReader.Script).Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
                 // The header (and so every pre-#1509 column position) is unchanged up to Comment.
                 Assert.Equal(expectedHeader, lines[0]);
@@ -192,7 +192,7 @@ namespace HSMServer.Core.Tests.Model
             }
 
             var unknown = new List<BaseValue> { new DoubleBarValue { Count = 4, Mean = 5, OpenTime = Start, CloseTime = Start.AddMinutes(1), Time = Start.AddMinutes(1) } };
-            Assert.EndsWith("\"\"", unknown.ConvertToCsv().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[1]);
+            Assert.EndsWith("\"\"", unknown.ConvertToCsv(CsvReader.Script).Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[1]);
         }
 
 
