@@ -22,7 +22,6 @@ namespace HSMServer.Core.Tests.Notifications
     // #1824 / #1828: what one save of the Telegram bot settings changes. The same list of
     // changes feeds the log line of the save and the `serverSettings` journal records. The
     // bot token is a secret: both say THAT it changed, never the old or the new value.
-    [Collection("Database collection")]
     public class TelegramSettingsChangesTests : MonitoringCoreTestsBase<TelegramSettingsChangesFixture>
     {
         private const string OldToken = "110201543:AAE-old-token-value-xxxxxxxxxxxxxxx";

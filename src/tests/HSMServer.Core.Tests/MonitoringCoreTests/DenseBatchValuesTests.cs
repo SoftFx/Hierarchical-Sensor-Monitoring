@@ -30,7 +30,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     // (real TreeValuesCache over a real LevelDB DatabaseCore) — the loss was
     // reproducible only through the write-through path, not through the
     // storage primitives in isolation.
-    [Collection("Database collection")]
     // TemplateConcurrencyFixture is reused for its ProductAId/AccessKeyAId
     // wiring only — there is no template-concurrency angle in this suite.
     public class DenseBatchValuesTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
