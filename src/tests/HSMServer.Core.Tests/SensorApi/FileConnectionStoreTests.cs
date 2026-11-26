@@ -39,6 +39,7 @@ namespace HSMServer.Core.Tests.SensorApi
         private readonly string _key = TestProductsManager.TestProductKey.Id;
         private readonly string _root = $"fs{Guid.NewGuid():N}"[..12];
         private readonly LargeFileUploadService _uploads;
+        private readonly GatedUploads _gated;
         private readonly LargeFileUploadStore _store;
 
 
@@ -46,7 +47,8 @@ namespace HSMServer.Core.Tests.SensorApi
             : base(fixture, registerFixture)
         {
             _uploads = new LargeFileUploadService(_databaseCoreManager.DatabaseCore, _valuesCache, new LargeFileOptions { MinFreeDiskMb = 0 });
-            _store = new LargeFileUploadStore(_uploads, LargeFileStoreLimits.DefaultMaxFileSizeBytes);
+            _gated = new GatedUploads(_uploads);
+            _store = new LargeFileUploadStore(_gated, LargeFileStoreLimits.DefaultMaxFileSizeBytes);
         }
 
 
@@ -227,6 +229,143 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // A part that cannot give back what was stored (#1884 review): a defect of the content found by the end check, not
+        // a fault answered 503 for days. The upload is discarded and the end answered 400 naming the piece.
+        [Fact]
+        public async Task AShortPart_IsADefectOfTheLastPiece_AndTheUploadIsDiscarded()
+        {
+            var sensor = await CreateFileSensorAsync("dumps");
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("app.dmp", 3 * 64 * 1024, seed: 10);
+
+            var begun = await file.BeginAsync(data, sensor.Path);
+
+            for (var i = 0; i < data.PieceCount; i++)
+                await file.SendPieceAsync(data.Piece(i), begun.Upload);
+
+            var record = Record(begun.Upload);
+            var part = System.IO.Path.Combine(Files.Folder, "uploads", record.ProductId.ToString("N"), $"{record.FileId:N}.part");
+
+            using (var stream = new System.IO.FileStream(part, System.IO.FileMode.Open))
+                stream.SetLength(stream.Length - 1);
+
+            var answer = await file.EndUntilSettledAsync(begun.Upload, data.Hash());
+
+            Assert.Equal(400, answer.Status);
+            Assert.StartsWith($"piece {data.PieceCount - 1}: the stored piece cannot be read back", answer.Error);
+            Assert.EndsWith("the upload is discarded", answer.Error);
+            Assert.Null(Record(begun.Upload));
+            Assert.False(System.IO.File.Exists(part));
+        }
+
+        // A shutdown during a check: the store's own end of the finish clears the check, so after the restart a begin
+        // continues (next = pieces) and the end runs the check again.
+        [Fact]
+        public async Task AShutdownDuringACheck_LeavesTheUploadToContinue()
+        {
+            var sensor = await CreateFileSensorAsync("dumps");
+            var data = TestFile.Random("app.dmp", 2 * 64 * 1024, seed: 11);
+            var gate = _gated.HoldNextCheck();
+            var host = await StartHost();
+            string upload;
+
+            try
+            {
+                using var file = await OpenFileAsync(host);
+                var begun = await file.BeginAsync(data, sensor.Path);
+                upload = begun.Upload;
+
+                for (var i = 0; i < data.PieceCount; i++)
+                    await file.SendPieceAsync(data.Piece(i), upload);
+
+                Assert.Equal(202, (await file.EndAsync(upload, data.Hash())).Status);
+                await gate.Entered.Task.WaitAsync(Patience);
+                Assert.True(Files.IsChecking(Record(upload).FileId));
+
+                await host.StopAsync().WaitAsync(Patience);
+            }
+            finally
+            {
+                await host.DisposeAsync();
+            }
+
+            Assert.False(Files.IsChecking(Record(upload).FileId));
+            Assert.Equal(LargeFileState.Uploading, Record(upload).State);
+
+            await using var after = await StartHost();
+            using var again = await OpenFileAsync(after);
+
+            var continued = await again.BeginAsync(data, sensor.Path);
+
+            Assert.Equal(upload, continued.Upload);
+            Assert.Equal(data.PieceCount, continued.Next);
+            Assert.Equal("stored", (await again.EndUntilSettledAsync(upload, data.Hash())).State);
+        }
+
+        // A 409 to an end after its 202 sends the collector to begin, which the real store answers with its own next. The
+        // 409 itself is forced (the store answers Incomplete only for pieces the connection already knows are missing).
+        [Fact]
+        public async Task A409ToEndAfterA202_IsFollowedByBegin_WhichTheStoreAnswers()
+        {
+            var sensor = await CreateFileSensorAsync("dumps");
+            await using var host = await StartHost();
+            using var file = await OpenFileAsync(host);
+            var data = TestFile.Random("app.dmp", 2 * 64 * 1024, seed: 12);
+            var gate = _gated.HoldNextCheck(answerIncomplete: true);
+
+            var begun = await file.BeginAsync(data, sensor.Path);
+
+            for (var i = 0; i < data.PieceCount; i++)
+                await file.SendPieceAsync(data.Piece(i), begun.Upload);
+
+            Assert.Equal(202, (await file.EndAsync(begun.Upload, data.Hash())).Status);
+            await gate.Entered.Task.WaitAsync(Patience);
+            gate.Release.SetResult();
+
+            var missing = await file.EndUntilSettledAsync(begun.Upload, data.Hash());
+
+            Assert.Equal(409, missing.Status);
+
+            var again = await file.BeginAsync(data, sensor.Path);
+
+            Assert.Equal(begun.Upload, again.Upload);
+            Assert.Equal(data.PieceCount, again.Next);
+            Assert.Equal("stored", (await file.EndUntilSettledAsync(again.Upload, data.Hash())).State);
+        }
+
+        // Busy, with the rest of the lease as the time to wait.
+        [Fact]
+        public async Task ASecondConnectionWhileTheFirstHoldsTheLease_IsBusyForTheRestOfTheLease()
+        {
+            var sensor = await CreateFileSensorAsync("dumps");
+            await using var host = await StartHost();
+            using var first = await OpenFileAsync(host);
+            using var second = await OpenFileAsync(host);
+            var data = TestFile.Random("app.dmp", 2 * 64 * 1024, seed: 13);
+
+            Assert.Equal(200, (await first.BeginAsync(data, sensor.Path)).Status);
+
+            var busy = await second.BeginAsync(data, sensor.Path);
+
+            Assert.Equal(409, busy.Status);
+            Assert.InRange(busy.RetryAfter ?? 0, 170, LargeFileStoreLimits.DefaultLeaseTimeoutSeconds);
+        }
+
+        // A lease shorter than a frame's deadline (the silence limit) would let a frame outlast it: it is raised at start.
+        [Theory]
+        [InlineData(10, 30, 90)]
+        [InlineData(180, 30, 180)]
+        [InlineData(100, 40, 120)]
+        public void TheLease_IsNeverShorterThanTheSilenceLimit(int lease, int heartbeat, int expected)
+        {
+            var config = new Mock<IServerConfig>();
+            config.SetupGet(c => c.LargeFiles).Returns(new LargeFilesConfig { LeaseTimeoutSeconds = lease });
+            config.SetupGet(c => c.CollectorSessions).Returns(new CollectorSessionsConfig { HeartbeatSeconds = heartbeat });
+
+            Assert.Equal(expected, HSMServer.ServiceExtensions.ApplicationServiceExtensions.LargeFileOptionsFor(config.Object).LeaseTimeoutSeconds);
+        }
+
         // A removal of an empty part that fails at Release does not reach the connection, where it would drop it.
         [Fact]
         public void AReleaseTheStoreCannotComplete_DoesNotFault()
@@ -239,6 +378,57 @@ namespace HSMServer.Core.Tests.SensorApi
             store.Release(new FileUploadLease(Guid.NewGuid(), Guid.NewGuid()));
 
             uploads.Verify(u => u.Release(It.IsAny<UploadLease>()), Times.Once);
+        }
+
+        // The real uploads, with a hold inside the end check (after the store marked the file as being checked) and, on
+        // demand, a finish answered Incomplete after the hold.
+        private sealed class GatedUploads(ILargeFileUploads inner) : ILargeFileUploads
+        {
+            private volatile FakeFileUploadStore.Gate _gate;
+            private volatile bool _incomplete;
+
+
+            public FakeFileUploadStore.Gate HoldNextCheck(bool answerIncomplete = false)
+            {
+                _incomplete = answerIncomplete;
+                return _gate = new FakeFileUploadStore.Gate();
+            }
+
+            public Task<LargeFileBeginResult> BeginAsync(LargeFileBeginRequest request, CancellationToken ct) => inner.BeginAsync(request, ct);
+
+            public Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct) =>
+                inner.AppendAsync(lease, pieceNumber, storedBytes, digest, ct);
+
+            public Task<bool> DiscardAsync(UploadLease lease, string reason, CancellationToken ct) => inner.DiscardAsync(lease, reason, ct);
+
+            public void Release(UploadLease lease) => inner.Release(lease);
+
+            public bool IsChecking(Guid fileId) => inner.IsChecking(fileId);
+
+            public async Task<LargeFileFinishResult> FinishAsync(UploadLease lease, byte[] wholeHash, ILargeFilePartChecker checker, CancellationToken ct)
+            {
+                var gate = _gate;
+                _gate = null;
+
+                if (gate is not null && _incomplete)
+                {
+                    _incomplete = false;
+                    await gate.PassAsync(ct);
+                    return new LargeFileFinishResult(LargeFileFinishOutcome.Incomplete, lease.FileId, null, 0, "forced by the test");
+                }
+
+                return await inner.FinishAsync(lease, wholeHash, gate is null ? checker : new GatedChecker(checker, gate), ct);
+            }
+        }
+
+
+        private sealed class GatedChecker(ILargeFilePartChecker inner, FakeFileUploadStore.Gate gate) : ILargeFilePartChecker
+        {
+            public async Task<LargeFilePartCheck> CheckAsync(ILargeFilePartReader part, byte[] wholeHash, CancellationToken ct)
+            {
+                await gate.PassAsync(ct);
+                return await inner.CheckAsync(part, wholeHash, ct);
+            }
         }
 
         private static TestFile Routed(TestFile file) =>

@@ -121,7 +121,7 @@ Memory: file frames have a budget of their own, so a piece never takes the reser
 
 Details to settle in the step: the header layout, whether the whole-file hash is a hash of the bytes or of the pieces' hashes (the second lets both sides resume without reading the file again), how the collector learns the result of a check that takes minutes.
 
-Settled in #1884 (2026-11-25; the wire is `aicontext/features/api/wire-contract/feature.md`, "File connection"): an 88-byte header with the SHA-256 of each piece's original bytes; the hash in `end` is the SHA-256 of the pieces' digests, while the value shows the SHA-256 of the original bytes, which the end check computes on the way (the coordinator's decision); `end` is answered `202 checking` at once and the collector asks again, after a cut with `begin`. The issue's test of a frame budget and its `1013` is replaced by the bound on uploads in progress: a file connection never waits for memory.
+Settled in #1884 (2026-11-25; the wire is `aicontext/features/api/wire-contract/feature.md`, "File connection"): an 88-byte header with the SHA-256 of each piece's original bytes; the hash in `end` is the SHA-256 of the pieces' digests, while the value shows the SHA-256 of the original bytes, which the end check computes on the way (the coordinator's decision); `end` is answered with the outcome of a check done within 2 seconds, otherwise `202 checking` and the collector asks again, after a cut with `begin`. The issue's test of a frame budget and its `1013` is replaced by the bound on uploads in progress: a file connection never waits for memory.
 
 ### Where the bytes live on the server
 

@@ -60,6 +60,11 @@ namespace HSMServer.SensorApi.Sessions.Files
                     expected++;
                 }
             }
+            catch (FilePieceDefectException ex)
+            {
+                // Reading again finds the same: a defect of the content, not a fault.
+                return Bad(ex.Piece, $"the stored piece cannot be read back: {ex.Message}");
+            }
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);

@@ -22,8 +22,13 @@ namespace HSMServer.SensorApi.Sessions.Files
         // its original bytes; returns once both are on the disk.
         Task<FileAppendResult> AppendAsync(FileUploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct);
 
-        // Removes the upload, its part and its reservation, and ends the lease. A stale lease is ignored.
-        Task DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct);
+        // Removes the upload, its part and its reservation, and ends the lease. False when nothing was removed: a stale
+        // lease (another connection holds the upload now) or an upload that is gone.
+        Task<bool> DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct);
+
+        // How long the store keeps a lease without an append (LargeFiles.LeaseTimeoutSeconds): past it the connection no
+        // longer counts on holding its upload.
+        TimeSpan LeaseTimeout { get; }
 
         // Ends a lease; idempotent; a stale lease is ignored.
         void Release(FileUploadLease lease);
@@ -129,4 +134,12 @@ namespace HSMServer.SensorApi.Sessions.Files
 
 
     public sealed class FileUploadStoreException(string message, Exception inner = null) : Exception(message, inner);
+
+
+    // A stored piece that cannot be read back (its index does not match the part, the part ends before it): thrown by a
+    // part reader, taken by the end check as a defect of the content at that piece, never as a fault.
+    public sealed class FilePieceDefectException(long piece, string message, Exception inner = null) : Exception(message, inner)
+    {
+        public long Piece { get; } = piece;
+    }
 }

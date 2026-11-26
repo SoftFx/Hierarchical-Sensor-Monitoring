@@ -507,8 +507,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
             if (!HoldsLease(entry, lease, Mono(), Limits) || entry.Checking || record.State != LargeFileState.Uploading)
                 return new LargeFileAppendResult(LargeFileAppendOutcome.LeaseLost, record.PieceCount);
 
-            if (storedLength <= 0 || storedLength > MaxStoredPieceBytes(entry.MaxPieceSize))
-                throw new ArgumentException($"A stored piece has 1..{MaxStoredPieceBytes(entry.MaxPieceSize)} bytes, not {storedLength}.", "storedBytes");
+            // The bound of this upload's own piece size (at most the caller's maximum), the one the reader checks too.
+            if (storedLength <= 0 || storedLength > MaxStoredPieceBytes(record.PieceSize))
+                throw new ArgumentException($"A stored piece has 1..{MaxStoredPieceBytes(record.PieceSize)} bytes, not {storedLength}.", "storedBytes");
 
             if (pieceNumber < record.PieceCount)
                 return new LargeFileAppendResult(LargeFileAppendOutcome.AlreadyHave, record.PieceCount);
@@ -560,7 +561,7 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         // === Discard, release, finish ===
 
-        public void Discard(UploadLease lease, string reason)
+        public bool Discard(UploadLease lease, string reason)
         {
             Entry entry;
 
@@ -570,10 +571,11 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
                 if (!_files.TryGetValue(lease.FileId, out entry) || entry.Removed || entry.LeaseId != lease.LeaseId ||
                     entry.Record.State != LargeFileState.Uploading)
-                    return;
+                    return false;
             }
 
             RemoveEntry(entry, $"discarded: {reason}", force: true);
+            return true;
         }
 
         public void Release(UploadLease lease)
@@ -1763,12 +1765,18 @@ namespace HSMDatabase.LevelDB.LargeFiles
                             var stored = BinaryPrimitives.ReadUInt32LittleEndian(entry);
                             var start = BinaryPrimitives.ReadInt64LittleEndian(entry.AsSpan(4));
 
-                            if (start != offset || stored == 0 || offset + stored > Record.PartLength)
-                                throw new LargeFileStoreException($"The index of large file {Record.FileId:N} does not match its part at piece {number}.");
+                            // A length no piece of this record can have is damage too, and is not allocated.
+                            if (start != offset || stored == 0 || stored > MaxStoredPieceBytes(Record.PieceSize) || offset + stored > Record.PartLength)
+                                throw new LargeFilePartDefectException(number, $"The index of large file {Record.FileId:N} does not match its part at piece {number}.");
 
                             bytes = new byte[stored];
                             await part.ReadExactlyAsync(bytes, ct);
                             offset += stored;
+                        }
+                        catch (EndOfStreamException ex)
+                        {
+                            // The index or the part ends before the record does: what was stored is not there to read.
+                            throw new LargeFilePartDefectException(number, $"The part of large file {Record.FileId:N} ends before piece {number}.", ex);
                         }
                         catch (Exception ex) when (IsFileError(ex))
                         {

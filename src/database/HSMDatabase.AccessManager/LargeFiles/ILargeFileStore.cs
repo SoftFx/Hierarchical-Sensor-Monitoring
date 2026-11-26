@@ -345,7 +345,19 @@ namespace HSMDatabase.AccessManager.LargeFiles
 
 
     /// <summary>A fault of the store (I/O, a store that cannot open, disposed): nothing was acknowledged. Every refusal is a result instead.</summary>
-    public sealed class LargeFileStoreException(string message, Exception inner = null) : Exception(message, inner);
+    public class LargeFileStoreException(string message, Exception inner = null) : Exception(message, inner);
+
+
+    /// <summary>
+    /// A stored piece that cannot be read back as it was appended (#1884 review): its index entry does not match the part,
+    /// or the part ends before it. A defect of the content, not a fault: reading again finds the same, so the end check
+    /// takes it as a non-match at <paramref name="piece"/> and the upload is discarded. Still a
+    /// <see cref="LargeFileStoreException"/> for every caller that only knows faults.
+    /// </summary>
+    public sealed class LargeFilePartDefectException(long piece, string message, Exception inner = null) : LargeFileStoreException(message, inner)
+    {
+        public long Piece { get; } = piece;
+    }
 
 
     /// <summary>Counters since the process started, for self-monitoring (<c>Database/Large files</c>). Written with <see cref="Interlocked"/>.</summary>
@@ -486,8 +498,11 @@ namespace HSMDatabase.AccessManager.LargeFiles
         /// </summary>
         LargeFileAppendResult Append(UploadLease lease, long pieceNumber, ReadOnlySpan<byte> storedBytes, ReadOnlySpan<byte> digest);
 
-        /// <summary>Removes an upload (part, index, record), releasing its lease and reservation; logged and counted. A stale lease is ignored.</summary>
-        void Discard(UploadLease lease, string reason);
+        /// <summary>
+        /// Removes an upload (part, index, record), releasing its lease and reservation; logged and counted. True when it was
+        /// removed; false for a stale lease (another connection holds the upload now) or an unknown upload, which change nothing.
+        /// </summary>
+        bool Discard(UploadLease lease, string reason);
 
         /// <summary>
         /// Ends a lease whatever the state; idempotent; a stale lease is ignored. A part that received no piece is removed
