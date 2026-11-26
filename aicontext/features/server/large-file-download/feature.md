@@ -144,7 +144,7 @@ An access key never downloads, but it reads the history of a File sensor (`POST 
 
 ## Self-monitoring
 
-Two sensors in a node of their own, `Large files`, of the server's self-monitoring product (`LargeFileSensors`, created by `DataCollectorWrapper`). Unlike the other self-monitoring sensors, both carry a default alert: on a change to Error, a notification and the Error icon.
+Two Bool sensors in the node `Large files` of the server's self-monitoring product, beside the large file store's counters (the same class, `LargeFileSensors`, created by `DataCollectorWrapper`); each is created at its first report, so a server that never built an archive has neither. Unlike the other self-monitoring sensors, both carry a default alert: on a change to Error, a notification and the Error icon.
 
 | Sensor | Type | Posted | Error means | Default alert text |
 |---|---|---|---|---|

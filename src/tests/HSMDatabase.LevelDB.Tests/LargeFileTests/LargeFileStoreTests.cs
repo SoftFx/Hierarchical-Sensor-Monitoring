@@ -696,6 +696,10 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.True(store.Exists);
             Assert.False(store.HasContent);
 
+            // The bundled compose mounts archives/ into Caddy, so Docker creates it empty on every server.
+            Directory.CreateDirectory(Path.Combine(_root, LargeFileStore.ArchivesFolderName));
+            Assert.False(store.HasContent);
+
             Begin(store, Key("a", Piece));
             Assert.True(store.HasContent);
         }

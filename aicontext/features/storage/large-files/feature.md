@@ -205,7 +205,7 @@ There is no piece-size setting: the piece size is the caller's (the file connect
 
 ## Self-monitoring
 
-Under `Large files` (`LargeFileSensors`; steps 3 and 4 add their sensors to the same class and node), posted from the 5-minute self-monitoring sample, **only once `uploads/` or `archives/` exists** (`HasContent`): the folder alone exists on every server whose compose file mounts it. Counters since the process started, posted when they change: `Start disagreements`, `Parts removed`, `Files removed`, `Leftovers removed`, `Refused for space`, `Rows written again`, `Rows that disagree`, `Files of sensors not loaded`, `Write failures`. Every one but the three removal counters is Error in the sample in which it grew and Ok at the next sample without growth. Step 4 (#1886) adds uploads in progress, bytes stored, builds and files waiting for a password, and the alerts.
+Under `Large files` (`LargeFileSensors`; steps 3 and 4 add their sensors to the same class and node), posted from the 5-minute self-monitoring sample, **only once `uploads/` exists or `archives/` holds an entry** (`HasContent`): the folder and an empty `archives/` exist on every server whose compose file mounts them (the bundled compose mounts `archives/` into Caddy). Counters since the process started, posted when they change: `Start disagreements`, `Parts removed`, `Files removed`, `Leftovers removed`, `Refused for space`, `Rows written again`, `Rows that disagree`, `Files of sensors not loaded`, `Write failures`. Every one but the three removal counters is Error in the sample in which it grew and Ok at the next sample without growth. Step 4 (#1886) adds uploads in progress, bytes stored, builds and files waiting for a password, and the alerts.
 
 ## Log lines (logger `LargeFiles`)
 
