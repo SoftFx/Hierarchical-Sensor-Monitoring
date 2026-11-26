@@ -568,7 +568,7 @@ namespace HSMServer.SensorApi.Sessions
                 ? new TableFrameMemory(_tableBudget, maxFrameBytes, session.KeyId, (reservation, token) => WaitForTableBudgetAsync(session, silence, reservation, token), frameDeadline.Arm)
                 : null;
 
-            var fileMemory = session.IsFile ? new FileFrameMemory(maxFrameBytes, () => session.Files.HoldsUpload, frameDeadline.Arm) : null;
+            var fileMemory = session.IsFile ? new FileFrameMemory(maxFrameBytes, session.Files.HoldsLiveUploadOrReleaseIt, frameDeadline.Arm) : null;
 
             IFrameMemory memory = (IFrameMemory)tableMemory ?? fileMemory;
 

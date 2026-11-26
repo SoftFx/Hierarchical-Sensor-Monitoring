@@ -70,9 +70,11 @@ namespace HSMServer.SensorApi.Sessions.Files
 
 
         // True while the connection holds an upload whose lease is alive: only then may a frame be larger than 64 KiB. A
-        // lease the store let expire (no append within its lease timeout) may be held by another connection now: the
-        // connection forgets it, so its frames are bounded by the uploads in progress again.
-        public bool HoldsUpload => Current() is not null;
+        // lease the store let expire (no append within its lease timeout) may be held by another connection now: this
+        // forgets it and gives it back (a release, not only a test), so its frames are bounded by the uploads in
+        // progress again. Called by the receive of the connection's loop, which reads and handles one frame at a time:
+        // no begin, piece or end of this connection runs meanwhile, so the upload cannot change under it.
+        public bool HoldsLiveUploadOrReleaseIt() => Current() is not null;
 
 
         public async Task HandleBeginAsync(PublicApiRequestInfo caller, SessionRequest request, long id, ArrayBufferWriter<byte> output, CancellationToken token)
@@ -93,6 +95,9 @@ namespace HSMServer.SensorApi.Sessions.Files
             ReleaseUpload();
 
             FileBeginResult result;
+
+            // Taken before the call: the store grants the lease before it creates the part's files, so this is never later.
+            var asked = _time.GetTimestamp();
 
             try
             {
@@ -120,7 +125,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                     var pieces = FilePiece.PieceCount(begin.Size, pieceSize);
 
                     _upload = new Upload(result.Lease, result.FileId, begin.Size, pieceSize, pieces, result.NextPiece, CollectorSession.Printable(begin.Name),
-                        _time.GetTimestamp());
+                        asked);
                     _session.CountUploadBegun();
 
                     _logger.Info($"Collector file connection {_session.ShortId}: upload {upload} of \"{_upload.Name}\" ({begin.Size} bytes, {pieces} pieces of {pieceSize}) " +
@@ -255,8 +260,9 @@ namespace HSMServer.SensorApi.Sessions.Files
             }
             catch (FileUploadStoreException ex)
             {
-                // Nothing was acknowledged: the collector sends the same piece again. The store renewed the lease before
-                // its write failed, so a collector that retries a full disk on this connection keeps its upload.
+                // Nothing was acknowledged: the collector sends the same piece again. A write that failed (a full disk
+                // included) comes after the store renewed the lease, so a collector that retries it on this connection
+                // keeps its upload; a fault before the renewal (a store that cannot open) ends the next append LeaseLost.
                 upload.Touched = asked;
                 _logger.Debug($"Collector file connection {_session.ShortId}: the store could not write piece {header.Number} of upload {FormatId(upload.FileId)}: {ex.Message}");
                 _session.CountPieceRefused();

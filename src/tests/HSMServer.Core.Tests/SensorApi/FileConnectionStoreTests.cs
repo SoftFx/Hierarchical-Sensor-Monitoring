@@ -352,6 +352,20 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.InRange(busy.RetryAfter ?? 0, 170, LargeFileStoreLimits.DefaultLeaseTimeoutSeconds);
         }
 
+        // A lease shorter than a frame's deadline (the silence limit) would let a frame outlast it: it is raised at start.
+        [Theory]
+        [InlineData(10, 30, 90)]
+        [InlineData(180, 30, 180)]
+        [InlineData(100, 40, 120)]
+        public void TheLease_IsNeverShorterThanTheSilenceLimit(int lease, int heartbeat, int expected)
+        {
+            var config = new Mock<IServerConfig>();
+            config.SetupGet(c => c.LargeFiles).Returns(new LargeFilesConfig { LeaseTimeoutSeconds = lease });
+            config.SetupGet(c => c.CollectorSessions).Returns(new CollectorSessionsConfig { HeartbeatSeconds = heartbeat });
+
+            Assert.Equal(expected, HSMServer.ServiceExtensions.ApplicationServiceExtensions.LargeFileOptionsFor(config.Object).LeaseTimeoutSeconds);
+        }
+
         // A removal of an empty part that fails at Release does not reach the connection, where it would drop it.
         [Fact]
         public void AReleaseTheStoreCannotComplete_DoesNotFault()
