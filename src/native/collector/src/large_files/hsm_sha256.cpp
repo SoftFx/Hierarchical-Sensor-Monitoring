@@ -76,12 +76,27 @@ namespace hsm::collector::large_files
         return done;
     }
 #else
+    namespace
+    {
+        // The implementation fetched once for the process (OpenSSL 3): every hash then skips the name
+        // lookup an implicit fetch of EVP_sha256() makes each time. Never freed: it lives as the process.
+        const EVP_MD* Sha256Md() noexcept
+        {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            static const EVP_MD* const fetched = EVP_MD_fetch(nullptr, "SHA256", nullptr);
+            if (fetched != nullptr)
+                return fetched;
+#endif
+            return EVP_sha256();
+        }
+    } // namespace
+
     Sha256::Sha256() noexcept
     {
         EVP_MD_CTX* context = EVP_MD_CTX_new();
         if (context == nullptr)
             return;
-        if (EVP_DigestInit_ex(context, EVP_sha256(), nullptr) != 1)
+        if (EVP_DigestInit_ex(context, Sha256Md(), nullptr) != 1)
         {
             EVP_MD_CTX_free(context);
             return;
