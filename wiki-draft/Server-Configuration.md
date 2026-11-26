@@ -317,6 +317,10 @@ Caddy has no route of its own to the folder: an archive is reachable only as HSM
 
 A Caddyfile of your own ([Advanced Caddyfile customization](Installation#advanced-caddyfile-customization)) made from a bundled file older than the image `hsmonitoring/hsm-caddy:2.11.4-9` has no hand-over rule: HSM then serves the archives itself. Such a copy also passes a client's own `X-Hsm-Serve-Archives` header on to HSM, which then answers that client with an error instead of the file. Re-merge your copy with the current bundled file.
 
+### The link in alert messages
+
+The alerts of File sensors can print `$link`, the address of the sensor page (`https://<address>/Home/<sensor id>`; see [Large Files](Large-Files#the-alert)). The server takes the address from the environment variable `HSM_DOMAIN`, which the reference compose file passes to it from `.env`, or, without it, from `Agent.ExternalConnectionUrl`; without either, `$link` prints the path alone. `HSM_DOMAIN` has no port: on a server whose site is on a port other than 443 the links lack it, and whoever opens one adds it. `Agent.ExternalConnectionUrl` keeps its scheme and port.
+
 ### Without Caddy, or behind another reverse proxy
 
 - **Without Caddy** (`docker-compose.direct.yml`, a plain `docker run`, a service install): HSM serves the archives itself, with byte ranges and resumption. `docker-compose.direct.yml` mounts the same `HSM_LARGE_FILES` folder.
@@ -333,11 +337,13 @@ The node **HSM Server Monitoring → Large files** appears once the server has t
 |---|---|
 | `Archive build result` | Error when an archive could not be built (the comment names the file and the reason) or waits for disk room; the file is kept and tried again. Has a default alert. |
 | `Download log` | Error when a download record cannot be written: every download is refused meanwhile. Has a default alert. |
-| `Refused for space` | uploads refused for free space since the start; Error in the sample in which it grew |
+| `Refused for space` | uploads refused for free space since the start; Error in the sample in which it grew, with a default alert: `[$product]$path: a large file upload was refused, the disk is short ($value since the server started)` |
+| `Archive builds failed` | archive builds (first packs and re-encryptions) that failed since the start; Error in the sample in which it grew |
+| `Uploads in progress`, `Files stored`, `Bytes stored` (MB), `Files waiting for a password` | what the folder holds now, read from its records at every sample: uploads not finished, stored files of every product, the megabytes of the parts of uploads and of stored files and of the archives, secure files of products without a dump password |
 | `Parts removed`, `Files removed`, `Leftovers removed` | what the server removed: abandoned or discarded parts, files whose value is gone (retention, a clear, a removed sensor), files left behind |
 | `Start disagreements`, `Rows written again`, `Rows that disagree`, `Files of sensors not loaded`, `Write failures` | checks of the folder against the database; each is Error in the sample in which it grew, and the log names every case |
 
-The counters count since the server started. The server's log names every upload begun, stored or discarded, every archive built, and every removal (logger `LargeFiles`). The download log is a database of its own, `Databases/DownloadLog`.
+`Uploads in progress`, `Files stored`, `Bytes stored` and `Files waiting for a password` are read again at every sample (every 5 minutes); the other number sensors count since the server started. The server's log names every upload begun, stored or discarded, every archive built, and every removal (logger `LargeFiles`). The download log is a database of its own, `Databases/DownloadLog`.
 
 ---
 
