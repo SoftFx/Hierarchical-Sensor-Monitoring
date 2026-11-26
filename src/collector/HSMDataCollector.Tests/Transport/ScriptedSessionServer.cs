@@ -57,6 +57,8 @@ namespace HSMDataCollector.Tests.Transport
         private int _listFramesBeforeFailure = -1;
         private int _listFailStatus;
         private int _silentRequests;
+        private string _holdAckPath;
+        private int _acksToHold;
         private int _answerPings = 1;
         private int _sessions;
         private int _refused;
@@ -160,6 +162,36 @@ namespace HSMDataCollector.Tests.Transport
             {
                 _listFailStatus = status;
                 _listFramesBeforeFailure = accepted;
+            }
+        }
+
+        /// <summary>
+        /// The next <paramref name="frames"/> <c>list</c> frames that carry a value of <paramref name="path"/> (the
+        /// sensor's own path, after the computer and module the collector puts ahead of it) are stored (recorded
+        /// as accepted when they arrive) and their acks are held back until <see cref="ReleaseHeldAcks"/>: the moment
+        /// between a server storing a frame and the collector reading its ack, kept open for as long as a test needs.
+        /// </summary>
+        public void HoldAcksOfListFramesCarrying(string path, int frames)
+        {
+            lock (_script)
+            {
+                _holdAckPath = path;
+                _acksToHold = frames;
+            }
+        }
+
+        private readonly ConcurrentQueue<KeyValuePair<WebSocket, string>> _heldAcks = new ConcurrentQueue<KeyValuePair<WebSocket, string>>();
+
+        /// <summary>The acks held back by <see cref="HoldAcksOfListFramesCarrying"/> and not yet released.</summary>
+        public int HeldAcks => _heldAcks.Count;
+
+        /// <summary>Writes the held acks, in order; an ack whose session has ended is lost, as it would be.</summary>
+        public void ReleaseHeldAcks()
+        {
+            while (_heldAcks.TryDequeue(out var held))
+            {
+                try { SendAsync(held.Key, held.Value).GetAwaiter().GetResult(); }
+                catch (Exception) { }
             }
         }
 
@@ -438,10 +470,16 @@ namespace HSMDataCollector.Tests.Transport
                 return;
 
             var status = FaultFor(op, body) ?? (_ackStatus.TryGetValue(op ?? string.Empty, out var scripted) ? scripted : 200);
+            var hold = false;
 
             lock (_script)
             {
-                if (_silentRequests > 0)
+                if (op == "list" && _acksToHold > 0 && body != null && body.Contains("/" + _holdAckPath + "\""))
+                {
+                    _acksToHold--;
+                    hold = true;
+                }
+                else if (_silentRequests > 0)
                 {
                     _silentRequests--;
                     status = 0;
@@ -458,6 +496,14 @@ namespace HSMDataCollector.Tests.Transport
             if (status == 0)
             {
                 _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, 0));
+                return;
+            }
+
+            if (hold)
+            {
+                // Stored now; the ack waits for the test.
+                _requests.Enqueue(new SessionRequest(session, id.Value, op, body, text, status));
+                _heldAcks.Enqueue(new KeyValuePair<WebSocket, string>(socket, $"{{\"ack\":{id.Value},\"status\":{status},\"body\":{{}}}}"));
                 return;
             }
 

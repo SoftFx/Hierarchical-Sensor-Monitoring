@@ -128,6 +128,20 @@ namespace HSMDataCollector.Client.Session
         /// </summary>
         internal Func<long, Task> AckDeadlineForTests { get; set; }
 
+        /// <summary>
+        /// How long writing the close frame of a stop may take (<see cref="CloseFrameBound"/>). Tests set it to
+        /// <see cref="Timeout.InfiniteTimeSpan"/> when they check that the close frame is written, so no clock decides it.
+        /// </summary>
+        internal TimeSpan CloseFrameBoundForTests { get; set; } = CloseFrameBound;
+
+        /// <summary>
+        /// For tests: after the close frame of a connection the collector gives up (a protocol error of the server, a
+        /// block without an ack) is written, the socket is aborted only once the task this returns for the close code
+        /// completes. The abort follows the close at once otherwise, and a server that is not reading at that moment
+        /// loses the close with the connection, so a test that checks the close code waits for the server to have it.
+        /// </summary>
+        internal Func<WebSocketCloseStatus, Task> CloseHeardForTests { get; set; }
+
         private static TaskCompletionSource<bool> NewSignal() => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
 
@@ -188,7 +202,7 @@ namespace HSMDataCollector.Client.Session
                     // The close frame is written even when the budget is spent (a drain that waited for an ack to its
                     // end): it is a few bytes, bounded on its own, and lets the server see a normal closure. Only the
                     // wait for the server's answer is the budget's.
-                    using (var write = new CancellationTokenSource(CloseFrameBound))
+                    using (var write = new CancellationTokenSource(CloseFrameBoundForTests))
                         await CloseOutputAsync(link, WebSocketCloseStatus.NormalClosure, "collector stopped", write.Token).ConfigureAwait(false);
 
                     using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(budget))
@@ -479,7 +493,7 @@ namespace HSMDataCollector.Client.Session
                     }
                     catch (TableProtocolException ex)
                     {
-                        await CloseQuietlyAsync(socket, ex.Code, ex.Message).ConfigureAwait(false);
+                        await CloseQuietlyAsync(socket, ex.Code, ex.Message, closeHeard: CloseHeardForTests).ConfigureAwait(false);
                         return new OpenResult(null, 0, ex.Message);
                     }
                     catch (Exception ex) when (!(ex is OperationCanceledException))
@@ -685,7 +699,7 @@ namespace HSMDataCollector.Client.Session
                 // The close is said before the loops are cancelled: cancelling a receive that is under way aborts a
                 // ClientWebSocket, and the server would then see a reset where the collector meant a closure (a block
                 // without an ack in time, the end of the session).
-                await CloseQuietlyAsync(link.Socket, link.CloseCode, link.CloseReason, link.SendLock).ConfigureAwait(false);
+                await CloseQuietlyAsync(link.Socket, link.CloseCode, link.CloseReason, link.SendLock, CloseHeardForTests).ConfigureAwait(false);
 
                 serving.Cancel();
                 Observe(receive);
@@ -1126,7 +1140,8 @@ namespace HSMDataCollector.Client.Session
         }
 
         // Says the close (ours, or the answer to the server's) for at most a second, then lets the socket go.
-        private static async Task CloseQuietlyAsync(ClientWebSocket socket, WebSocketCloseStatus code, string reason, SemaphoreSlim sendLock = null)
+        private static async Task CloseQuietlyAsync(ClientWebSocket socket, WebSocketCloseStatus code, string reason, SemaphoreSlim sendLock = null,
+                                                    Func<WebSocketCloseStatus, Task> closeHeard = null)
         {
             try
             {
@@ -1152,6 +1167,12 @@ namespace HSMDataCollector.Client.Session
             }
             catch (Exception)
             {
+            }
+
+            if (closeHeard != null)
+            {
+                try { await closeHeard(code).ConfigureAwait(false); }
+                catch (Exception) { }
             }
 
             try { socket.Abort(); }
