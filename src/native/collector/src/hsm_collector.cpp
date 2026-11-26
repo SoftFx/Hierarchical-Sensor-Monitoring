@@ -7321,9 +7321,11 @@ namespace
         mutable std::mutex large_files_mutex_;
         std::unique_ptr<large_files::LargeFiles> large_files_;
         std::atomic<bool> dispose_on_uploader_said_{ false };
-        // A file value is routable only above a quarter of the smallest session frame a server announces
-        // (65,536 bytes, the server's lower bound of CollectorSessions.MaxFrameBytes).
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        // A file value is routable only above a quarter of the smallest session frame a server announces: the
+        // server's CollectorSessions.MaxFrameBytes is at least MinFrameBytes = 64 KiB (65,536 bytes).
         static constexpr size_t kMinRoutableFileBytes = 65536 / 4;
+#endif
         // File values given a route copy since creation (test seam).
         std::atomic<std::uint64_t> route_copies_for_tests_{ 0 };
 

@@ -223,7 +223,6 @@ namespace hsm::test
         void AnswerBeginNext(FileScriptAnswer answer) { Push(begin_answers_, std::move(answer)); }
         void AnswerPieceNext(FileScriptAnswer answer) { Push(piece_answers_, std::move(answer)); }
         void AnswerEndNext(FileScriptAnswer answer) { Push(end_answers_, std::move(answer)); }
-        void AnswerDiscardNext(FileScriptAnswer answer) { Push(discard_answers_, std::move(answer)); }
 
         // The next `count` ends that would store a file answer 202 "checking" with retryAfter 1 instead.
         void SetCheckingRounds(int count)
