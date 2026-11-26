@@ -8,11 +8,11 @@ namespace HSMServer.Core.TableSensors
     /// rounded up, at least 1; 0 for kept for ever. The batches of an hour go to the class the sensor has at the merge.
     /// <para>
     /// The same rule as the cleanup of ordinary sensor history (<c>TimeIntervalModel.TimeIsUp</c> and the retention floor
-    /// in <c>TreeValuesCache</c>): what never expires there is kept for ever here. That includes a dynamic preset (a month,
-    /// a year) inherited from a folder: the tree carries it as <see cref="TimeInterval.FromFolder"/> with 0 ticks, which
-    /// says nothing about its length, and the ordinary cleanup never deletes such history either (an open question for the
-    /// owner, not worked around here). A preset on the sensor or the product counts by its nominal length (a month 31 days:
-    /// 5 weeks; three months 14; six months 27; a year 53).
+    /// in <c>TreeValuesCache</c>): what never expires there is kept for ever here. A calendar preset counts by its nominal
+    /// length (a month 31 days: 5 weeks; three months 14; six months 27; a year 53), whether it is set on the sensor or the
+    /// product or inherited from a folder (<see cref="TimeIntervalModel.FolderPreset"/>, #1864). An inherited setting
+    /// stored by an earlier build without its preset (<see cref="TimeInterval.FromFolder"/> with 0 ticks) is kept for ever,
+    /// as the ordinary cleanup keeps it, until the start of the server resolves it from the folder.
     /// </para>
     /// </summary>
     public static class TablePeriodClass
@@ -28,9 +28,9 @@ namespace HSMServer.Core.TableSensors
             if (policy is null)
                 return Forever;
 
-            long ticks = policy.Interval switch
+            long ticks = policy.AppliedInterval switch
             {
-                TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year => (long)policy.Interval,
+                TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year => (long)policy.AppliedInterval,
                 TimeInterval.Ticks or TimeInterval.FromFolder => policy.Ticks,
                 _ => 0, // None, FromParent left unresolved: never expires
             };
