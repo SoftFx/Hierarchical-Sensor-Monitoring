@@ -81,7 +81,8 @@ namespace HSMServer.Core.Model
         // and the weekly-database protection does NOT apply to them. The same
         // MinValue applies to KeepHistory inherited from a folder when the
         // folder window never expires for the retention pass (FromFolder with
-        // the folder's month presets, Ticks = 0) or is too large to shift
+        // Ticks = 0 and no FolderPreset: a calendar preset stored by a build
+        // before #1864 and not yet resolved at start) or is too large to shift
         // (FromFolder Forever, long.MaxValue) — the floor mirrors TimeIsUp,
         // not just IsNone.
         internal long OutOfRetentionValues;
