@@ -95,6 +95,7 @@ namespace HSMServer.ServerConfiguration
         public TableSensorsConfig TableSensors { get; }
 
         public LargeFileArchivesConfig LargeFileArchives { get; }
+        public LargeFilesConfig LargeFiles { get; }
 
         public OidcConfig Oidc { get; }
 
@@ -146,6 +147,7 @@ namespace HSMServer.ServerConfiguration
             HistoryCompaction = Register<HistoryCompactionConfig>(nameof(HistoryCompaction));
             TableSensors = Register<TableSensorsConfig>(nameof(TableSensors));
             LargeFileArchives = Register<LargeFileArchivesConfig>(nameof(LargeFileArchives));
+            LargeFiles = Register<LargeFilesConfig>(nameof(LargeFiles));
             Oidc = OidcConfig.Bind(configuration.GetSection(OidcConfig.SectionName));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
@@ -171,6 +173,7 @@ namespace HSMServer.ServerConfiguration
             HistoryCompaction.Validate();
             TableSensors.Validate();
             LargeFileArchives.Validate();
+            LargeFiles.Validate();
             OidcErrors = Oidc.Validate();
 
             ResaveSettings();

@@ -619,6 +619,11 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
+            // A large value (#1883) has no content here: its file is in the large file store and is given out by its own
+            // download (#1885), never as an empty file.
+            if (value is LargeFileValue)
+                return NotFound();
+
             var fileName = $"{path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
 
             return File(value.Value ?? Array.Empty<byte>(), fileName.GetContentType(), fileName);
@@ -633,6 +638,9 @@ namespace HSMServer.Controllers
 
             if (value?.Value is null)
                 return _emptyResult;
+
+            if (value is LargeFileValue)
+                return NotFound();
 
             var fileContentsStream = new MemoryStream(value.Value);
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";

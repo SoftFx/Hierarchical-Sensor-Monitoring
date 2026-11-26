@@ -31,6 +31,20 @@
             two counters are posted only once one of them is above zero (a sealed week is still read).
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileSensors">
+            <summary>
+            Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
+            self-monitoring sample. Inert until the store has content (<c>uploads/</c> or <c>archives/</c> exists, not only its
+            folder, which a bind mount creates): a server that never took a large file creates none of these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
+            Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
+            <para>
+            The archive side (#1885) adds two Bool sensors, each created at its first report: <c>Archive build result</c> and
+            <c>Download log</c>. Unlike the other self-monitoring sensors both carry a default alert on Error (ADR-0022, the
+            owner's decision on #1885): a build that fails or waits for room keeps a file undownloadable, and a download log
+            that cannot be written refuses every download.
+            </para>
+            </summary>
+        </member>
         <member name="T:HSMServer.BackgroundServices.TableBlockSensors">
             <summary>
             Self-monitoring of the block store of table sensors (#1844), under <c>Database/Tables</c>, posted from the 5-minute
@@ -48,13 +62,6 @@
         </member>
         <member name="M:HSMServer.BackgroundServices.ILargeFilesMonitor.ReportDownloadLog(System.Boolean,System.String)">
             <summary>A download record was written, or could not be (every download is refused meanwhile).</summary>
-        </member>
-        <member name="T:HSMServer.BackgroundServices.LargeFileSensors">
-            <summary>
-            The self-monitoring sensors of large files, in a node of their own. Unlike the other self-monitoring sensors both
-            carry a default alert on Error (ADR-0022, the owner's decision on #1885): a build that fails or waits for room keeps
-            a dump undownloadable, and a download log that cannot be written refuses every download.
-            </summary>
         </member>
         <member name="T:HSMServer.BackgroundServices.LargeFileArchiveBackgroundService">
             <summary>

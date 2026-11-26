@@ -135,7 +135,7 @@ What deliberately stays: the startup warning for `Kestrel.SensorPort`/`Kestrel.S
 | `DatabasesBackups` | Automated SFTP backup snapshots |
 | `CaddyData` | Caddy certificates and ACME account (compose) |
 | `CaddyCertificates` | Optional custom certificate chain and key, mounted read-only at `/certs` |
-| `LargeFiles` (`HSM_LARGE_FILES`, default `./LargeFiles`) | Large file values (#1882): uploads, checked files and finished archives. The app mounts the whole folder at `/app/LargeFiles`, where its `LargeFiles.Folder` setting points by default; Caddy mounts only the `archives/` subtree, read-only, at `/srv/hsm-archives`. Both mounts come from the one variable, so moving the folder means changing `HSM_LARGE_FILES` alone. If the two mounts pointed at different folders, every download through Caddy would answer 404. |
+| `LargeFiles` (`HSM_LARGE_FILES`, default `./LargeFiles`) | The large file store (#1883, `aicontext/features/storage/large-files/feature.md`): uploads in progress, checked files and finished archives. Created by the first upload; not a database and not in the backups. The app mounts the whole folder at `/app/LargeFiles`, where its `LargeFiles.Folder` setting points by default; Caddy mounts only the `archives/` subtree, read-only, at `/srv/hsm-archives` (#1885). Both mounts come from the one variable, so another volume means changing `HSM_LARGE_FILES` alone and leaving `LargeFiles.Folder` at its default. If the two mounts pointed at different folders, every download through Caddy would answer 404. |
 
 ### What survives a container recreate (#1633)
 

@@ -136,19 +136,13 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
                     return sensors[path] = new HistorySealingSensorsTests.Recording<bool>();
                 });
 
-            var monitor = new LargeFileSensors(collector.Object);
+            var monitor = new LargeFileSensors(collector.Object, null);
 
             var buildPath = $"{LargeFileSensors.NodeName}/{LargeFileSensors.ArchiveBuildResultName}";
             var logPath = $"{LargeFileSensors.NodeName}/{LargeFileSensors.DownloadLogName}";
 
-            foreach (var path in new[] { buildPath, logPath })
-            {
-                var alert = Assert.Single(options[path].Alerts);
-                var condition = Assert.Single(alert.Conditions);
-                Assert.Equal(AlertProperty.Status, condition.Property);
-                Assert.Equal(AlertOperation.IsChangedToError, condition.Operation);
-                Assert.False(string.IsNullOrEmpty(alert.Template));
-            }
+            // Created at their first report: a server that never built an archive has neither.
+            Assert.Empty(sensors);
 
             var fileId = Guid.NewGuid();
             monitor.ReportArchiveBuild(fileId, false, "packing failed: disk error");
@@ -165,6 +159,15 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             Assert.Equal([(true, SensorStatus.Ok), (false, SensorStatus.Error), (false, SensorStatus.Error), (true, SensorStatus.Ok)],
                 sensors[logPath].Values.Select(v => (v.Value, v.Status)));
+
+            foreach (var path in new[] { buildPath, logPath })
+            {
+                var alert = Assert.Single(options[path].Alerts);
+                var condition = Assert.Single(alert.Conditions);
+                Assert.Equal(AlertProperty.Status, condition.Property);
+                Assert.Equal(AlertOperation.IsChangedToError, condition.Operation);
+                Assert.False(string.IsNullOrEmpty(alert.Template));
+            }
         }
 
 

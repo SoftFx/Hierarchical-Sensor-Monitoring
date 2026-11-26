@@ -18,6 +18,7 @@ namespace HSMDatabase.Settings
         private const string DefaultChangeSetsDatabaseName = "ChangeSets";
         private const string DefaultDownloadLogDatabaseName = "DownloadLog";
         private const string DefaultTableBlocksFolderName = "Tables";
+        public const string DefaultLargeFilesFolder = "LargeFiles";
 
         private const string DefaultExportFolder = "Export";
 
@@ -46,5 +47,9 @@ namespace HSMDatabase.Settings
         public string DownloadLogDatabaseName { get; init; } = DefaultDownloadLogDatabaseName;
 
         public string TableBlocksFolderName { get; init; } = DefaultTableBlocksFolderName;
+
+        public string LargeFilesFolder { get; init; } = DefaultLargeFilesFolder;
+
+        public string LargeFilesUsedMarkName { get; init; } = HSMDatabase.LevelDB.LargeFiles.LargeFileStore.UsedMarkName;
     }
 }

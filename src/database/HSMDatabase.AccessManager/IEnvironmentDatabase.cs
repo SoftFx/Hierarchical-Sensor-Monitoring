@@ -113,6 +113,12 @@ namespace HSMDatabase.AccessManager
         void RemoveSensorIdFromList(string sensorId);
         void RemoveSensor(string sensorId);
         SensorEntity GetSensorEntity(string sensorId);
+
+        /// <summary>
+        /// Whether the key of a sensor's entity is in the database (#1883): true when it is (whatever its bytes: an entity that
+        /// cannot be deserialized exists), false when a read that succeeded did not find it, null when the read failed.
+        /// </summary>
+        bool? SensorEntityExists(string sensorId);
         List<string> GetAllSensorsIds();
 
         #endregion

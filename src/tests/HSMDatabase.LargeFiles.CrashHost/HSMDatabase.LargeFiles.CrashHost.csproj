@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The child process of LargeFileStoreKillTests (#1883): appends pieces through the real store until it is killed. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RollForward>LatestMajor</RollForward>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\database\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj" />
+  </ItemGroup>
+</Project>

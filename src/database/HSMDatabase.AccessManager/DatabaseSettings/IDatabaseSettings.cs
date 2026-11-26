@@ -34,6 +34,14 @@ namespace HSMDatabase.AccessManager
         // The folder of the table block store (#1844), under DatabaseFolder.
         public string TableBlocksFolderName { get; init; }
 
+        // The folder of the large file store (#1883): not under DatabaseFolder (it is not a database and is not part of
+        // the databases' size); relative to the working directory like DatabaseFolder, or absolute (another volume).
+        public string LargeFilesFolder { get; init; }
+
+        // The mark, in DatabaseFolder, that the server held a verified large file at some time (#1883): it outlives the store's
+        // folder, so the check at start compares the values with a store folder that was lost.
+        public string LargeFilesUsedMarkName { get; init; }
+
 
         public string PathToServerLayoutDb => Path.Combine(DatabaseFolder, ServerLayoutDatabaseName);
 
@@ -51,6 +59,11 @@ namespace HSMDatabase.AccessManager
 
         // The block store of table sensors (#1844): the Blocks and BlockIndex databases. Created on first use only.
         public string PathToTableBlocks => Path.Combine(DatabaseFolder, TableBlocksFolderName);
+
+        // The large file store (#1883). Created by the first upload only.
+        public string PathToLargeFiles => Path.GetFullPath(LargeFilesFolder);
+
+        public string PathToLargeFilesUsedMark => Path.Combine(DatabaseFolder, LargeFilesUsedMarkName);
 
 
         public string GetPathToJournalValueDatabase(long from, long to) => BuildWeeklyDbName(PathToJournalDb, JournalValuesDatabaseName, from, to);

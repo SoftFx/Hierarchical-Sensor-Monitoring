@@ -29,7 +29,8 @@ namespace HSMServer.Core.Extensions
 
         public static FileValue CompressContent(this FileValue file)
         {
-            if (file.Value == null)
+            // A large file value (#1883) has no content: its file is in the large file store, never deflated here.
+            if (file.Value == null || file is LargeFileValue)
                 return file;
 
             using var output = new MemoryStream();
@@ -51,7 +52,8 @@ namespace HSMServer.Core.Extensions
 
         public static FileValue DecompressContent(this FileValue file)
         {
-            if (file.Value == null || file.Value.Length == file.OriginalSize)
+            // A large file value (#1883): Value is empty and OriginalSize is the size of the file in the store; nothing to inflate.
+            if (file.Value == null || file is LargeFileValue || file.Value.Length == file.OriginalSize)
                 return file;
 
             using var input = new MemoryStream(file.Value);

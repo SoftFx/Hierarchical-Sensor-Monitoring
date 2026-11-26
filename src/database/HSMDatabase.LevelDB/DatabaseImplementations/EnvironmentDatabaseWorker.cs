@@ -423,6 +423,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
+        public bool? SensorEntityExists(string sensorId)
+        {
+            try
+            {
+                return _database.TryRead(Encoding.UTF8.GetBytes(sensorId), out _);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read the entity of sensor {sensorId}");
+                return null;
+            }
+        }
+
         public List<string> GetAllSensorsIds() =>
             GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
 
