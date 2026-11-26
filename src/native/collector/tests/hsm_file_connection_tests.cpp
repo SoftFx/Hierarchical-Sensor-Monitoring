@@ -111,6 +111,8 @@ namespace
             return "NotHeld";
         case Kind::Final:
             return "Final";
+        case Kind::BadRequest:
+            return "BadRequest";
         case Kind::UnknownOp:
             return "UnknownOp";
         case Kind::Fault:

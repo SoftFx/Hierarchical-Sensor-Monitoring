@@ -104,6 +104,8 @@ namespace
         Check(kind("piece", Ack(503, "", "write failed", 3)) == K::RetryLater, "piece 503");
         Check(kind("piece", Ack(404, "", "no upload")) == K::NotHeld, "piece 404");
         Check(kind("piece", Ack(400, "", "piece 3: the upload is discarded")) == K::Discarded, "piece 400");
+        Check(kind("piece", Ack(403, "", "forbidden")) == K::Final && kind("piece", Ack(413, "", "too large")) == K::Final, "piece: another 4xx is final");
+        Check(kind("piece", Ack(409, "", "busy")) == K::Fault, "piece 409 without next is not final");
 
         // end
         const auto stored = lf::FileConnection::Read("end", Ack(200, "{" + upload + ",\"state\":\"stored\",\"time\":\"2026-11-25T10:00:00.1234567Z\"}"));
