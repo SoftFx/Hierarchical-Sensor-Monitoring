@@ -30,7 +30,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// sensor entity this build cannot build still loads (the rollback rule).
     /// </summary>
     // The fixture database is shared by every test in the class, so each test works under its own node name.
-    [Collection("Database collection")]
     public class TableSensorTests : MonitoringCoreTestsBase<TableSensorFixture>
     {
         private readonly TableSensorFixture _fixture;

@@ -1,6 +1,6 @@
 # Testing Strategy
 
-> Owner: shared | Last reviewed: 2026-05-26 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-26 | Canonical: yes
 
 ## Test Projects
 
@@ -43,6 +43,47 @@ Categories:
 - Tree values cache tests — in-memory tree operations
 - Updates queue tests — Channel-based processing
 - Database tests — LevelDB operations
+
+#### Parallelism and the database test classes (#1943)
+
+xUnit runs every test class as its own collection, and the collections in parallel; the tests of one
+class run in order. The classes on `DatabaseCoreTestsBase<T>` / `MonitoringCoreTestsBase<T>` (also used
+by `HSMDatabase.LevelDB.Tests`) open real LevelDB databases and still run in parallel, because nothing
+of that state is shared between classes:
+
+- each class fixture (`DatabaseFixture`) has its own folder, `TestDB_<name>_<instance number>`: several
+  classes share one fixture type, and xUnit builds a fixture per class;
+- each test's databases carry a process-wide number in their names (`DatabaseCoreManager`);
+- each class has its own `DatabaseRegisterFixture` (a class fixture, through the non-generic
+  `DatabaseTestClass` root), which closes the class's databases and removes its folder when the class
+  ends. The removal is one attempt: `DatabaseCore.Dispose` leaves the Dashboards (ServerLayout) and
+  ChangeSets databases open, so their files stay locked until the test host exits, and
+  `FileManager.SafeRemoveFolder` would spend 5 × 5 s retrying each folder. The fixture of the next run
+  removes what is left.
+
+The test host starts with at least 128 worker and I/O pool threads (`Infrastructure/TestThreadPool.cs`, a
+module initializer): when dozens of classes start at once and block pool threads, a pool that grows by
+injection lets the product's bounded waits on its background loops (the security-event sink's 3 s drain,
+`UpdatesQueue.DisposeAsync`'s 5 s) expire.
+
+There is no shared "Database collection" any more; do not add one back to a database class. Before
+adding a static field, an environment variable, a fixed port or a fixed file path to such a class, put
+the class in an exclusive collection instead.
+
+The serial (exclusive, `DisableParallelization = true`) collections, which run alone after the parallel
+ones:
+
+| Collection | Classes | Why |
+|---|---|---|
+| `NLog isolated` | `AlertScheduleProviderMissingIdLoggingTests`, `LoggingExceptionMiddlewareTests`, `ChannelTestSendResultTests`, `TelegramBotStartFailureLoggingTests`, `TableFeedSensorsServiceTests` | They swap the process-global NLog configuration. |
+| `Process-wide measurement` | `CollectorSessionTests` | `IdleSession_CostsTensOfKilobytes` reads the process-wide managed heap, and a shutdown test bounds a wall-clock time. |
+
+Measured locally (24 cores, other suites running on the machine; #1943): `HSMServer.Core.Tests` went
+from 23 m 40 s to 1 m 43 s with the same 3,641 passed and 5 skipped tests. The longest class,
+`TableMergeJobTests` (about 80 s under load), now sets the floor of the run.
+`HSMDatabase.LevelDB.Tests` (about 4 min) is bound by single classes, not by the collection:
+`SealedWeekDifferentialTests` and `HistorySealingJobTests` take about 4 min each, their tests in order
+inside the class; splitting them into several classes is what would shorten that run.
 
 ### 3. Database Tests
 

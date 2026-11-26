@@ -34,7 +34,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// and the refusals of a request; and the plan of both readers taken at one generation of the batch store. No timing:
     /// the stores' clocks are seams.
     /// </summary>
-    [Collection("Database collection")]
     public class TableChartReadTests : MonitoringCoreTestsBase<TableChartReadFixture>
     {
         private static readonly DateTime Hour0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);

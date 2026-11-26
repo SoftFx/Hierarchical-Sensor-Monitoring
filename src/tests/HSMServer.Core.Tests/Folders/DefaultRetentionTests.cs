@@ -41,7 +41,6 @@ namespace HSMServer.Core.Tests.Folders
     // product and of a new folder are three months (owner's decision,
     // 2026-11-25; one month before). Only new ones: what is stored keeps its
     // period.
-    [Collection("Database collection")]
     public class DefaultRetentionTests : MonitoringCoreTestsBase<DefaultRetentionFixture>
     {
         private readonly DefaultRetentionFixture _fixture;

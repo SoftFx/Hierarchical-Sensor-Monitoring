@@ -32,7 +32,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// </summary>
     // The fixture database is shared by every test in the class, so each test
     // works under its own unique node name.
-    [Collection("Database collection")]
     public class SensorMoveRobustnessTests : MonitoringCoreTestsBase<SensorMoveFixture>
     {
         private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(30);

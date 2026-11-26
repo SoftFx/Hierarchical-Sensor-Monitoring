@@ -14,7 +14,6 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
-    [Collection("Database collection")]
     public class AddSensorDbFailureTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     {
         private Guid _failProductId = Guid.Empty;

@@ -12,7 +12,6 @@ namespace HSMDatabase.LevelDB.Tests.SensorValuesDBTests;
 
 // #1720: the merge primitive of sensor move, and the newest-value lookup the
 // merge relies on.
-[Collection("Database collection")]
 public class SensorValuesMergeTests : DatabaseCoreTestsBase<SensorValuesMergeFixture>, IClassFixture<DatabaseRegisterFixture>
 {
     private static readonly MemoryPackFormatter _formatter = new();

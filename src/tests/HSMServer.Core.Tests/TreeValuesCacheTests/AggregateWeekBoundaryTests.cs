@@ -31,7 +31,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     // a value is folded into the stored last value only when both fall in the same week,
     // so a run never rewrites a row in a week that has already ended. The equal value that
     // arrives in the next week starts a new row there, exactly like a value that differs.
-    [Collection("Database collection")]
     public class AggregateWeekBoundaryTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     {
         private static readonly MemoryPackFormatter _formatter = new();
