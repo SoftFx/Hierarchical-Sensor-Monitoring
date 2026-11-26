@@ -1,6 +1,6 @@
 # Feature: Sensor API Wire Contract
 
-> Owner: shared | Last reviewed: 2026-11-24 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-25 | Canonical: yes
 > Scope: API - the frozen wire contract between collectors (any language) and HSMServer: enums, DTOs, JSON conventions, endpoints
 
 ---
@@ -258,7 +258,7 @@ A collector with table sensors sends their rows as blocks (`aicontext/features/a
 
 **Handshake.** `GET {base}session` with `Sec-WebSocket-Protocol: hsm.tables.v1` (echoed), the same `Key` / `ClientName` (and optional `X-Collector-Kind` / `X-Collector-Version`) headers, and `X-Hsm-Session: <sessionId>`, the id from the `hello` of the collector's live ordinary session. A refused upgrade is an HTTP status, checked in this order: `406` no usable key (as for the session); `404` sessions off, or **table connections off** (`CollectorSessions.MaxTableFrameBytes = 0`: table ingest stops, sessions go on); `400` neither subprotocol offered; `503` shutting down; **`409` `X-Hsm-Session` is missing, malformed, or names no live session of the same key** (open the session first, then the table connection). An older server knows only `hsm.sensors.v1` and answers `400` before anything is upgraded.
 
-- **The pair.** A table connection belongs to one live session of the same key. It takes **no slot**: neither `MaxSessions` nor `MaxSessionsPerAddress` counts it, so the limits count collectors and a server holds at most twice `MaxSessions` sockets. A session has at most one table connection: **a new one replaces the old** (the old is closed with `1000`, reason `replaced by a new table connection of its session`, after the ack of a block it is storing). **When the session ends, its table connection is closed** with `1000`, reason `its session ended`, again after the ack of a block in progress. A collector reconnects the session first and the table connection after it.
+- **The pair.** A table connection belongs to one live session of the same key. It takes **no slot**: neither `MaxSessions` nor `MaxSessionsPerAddress` counts it, so the limits count collectors and a server holds at most three times `MaxSessions` sockets (a session, its table connection and its file connection, #1884). A session has at most one table connection: **a new one replaces the old** (the old is closed with `1000`, reason `replaced by a new table connection of its session`, after the ack of a block it is storing). **When the session ends, its table connection is closed** with `1000`, reason `its session ended`, again after the ack of a block in progress. A collector reconnects the session first and the table connection after it.
 - **Hello.** The server's first frame: `{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"blockLimits":{"maxDecompressedBytes":67108864,"maxTables":65536,"maxRows":8388608,"maxColumnsPerTable":64,"maxTableIdLength":1024}}}`. `maxFrameBytes` is the largest binary frame (`CollectorSessions.MaxTableFrameBytes`, 4 MiB by default; a real tick of a thousand tables is 25–50 KB), header included; `blockLimits` are the limits a block is checked against (section `TableSensors`). A collector splits a tick's rows into blocks that keep to both.
 - **Text frames** are those of the session: `ping` / `pong` (the heartbeat and the silence limit are the session's), acks. A text request with any `op` is answered `400` `unknown op`: the table connection takes no `list` or `commands`. A text frame that is not JSON closes with `1007`, a request without `id` with `1002`, as on the session.
 - **Binary frames** carry the requests. Version 1, little-endian, a 40-byte header and then the block:
@@ -299,6 +299,131 @@ A collector with table sensors sends their rows as blocks (`aicontext/features/a
 - **Shutdown**: the table connection is closed with `1001` like the session, after the ack of a block being stored (within the shutdown budget).
 - **Back-pressure on memory.** A frame larger than 64 KiB waits, unread, while the server holds as much for table frames as it allows (`CollectorSessions.MaxTableBytesInFlight`); a collector sees only a slower send. A wait longer than twice the silence limit (3 minutes by default) closes the connection with **`1013`** (Try Again Later): the frame was not complete, so there is no request id to answer; the block was not stored, and the collector sends it again on its next table connection. **A reserved frame has a deadline**: from the moment the server reserves its bytes, the whole frame must arrive within the silence limit (90 s by default; 4 MiB in that time is about 47 KB/s), however its bytes trickle in, or the connection is cut and the reservation goes back. **One access key holds at most one reservation at a time**: a second large frame of the same key (another connection of the same key) waits for the first like any other waiter, so the connections of one key cannot fill the budget for the others. **The limit that follows:** collectors that share one access key (a product key installed on many hosts) send their frames larger than 64 KiB one at a time, each holding the key's reservation from its first byte past 64 KiB until its put is answered. With N such collectors sending a large frame at once, the last waits (N − 1) × that time; past twice the silence limit (180 s by default) it is closed with `1013` and sends the block again on its next table connection, queuing again. The bound is passed beyond about 91 collectors of one key at 2 s a frame, beyond 3 at the 90 s worst case of a trickled frame. Frames up to 64 KiB, and collectors with keys of their own, are not affected. A collector that sees repeated `1013`s for this reason needs a key of its own; the server logs such a close as a `Warn` naming its own key as the cause.
 - **Close codes from the server on a table connection**: `1000` replaced or its session ended, `1001` shutdown, `1013` the wait for the frame budget passed its bound, `1002` a binary frame without a trusted header or a text request without `id`, `1007` a text frame that is not a JSON object, `1008` the key can no longer send, `1009` a frame over `maxFrameBytes`. The session keeps `1003` for a binary frame: it stays text-only.
+
+### File connection (#1884, ADR-0022 points 6-8)
+
+A collector sends a large file (a dump, up to `fileLimits.maxFileBytes`, 64 GB by design) as a large value of a File sensor on a **third WebSocket of the same session protocol**, opened for an upload and closed after it, so that a piece never waits ahead of a block or a value. Large files need the session transport: there is no HTTP route for uploading them. The store and the value are #1883 (`docs/initiatives/large-file-values.md`).
+
+**Handshake.** `GET {base}session` with `Sec-WebSocket-Protocol: hsm.files.v1` (echoed), the `Key` / `ClientName` headers and `X-Hsm-Session: <sessionId>` of the collector's live ordinary session, as for a table connection. Refusals, in this order: `406` no usable key; `404` sessions off, or **file connections off** (`CollectorSessions.MaxFileFrameBytes = 0`, or a server without a store of large files); `400` no known subprotocol, or both `hsm.tables.v1` and `hsm.files.v1` offered (a connection is one or the other); `503` shutting down; `409` `X-Hsm-Session` missing, malformed, or naming no live session of the same key.
+
+- **The pair.** As the table connection: no slot, one per session (a new one replaces the old; the old is closed with `1000`, reason `replaced by a new file connection of its session`, and gives its upload back **before the new one's hello**: a close the collector does not answer within 3 s is cut off), closed with `1000` `its session ended` when its session ends. A session holds at most three sockets (session, table connection, file connection), so a server holds at most three times `MaxSessions` sockets.
+- **Hello.** `{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"fileLimits":{"maxFileBytes":68719476736,"pieceBytes":4173824}}}`. `maxFrameBytes` is `CollectorSessions.MaxFileFrameBytes`. **`pieceBytes`** is the largest multiple of 4 KiB with `88 + ZSTD_compressBound(pieceBytes) ≤ maxFrameBytes`: a piece of that size always fits a frame, however badly it compresses (4,173,824 bytes at the default 4 MiB frame; 16,465 pieces for 64 GiB).
+- **Text frames** are those of the session: `ping` / `pong`, acks, `1007` for a frame that is not a JSON object, `1002` for a request without `id`. The requests are `begin`, `end` and `discard`; any other `op` is `400 unknown op`.
+- **An answer with `retryAfter` is not final** (whole seconds, at least 1): the collector tries again after it, with the same request unless a row below names another (`503` to `end`, `409` to `discard`: `begin`). Any other 4xx is final for that file until the collector restarts, except where a row below says what to do instead.
+
+**begin** (text): names the file and how it is cut.
+
+```json
+{"id":1,"op":"begin","body":{"path":"app/dumps","name":"app_20261125.dmp","size":123456789,"modified":"2026-11-25T10:00:00.1234567Z","source":"vol:5b2e/file:00a1","secure":true,"pieceBytes":4173824}}
+{"id":2,"op":"begin","body":{"path":"app/report","name":"report.bin","size":3145728,"modified":"2026-11-25T10:05:00Z","source":"send:5f0c3e2a9b6d4c1e8a7f2b3c4d5e6f70","secure":false,"status":3,"comment":"disk is full","pieceBytes":4173824}}
+{"ack":1,"status":200,"body":{"upload":"a3f0…32 hex","next":0,"pieces":30,"pieceBytes":4173824}}
+```
+
+`path` is the File sensor's registered path, 1..1,024 characters, looked up only in the root product of the key; `name` 1..1,024 characters, shown and used as the name inside the archive, never a path on the server; `size` the original size in bytes (0 allowed: a file of no pieces); `modified` the source file's modification time with `Z` or an offset (taken as UTC); `source` optional, 1..256 characters, an opaque identity of the source file (a file id, an inode) so that two files with one name, size and time are not taken for one; `pieceBytes` 65,536..the hello's `pieceBytes`; **`secure`** optional, `true` or `false`, **absent means `true`** (ADR-0022 point 20: a secure file is given out as a zip under the product's dump password, a file that is not secure as the same zip without one; an older collector, or a mistake, fails closed), kept with the upload and never changed; `status` optional, the `SensorStatus` number as `Status` of a value in a `list` frame (absent: `1`, Ok); `comment` optional, text of at most 4,096 characters (absent: none; the value keeps its first 1,024, as every value's comment is kept; a `Warning` status becomes `Error`, as for every value of the Sensor API); a field out of its bounds is `400`, and `null` is taken as absent for every optional field. Status and comment go into the value. The file is known by its sensor, name, size, `modified`, `source` and `secure` mark, across restarts of either side: a `begin` with the other mark is another upload. A `begin` is a text frame and must fit 64 KiB (a frame above that needs an upload the connection holds); the bounds of its fields keep it well within. The server records with the upload the session's `ClientName` and the address it resolved for it; they are not fields of the request.
+
+**A routed ordinary send** (ADR-0022 point 21): a collector on a session sends the content of an ordinary file value larger than a quarter of the `maxFrameBytes` of the **session's** hello on the file connection, as a large file that is not secure, with the same requests, answers and limits. It has no file of its own, so it names `source` = `send:` and a new GUID (32 hex digits) per send, `modified` = the time of the value, and its value's `status` and `comment`; two sends of one name and size are then never one file. It is sent only after the registration of its sensor was acknowledged on the session: an unknown sensor stays `422`.
+
+**One file connection carries several files in turn**: after a file is answered (`stored`, a final refusal, `discard`), the next `begin` on the same connection starts the next one. A collector keeps the connection while files are waiting, rather than opening one per file; a `begin` on a connection that holds an upload gives that one back first, so a routed send can go ahead of a large file, which then continues from the server's piece number.
+
+| Answer | Meaning |
+|---|---|
+| `200 {"upload","next","pieces","pieceBytes"}` | A new upload (`next` 0) or a continue: send piece `next` onward. `pieceBytes` is the upload's own, kept from its first begin. `next == pieces`: every piece is in, send `end`. A begin with another `pieceBytes` than the upload was begun with starts it again from 0 (a collector whose hello now allows less does that; never a `400`). |
+| `200 {"upload","state":"stored"}` | This file was stored before (an answer that was lost): nothing to send; the collector may delete its source. |
+| `202 {"upload","state":"checking"}` + `retryAfter` | Its end check is running: ask again. |
+| `503` + `retryAfter` | No room on the server's disk; too many uploads in progress (`LargeFiles.MaxUploadsInProgress`, server-wide); too many unfinished uploads of the product (`LargeFiles.MaxUploadingPartsPerProduct`); a fault of the store. |
+| `409` + `retryAfter` | Busy: another live connection holds this file. |
+| `413` | Larger than `maxFileBytes`. |
+| `422` | The sensor cannot take it: no File sensor at that path in the key's product, blocked, not a File sensor. |
+| `400` | A malformed body or a field out of its bounds (checked before the store). |
+
+A connection holds one upload: a `begin` on a connection that holds one gives the old one back first (its pieces stay on the server).
+
+**Piece** (binary): version 1, little-endian, an 88-byte header and one zstd frame of the piece.
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1 | frame version, `1` |
+| 1 | 1 | kind: `1` piece, `2` probe |
+| 2 | 2 | reserved, `0` |
+| 4 | 4 | header length (u32): where the zstd frame starts; `88` in version 1; the server accepts up to 1,024 and skips the rest |
+| 8 | 8 | request id (i64), echoed as `ack` |
+| 16 | 16 | upload id: the 16 bytes whose lower-case hex is the `upload` of the begin answer |
+| 32 | 8 | piece number (i64): piece `n` holds bytes `n × pieceBytes ..` of the file |
+| 40 | 4 | decompressed length (u32): `pieceBytes`, the last piece the remainder |
+| 44 | 4 | compressed length (u32): the bytes after the header |
+| 48 | 4 | CRC-32 (IEEE, as the table block's) of the compressed bytes |
+| 52 | 4 | reserved, `0` |
+| 56 | 32 | SHA-256 of the piece's original (decompressed) bytes |
+| 88 | … | exactly one zstd frame that states its content size (zstd level 3 in the collectors); nothing for a probe |
+
+A frame shorter than 88 bytes, of another version or kind, with a reserved byte set, or with a header length below 88, above 1,024 or past the frame, cannot be answered (its id is not trusted) and closes with **`1002`**. A frame over `maxFrameBytes` closes with `1009`. **A frame larger than 64 KiB on a connection that holds no upload closes with `1002`**: only a piece is that large, and a piece needs an accepted `begin`. A **probe** is the 88-byte header with kind `2` and zeros after the request id; it is answered `{"ack":<id>,"status":200,"body":{}}`.
+
+One piece in flight: the collector sends the next after the answer. The server checks a piece in this order, **without decompressing it**:
+
+| Check | Answer when it fails |
+|---|---|
+| the upload id is the upload this connection holds | `404`: begin again |
+| `0 ≤ number < pieces` | `400 …: the upload is discarded` |
+| the decompressed length is what that number must be; the compressed length is the rest of the frame and at most `ZSTD_compressBound(decompressed length)` | `400 …: the upload is discarded` |
+| the CRC-32 | `409 {"next":n,"reason":"checksum mismatch"}`: the piece is refused, the upload kept; send it again |
+| the zstd frame, read by zstd's own functions: exactly one frame (not skippable) over every byte, stating its content size, equal to the decompressed length, with a window of at most `pieceBytes` rounded up to a power of two | `400 …: the upload is discarded` |
+| the store | below |
+
+| Answer of the store | Meaning |
+|---|---|
+| `200 {"next":n+1}` | On the server's disk, with its record, before this answer. |
+| `200 {"next":N}` | A repeat of a piece the server has (`number < N`): stored once, nothing written; `N` is the server's next. |
+| `409 {"next":N,"reason":"out of order"}` | A piece ahead of the server's next: nothing written; go on from `N`. |
+| `503` + `retryAfter` | The write failed (a full disk in the middle included): nothing acknowledged; send the same piece again. |
+| `404` | The upload is no longer held by this connection (removed, its lease lost): begin again. |
+
+A `400` that discards the upload removes its part from the server; the connection holds no upload after it, and the collector begins again from piece 0.
+
+**end** (text): the hash of the whole file.
+
+```json
+{"id":31,"op":"end","body":{"upload":"a3f0…32 hex","hash":"<64 hex>"}}
+{"ack":31,"status":202,"body":{"upload":"a3f0…","state":"checking"},"retryAfter":1}
+{"ack":32,"status":200,"body":{"upload":"a3f0…","state":"stored","time":"2026-11-25T12:00:00.0000000Z"}}
+```
+
+**`hash` is the SHA-256 of the pieces' SHA-256 digests**, in piece order (the 32-byte digests concatenated); of a file of no pieces, the SHA-256 of nothing. Each side can continue after a cut with a list of 32 bytes per piece instead of a running hash. The value the server records shows the SHA-256 of the original bytes, which the check computes on the way (#1883).
+
+The check reads every stored piece, checks its zstd frame again, decompresses it into a buffer of exactly its length with the window bounded as above, and compares its SHA-256 with its digest; then the hash. For a large file it takes minutes, so **`end` waits for the check at most 2 seconds**: a check done by then is answered with its outcome (a small file, a routed send); a longer one with **`202 checking` and `retryAfter`** (about the time the check reads the file at 256 MiB a second: 1 to 30 seconds), and the collector sends the same `end` again until the answer is not `202`; pings keep the connection alive meanwhile. The check runs beside the connection and goes on if the connection closes; after a cut, or a restart of either side, the collector sends `begin` again, which answers `checking`, `stored`, or `next == pieces` (the check was cut by a restart: send `end`, it runs again).
+
+| Answer to `end` | Meaning |
+|---|---|
+| `202 {"state":"checking"}` + `retryAfter` | The check runs: ask again. |
+| `200 {"state":"stored","time"}` | Verified on the disk and the value exists (`time` is the value's time, the time the server accepted the file). Only now does its alert fire; the collector may delete its source. |
+| `409 {"next":N,"reason":"pieces are missing"}` | Not every piece is in. **After any `409` to `end` the collector sends `begin` again**, which answers the server's `next`: once the check has begun (a `202` came before), the connection no longer holds the upload, and a piece sent instead would be closed with `1002` as a large frame without an upload. |
+| `400 "<what>: the upload is discarded"` | The check failed: the hash, or piece `k` (`piece k: its bytes do not match its digest`, `piece k: the piece does not decompress …`). The part is removed; begin again from 0. |
+| `422` | The sensor was removed or can no longer take the file. |
+| `404` | No such upload on this connection: begin again. |
+| `503` + `retryAfter` | The check could not read the part: nothing changed; begin again after `retryAfter` (`next == pieces`), then `end`. |
+
+After an `end` was answered, the connection holds no upload; a repeated `end` of it gets the same answer.
+
+**discard** (text): the collector gives up an upload because its source file changed while it was sent (ADR-0022 point 3: a changed file is not finished; it is sent again once it has settled, as a new file).
+
+```json
+{"id":12,"op":"discard","body":{"upload":"a3f0…32 hex"}}
+{"ack":12,"status":200,"body":{"upload":"a3f0…","state":"discarded"}}
+```
+
+It names the upload this connection holds. After a cut, the collector first sends `begin` with the file's **original** identity (name, size, `modified` and `source` as first begun) to hold it again; if that `begin` answers `stored`, the file was accepted before it changed and there is nothing to discard. Then it begins the changed file with its new identity: a new upload from piece 0.
+
+| Answer to `discard` | Meaning |
+|---|---|
+| `200 {"upload","state":"discarded"}` | The part, its reserved space and its upload slot are gone; the connection holds no upload. |
+| `409 {"upload","state":"checking"}` + `retryAfter` | `end` was sent and its check is running: the check settles the upload. Send `begin` after `retryAfter`: `stored`, or `next` after a failed check (then discard it). Sending `discard` again instead is harmless: `409` while the check runs, `404` after it, then `begin`. |
+| `404` | This connection holds no such upload: `begin` it first. |
+| `503` + `retryAfter` | The store could not remove it: nothing changed, the connection still holds it; send the same `discard` again. |
+| `400` | A malformed body. |
+
+- **Access** is checked again for every frame, as on the table connection: a key that can no longer send closes with `1008`, and the pieces stored so far stay for a continue. A piece counts as a use of the key, a probe does not. A check that has begun goes on after the key lost access: the file was sent whole while the key could send.
+- **Shutdown**: `1001`, after the answer of a piece being written; a piece still arriving is not stored. Running checks are cancelled and awaited; a cancelled check changes nothing.
+- **Memory.** A connection holds at most one upload, and frames above 64 KiB only while it holds one, so the memory of file frames is bounded by the uploads in progress (`LargeFiles.MaxUploadsInProgress`), not by a budget: there is no wait for memory and no `1013` on a file connection. An upload beyond the bound is refused at `begin` (`503` with `retryAfter`). **There is no per-key rule** (ADR-0022 point 6): collectors that share a key do not queue behind each other's files, and one key can hold every upload slot. A frame above 64 KiB must arrive whole within one silence limit from its 64th KiB (90 s by default: 4 MiB needs about 47 KB/s), or the connection is cut.
+- **Close codes from the server on a file connection**: `1000` replaced or its session ended, `1001` shutdown, `1002` a header that cannot be trusted, a text request without `id`, a frame over 64 KiB without an upload, `1007` a text frame that is not a JSON object, `1008` the key can no longer send, `1009` a frame over `maxFrameBytes`.
 
 ## Table history (#1845, ADR-0021 point 13)
 
@@ -348,6 +473,7 @@ The native collector (`src/native/collector`, #1096) reproduces this wire **byte
 | `src/api/HSMSensorDataObjects/**` | DTOs + enums (source of truth) |
 | `src/collector/HSMDataCollector/Client/HttpsClient/Endpoints.cs` | Route constants |
 | `src/server/HSMServer/SensorApi/Sessions/SessionProtocol.cs` | Collector session: names, close codes, frame writers (server) |
+| `src/server/HSMServer/SensorApi/Sessions/Files/FilePiece.cs` | File connection (#1884): the piece header, the piece size of a frame, the zstd checks of a piece |
 | `src/server/HSMServer/SensorApi/AgentDirectives.cs` | The server directives of an agent, one set for the `X-Hsm-Directive` headers and the session's `directive` pushes |
 | `src/collector/HSMDataCollector/Converters/*.cs` | Serializer configuration |
 | `ai-docs/Wiki/REST-API.md` | Human-facing examples |
