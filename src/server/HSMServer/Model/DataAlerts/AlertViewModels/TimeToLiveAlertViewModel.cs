@@ -58,9 +58,13 @@ namespace HSMServer.Model.DataAlerts
                     // Node-level TTL alert: "From Parent" resolves against this node's own Settings.TTL
                     // (bounded — does not climb to the parent product/folder). Build the parent view
                     // from the policy's resolved TTL so the UI matches the node's "Time to sensor(s) live" field.
-                    var resolved = policy.TTLInterval.UseTicks
-                        ? new TimeIntervalModel(policy.TTLInterval.Ticks)
-                        : policy.TTLInterval;
+                    // A calendar preset inherited from the folder (#1864) shows as the preset itself: as FromFolder it
+                    // would read as "from parent" on a view that has no parent.
+                    var resolved = policy.TTLInterval.FolderPreset is { } preset
+                        ? new TimeIntervalModel(preset)
+                        : policy.TTLInterval.UseTicks
+                            ? new TimeIntervalModel(policy.TTLInterval.Ticks)
+                            : policy.TTLInterval;
 
                     var resolvedParent = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
                     resolvedParent.FromModel(resolved, PredefinedIntervals.ForTimeout);

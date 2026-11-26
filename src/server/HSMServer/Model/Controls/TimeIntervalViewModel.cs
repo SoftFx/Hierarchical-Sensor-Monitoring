@@ -144,9 +144,15 @@ namespace HSMServer.Model
             var parent = current?.Parent ?? Parent;
             var hasFolder = current?.HasFolder ?? HasFolder;
 
-            // A folder's calendar preset is inherited as itself, not as its nominal length in ticks (#1864).
-            if (hasFolder && parent is not null && parent.TimeInterval.IsDynamic())
-                return new TimeIntervalModel(parent.TimeInterval.ToDynamicCore()).ToFromFolderModel();
+            // A folder's calendar preset is inherited as itself, not as its nominal length in ticks (#1864). Whether the
+            // folder says a calendar preset is read from its model, the value it stores, never from the view's interval.
+            if (hasFolder && parent is not null)
+            {
+                var folderModel = parent.ToModel();
+
+                if (TimeIntervalModel.IsCalendarPreset(folderModel.Interval))
+                    return folderModel.ToFromFolderModel();
+            }
 
             var ticks = parent?.CustomSpan.Ticks ?? 0L;
 
@@ -164,7 +170,10 @@ namespace HSMServer.Model
                 if (Interval is TimeInterval.None && predefinedIntervals.Contains(TimeInterval.Forever))
                     Interval = TimeInterval.Forever;
             }
-            else if (TimeInterval.IsDefined(model.Ticks) && (predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true)) //const ticks to enum
+            // const ticks to enum, the fixed periods only: ticks equal to a calendar preset's nominal length (31, 93, 186,
+            // 365 days) are a custom period: read as the preset, they would be saved back as the calendar preset (#1864)
+            else if (TimeInterval.IsDefined(model.Ticks) && !((TimeInterval)model.Ticks).IsDynamic() &&
+                     (predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true))
                 Interval = (TimeInterval)model.Ticks;
             else
             {

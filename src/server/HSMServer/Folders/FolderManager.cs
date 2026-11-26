@@ -597,44 +597,68 @@ namespace HSMServer.Folders
                 }
         }
 
-        // #1864: a product stored by an earlier build inherits a folder's calendar preset (a month to a year) without
-        // it: as FromFolder with 0 ticks after a change of the folder, which never expires, or with the preset's
-        // nominal length in ticks when saved as "from folder". Both are re-derived here from the folder's present
-        // setting and stored with the product, so the inherited preset applies as the same preset set on the product.
+        // #1864: what a product inherits from its folder is brought in line with the folder's present setting at start.
+        // - A product stored by an earlier build inherits a calendar preset (a month to a year) without it: as FromFolder
+        //   with 0 ticks after a change of the folder, which never expires, or with the preset's nominal length in ticks
+        //   when saved as "from folder". It is re-derived from the folder.
+        // - A product holding a preset is always re-derived from the folder, whatever the folder says now: a change of
+        //   the folder that was cut off before it reached the product (the folder is saved first) or a product the
+        //   folder does not list would otherwise keep clearing by a preset the folder no longer has.
+        // - A product holding a preset whose folder is gone (or that is in no folder) has nothing to inherit from: the
+        //   preset is dropped, FromFolder with 0 ticks, which never expires, so nothing is deleted by a guess.
+        // Whether the folder says a calendar preset is read from its model (the value it stores), not from its view.
+        // A model without a preset under a folder without one is left as it is. Stored with the product, so a second
+        // start finds nothing to change.
         private async Task ResolveInheritedCalendarPresets()
         {
             static TimeIntervalModel Resolve(TimeIntervalModel current, TimeIntervalViewModel folderSetting)
             {
-                if (current is null || !current.IsFromFolder || !folderSetting.TimeInterval.IsDynamic())
+                if (current is null || !current.IsFromFolder)
                     return null;
 
-                var inherited = folderSetting.ToModel().ToFromFolderModel();
+                TimeIntervalModel inherited;
 
-                return inherited.FolderPreset == current.FolderPreset ? null : inherited;
+                if (folderSetting is null)
+                    inherited = current.FolderPreset is null ? null : new TimeIntervalModel(Core.Model.TimeInterval.FromFolder, 0L);
+                else
+                {
+                    var folderModel = folderSetting.ToModel();
+
+                    inherited = current.FolderPreset is not null || TimeIntervalModel.IsCalendarPreset(folderModel.Interval)
+                        ? folderModel.ToFromFolderModel()
+                        : null;
+                }
+
+                return inherited is null || inherited.ToString() == current.ToString() ? null : inherited;
             }
 
             foreach (var product in _cache.GetProducts())
-                if (product.FolderId.HasValue && TryGetValueById(product.FolderId, out var folder))
+            {
+                var hasFolder = TryGetValueById(product.FolderId, out var folder);
+
+                var update = new ProductUpdate
                 {
-                    var update = new ProductUpdate
-                    {
-                        Id = product.Id,
-                        TTL = Resolve(product.Settings.TTL.CurValue, folder.TTL),
-                        KeepHistory = Resolve(product.Settings.KeepHistory.CurValue, folder.KeepHistory),
-                        SelfDestroy = Resolve(product.Settings.SelfDestroy.CurValue, folder.SelfDestroy),
-                        Initiator = InitiatorInfo.AsSystemMigrator(),
-                    };
+                    Id = product.Id,
+                    TTL = Resolve(product.Settings.TTL.CurValue, folder?.TTL),
+                    KeepHistory = Resolve(product.Settings.KeepHistory.CurValue, folder?.KeepHistory),
+                    SelfDestroy = Resolve(product.Settings.SelfDestroy.CurValue, folder?.SelfDestroy),
+                    Initiator = InitiatorInfo.AsSystemMigrator(),
+                };
 
-                    if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
-                    {
-                        _logger.Info($"Product '{product.DisplayName}' [{product.Id}] inherits a calendar preset from folder '{folder.Name}' that was not applied, resolved (#1864):" +
-                                     $"{(update.KeepHistory != null ? $" keep history {update.KeepHistory}" : string.Empty)}" +
-                                     $"{(update.SelfDestroy != null ? $" remove after inactivity {update.SelfDestroy}" : string.Empty)}" +
-                                     $"{(update.TTL != null ? $" TTL {update.TTL}" : string.Empty)}");
+                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
+                {
+                    var what = $"{(update.KeepHistory != null ? $" keep history {product.Settings.KeepHistory.CurValue} -> {update.KeepHistory}" : string.Empty)}" +
+                               $"{(update.SelfDestroy != null ? $" remove after inactivity {product.Settings.SelfDestroy.CurValue} -> {update.SelfDestroy}" : string.Empty)}" +
+                               $"{(update.TTL != null ? $" TTL {product.Settings.TTL.CurValue} -> {update.TTL}" : string.Empty)}";
 
-                        await _cache.UpdateProductAsync(update);
-                    }
+                    if (hasFolder)
+                        _logger.Info($"Product '{product.DisplayName}' [{product.Id}]: what it inherits from folder '{folder.Name}' is re-derived from the folder (#1864):{what}");
+                    else
+                        _logger.Warn($"Product '{product.DisplayName}' [{product.Id}] inherits a calendar preset but its folder '{product.FolderId?.ToString() ?? "none"}' is not found: the preset is dropped, never expires (#1864):{what}");
+
+                    await _cache.UpdateProductAsync(update);
                 }
+            }
         }
 
         private List<FolderModel> GetFolders() => Values.Select(x => x.RecalculateState()).ToList();
