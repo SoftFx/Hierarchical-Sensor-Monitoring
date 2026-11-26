@@ -24,13 +24,26 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
     private BaseNodeViewModel _node;
     private int _totalSize;
 
+    private Func<ProductNodeViewModel, bool> _isProductVisible;
+
     public int TotalSize => _totalSize;
 
+    /// <summary>Id of the sensor, node or folder whose journal is loaded; null before the first selection.</summary>
+    public Guid? ConnectedId => _node?.Id;
 
-    public Task ConnectJournal(BaseNodeViewModel baseNode, IJournalService journal)
+
+    /// <param name="baseNode">The selected sensor, node or folder.</param>
+    /// <param name="journal">The journal to read from.</param>
+    /// <param name="isProductVisible">
+    /// For a folder: which of its products the user can see. Records of the other products are not loaded
+    /// (a folder role does not imply a role on every product in it). Null loads every product.
+    /// </param>
+    public Task ConnectJournal(BaseNodeViewModel baseNode, IJournalService journal, Func<ProductNodeViewModel, bool> isProductVisible = null)
     {
         if (baseNode is null || _node?.Id == baseNode?.Id)
             return Task.CompletedTask;
+
+        _isProductVisible = isProductVisible;
 
         if (_journal is null)
         {
@@ -60,7 +73,8 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         if (node is FolderModel folder)
         {
             foreach (var (_, product) in folder.Products)
-                requests.Add(Task.Run(() => Subscribe(product)));
+                if (_isProductVisible?.Invoke(product) ?? true)
+                    requests.Add(Task.Run(() => Subscribe(product)));
         }
         else if (node is ProductNodeViewModel product)
         {
@@ -95,7 +109,12 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
     }
 
 
-    public (IEnumerable<JournalRecordViewModel> journals, int filteredSize) GetPage(DataTableParameters filter)
+    /// <param name="filter">Paging, order and search of the table.</param>
+    /// <param name="isVisible">
+    /// Which of the loaded sensors and nodes (by id) the user sees now; records of the others are left
+    /// out of the page and of both counts. Null: everything loaded.
+    /// </param>
+    public (IEnumerable<JournalRecordViewModel> journals, int filteredSize, int totalSize) GetPage(DataTableParameters filter, Func<Guid, bool> isVisible = null)
     {
         //if (_tableFilters == filter) //doesn't work because of DataTableParameters has referense on a list
         //    return _journals;
@@ -103,7 +122,8 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         string FilterFunc(JournalRecordViewModel r, ColumnName type) => r[type];
         DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
-        var records = GetOrderedRecords(filter);
+        var visible = (isVisible is null ? this : this.Where(queue => isVisible(queue.Key))).Select(queue => queue.Value).ToList();
+        var records = GetOrderedRecords(filter, visible);
 
         IOrderedEnumerable<JournalRecordViewModel> Order(ColumnName type, bool asc) => type is ColumnName.Date ?
             asc ? records.ThenBy(FilterByDate) : records.ThenByDescending(FilterByDate) :
@@ -115,10 +135,10 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         var resultRecords = records.ToList();
 
-        return (resultRecords.Skip(filter.Start).Take(filter.Length), resultRecords.Count);
+        return (resultRecords.Skip(filter.Start).Take(filter.Length), resultRecords.Count, visible.Sum(queue => queue.Count));
     }
 
-    private IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(DataTableParameters parameters)
+    private static IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(DataTableParameters parameters, List<ConcurrentQueue<JournalRecordViewModel>> queues)
     {
         bool Search(string value) => value?.Contains(parameters.Search.Value, StringComparison.OrdinalIgnoreCase) ?? false;
         bool Filter(JournalRecordViewModel record) => Search(record.SearchValue) || (parameters.NeedSearchPath && Search(record.Path));
@@ -126,7 +146,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(parameters.Search.Value) ? EmptyFilter : Filter;
 
-        return Values.SelectMany(x => x.Where(filter)).OrderBy(x => 1);
+        return queues.SelectMany(x => x.Where(filter)).OrderBy(x => 1);
     }
 
     private void SaveNewRecords(JournalRecordModel record)

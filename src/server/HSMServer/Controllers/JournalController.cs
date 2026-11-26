@@ -5,11 +5,13 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Journal;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Journal;
+using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers;
@@ -30,12 +32,14 @@ public class JournalController : BaseController
 {
     private readonly JournalAdministrationService _journal;
     private readonly ITreeValuesCache _cache;
+    private readonly UserTreeAccess _tree;
 
     public JournalController(IUserManager userManager, JournalAdministrationService journal,
-        ITreeValuesCache cache) : base(userManager)
+        ITreeValuesCache cache, UserTreeAccess tree) : base(userManager)
     {
         _journal = journal;
         _cache = cache;
+        _tree = tree;
     }
 
 
@@ -44,7 +48,23 @@ public class JournalController : BaseController
     {
         var draw = parameters.Draw;
         var rows = new List<List<string>>(parameters.Length);
-        var (recordsFromDb, filteredRecords) = StoredUser.Journal.GetPage(parameters);
+
+        // The feed reads per-user state that HomeController.SelectNode connected to a sensor, node or
+        // folder. That state outlives a role change, so it is checked again on every page: no selection,
+        // or one the user can no longer see, answers an empty table, and of a folder's loaded records only
+        // those of the sensors and nodes the user sees now are paged and counted.
+        var user = CurrentUser;
+
+        if (StoredUser.Journal.ConnectedId is not { } connectedId || !_tree.IsVisible(user, connectedId))
+            return Json(new DataTableResultSet(draw, 0, 0, rows));
+
+        // A folder's own records (its settings) follow the rule of the global Journal page: they are the
+        // folder Manager's to read, while the records of its products follow the products.
+        bool IsOwnerVisible(Guid id) =>
+            _tree.TryGetSensor(user, id, out _) || _tree.TryGetNode(user, id, out _) ||
+            (_tree.TryGetFolder(user, id, out var folder) && user.IsFolderManager(folder.Id));
+
+        var (recordsFromDb, filteredRecords, totalRecords) = StoredUser.Journal.GetPage(parameters, IsOwnerVisible);
         foreach (var recordFromDb in recordsFromDb)
         {
             var cells = new List<string>(parameters.Columns.Count);
@@ -53,6 +73,12 @@ public class JournalController : BaseController
                 if (Enum.TryParse<ColumnName>(column.Name, out var name))
                 {
                     var value = recordFromDb[name];
+
+                    // The table inserts every cell as HTML. The Record cell is HTML already (its text is
+                    // encoded where it is built, JournalRecordViewModel); the other cells are plain text
+                    // (a path, an initiator name) and are encoded here.
+                    if (name is not ColumnName.Record)
+                        value = WebUtility.HtmlEncode(value);
 
                     if (name is ColumnName.Record)
                     {
@@ -72,7 +98,7 @@ public class JournalController : BaseController
             rows.Add(cells);
         }
 
-        return Json(new DataTableResultSet(draw, filteredRecords, StoredUser.Journal.TotalSize, rows));
+        return Json(new DataTableResultSet(draw, filteredRecords, totalRecords, rows));
     }
 
 

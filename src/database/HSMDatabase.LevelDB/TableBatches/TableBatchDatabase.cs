@@ -554,6 +554,10 @@ namespace HSMDatabase.LevelDB.TableBatches
             if (!Directory.Exists(_root))
                 return [];
 
+            // The folders of removed products that a crash or a failed delete left (#1850 part 4d), once per run. Never
+            // listed below: their names are not product ids.
+            DeleteRemovedFolders();
+
             return Directory.GetDirectories(_root).Select(Path.GetFileName).Select(n => Guid.TryParseExact(n, "N", out var id) ? id : Guid.Empty)
                             .Where(id => id != Guid.Empty).OrderBy(id => id).ToArray();
         }
@@ -867,6 +871,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                 if (_products.TryGetValue(productId, out slot) && slot.State is { } open)
                     return open;
 
+                if (slot?.Removed == true)
+                    return Removed(productId, create);
+
                 if (slot is null)
                     _products[productId] = slot = new ProductSlot();
             }
@@ -883,6 +890,9 @@ namespace HSMDatabase.LevelDB.TableBatches
 
                     if (slot.State is { } opened)
                         return opened;
+
+                    if (slot.Removed)
+                        return Removed(productId, create);
                 }
 
                 var folder = ProductPath(productId);
@@ -1025,6 +1035,16 @@ namespace HSMDatabase.LevelDB.TableBatches
                 Rebuild(product);
 
             OpenPlacements(product, folder);
+
+            // The newest week of the product (of a commit or of a database) is its pinned week from the open on, as it would be
+            // had this process written it: a write of that week pins its databases, and the move's primitives, which pin only
+            // that week, never pin an older one (they would stay open past the bound until the product wrote a newer week).
+            long newest = long.MinValue;
+            foreach (var week in product.Weeks)
+                newest = Math.Max(newest, week.WeekStartTicks);
+            foreach (var hour in product.Hours.Keys)
+                newest = Math.Max(newest, StorageWeek.GetStartTicks(hour));
+            product.PinnedWeek = newest;
 
             _logger.Info($"Table batches of product {productId} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: " +
                          $"{product.Hours.Count} merged hours, {product.Weeks.Count} week databases, {product.Placements.Count} placements");
@@ -1476,13 +1496,14 @@ namespace HSMDatabase.LevelDB.TableBatches
                 if (_disposed)
                     throw new TableBatchStoreException("The table batch store is closed.");
 
-                if (_dropping.Contains(key))
+                if (_dropping.Contains(key) || _productsGone.Contains(key.Product))
                 {
                     if (!create)
                         return null;
 
                     Statistics.Add(ref Statistics.WriteFailures);
-                    throw new TableBatchStoreException($"The table batch database {WeekPath(key.Product, key.Week, key.Period)} is being dropped.");
+                    throw new TableBatchStoreException($"The table batch database {WeekPath(key.Product, key.Week, key.Period)} is being " +
+                                                       (_productsGone.Contains(key.Product) ? "removed with its product." : "dropped."));
                 }
 
                 if (_handles.TryGetValue(key, out var handle))
@@ -1883,6 +1904,9 @@ namespace HSMDatabase.LevelDB.TableBatches
         {
             public readonly object Gate = new();
             public ProductState State;
+            // RemoveProduct (#1850 part 4d), under _productsLock: from then on a read finds no product (as without a
+            // folder) and a write is refused, for the rest of the process.
+            public bool Removed;
         }
 
         private sealed class ProductState(Guid id)

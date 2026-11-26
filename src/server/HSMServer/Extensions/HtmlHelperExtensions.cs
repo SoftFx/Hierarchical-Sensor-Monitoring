@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 
 namespace HSMServer.Extensions
 {
@@ -33,7 +34,8 @@ namespace HSMServer.Extensions
                         builder.Append("<br>");
                 }
 
-                builder.Append(items[i].Trim());
+                // The items are names and paths that collectors and users supply: they are text.
+                builder.Append(HtmlEncoder.Default.Encode(items[i]?.Trim() ?? string.Empty));
             }
 
             if (items.Count - maxCount > 0)

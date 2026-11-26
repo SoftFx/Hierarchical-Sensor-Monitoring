@@ -10,8 +10,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO SoftFx/Hierarchical-Sensor-Monitoring
-    REF collector-v0.11.1
-    SHA512 e018e99430836e901d1b40fd80ec44b4d72956efb02058ea7c744d6f44288d5333c579166e38d2263fd71ba14da55420e38e234fa99bc05227e2d522b5530e2f
+    REF collector-v0.15.2
+    SHA512 abdb9df829f72e8dd6b216121f0923c87b81a7e65f5e91d55b76f6f98b5f459d75e56732c6586e0e68b0386b0036d77d60801baefa2d206e6154c2dd79a4a879
     HEAD_REF master
 )
 
@@ -21,6 +21,7 @@ set(SOURCE_PATH "${SOURCE_PATH}/src/native/collector")
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
         http HSM_COLLECTOR_HTTP
+        tables HSM_COLLECTOR_TABLES
 )
 
 vcpkg_cmake_configure(

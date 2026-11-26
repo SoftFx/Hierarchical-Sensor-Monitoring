@@ -58,12 +58,15 @@ namespace HSMServer.Core.Tests.Mcp
             "create_access_key",
             "create_alert_schedule",
             "create_alert_template",
+            "create_chat",
+            "create_chat_telegram_invitation",
             "create_product",
             "create_sensor_policy",
             "create_sensor_ttl_policy",
             "delete_access_key",
             "delete_alert_schedule",
             "delete_alert_template",
+            "delete_chat",
             "delete_sensor",
             "delete_sensor_policy",
             "delete_sensor_ttl_policy",
@@ -91,10 +94,12 @@ namespace HSMServer.Core.Tests.Mcp
             "mute_sensor",
             "remove_sensor_alias",
             "rollback_journal_record",
+            "send_chat_test_message",
             "unmute_sensor",
             "update_access_key",
             "update_alert_schedule",
             "update_alert_template",
+            "update_chat",
             "update_sensor_policy",
             "update_sensor_ttl_policy",
         ];
@@ -342,6 +347,30 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Contains("notifications resume and the stored muting period clears", tools["unmute_sensor"].Description);
             Assert.Contains("Fails on a Blocked sensor", tools["unmute_sensor"].Description);
+
+            // The chat write trio (#1829): the admission and the secrets rule ride the
+            // tool descriptions, the folder scope and the write-only webhooks ride the
+            // parameters — an agent must know before its first call that a webhook never
+            // comes back, and that `folders` replaces its bindings.
+            Assert.Contains("ADMIN tokens only", tools["create_chat"].Description);
+            Assert.Contains("never the URL", tools["create_chat"].Description);
+
+            var createChat = Descriptions(tools["create_chat"]);
+            Assert.Contains("write-only, never echoed", createChat);
+            Assert.Contains("each must be a folder the token's owner manages", createChat);
+            // The delay's range reaches the agent (a negative delay would drop the chat's alerts).
+            Assert.Contains("0 sends every message at once, at most 86400 (a day)", createChat);
+
+            Assert.Contains("an empty webhook value changes nothing", tools["update_chat"].Description);
+            Assert.Contains("the manager of a folder the chat is bound to", tools["update_chat"].Description);
+
+            var updateChat = Descriptions(tools["update_chat"]);
+            Assert.Contains("Remove the Telegram binding", updateChat);
+            Assert.Contains("omitted: unchanged", updateChat);
+            Assert.Contains("0 sends every message at once, at most 86400 (a day)", updateChat);
+
+            Assert.Contains("Use dryRun first", tools["delete_chat"].Description);
+            Assert.Contains("WITHOUT removing anything", Descriptions(tools["delete_chat"]));
         }
 
 
@@ -427,6 +456,15 @@ namespace HSMServer.Core.Tests.Mcp
             var chats = Descriptions(tools["list_chats"]);
             Assert.Contains("the webhook URLs themselves are never exposed", chats);
 
+            // The chat write trio (#1829), output side: an echo never carries a webhook
+            // URL, and the delete's preview arm names what its count is.
+            var createdChat = Descriptions(tools["create_chat"]);
+            Assert.Contains("the webhook URLs themselves are never exposed", createdChat);
+
+            var deletedChat = Descriptions(tools["delete_chat"]);
+            Assert.Contains("how many sensors' alerts reference the chat", deletedChat);
+            Assert.Contains("Nothing was removed. Absent after an applied deletion.", deletedChat);
+
             // The folder surface: the entity disambiguation (access-grouping
             // folder, not the tree's nested products).
             var folder = Descriptions(tools["get_folder"]);
@@ -495,7 +533,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(42, tools.Count);
+                Assert.Equal(47, tools.Count);
 
                 foreach (var tool in tools)
                 {

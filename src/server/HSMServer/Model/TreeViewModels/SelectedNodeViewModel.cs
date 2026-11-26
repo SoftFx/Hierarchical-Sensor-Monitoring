@@ -1,4 +1,6 @@
 using HSMServer.Model.Folders;
+using System;
+using System.Collections.Generic;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 
@@ -24,20 +26,49 @@ public class SelectedNodeViewModel
     public bool ShowChartTab { get; set; }
 
 
+    // One user may have several requests in flight (two browser tabs). Selecting an entity and loading
+    // its children is one step: a refresh that checked the selection must not write its list after
+    // another request has selected something else.
+    private readonly object _selection = new();
+
     public void ConnectNode(ProductNodeViewModel newNode)
     {
-        Subscribe(newNode);
-        
-        _nodes.Load(newNode.Nodes);
-        _sensors.Load(newNode.Sensors);
+        lock (_selection)
+        {
+            Subscribe(newNode);
+
+            _nodes.Load(newNode.Nodes);
+            _sensors.Load(newNode.Sensors);
+        }
     }
 
-    public void ConnectFolder(FolderModel newFolder)
+    /// <param name="newFolder">The selected folder.</param>
+    /// <param name="visibleProducts">
+    /// The products of the folder to page through: the ones the user can see, which is not always the whole
+    /// folder (<see cref="UserTreeAccess.GetVisibleProducts"/>).
+    /// </param>
+    public void ConnectFolder(FolderModel newFolder, IDictionary<Guid, ProductNodeViewModel> visibleProducts)
     {
-        Subscribe(newFolder);
+        lock (_selection)
+        {
+            Subscribe(newFolder);
 
-        _nodes.Load(newFolder.Products, "Products");
-        _sensors.Reset();
+            _nodes.Load(visibleProducts, "Products");
+            _sensors.Reset();
+        }
+    }
+
+    /// <summary>
+    /// Replaces the product list of the selected folder with the products the user sees now. Does nothing
+    /// when another entity has been selected in the meantime: a page request never changes the selection.
+    /// </summary>
+    public void RefreshFolderProducts(Guid folderId, IDictionary<Guid, ProductNodeViewModel> visibleProducts)
+    {
+        lock (_selection)
+        {
+            if (_selectedNode?.Id == folderId)
+                _nodes.Load(visibleProducts, "Products");
+        }
     }
 
     public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest) => pageRequest.IsNodes ? _nodes.Reload(pageRequest) : _sensors.Reload(pageRequest);

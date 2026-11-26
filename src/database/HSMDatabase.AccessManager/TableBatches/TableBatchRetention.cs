@@ -38,7 +38,10 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// the tree (it has no setting): the stored target alone decides then.</item>
         /// </list>
         /// A shortening never frees anything early: the stored class and the setting's must both have passed, and the
-        /// longer one has not. A stale or unwritable placement never causes a deletion the setting now forbids.
+        /// longer one has not; except the move's expired step, which applies this rule to the placement its switch writes
+        /// (the class that holds the hours is then the new target), so rows whose new class has passed are deleted before the
+        /// old class has (ADR-0021 point 12; the feature doc's section "The move"). A stale or unwritable placement never
+        /// causes a deletion the setting now forbids.
         /// </para>
         /// </summary>
         public static bool IsExpired(TablePlacement placement, long hourTicks, DateTime utcNow, int? settingWeeks)

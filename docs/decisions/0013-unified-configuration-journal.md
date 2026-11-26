@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-10-27
 **Supersedes:** ADR-0010 (in part: client change-set ids, per-source journaling scope, rollback authorization)
+**Amended:** 2026-11-25 (#1828) — the kind list gained two journal-visible-only kinds, `chat` and `serverSettings`.
 
 ---
 
@@ -46,7 +47,8 @@ detail.
 4. **Journal records link to their undo group.** Every record carries the
    entity kind (`sensorDataPolicies`, `sensorTtlPolicies`,
    `productTtlPolicies`, `alertTemplate`, `alertSchedule`, `nodeSettings`,
-   `treeCrud`, `folder`), the root product and, for the rollbackable kinds,
+   `treeCrud`, `folder`; since #1828 also `chat` and `serverSettings`,
+   journal-visible only), the root product and, for the rollbackable kinds,
    the undo-group id. Policy writes link through the initiator (the
    cache-layer records stamp it); templates, schedules and rollback entries
    get their journal record from the recorder.
@@ -73,7 +75,9 @@ detail.
   product TTL, alert templates, alert schedules); tree CRUD (product/
   sensor/folder create/delete/move) and node settings are journal-visible
   only — a product deletion irreversibly purges data, rollback is
-  impossible by design.
+  impossible by design. Since #1828 chats and server settings are
+  journal-visible only for another reason: they hold secrets (webhooks,
+  the bot token), and a secret cannot sit in a before/after image.
 - Backup exclusion of the change-set store is unchanged (ADR-0010); the
   presentation Journal store was never part of the backup set either.
 - The JournalValues storage gains the unified tags and a global Changes-type

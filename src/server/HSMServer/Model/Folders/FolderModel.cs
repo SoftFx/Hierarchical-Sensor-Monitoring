@@ -53,8 +53,10 @@ namespace HSMServer.Model.Folders
 
             DefaultChats = LoadDefaultChats(entity.DefaultChatsSettings);
 
-            KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
-            SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
+            // A stored folder without a period keeps reading it as the month it
+            // always read: the new default is for new folders only.
+            KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)), StoredWithoutPeriod);
+            SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)), StoredWithoutPeriod);
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
 
             Chats = LoadChats(entity);
@@ -74,8 +76,8 @@ namespace HSMServer.Model.Folders
 
             DefaultChats = LoadDefaultChats();
 
-            KeepHistory = LoadKeepHistory();
-            SelfDestroy = LoadSelfDestroy();
+            KeepHistory = LoadKeepHistory(null, Core.Cache.TreeValuesCache.DefaultRetention);
+            SelfDestroy = LoadSelfDestroy(null, Core.Cache.TreeValuesCache.DefaultRetention);
             TTL = LoadTTL();
         }
 
@@ -270,9 +272,11 @@ namespace HSMServer.Model.Folders
 
         private static TimeIntervalViewModel LoadTTL(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForFolderTimeout, Core.Model.TimeInterval.None);
 
-        private static TimeIntervalViewModel LoadKeepHistory(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForKeepHistory, Core.Model.TimeInterval.Month);
+        private const Core.Model.TimeInterval StoredWithoutPeriod = Core.Model.TimeInterval.Month;
 
-        private static TimeIntervalViewModel LoadSelfDestroy(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForSelfDestory, Core.Model.TimeInterval.Month);
+        private static TimeIntervalViewModel LoadKeepHistory(TimeIntervalEntity entity, Core.Model.TimeInterval defaultInterval) => LoadSetting(entity, PredefinedIntervals.ForKeepHistory, defaultInterval);
+
+        private static TimeIntervalViewModel LoadSelfDestroy(TimeIntervalEntity entity, Core.Model.TimeInterval defaultInterval) => LoadSetting(entity, PredefinedIntervals.ForSelfDestory, defaultInterval);
 
 
         private static TimeIntervalViewModel LoadSetting(TimeIntervalEntity entity, HashSet<TimeInterval> predefinedIntervals, Core.Model.TimeInterval defaultInterval)
