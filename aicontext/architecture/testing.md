@@ -58,6 +58,12 @@ Browser-level tests using Playwright (TypeScript):
 - Auth flow
 - User registration
 - Environment management
+- The page of a table sensor (`home/table_sensor_page.spec.ts`, #1847): the rows it draws are sent by
+  `tools/TableSeeder`, a .NET 8 console client of the collector session's table connection built on the repo's
+  `HSMTableBlocks` (one block, waits for the ack, exits non-zero with the reason on a refusal; `--insecure` accepts the
+  test server's self-signed certificate; the access key comes from `--key` or, kept off the command line, from
+  `HSM_TABLE_SEEDER_KEY`, which is how the spec passes it). The spec runs it with `dotnet run -c Release`, so the machine that runs the
+  suite needs the .NET 8 SDK; the e2e workflow (`tests.yml`) builds the tool once before the specs run.
 
 ## Running Tests
 
@@ -71,8 +77,10 @@ dotnet test src/tests/HSMServer.Core.Tests/
 # Database tests
 dotnet test src/tests/HSMDatabase.LevelDB.Tests/
 
-# E2E (requires running HSMServer)
+# E2E (requires running HSMServer; the base URL defaults to https://localhost:443)
 cd src/tests/Autotests && npx playwright test
+# against another server, one spec (the setup project runs first)
+PLAYWRIGHT_TEST_BASE_URL=https://localhost:44990 CI=1 npx playwright test --project=chromium home/table_sensor_page.spec.ts
 ```
 
 ## Test Writing Guidelines
@@ -126,7 +134,9 @@ therefore gets these checks green in seconds; a PR touching a lane's paths runs 
   integration — the collector unit set (incl. `tests/conformance/**`: `WireFormatGoldenLockTests`
   reads the golden files there byte for byte, and `.gitattributes` fixes their line endings) plus
   `src/server/**`, `src/database/**`, `src/lib/**` (the lane builds the server image from branch
-  source). Each also lists its own workflow file.
+  source) and `src/native/collector/**` (`NativeTableSensorEndToEndTests` builds the native
+  collector's table driver from branch source and runs it against that server). Each also lists its
+  own workflow file.
 - Always the full lane: any change under `.github/**`, every `push` / `workflow_dispatch` /
   `schedule` run, and any doubt (HEAD not a two-parent merge commit, `git diff` failure) —
   detection fails open.

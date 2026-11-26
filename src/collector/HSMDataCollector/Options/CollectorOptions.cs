@@ -73,6 +73,36 @@ namespace HSMDataCollector.Core
 
         public int MaxSensors { get; set; } = 100000;
 
+
+        /// <summary>
+        /// How often the rows of all table sensors are packed into one block and sent (ADR-0021). At least one second;
+        /// 10 seconds by default. A row reaches the server about one tick after it was added.
+        /// </summary>
+        public TimeSpan TableTickPeriod { get; set; } = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// The bound on the rows of all table sensors waiting for the next tick, in bytes: 8 per column per row, the
+        /// time included (a row of time, bid and ask counts 24). A row added past it is dropped and counted. 64 MiB by
+        /// default.
+        /// </summary>
+        public long MaxTableBufferBytes { get; set; } = 64L * 1024 * 1024;
+
+        /// <summary>
+        /// The bound on the packed table blocks that wait for delivery (an outage, a slow server), in bytes. Past it the
+        /// oldest blocks are dropped, and their rows counted. 64 MiB by default: at about 4 bytes per row of time, bid
+        /// and ask, some 16 million rows.
+        /// </summary>
+        public long MaxTableBacklogBytes { get; set; } = 64L * 1024 * 1024;
+
+        /// <summary>
+        /// For tests: no scheduled table tick; a test drives the tick through the collector's internal hook, and the
+        /// tick then waits for the registration and the delivery it starts.
+        /// </summary>
+        internal bool ManualTableTick { get; set; }
+
+        /// <summary>For tests: makes the table block compressor instead of <c>new TableBlockWriter()</c> (a test makes it throw).</summary>
+        internal Func<HSMTableBlocks.TableBlockWriter> TableCompressorFactory { get; set; }
+
         /// <summary>
         /// Headers the collector adds to every request that carries sensor values, next to its
         /// own <c>Key</c> and <c>ClientName</c>. They state facts about the host for the server
@@ -162,6 +192,15 @@ namespace HSMDataCollector.Core
 
             if (MaxSensors <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxSensors), "Max sensors must be greater than zero.");
+
+            if (TableTickPeriod < TimeSpan.FromSeconds(1))
+                throw new ArgumentOutOfRangeException(nameof(TableTickPeriod), "The table tick period must be at least one second.");
+
+            if (MaxTableBufferBytes <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxTableBufferBytes), "Max table buffer bytes must be greater than zero.");
+
+            if (MaxTableBacklogBytes <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxTableBacklogBytes), "Max table backlog bytes must be greater than zero.");
 
             if (Transport != CollectorTransport.Http && Transport != CollectorTransport.Session)
                 throw new ArgumentOutOfRangeException(nameof(Transport), "The transport is either Http or Session.");

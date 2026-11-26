@@ -1,0 +1,15 @@
+{
+  "name": "hsm-cpp-wrapper",
+  "description": "HSMCppWrapper.dll over the native collector: curl with WebSocket for the collector session, zstd and zlib for table sensors. Keep the baseline and the curl features in step with src/native/collector/vcpkg.json.",
+  "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d",
+  "dependencies": [
+    {
+      "name": "curl",
+      "default-features": false,
+      "features": ["ssl", "websockets"]
+    },
+    "nlohmann-json",
+    "zstd",
+    "zlib"
+  ]
+}

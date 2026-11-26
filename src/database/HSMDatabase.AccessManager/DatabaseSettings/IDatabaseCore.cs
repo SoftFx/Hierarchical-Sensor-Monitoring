@@ -36,6 +36,15 @@ namespace HSMServer.Core.DataLayer
 
         long TotalDbSize { get; }
 
+        // The block store of table sensors (#1844). Nothing is opened before its first use.
+        HSMDatabase.AccessManager.TableBlocks.ITableBlockStore TableBlocks { get; }
+
+        // The batch store of table sensors (#1850): the merged hours, under the same folder. Nothing is opened before its first use.
+        HSMDatabase.AccessManager.TableBatches.ITableBatchStore TableBatches { get; }
+
+        // The size of its folder on disk; 0 when it does not exist (nothing is opened).
+        long TableBlocksDbSize { get; }
+
         int SensorValuesPageCount { get; }
 
         List<ISensorValuesDatabase> SensorValuesDatabases { get; }
@@ -135,6 +144,12 @@ namespace HSMServer.Core.DataLayer
         Exception AddSensorChecked(SensorEntity entity);
         Exception UpdateSensorChecked(SensorEntity entity);
         void RemoveSensorWithMetadata(Guid sensorId);
+
+        /// <summary>
+        /// Whether the entity of a sensor or of a product (node) with the id is in the environment database (#1850 part 4d:
+        /// a table removal is acted on only once its entity is gone). True when the read fails.
+        /// </summary>
+        bool EntityExists(Guid id);
 
         void AddSensorValue(Guid sensorId, BaseValue value);
         void ClearSensorValues(Guid sensorId, DateTime from, DateTime to);

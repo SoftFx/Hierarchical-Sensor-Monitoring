@@ -22,6 +22,14 @@
          <span id="dbError" class="text-danger text-start"></span>
      </div>
 </div>
+<div class="row mt-3 d-flex align-items-center">
+    <div class="col-2">
+        <label class="col-form-label" title="The block store of table sensors (Tables: Blocks and BlockIndex). Part of the total; not exported, not compacted by the button.">Table blocks (MB)</label>
+    </div>
+    <div class="col-auto form-check form-switch ms-3">
+        <input id="dbTableBlocksSize" class="form-control" type="number" value="@Model.TableBlocksDbSize" disabled>
+    </div>
+</div>
 <div class="row mt-5 d-flex align-items-center">
     <div class="col-2">
         <label class="col-form-label">Values Database</label>

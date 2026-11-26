@@ -123,7 +123,8 @@
             <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description'></textarea>
         </div>
 
-        @if (Model is SensorInfoViewModel)
+        @* A table sensor has no alerts (#1844). *@
+        @if (Model is SensorInfoViewModel { SensorType: not HSMCommon.Model.SensorType.Table })
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
         }

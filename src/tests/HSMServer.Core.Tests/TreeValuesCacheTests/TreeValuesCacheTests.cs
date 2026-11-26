@@ -308,6 +308,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
+        [Trait("Category", "Remove")]
+        public async Task Removing_a_root_product_on_a_server_without_table_sensors_creates_no_table_store()
+        {
+            // #1850 part 4d, review of the epic: a removal mark of a root product was written for every root product, so
+            // the first product removal on a server that never had a table sensor created the table store's folder, and
+            // the merge job then opened (and created) its databases for the life of the process.
+            var tables = _databaseCoreManager.DatabaseCore.TableBlocks;
+            Assert.False(tables.Exists);
+
+            var product = await _valuesCache.AddProductAsync($"noTables{Guid.NewGuid():N}"[..16], Guid.Empty);
+            await _valuesCache.RemoveProductAsync(product.Id);
+
+            Assert.Null(_valuesCache.GetProduct(product.Id));
+            Assert.False(tables.Exists);
+        }
+
+        [Fact]
         [Trait("Category", "Remove product(s)")]
         public async Task RemoveProductTest()
         {

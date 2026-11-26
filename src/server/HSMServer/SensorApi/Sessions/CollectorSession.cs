@@ -41,8 +41,8 @@ namespace HSMServer.SensorApi.Sessions
     }
 
 
-    // One inbound message. Dispose returns the buffer it may have rented.
-    internal readonly struct SessionFrame(SessionFrameKind kind, byte[] buffer, int length, byte[] rented) : IDisposable
+    // One inbound message. Dispose returns the buffer it may have rented to where it came from.
+    internal readonly struct SessionFrame(SessionFrameKind kind, byte[] buffer, int length, byte[] rented, IFrameMemory memory = null) : IDisposable
     {
         public SessionFrameKind Kind { get; } = kind;
 
@@ -54,7 +54,7 @@ namespace HSMServer.SensorApi.Sessions
         public void Dispose()
         {
             if (rented is not null)
-                ArrayPool<byte>.Shared.Return(rented);
+                (memory ?? SharedPoolFrameMemory.Instance).Return(rented);
         }
     }
 
@@ -71,6 +71,10 @@ namespace HSMServer.SensorApi.Sessions
         private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(2);
 
         private readonly SemaphoreSlim _sendLock = new(1, 1);
+
+        // Cancelled when the server ends the session (a close it starts, an abort): what the loop
+        // waits for besides the socket (the table frame budget) stops waiting then.
+        private readonly CancellationTokenSource _ending = new();
         private readonly byte[] _receiveBuffer = new byte[IdleBufferBytes];
         private readonly WebSocket _socket;
 
@@ -92,6 +96,14 @@ namespace HSMServer.SensorApi.Sessions
         private long _bytesOut;
         private long _valuesAccepted;
         private long _requestsRefused;
+
+        // A table connection's blocks (#1845), for its close line.
+        private long _blocksStored;
+        private long _blocksDuplicate;
+        private long _blocksAllRefused;
+        private long _blocksInvalid;
+        private long _blockFaults;
+        private long _tablesRefused;
 
         // Guards the three fields below: which of the two, the handler loop or a close
         // asked for from outside, gets to the socket first.
@@ -119,6 +131,18 @@ namespace HSMServer.SensorApi.Sessions
         public string AgentVersion { get; }
 
         public DateTime ConnectedAtUtc { get; }
+
+        // A table connection (#1845) carries blocks only; it belongs to the ordinary session
+        // `PairedSessionId` of the same collector.
+        public bool IsTable { get; }
+
+        public Guid PairedSessionId { get; }
+
+        public CancellationToken Ending => _ending.Token;
+
+        // The producer id of the last block of a table connection, for the check that two live
+        // connections do not share one (the registry keeps one entry per connection).
+        internal (Guid Product, Guid Producer)? LastProducer { get; set; }
 
         // Who the session acts for, as last resolved from the cache. Replaced by the
         // handler loop when the key or the product changed; read by the registry.
@@ -155,10 +179,28 @@ namespace HSMServer.SensorApi.Sessions
 
         public long RequestsRefused => Interlocked.Read(ref _requestsRefused);
 
+        public long BlocksStored => Interlocked.Read(ref _blocksStored);
 
-        public CollectorSession(WebSocket socket, PublicApiRequestInfo caller, string collectorKind, string collectorVersion, string agentVersion, DateTime utcNow)
+        public long BlocksDuplicate => Interlocked.Read(ref _blocksDuplicate);
+
+        public long BlocksAllRefused => Interlocked.Read(ref _blocksAllRefused);
+
+        public long BlocksInvalid => Interlocked.Read(ref _blocksInvalid);
+
+        public long BlockFaults => Interlocked.Read(ref _blockFaults);
+
+        public long TablesRefused => Interlocked.Read(ref _tablesRefused);
+
+        // Short ids: what the log lines of the connection and of its session share.
+        public string PairedShortId => PairedSessionId.ToString("N")[..8];
+
+
+        public CollectorSession(WebSocket socket, PublicApiRequestInfo caller, string collectorKind, string collectorVersion, string agentVersion, DateTime utcNow,
+            Guid? pairedSessionId = null)
         {
             _socket = socket;
+            IsTable = pairedSessionId is not null;
+            PairedSessionId = pairedSessionId ?? Guid.Empty;
 
             SetCaller(caller);
             KeyId = caller.Key.Id;
@@ -196,6 +238,24 @@ namespace HSMServer.SensorApi.Sessions
         public void CountValuesAccepted(int count) => Interlocked.Add(ref _valuesAccepted, Math.Max(count, 0));
 
         public void CountRequestRefused() => Interlocked.Increment(ref _requestsRefused);
+
+        public void CountBlockStored(int tablesRefused)
+        {
+            Interlocked.Increment(ref _blocksStored);
+            Interlocked.Add(ref _tablesRefused, tablesRefused);
+        }
+
+        public void CountBlockDuplicate() => Interlocked.Increment(ref _blocksDuplicate);
+
+        public void CountBlockAllRefused(int tablesRefused)
+        {
+            Interlocked.Increment(ref _blocksAllRefused);
+            Interlocked.Add(ref _tablesRefused, tablesRefused);
+        }
+
+        public void CountBlockInvalid() => Interlocked.Increment(ref _blocksInvalid);
+
+        public void CountBlockFault() => Interlocked.Increment(ref _blockFaults);
 
         public void NoteEnd(string text, bool abnormal)
         {
@@ -327,8 +387,13 @@ namespace HSMServer.SensorApi.Sessions
         // Reads one whole message. Only the handler loop calls it. `progressed` is called
         // after every read from the socket with the number of bytes it brought, so the
         // caller can tell a frame that is still arriving from a collector that went silent.
-        public async ValueTask<SessionFrame> ReceiveAsync(int maxFrameBytes, Action<int> progressed, CancellationToken token)
+        //
+        // `memory` gives the buffers of a frame that outgrows the session's own (the shared pool when
+        // null); it may make the read wait (the table frame budget, #1845).
+        public async ValueTask<SessionFrame> ReceiveAsync(int maxFrameBytes, Action<int> progressed, CancellationToken token, IFrameMemory memory = null)
         {
+            memory ??= SharedPoolFrameMemory.Instance;
+
             var buffer = _receiveBuffer;
             byte[] rented = null;
             var total = 0;
@@ -344,7 +409,7 @@ namespace HSMServer.SensorApi.Sessions
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         Received(0);
-                        Return(ref rented);
+                        Return(memory, ref rented);
                         return new SessionFrame(SessionFrameKind.Close, buffer, 0, null);
                     }
 
@@ -355,7 +420,7 @@ namespace HSMServer.SensorApi.Sessions
                     if (total > maxFrameBytes)
                     {
                         Received(total);
-                        Return(ref rented);
+                        Return(memory, ref rented);
                         return new SessionFrame(SessionFrameKind.TooBig, buffer, 0, null);
                     }
 
@@ -364,16 +429,16 @@ namespace HSMServer.SensorApi.Sessions
                         Received(total);
 
                         var kind = result.MessageType == WebSocketMessageType.Text ? SessionFrameKind.Text : SessionFrameKind.Binary;
-                        return new SessionFrame(kind, buffer, total, rented);
+                        return new SessionFrame(kind, buffer, total, rented, memory);
                     }
 
                     if (total == buffer.Length)
                     {
                         // One byte past the limit is enough room to see a frame go over it.
-                        var next = ArrayPool<byte>.Shared.Rent((int)Math.Min(buffer.Length * 2L, maxFrameBytes + 1L));
+                        var next = await memory.RentAsync((int)Math.Min(buffer.Length * 2L, maxFrameBytes + 1L), token);
 
                         buffer.AsSpan(0, total).CopyTo(next);
-                        Return(ref rented);
+                        Return(memory, ref rented);
 
                         rented = next;
                         buffer = next;
@@ -382,7 +447,7 @@ namespace HSMServer.SensorApi.Sessions
             }
             catch
             {
-                Return(ref rented);
+                Return(memory, ref rented);
                 throw;
             }
         }
@@ -444,7 +509,9 @@ namespace HSMServer.SensorApi.Sessions
             {
                 if (_handling)
                 {
-                    _closeRequest = (status, reason);
+                    // The first close asked for stands: the shutdown's 1001 is not overwritten by the 1000 of
+                    // the session ending under it.
+                    _closeRequest ??= (status, reason);
                     return;
                 }
 
@@ -480,6 +547,7 @@ namespace HSMServer.SensorApi.Sessions
 
             _endReason ??= reason;
             _socket.Abort();
+            SignalEnding();
         }
 
         public bool IsOpen => _socket.State == WebSocketState.Open;
@@ -488,11 +556,27 @@ namespace HSMServer.SensorApi.Sessions
         {
             _socket.Dispose();
             _sendLock.Dispose();
+            _ending.Dispose();
         }
 
 
-        private void NoteServerClose(WebSocketCloseStatus status, string reason) =>
+        private void NoteServerClose(WebSocketCloseStatus status, string reason)
+        {
             NoteEnd($"the server closed it with {(int)status}{DescribeReason(reason)}", abnormal: !IsOrderly(status));
+            SignalEnding();
+        }
+
+        private void SignalEnding()
+        {
+            try
+            {
+                _ending.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ended and disposed already.
+            }
+        }
 
         // One complete frame (or a close, or a frame refused as too big) arrived.
         private void Received(int bytes)
@@ -502,11 +586,11 @@ namespace HSMServer.SensorApi.Sessions
             Interlocked.Exchange(ref _lastReceivedTimestamp, Stopwatch.GetTimestamp());
         }
 
-        private static void Return(ref byte[] rented)
+        private static void Return(IFrameMemory memory, ref byte[] rented)
         {
             if (rented is not null)
             {
-                ArrayPool<byte>.Shared.Return(rented);
+                memory.Return(rented);
                 rented = null;
             }
         }

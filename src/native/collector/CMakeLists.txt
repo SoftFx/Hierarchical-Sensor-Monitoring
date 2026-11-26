@@ -2,9 +2,17 @@
 # install/example defaults below and is only auto-set from 3.21.
 cmake_minimum_required(VERSION 3.21)
 
+# Table sensors (#1848): declared before project() so that, in a vcpkg manifest build, turning it on
+# also turns on the manifest feature "tables" (zstd, zlib) that vcpkg installs at project(). A build
+# with tables OFF resolves neither. See the option's block below for what it builds.
+option(HSM_COLLECTOR_TABLES "Build table sensor support (needs zstd and zlib)" OFF)
+if(HSM_COLLECTOR_TABLES AND NOT "tables" IN_LIST VCPKG_MANIFEST_FEATURES)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tables")
+endif()
+
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.14.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.15.2 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -109,6 +117,11 @@ add_library(hsm_collector_core STATIC
     src/proc_metrics.cpp                         # portable /proc parsers + delta math (#1414; no OS reads)
     src/platform/hsm_linux_metric_sources.cpp    # self-guarded #if __linux__ (#1414)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
+    # Table sensors (#1848): the C ABI, the sensors, their buffers and the pipeline exist in every
+    # build; without HSM_COLLECTOR_TABLES every table sensor is Unavailable (no block writer).
+    src/tables/hsm_table_pipeline.cpp
+    src/tables/hsm_table_row_buffer.cpp
+    src/tables/hsm_table_schema.cpp
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
@@ -162,7 +175,8 @@ if(HSM_COLLECTOR_HTTP)
     # private, so it adds nothing to what a consumer of the built library links.
     find_package(nlohmann_json REQUIRED)
     get_target_property(HSM_NLOHMANN_JSON_INCLUDES nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
-    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp src/hsm_ws_connection.cpp src/hsm_session_transport.cpp
+        src/hsm_acked_binary_link.cpp) # the second connection of a session (#1848)
     target_include_directories(hsm_collector_core SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
     target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
     target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
@@ -173,6 +187,45 @@ if(HSM_COLLECTOR_HTTP)
         # DLL does not bring it along.
         target_link_libraries(hsm_collector_core PUBLIC ws2_32)
     endif()
+endif()
+
+# Table sensors (#1848, epic #1842). Opt-in so the agent, the probe and every existing consumer build
+# exactly as before, with no new dependency; the vcpkg feature `tables` and the Conan option `tables`
+# turn it on. The block writer compresses with libzstd and checksums with zlib's crc32_z (the block's
+# own layout is written in src/tables/). Both are private to the static core, which still propagates
+# them to a consumer's link (as $<LINK_ONLY:>), so hsm_collectorConfig re-finds them. Delivery of the
+# blocks will need the session transport (HSM_COLLECTOR_HTTP); the writer itself does not.
+# (The option itself is declared above project().)
+set(HSM_COLLECTOR_ZSTD_PKGCONFIG OFF)
+if(HSM_COLLECTOR_TABLES)
+    # vcpkg and zstd's own CMake build ship a package config; a distribution package may ship only
+    # libzstd.pc (Debian's libzstd-dev), so fall back to pkg-config.
+    find_package(zstd CONFIG QUIET)
+    if(TARGET zstd::libzstd)
+        set(HSM_ZSTD_TARGET zstd::libzstd)
+    elseif(TARGET zstd::libzstd_shared)
+        set(HSM_ZSTD_TARGET zstd::libzstd_shared)
+    elseif(TARGET zstd::libzstd_static)
+        set(HSM_ZSTD_TARGET zstd::libzstd_static)
+    else()
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(HSM_ZSTD REQUIRED IMPORTED_TARGET GLOBAL libzstd)
+        set(HSM_ZSTD_TARGET PkgConfig::HSM_ZSTD)
+        set(HSM_COLLECTOR_ZSTD_PKGCONFIG ON)
+    endif()
+    find_package(ZLIB REQUIRED)
+    message(STATUS "hsm_collector: table sensors ON (zstd: ${HSM_ZSTD_TARGET}, zlib ${ZLIB_VERSION_STRING})")
+
+    target_sources(hsm_collector_core PRIVATE
+        src/tables/hsm_table_block_writer.cpp
+    )
+    # The table connection of the collector session (#1848 part 4): blocks reach a server only with
+    # the session transport, so only a build that has it delivers them.
+    if(HSM_COLLECTOR_HTTP)
+        target_sources(hsm_collector_core PRIVATE src/tables/hsm_session_table_channel.cpp)
+    endif()
+    target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_TABLES=1)
+    target_link_libraries(hsm_collector_core PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
 endif()
 
 # Header-only C++ RAII wrapper over the C ABI.
@@ -259,6 +312,10 @@ if(HSM_COLLECTOR_BUILD_BENCH)
     if(WIN32)
         target_link_libraries(hsm_collector_bench PRIVATE psapi)
     endif()
+    # The table add path (#1848) is measured in the tables build, through the internal test seams.
+    if(HSM_COLLECTOR_TABLES)
+        target_compile_definitions(hsm_collector_bench PRIVATE HSM_COLLECTOR_TABLES=1)
+    endif()
 endif()
 
 # The test/conformance binary and its ctest registrations (gated so package/consumer builds skip
@@ -267,6 +324,7 @@ if(HSM_COLLECTOR_BUILD_TESTS)
 
 add_executable(hsm_collector_tests
     tests/hsm_collector_tests.cpp
+    tests/hsm_table_pipeline_tests.cpp  # table sensors (#1848); the parts that need zstd are #if HSM_COLLECTOR_TABLES
 )
 
 target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
@@ -282,7 +340,115 @@ if(HSM_COLLECTOR_HTTP)
     target_include_directories(hsm_collector_tests SYSTEM PRIVATE ${HSM_NLOHMANN_JSON_INCLUDES})
 endif()
 
+# The table block tests (#1848) compile only in the tables build. The test-only block reader
+# (tests/table_block_test_reader.hpp) decompresses with libzstd, so the tests link it themselves.
+if(HSM_COLLECTOR_TABLES)
+    target_sources(hsm_collector_tests PRIVATE tests/hsm_table_block_tests.cpp)
+    target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_TABLES=1)
+    target_link_libraries(hsm_collector_tests PRIVATE ${HSM_ZSTD_TARGET} ZLIB::ZLIB)
+endif()
+
 enable_testing()
+
+if(HSM_COLLECTOR_TABLES)
+    foreach(name
+            native_table_crc_check_value
+            native_table_schema_ids
+            native_table_worked_example
+            native_table_limits_and_rules_refused
+            native_table_nulls
+            native_table_nan_and_infinities_bit_exact
+            native_table_seeded_round_trips
+            native_table_thousand_tables
+            native_table_block_over_frame_limit_is_refused
+            native_table_writer_is_reusable
+            native_table_test_reader_is_strict
+            native_table_finish_refuses_impossible_reservations
+            native_table_limit_arithmetic_cannot_overflow
+            native_table_allocation_failure_leaves_the_writer_failed
+            native_table_byte_swap_writes_little_endian
+            native_table_buffers_grow_geometrically
+            native_table_refused_finish_keeps_the_writer)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    # The managed golden blocks: the test reader must accept them, and the native writer must give
+    # their header fields and decompressed payload for the same input.
+    foreach(golden mixed nulls single-row)
+        add_test(NAME native_table_golden_${golden}
+            COMMAND hsm_collector_tests native_table_golden
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/HSMTableBlocks.Tests/Golden/format1/${golden}.htb
+        )
+    endforeach()
+    # The pipeline with threads and the recording channel (#1848).
+    foreach(name
+            native_table_threads_only_while_running
+            native_table_unavailable_decided_at_each_start
+            native_table_writer_across_stop_and_start
+            native_table_stop_drain_is_bounded
+            native_table_losses_at_stop_reach_the_stop_line
+            native_table_split_keeps_every_row
+            native_table_too_large_is_final_and_sequences_never_go_back
+            native_table_pack_failure_settles_every_row
+            native_table_reports_reach_the_host_with_no_lock_held
+            native_table_over_connection_limits
+            native_table_final_pack_observes_the_stop_budget
+            native_table_impossible_row_count_is_a_wrong_shape
+            native_table_start_failure_rolls_back
+            native_table_stop_failure_completes
+            native_table_stress_writers_ticks_and_restarts)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+    endforeach()
+    set_tests_properties(native_table_stress_writers_ticks_and_restarts PROPERTIES TIMEOUT 600)
+    # The table connection of the collector session (#1848 part 4), against the scripted table side of
+    # tests/ws_test_server.hpp: the tables build with the session transport only.
+    if(HSM_COLLECTOR_HTTP)
+        foreach(name
+                native_table_block_after_hello_and_probe
+                native_table_every_ack_status_maps_to_its_answer
+                native_table_lost_ack_then_duplicate
+                native_table_close_1013_sends_the_same_frame
+                native_table_close_1000_sends_the_same_frame
+                native_table_upgrade_404_asked_again_later
+                native_table_upgrade_400_asked_again_later
+                native_table_upgrade_404_asked_with_the_next_session
+                native_table_upgrade_400_asked_with_the_next_session
+                native_table_upgrade_406_uses_the_backoff
+                native_table_upgrade_503_uses_the_backoff
+                native_table_upgrade_409_waits_for_the_next_session
+                native_table_block_in_flight_across_a_new_session
+                native_table_splits_by_the_hello_limits
+                native_table_block_packed_before_a_smaller_hello
+                native_table_stop_with_a_block_in_flight
+                native_table_server_protocol_errors
+                native_table_heartbeat
+                native_table_start_stop_start
+                native_table_dispose_from_every_state
+                native_table_no_connection_without_a_table_sensor
+                native_table_link_carries_4_and_16_mib_frames
+                native_table_stress_writers_reconnects_and_stop
+                native_table_cancel_reaches_a_closing_connection
+                native_table_reports_are_said_once_per_kind
+                native_table_retry_after_as_managed
+                native_table_service_reports_the_connection_of_a_new_session
+                native_table_three_lost_connections_keep_the_block_at_the_head
+                native_table_stuck_write_sends_the_same_frame_on_the_next_connection
+                native_table_stop_during_a_stuck_write_counts_the_rows_once)
+            add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+        endforeach()
+        # #1848 step 6: a write that does not end would hold the test; the timeout fails it.
+        set_tests_properties(native_table_stuck_write_sends_the_same_frame_on_the_next_connection
+                             native_table_stop_during_a_stuck_write_counts_the_rows_once PROPERTIES TIMEOUT 300)
+        set_tests_properties(native_table_stress_writers_reconnects_and_stop native_table_dispose_from_every_state
+                             native_table_every_ack_status_maps_to_its_answer PROPERTIES TIMEOUT 600)
+    endif()
+    # A report written under a lock the host's callback takes again deadlocks: the timeout fails it.
+    set_tests_properties(native_table_reports_reach_the_host_with_no_lock_held PROPERTIES TIMEOUT 120)
+    # Blocks and their rows as text, read by the managed reader in NativeBlockVectorTests
+    # (HSM_NATIVE_TABLE_BLOCKS_DIR=<build>/table-block-vectors; the CI HTTP lane runs both).
+    add_test(NAME native_table_write_vectors
+        COMMAND hsm_collector_tests native_table_write_vectors ${CMAKE_CURRENT_BINARY_DIR}/table-block-vectors
+    )
+endif()
 
 if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_posts_to_capture_server
@@ -349,6 +515,30 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_ws_refuses_binary_and_oversized_messages
         COMMAND hsm_collector_tests native_ws_refuses_binary_and_oversized_messages
     )
+    # #1848: binary frames (up to 16 MiB), the receive cap per connection, and a second WebSocket
+    # to the session route beside the session (the table connection's lower half).
+    add_test(NAME native_ws_sends_binary_frames_intact
+        COMMAND hsm_collector_tests native_ws_sends_binary_frames_intact
+    )
+    # #1848 step 6: what bounds a send (the wait before every write into libcurl). A send that does
+    # not end fails by the timeout, never by a measured duration.
+    foreach(name
+            native_ws_every_write_waits_for_the_socket
+            native_ws_send_to_a_peer_that_stops_reading
+            native_ws_close_writes_nothing_to_a_full_socket
+            native_ws_send_stops_at_its_deadline)
+        add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+        set_tests_properties(${name} PROPERTIES TIMEOUT 300)
+    endforeach()
+    add_test(NAME native_ws_receive_cap_is_set_per_connection
+        COMMAND hsm_collector_tests native_ws_receive_cap_is_set_per_connection
+    )
+    add_test(NAME native_ws_second_connection_opens_beside_the_session
+        COMMAND hsm_collector_tests native_ws_second_connection_opens_beside_the_session
+    )
+    add_test(NAME native_ws_second_connection_refusal_reports_its_status
+        COMMAND hsm_collector_tests native_ws_second_connection_refusal_reports_its_status
+    )
     # #1668: the collector session as the transport. Like the native_ws_* tests above they need a
     # libcurl with WebSocket and skip, saying so, on one without.
     add_test(NAME native_session_delivers_registrations_and_values
@@ -397,6 +587,13 @@ if(HSM_COLLECTOR_HTTP)
     set_tests_properties(native_session_value_at_the_frame_limit_does_not_stall_the_sender PROPERTIES TIMEOUT 90)
     add_test(NAME native_session_transport_request_contract
         COMMAND hsm_collector_tests native_session_transport_request_contract
+    )
+    # #1848: the hello's sessionId, the session generation, and the shared reconnect backoff.
+    add_test(NAME native_session_reports_session_id_and_generation
+        COMMAND hsm_collector_tests native_session_reports_session_id_and_generation
+    )
+    add_test(NAME native_session_reconnect_backoff_keeps_its_formula
+        COMMAND hsm_collector_tests native_session_reconnect_backoff_keeps_its_formula
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
@@ -447,6 +644,26 @@ if(HSM_COLLECTOR_HTTP)
         COMMAND hsm_collector_tests native_http_recovery_log_credits_only_retried_registrations
     )
 endif()
+
+# Table sensors in every build (#1848): the C ABI, the wrapper and the pipeline's parts. Without
+# HSM_COLLECTOR_TABLES every table sensor is Unavailable, and these say so.
+foreach(name
+        native_table_path_normalization
+        native_table_time_conversion
+        native_table_buffer_growth_and_swap
+        native_table_buffer_failed_growth
+        native_table_buffer_null_map_on_first_use
+        native_table_bound_never_overshoots
+        native_table_ledger_counts_by_reason
+        native_table_backlog_keeps_block_in_flight
+        native_table_abi_rejects_wrong_shapes
+        native_table_create_racing_dispose_is_refused
+        native_table_unavailable_says_why
+        native_table_host_without_table_sensors
+        native_table_handle_outlives_collector
+        native_table_wrapper_matches_abi)
+    add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
+endforeach()
 
 add_test(NAME native_invalid_argument_clears_out_params
     COMMAND hsm_collector_tests native_invalid_argument_clears_out_params
@@ -787,6 +1004,22 @@ if(HSM_COLLECTOR_HTTP)
     )
 endif()
 
+# Table sensors (#1846, #1848): the shared fixture and its must-fail meta fixture need the block writer
+# and the test block reader, so the tables build only.
+if(HSM_COLLECTOR_TABLES)
+    add_conformance_test(conformance_table_sensor_contract table_sensor_contract.hsmtest)
+    add_test(
+        NAME meta_table_rows_wrong_count
+        COMMAND hsm_collector_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/meta_table_rows_wrong_count.hsmtest
+    )
+    # The table connection of the collector session (#1848 part 4): the scripted session server takes it,
+    # so it needs the session transport too.
+    if(HSM_COLLECTOR_HTTP)
+        add_conformance_test(conformance_table_connection_contract table_connection_contract.hsmtest)
+    endif()
+endif()
+
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads
 # the folder on Windows only, too.
 if(WIN32)
@@ -823,5 +1056,16 @@ add_meta_conformance_test(meta_sent_count_overcount.hsmtest)
 add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
 add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)
 add_meta_conformance_test(meta_value_sequence_wrong_start.hsmtest)
+
+# The driver of the table sensors' run against a real server (#1848 step 6). Built in the build with
+# the session transport and table sensors, so the warnings gates compile it; not a ctest (it needs a
+# server): NativeTableSensorEndToEndTests in the managed integration suite runs it.
+if(HSM_COLLECTOR_HTTP AND HSM_COLLECTOR_TABLES)
+    add_executable(hsm_table_e2e tests/server_e2e/hsm_table_e2e.cpp)
+    target_link_libraries(hsm_table_e2e PRIVATE hsm_collector_cpp)
+    target_compile_features(hsm_table_e2e PRIVATE cxx_std_17)
+    hsm_collector_set_warnings(hsm_table_e2e)
+    hsm_collector_apply_sanitizer(hsm_table_e2e)
+endif()
 
 endif() # HSM_COLLECTOR_BUILD_TESTS

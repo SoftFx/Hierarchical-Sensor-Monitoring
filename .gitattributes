@@ -20,3 +20,6 @@ src/probe-linux/packaging/** text eol=lf
 src/probe-linux/**/fixtures/**/*.txt text eol=lf
 # Golden chunks of the sealed-history format (#1802): the bytes are the test data.
 src/tests/HSMDatabase.SealedHistory.Tests/Golden/*.bin binary
+# Golden table blocks (src/tests/HSMTableBlocks.Tests/Golden) are compared byte for byte.
+*.htb binary
+*.htbatch binary

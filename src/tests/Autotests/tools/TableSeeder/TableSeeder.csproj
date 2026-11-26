@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Seeds the rows of one table sensor for the Playwright specs (#1847): one table block sent over the
+       collector session's table connection, as a collector sends it. Test tooling, not shipped. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\api\HSMTableBlocks\HSMTableBlocks.csproj" />
+  </ItemGroup>
+
+</Project>

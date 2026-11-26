@@ -25,6 +25,7 @@ namespace HSMServer.Core.Model
                 SensorType.Version => new VersionSensorModel(entity, database, alertScheduleProvider),
                 SensorType.Rate => new RateSensorModel(entity, database, alertScheduleProvider),
                 SensorType.Enum => new EnumSensorModel(entity, database, alertScheduleProvider),
+                SensorType.Table => new TableSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

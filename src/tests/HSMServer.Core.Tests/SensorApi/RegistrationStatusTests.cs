@@ -115,6 +115,41 @@ namespace HSMServer.Core.Tests.SensorApi
             Assert.StartsWith(CannotConvert, (string)errors["commands/partial/refused-after"]);
         }
 
+        // A table sensor (#1844) refuses a registration of another explicit type, and a
+        // registration of the table type (11, #1845) without its columns is refused too. Both
+        // are refusals a repeat cannot cure: a per-path error in a 200 on /commands and a 406
+        // on /addOrUpdate, never a 500 that a collector repeats. The table registrations that
+        // carry columns: TableRegistrationWireTests.
+        [Fact]
+        public async Task Registration_RefusedByATableSensor_IsARefusal_NotAFault()
+        {
+            var table = await _valuesCache.AddOrUpdateSensorAsync(new Core.Model.Requests.SensorAddOrUpdateRequest(TestProductsManager.ProductId, "table/ticks")
+            {
+                Update = new Core.Cache.UpdateEntities.SensorUpdate { Id = Guid.Empty },
+                Type = HSMCommon.Model.SensorType.Table,
+                TypeIsExplicit = true,
+                Schema = new HSMTableBlocks.TableSchema([new HSMTableBlocks.TableSchemaColumn("time", HSMTableBlocks.TableColumnType.Time)]),
+            });
+            Assert.True(table.IsOk, table.Error);
+
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            var commands = await PostAsync(host, "commands", $"[{Registration("table/ticks")},{Registration("table/new", "\"SensorType\":11")}]", _key);
+
+            Assert.Equal(HttpStatusCode.OK, commands.Status);
+            var errors = JsonNode.Parse(commands.Body).AsObject();
+            Assert.Contains("is a table sensor", (string)errors["table/ticks"]);
+            Assert.Contains("a table registration needs a schema", (string)errors["table/new"]);
+
+            var single = await PostAsync(host, "addOrUpdate", Registration("table/ticks"), _key);
+
+            Assert.Equal(HttpStatusCode.NotAcceptable, single.Status);
+            Assert.Contains("is a table sensor", single.Body);
+            Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, "table/ticks", out var sensor));
+            Assert.IsType<Core.Model.TableSensorModel>(sensor);
+            Assert.False(Registered("table/new"));
+        }
+
         // A list with a null element or with a command without a path is the request's
         // fault, the same on every repeat: the whole request is a 400 that says what is
         // wrong, and nothing of it is applied. Not a 500, which a collector would send
@@ -274,7 +309,7 @@ namespace HSMServer.Core.Tests.SensorApi
         {
             Assert.True(_valuesCache.TryGetKey(Guid.Parse(_key), out var key, out _));
 
-            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry());
+            var service = new SensorIngestionService(_valuesCache, new RecordingTelemetry(), HSMTableBlocks.TableBlockLimits.Default);
             var caller = new PublicApiRequestInfo { Product = null, Key = key, CollectorName = ClientName, RemoteIP = "127.0.0.1" };
             var registration = new AddOrUpdateSensorRequest { Path = "service/fault/registration", SensorType = SensorType.IntSensor };
 

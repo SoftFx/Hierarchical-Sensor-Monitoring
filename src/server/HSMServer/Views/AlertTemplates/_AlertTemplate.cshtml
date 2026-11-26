@@ -24,7 +24,8 @@
     byte sensorType;
 
     List<SelectListItem> sensorTypes = new List<SelectListItem>() { new SelectListItem("Any", DataAlertTemplateViewModel.AnyType.ToString(), true) };
-    sensorTypes.AddRange(Html.GetEnumSelectList<SensorType>());
+    // A table sensor has no alerts (#1844): no template targets it.
+    sensorTypes.AddRange(Html.GetEnumSelectList<SensorType>().Where(x => x.Value != ((int)SensorType.Table).ToString()));
 
     if (Model.Type >= 0)
     {

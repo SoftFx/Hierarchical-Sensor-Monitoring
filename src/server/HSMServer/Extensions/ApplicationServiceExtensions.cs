@@ -54,6 +54,13 @@ namespace HSMServer.ServiceExtensions
         private static readonly HashSet<Type> _asyncStorageTypes = [];
 
 
+        // The feed sensors of table sensors (#1847): values the server derives itself for sensors of a user's product,
+        // through the cache without an access key, given only to the server's own service, never to a controller. The
+        // adapter is not disposable, so the container disposes the cache once (under ITreeValuesCache).
+        public static IServiceCollection AddTableFeedSensors(this IServiceCollection services) =>
+            services.AddSingleton<HSMServer.Core.Cache.IServerSensorValues>(provider => new HSMServer.Core.Cache.ServerSensorValues(provider.GetRequiredService<ITreeValuesCache>()))
+                    .AddHostedService<BackgroundServices.TableFeedSensorsService>();
+
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
         {
             services.AddSingleton(config);
@@ -66,6 +73,20 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                     .AddSingleton<IJournalService, JournalService>()
                     .AddSingleton<HSMServer.Core.Journal.JournalAppender>();
+
+            // The put and read of table blocks (#1844), for the transport of step 3 (#1845). Constructed on first
+            // resolve; its constructor opens nothing (the store opens on the first put or read, and the first put raises
+            // the sequence floor), so a block store that cannot open costs table puts only.
+            // The same instance owns the hourly merge (#1850), run by TableMergeService.
+            services.AddSingleton(provider => new HSMServer.Core.TableSensors.TableBlockService(
+                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), config.TableSensors.ToOptions()));
+            services.AddSingleton<HSMServer.Core.TableSensors.ITableBlockService>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
+            // The chart of a table sensor (#1847), read by the web UI; and the count of table reads running at once, shared
+            // by the read route of the Sensor API and the web UI.
+            services.AddSingleton<HSMServer.Core.TableSensors.ITableChartReader>(provider => provider.GetRequiredService<HSMServer.Core.TableSensors.TableBlockService>());
+            services.AddSingleton(_ => new HSMServer.Core.TableSensors.TableReadGate(config.TableSensors.MaxConcurrentReads));
+
+            services.AddTableFeedSensors();
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
@@ -243,8 +264,12 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<UserTreeAccess>()
                     .AddSingleton<ISensorApiTelemetry, SensorApiTelemetry>()
                     .AddSingleton<TelemetryCollector>()
-                    .AddSingleton<SensorIngestionService>()
+                    // The table schema of a registration is checked against the configured limits (#1845).
+                    .AddSingleton(provider => new SensorIngestionService(provider.GetRequiredService<ITreeValuesCache>(),
+                        provider.GetRequiredService<ISensorApiTelemetry>(), config.TableSensors.ToOptions().Limits))
                     .AddSingleton<AgentDirectives>()
+                    .AddSingleton<TableReadService>()
+                    .AddSingleton<HSMServer.TablePages.TablePageService>()
                     .AddSingleton<CollectorSessionRegistry>()
                     .AddSingleton<CollectorSessionHandler>()
                     // The clock of the session's silence limit, replaceable in tests.
@@ -271,6 +296,7 @@ namespace HSMServer.ServiceExtensions
                     .AddHostedService<BackgroundServices.DatabaseServices.ApiTokenRetentionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistoryCompactionService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.HistorySealingService>()
+                    .AddHostedService<BackgroundServices.DatabaseServices.TableMergeService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>

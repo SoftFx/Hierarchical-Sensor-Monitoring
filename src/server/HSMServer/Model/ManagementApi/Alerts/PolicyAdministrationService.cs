@@ -798,7 +798,18 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var sensor = _cache.GetSensor(sensorId);
 
-            return sensor is null ? (null, NotFound()) : (sensor, null);
+            if (sensor is null)
+                return (null, NotFound());
+
+            // A table sensor has no alerts (#1844): no data or TTL policy is written on it.
+            if (sensor.Type is SensorType.Table)
+                return (null, new PolicyWriteFailure
+                {
+                    Outcome = PolicyWriteOutcome.Invalid,
+                    Errors = new Dictionary<string, string[]> { ["sensor"] = [$"Sensor '{sensor.FullPath}' is a table sensor: table sensors have no alerts."] },
+                });
+
+            return (sensor, null);
         }
 
         private (ProductModel Product, PolicyWriteFailure Failure) ResolveWritableProduct(Guid productId,

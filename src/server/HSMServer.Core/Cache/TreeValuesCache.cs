@@ -171,6 +171,9 @@ namespace HSMServer.Core.Cache
 
             _changeSetJournal = changeSetJournal;
 
+            OpenTableBlockStore = () => _database.TableBlocks?.EnsureOpened();
+            TableBlockSequence = () => _database.TableBlocks?.PeekNextSequence() ?? 0L;
+
             Initialize();
 
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
@@ -542,6 +545,64 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // Every table sensor in the subtree of a node.
+        private static List<TableSensorModel> TableSensorsIn(ProductModel node)
+        {
+            var tables = new List<TableSensorModel>();
+
+            void Visit(ProductModel n)
+            {
+                foreach (var (_, sensor) in n.Sensors)
+                    if (sensor is TableSensorModel table)
+                        tables.Add(table);
+
+                foreach (var (_, child) in n.SubProducts)
+                    Visit(child);
+            }
+
+            Visit(node);
+            return tables;
+        }
+
+        // Tells the batch store (#1850 part 4d) that the entities of marked table sensors and root products left the database:
+        // the merge job acts on a mark of this run only then (a crash in between would bring the entity back). In memory.
+        private void ConfirmTableRemoval(IReadOnlyCollection<Guid> sensors, IReadOnlyCollection<Guid> products)
+        {
+            if ((sensors.Count == 0 && products.Count == 0) || _database.TableBatches is not { } batches)
+                return;
+
+            try
+            {
+                // Only what the environment database no longer holds: its deletes are logged and swallowed when they fail,
+                // so a removal that "returned" may have left the entity, which comes back at the next start.
+                batches.ConfirmRemoved(sensors.Where(id => !_database.EntityExists(id)).ToList(), products.Where(id => !_database.EntityExists(id)).ToList());
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"The removal of the stored rows of table sensors and products could not be confirmed; it is made after the next restart: {ex.Message}");
+            }
+        }
+
+        // Records in the batch store (#1850 part 4d) that the stored rows of table sensors (with their root products,
+        // Guid.Empty when not known) and of root products are to be deleted, before the tree removes them. A record that
+        // cannot be written is logged and the removal goes on (it must not make anything come back): the rows are then
+        // kept, and the merge job reports them as orphan placements.
+        private void MarkTableRemoval(IReadOnlyCollection<(Guid Product, Guid Sensor)> sensors, IReadOnlyCollection<Guid> products)
+        {
+            if ((sensors.Count == 0 && products.Count == 0) || _database.TableBatches is not { } batches)
+                return;
+
+            try
+            {
+                batches.MarkRemoved(sensors, products);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"The removal of the stored rows of table sensors [{string.Join(", ", sensors.Select(s => s.Sensor))}] and products " +
+                                  $"[{string.Join(", ", products)}] could not be recorded; the removal goes on, their rows are kept and reported as orphan " +
+                                  $"table placements: {ex.Message}");
+            }
+        }
 
         public async Task RemoveProductAsync(Guid productId, InitiatorInfo initiator = null, CancellationToken token = default)
         {
@@ -562,6 +623,8 @@ namespace HSMServer.Core.Cache
             // purge would rescan and deserialize every change set once
             // per sensor of the deleted tree, under the journal-wide lock.
             List<Guid> purgedEntityIds = [];
+            // The sensors whose entities left the database (#1850 part 4d: their table removals are confirmed).
+            List<Guid> removedSensors = [];
 
             void RemoveProduct(Guid productId, InitiatorInfo initiator)
             {
@@ -572,7 +635,8 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(subProductId, initiator);
 
                 foreach (var (sensorId, _) in product.Sensors)
-                    RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds);
+                    if (RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds, tableMarked: true))
+                        removedSensors.Add(sensorId);
 
                 RemoveBaseNodeSubscription(product);
 
@@ -600,7 +664,23 @@ namespace HSMServer.Core.Cache
                             _productsByName.TryRemove(product.DisplayName, out _);
                     }
 
+                    // The stored table rows of the subtree (#1850 part 4d), recorded in one write before anything leaves the
+                    // tree: its table sensors, and a root product itself (its folder of batches and its blocks go whole; its
+                    // sensors' marks then go with it, and they stand alone when the product's own removal did not complete).
+                    // A root product is marked only when it has table sensors or the table store exists on disk (it may hold
+                    // rows of its table sensors removed before): a server that never had a table sensor writes no record, so
+                    // a product removal does not create the table store and the merge job does not open it.
+                    var root = product.IsRoot ? product.Id : product.Root?.Id ?? Guid.Empty;
+                    var tables = TableSensorsIn(product);
+                    Guid[] tableProducts = product.IsRoot && (tables.Count > 0 || _database.TableBlocks?.Exists == true) ? [product.Id] : [];
+                    MarkTableRemoval(tables.Select(t => (root, t.Id)).ToList(), tableProducts);
+
                     RemoveProduct(request.Id, request.InitiatorInfo);
+
+                    // Confirmed only for an entity the database no longer holds (a removal that failed stays unconfirmed:
+                    // the merge job deletes nothing for it in this run, and after a restart it acts by whether the entity
+                    // loaded).
+                    ConfirmTableRemoval(tables.Select(t => t.Id).Where(removedSensors.Contains).ToList(), tableProducts);
 
                     RemoveProductFromCache(product);
 
@@ -1084,6 +1164,19 @@ namespace HSMServer.Core.Cache
         // needs longer than this for one registration is not working. Settable for tests.
         internal TimeSpan ForwardedRegistrationWait { get; set; } = TimeSpan.FromSeconds(20);
 
+        // The sequence number the next reserved table block will get (#1844): a new table
+        // sensor records it as its FirstSequence, so blocks numbered before it existed (an
+        // earlier sensor of the same path) are never read as its rows. The block store of
+        // the database by default (set in the constructor); a test seam.
+        internal Func<long> TableBlockSequence { get; set; }
+
+        // Opens the block store before a table sensor is created (#1844), outside the tree-structure lock: the first open
+        // of a process loads the index and may rebuild it from every block, and nothing of that may hold up the other
+        // registrations of the server. Under the lock, TableBlockSequence then only reads the open store. A test seam.
+        internal Action OpenTableBlockStore { get; set; }
+
+        internal bool IsTreeStructureLockHeld => Monitor.IsEntered(_treeStructureLock);
+
         // The one place where a failed registration is sorted into a fault and a refusal
         // (#1756). The Sensor API answers a fault 500, on which a collector sends the
         // registration again, and a refusal as delivered, so only a failure that has a
@@ -1115,6 +1208,12 @@ namespace HSMServer.Core.Cache
 
             if (request.Fault is not null)
                 return TaskResult.FromFault(request.Fault);
+
+            // A refusal is not a fault: sending it again cannot change the answer, so it
+            // must not reach the caller as one (a fault is answered 500 and repeated by
+            // the collector every cycle).
+            if (request.Refusal is not null)
+                return TaskResult.FromError(request.Refusal);
 
             if (request.Forwarded is { } forwarded)
             {
@@ -1157,6 +1256,12 @@ namespace HSMServer.Core.Cache
 
             var update = request.Update;
 
+            if (!TryCheckTableRegistration(request, out error))
+            {
+                request.Refusal = error;
+                return false;
+            }
+
             if (!TryGetSensorFromCache(request.ProductId, request.Path, out var sensor))
             {
                 // A registration of the old path updates the moved sensor
@@ -1184,6 +1289,64 @@ namespace HSMServer.Core.Cache
             return TryUpdateSensor(update, checkStore: true, out error, out storeFailed);
         }
 
+        // Table sensors (ADR-0021, #1844). A table registration needs a schema, and on a path
+        // that already holds a table sensor the same schema (names and types, in order): a
+        // different shape is a different sensor. A path held by a sensor of another kind
+        // does not become a table, and a table path takes no registration of an explicit
+        // other type. Path only: an alias is never a table sensor's (they do not move), and
+        // a table registration on an alias of another sensor displaces it as any other
+        // explicit type does (ResolveAlias). A registration of a table sensor that carries
+        // what a table sensor cannot take (alerts, aggregation) is refused before anything
+        // is created: it would fail the same way on every repeat.
+        private bool TryCheckTableRegistration(SensorAddOrUpdateRequest request, out string error)
+        {
+            error = null;
+            TryGetSensorFromCache(request.ProductId, request.Path, out var existing);
+
+            if (request.Type is not SensorType.Table)
+            {
+                if (existing is TableSensorModel && request.TypeIsExplicit)
+                    error = $"Sensor '{request.Path}' is a table sensor: it cannot be registered as a {request.Type} sensor.";
+                else if (existing is TableSensorModel && request.Update is not null)
+                    error = RefuseTableUpdate(request.Path, request.Update);
+
+                return error is null;
+            }
+
+            if (request.Schema is null)
+                error = $"Table sensor '{request.Path}': a table registration needs a schema.";
+            else if (request.Update is not null && RefuseTableUpdate(request.Path, request.Update) is { } updateError)
+                error = updateError;
+            else if (existing is null)
+                return true;
+            else if (existing is not TableSensorModel table)
+                error = $"Sensor '{request.Path}' already exists as a {existing.Type} sensor: it cannot become a table sensor.";
+            else if (!table.Schema.SameAs(request.Schema))
+                error = $"Table sensor '{request.Path}' is registered with the schema {DescribeSchema(table.Schema)}; " +
+                        $"a registration with {DescribeSchema(request.Schema)} is refused: a different shape is a different sensor.";
+
+            return error is null;
+        }
+
+        private static string DescribeSchema(HSMTableBlocks.TableSchema schema) =>
+            $"({string.Join(", ", schema.Columns.Select(c => $"{c.Name} {c.Type}"))})";
+
+        // Updates a table sensor cannot take (#1844): alerts of any kind, TTL policies included
+        // (it has no values to judge), and aggregation of values. Null when the update is fine.
+        private static string RefuseForTableSensor(BaseSensorModel sensor, SensorUpdate update) =>
+            sensor is TableSensorModel ? RefuseTableUpdate(sensor.FullPath, update) : null;
+
+        private static string RefuseTableUpdate(string path, SensorUpdate update)
+        {
+            if (update.Policies is { Count: > 0 } || update.TTLPolicies is { Count: > 0 })
+                return $"Sensor '{path}' is a table sensor: {TableSensorPolicyCollection.NoAlertsError}";
+
+            if (update.AggregateValues is true)
+                return $"Sensor '{path}' is a table sensor: it has no values to aggregate.";
+
+            return null;
+        }
+
         // The write of a sensor's row on the registration path (#1756). The store's void
         // methods do not tell a write the storage engine failed on (it logs it and
         // returns), which is what every other caller of them relies on; a registration
@@ -1199,6 +1362,10 @@ namespace HSMServer.Core.Cache
         {
             if (!TryGetSensorById(update.Id, out var sensor))
                 return TaskResult.FromError($"Sensor {update.Id} was not found");
+
+            // Said to the caller here; the queue handler refuses the same update again (#1844).
+            if (RefuseForTableSensor(sensor, update) is { } tableError)
+                return TaskResult.FromError(tableError);
 
             return await ProcessRequestAsync(sensor.Root.Id, update);
         }
@@ -1231,6 +1398,13 @@ namespace HSMServer.Core.Cache
                 if (!TryGetSensorById(update.Id, out var sensor))
                 {
                     error = $"Sensor doesn't exist {update.Id}";
+                    return false;
+                }
+
+                if (RefuseForTableSensor(sensor, update) is { } tableError)
+                {
+                    error = tableError;
+                    policyFailures?.Add(new PolicyUpdateFailure(PolicyUpdateFailureKind.Rejected, tableError));
                     return false;
                 }
 
@@ -1285,6 +1459,9 @@ namespace HSMServer.Core.Cache
             if (!TryGetSensorById(masked.Id, out var sensor))
                 return TaskResult.FromError($"Sensor {masked.Id} was not found");
 
+            if (sensor is TableSensorModel)
+                return TaskResult.FromError($"Sensor '{sensor.FullPath}' is a table sensor: {TableSensorModel.NoValuesError}");
+
             return await ProcessRequestAsync(sensor.Root.Id, masked, token);
         }
 
@@ -1292,7 +1469,7 @@ namespace HSMServer.Core.Cache
         {
             try
             {
-                if (TryGetSensorById(request.Id, out var sensor))
+                if (TryGetSensorById(request.Id, out var sensor) && sensor is not TableSensorModel)
                 {
                     var lastValue = sensor.LastValue;
 
@@ -1382,8 +1559,11 @@ namespace HSMServer.Core.Cache
         // Returns false when the sensor's entity may still be in the database
         // (the removal threw before or inside the database step): a merge must
         // report that, the occupant would come back on restart (#1720 review).
+        //
+        // tableMarked: the caller recorded the removal of the sensor's stored table rows already (a product's removal
+        // records its whole subtree in one write).
         private bool RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
-            List<Guid> purgeIds = null)
+            List<Guid> purgeIds = null, bool tableMarked = false)
         {
             var removedFromDatabase = false;
 
@@ -1391,6 +1571,12 @@ namespace HSMServer.Core.Cache
             {
                 if (!TryGetSensorById(sensorId, out var sensor))
                     return true;
+
+                // Before the sensor leaves the tree (#1850 part 4d): the merge job deletes a table sensor's stored rows once
+                // it is gone, by this record. Written first, so a crash before the entity goes leaves a record of a sensor
+                // still in the tree, which the job clears without deleting anything.
+                if (sensor is TableSensorModel && !tableMarked)
+                    MarkTableRemoval([(sensor.Root?.Id ?? Guid.Empty, sensor.Id)], []);
 
                 RemoveSensorFromCache(sensor);
                 UnindexAliases(sensor);
@@ -1418,6 +1604,9 @@ namespace HSMServer.Core.Cache
 
                 _database.RemoveSensorWithMetadata(sensorId);
                 removedFromDatabase = true;
+
+                if (sensor is TableSensorModel && !tableMarked)
+                    ConfirmTableRemoval([sensor.Id], []);
 
                 // Inside a product deletion the sensor's id joins the
                 // subtree's single batch purge; a standalone sensor removal
@@ -1464,8 +1653,10 @@ namespace HSMServer.Core.Cache
             foreach (var (subProductId, _) in product.SubProducts)
                 await ClearNodeHistoryAsync(request with {Id = subProductId}, token);
 
-            foreach (var (sensorId, _) in product.Sensors)
-                await ClearSensorHistoryAsync(request with {Id = sensorId}, token);
+            // A table sensor's rows are not values (#1844): a node clear skips it.
+            foreach (var (sensorId, sensor) in product.Sensors)
+                if (sensor is not TableSensorModel)
+                    await ClearSensorHistoryAsync(request with {Id = sensorId}, token);
         }
 
         public async Task CheckSensorsHistoryAsync(CancellationToken token = default)
@@ -1502,6 +1693,13 @@ namespace HSMServer.Core.Cache
                 // the self-destroy sweep that runs right after silently skips them.
                 try
                 {
+                    // Per-sensor retention does not apply to a table sensor (#1844, #1850).
+                    if (sensor is TableSensorModel)
+                    {
+                        _logger.Debug($"Skipped [{sensor.Id}][{sensor.FullPath}]: a table sensor");
+                        continue;
+                    }
+
                     sensor.Initialize();
 
                     var from = sensor.From;
@@ -1529,19 +1727,34 @@ namespace HSMServer.Core.Cache
             _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}, failed {failed}");
         }
 
-        public async Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
+        public async Task<TaskResult> ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
         {
             if (!TryGetSensorById(request.Id, out var sensor))
-                return;
+                return TaskResult.FromError($"Sensor {request.Id} was not found");
 
-            await ProcessRequestAsync(sensor.Root.Id, request, token);
+            if (sensor is TableSensorModel)
+                return TaskResult.FromError(TableHistoryNotCleared(sensor));
+
+            return await ProcessRequestAsync(sensor.Root.Id, request, token);
         }
+
+        // The history of a table sensor is its rows in the block store (#1844), which neither a
+        // history clear nor the per-sensor retention reaches: retention is one period per
+        // product (#1850).
+        private static string TableHistoryNotCleared(BaseSensorModel sensor) =>
+            $"Sensor '{sensor.FullPath}' is a table sensor: clearing its history is not supported.";
 
         private void ClearSensorHistory(ClearHistoryRequest request)
         {
             if (!TryGetSensorById(request.Id, out var sensor))
             {
                 _logger.Info($"{nameof(ClearSensorHistory)} {request.Id} failed: sensor not found");
+                return;
+            }
+
+            if (sensor is TableSensorModel)
+            {
+                _logger.Debug($"{nameof(ClearSensorHistory)} {request.Id} skipped: {TableHistoryNotCleared(sensor)}");
                 return;
             }
 
@@ -2987,7 +3200,9 @@ namespace HSMServer.Core.Cache
 
                     foreach (var product in products)
                     {
-                        foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, product.Id))
+                        // A table sensor has no alerts (#1844): no template applies to it.
+                        foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, product.Id)
+                                     .Where(s => s is not TableSensorModel))
                         {
                             matchedSensors.Add(sensor);
                             pathMatched = true;
@@ -3423,6 +3638,9 @@ namespace HSMServer.Core.Cache
                 case AddSensorValuesRequest request:
                     AddNewSensorValues(request);
                     break;
+                case ServerSensorValuesRequest request:
+                    AddServerValues(request);
+                    break;
                 case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error, out var storeFailed):
                     _logger.Error(error);
 
@@ -3730,10 +3948,14 @@ namespace HSMServer.Core.Cache
 
         // The add half of TryAddNewSensorValue, shared with values that reach a
         // moved sensor through an alias of another product (AliasValueRequest).
-        private void AddValueToSensor(BaseSensorModel sensor, string path, BaseValue value)
+        // False when the sensor did not take the value (blocked, or rejected);
+        // only the server's own values (#1847) ask.
+        private bool AddValueToSensor(BaseSensorModel sensor, string path, BaseValue value)
         {
             if (sensor.State == SensorState.Blocked)
-                return;
+                return false;
+
+            var added = true;
 
             // The previous cached newest, captured before the add: a value that
             // lands on the SAME tick as it keeps only the last row in the
@@ -3757,9 +3979,12 @@ namespace HSMServer.Core.Cache
                 // rejected value is a sensor-level event, not a transport error,
                 // and clients treat response entries as such.
                 Interlocked.Increment(ref sensor.RejectedValues);
+                added = false;
             }
 
             SensorUpdateViewAndNotify(sensor);
+
+            return added;
         }
 
 
@@ -4081,7 +4306,15 @@ namespace HSMServer.Core.Cache
                                      $" parentExists={_tree.ContainsKey(productId)}," +
                                      $" REMOVE WILL BE APPLIED");
 
+                        // Its stored table rows (#1850 part 4d): its root product is not known, the merge job finds the
+                        // product that holds a placement of it.
+                        if (sensor is TableSensorModel)
+                            MarkTableRemoval([(Guid.Empty, sensor.Id)], []);
+
                         _database.RemoveSensorWithMetadata(Guid.Parse(entity.Id));
+
+                        if (sensor is TableSensorModel)
+                            ConfirmTableRemoval([sensor.Id], []);
 
                         ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
                     }
@@ -4170,10 +4403,13 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // A new node takes the author of the parent's first key; a parent without any key (all removed) gives no author
+        // (#1847) instead of failing the creation. Every new node gets the default key, as every node does at a start
+        // (ApplyAccessKeys).
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseUpdateRequest request)
         {
             var pathParts = request.PathParts;
-            var authorId =  parentProduct.AccessKeys.Values.FirstOrDefault().AuthorId;
+            var authorId = parentProduct.AccessKeys.Values.FirstOrDefault()?.AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -4263,6 +4499,23 @@ namespace HSMServer.Core.Cache
         {
             storeFailed = false;
 
+            // A table sensor reads the block store's next sequence under the lock below; the store is opened here, before
+            // it. A store that cannot open is a fault of the store, which a repeat can cure.
+            if (type is SensorType.Table)
+            {
+                try
+                {
+                    OpenTableBlockStore?.Invoke();
+                }
+                catch (HSMDatabase.AccessManager.TableBlocks.TableBlockStoreException ex)
+                {
+                    sensor = null;
+                    error = $"Table sensor '{request.Path}' was not created: {ex.Message}";
+                    storeFailed = true;
+                    return false;
+                }
+            }
+
             lock (_treeStructureLock)
             {
                 if (TryGetSensorFromCache(productId, request.Path, out sensor))
@@ -4277,7 +4530,10 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed)
+        // server (#1847): a sensor the server creates for itself in a user's product (a feed sensor), with its description
+        // and unit; null for every other creation.
+        private bool TryAddSensorUnderLock(BaseUpdateRequest request, SensorType type, Guid productId, DefaultAlertsOptions options, bool checkStore, out BaseSensorModel sensor, out string error, out bool storeFailed,
+            ServerSensorValue server = null)
         {
             sensor = null;
             error = string.Empty;
@@ -4293,6 +4549,25 @@ namespace HSMServer.Core.Cache
                     return false;
                 }
 
+                // A table sensor (#1844) is created with its schema and the first block
+                // sequence its rows may come from: the sequence the next reserved block will
+                // get, read before the sensor can be seen (see TableBlockService, "a sensor
+                // created during a put"). Reading it opens the block store; a store that
+                // cannot open is a fault of the store, which a repeat can cure.
+                TableSensorEntity table = null;
+                if (type is SensorType.Table)
+                {
+                    if (request is not SensorAddOrUpdateRequest { Schema: { } schema })
+                    {
+                        error = $"Table sensor '{request.Path}': a table sensor needs a schema.";
+                        return false;
+                    }
+
+                    storing = true;
+                    table = TableSensorModel.ToEntity(schema, TableBlockSequence());
+                    storing = false;
+                }
+
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
 
                 var sensorName = request.SensorName;
@@ -4304,12 +4579,16 @@ namespace HSMServer.Core.Cache
                     Type = (byte) type,
                     DisplayUnit = 0,
                     CreationDate = DateTime.UtcNow.Ticks,
+                    Table = table,
+                    Description = server?.Description,
+                    OriginalUnit = (int?)server?.Unit,
                 };
 
                 sensor = SensorModelFactory.Build(entity, _database, _alertScheduleProvider);
                 parentProduct.AddSensor(sensor);
 
-                if (!sensor.Settings.TTL.IsSet)
+                // A table sensor has no alerts: it does not inherit the parent's TTL policies.
+                if (!sensor.Settings.TTL.IsSet && type is not SensorType.Table)
                     foreach (var parentTtl in parentProduct.Policies.TTLPolicies)
                     {
                         var childTtl = new TTLPolicy();
@@ -4342,7 +4621,7 @@ namespace HSMServer.Core.Cache
                 AddSensor(sensor, product);
                 UpdateProduct(parentProduct);
 
-                _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.System)
+                _journalService.AddRecord(new JournalRecordModel(sensor.Id, server is null ? InitiatorInfo.System : InitiatorInfo.AsSystemInfo(server.Initiator))
                 {
                     PropertyName = "sensor",
                     NewValue = sensor.FullPath,

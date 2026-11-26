@@ -122,6 +122,10 @@ pub struct DockerSource<'c, E: EngineApi> {
     cpu: CpuTracker,
     log_once: LogOnce,
     origin: Instant,
+    /// Tests only: the source's monotonic time, frozen at this offset from `origin` and moved on by
+    /// the test, so the interval between two stats rounds is exactly what the test sets.
+    #[cfg(test)]
+    frozen_elapsed: Option<Duration>,
     /// When the next state poll is due (the first tick polls).
     next_poll: Instant,
     /// While the daemon is unreachable: no call before this.
@@ -238,6 +242,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             cpu: CpuTracker::default(),
             log_once: LogOnce::default(),
             origin: Instant::now(),
+            #[cfg(test)]
+            frozen_elapsed: None,
             next_poll: Instant::now(),
             unavailable_until: None,
             backoff: config.sample_period(),
@@ -253,6 +259,17 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             pressure: PressureTracker::default(),
             oom_kills: OomKillTracker::default(),
         }
+    }
+
+    /// The source's monotonic time, since `origin`: the clock of the CPU and pressure intervals.
+    fn elapsed(&self) -> Duration {
+        #[cfg(test)]
+        {
+            if let Some(at) = self.frozen_elapsed {
+                return at;
+            }
+        }
+        self.origin.elapsed()
     }
 
     /// One scheduled tick: the state poll when it is due, then a stats round. An unreachable daemon
@@ -989,7 +1006,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 }
                 // Stamped per container, when its counters arrived: a slow call for one container
                 // must not skew the interval of the next.
-                let at = self.origin.elapsed();
+                let at = self.elapsed();
                 let running = match CpuCounters::from_stats(&stats, at) {
                     Some(counters) => {
                         any_counters = true;
@@ -1684,7 +1701,18 @@ pub(crate) mod tests {
             Some(DEMO_MEM_TOTAL),
         );
         source.should_stop = || false;
+        // Its monotonic time stands still until a test moves it on: an interval between two rounds
+        // is what the test sets, not that plus however long the test took.
+        source.frozen_elapsed = Some(Duration::ZERO);
         source
+    }
+
+    /// Moves the frozen monotonic time of a demo source on by `by`.
+    fn advance_monotonic(source: &mut DockerSource<'_, FixtureEngine>, by: Duration) {
+        let at = source
+            .frozen_elapsed
+            .expect("a demo source runs on a frozen monotonic time");
+        source.frozen_elapsed = Some(at + by);
     }
 
     const DEMO_MEM_TOTAL: u64 = 16_298_872 * 1024;
@@ -1729,10 +1757,7 @@ pub(crate) mod tests {
         // One default sample period on the source's monotonic clock, so the CPU interval check
         // passes. The captures are really 5.3 s apart, but the percent is the ratio of the two
         // counters' deltas, whatever the interval.
-        source.origin = source
-            .origin
-            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
-            .expect("monotonic clock past one sample period");
+        advance_monotonic(&mut source, contract::DEFAULT_SAMPLE_PERIOD);
         source
             .sample_stats(&quiet(), &never)
             .expect("second stats round");
@@ -2254,10 +2279,7 @@ pub(crate) mod tests {
                     }
                 }
             }
-            source.origin = source
-                .origin
-                .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
-                .expect("clock");
+            advance_monotonic(source, contract::DEFAULT_SAMPLE_PERIOD);
             source
                 .sample_stats(&quiet(), &|| false)
                 .expect("third round");
@@ -2874,10 +2896,7 @@ pub(crate) mod tests {
         set_clock(at_ms + apart_ms);
         source.engine.round = 1;
         cgroup::tests::demo_cgroups(cgroups, "cgroup", 1);
-        source.origin = source
-            .origin
-            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
-            .expect("monotonic clock past one sample period");
+        advance_monotonic(source, contract::DEFAULT_SAMPLE_PERIOD);
         source.sample_stats(logger, &never).expect("round 1");
     }
 
@@ -2915,10 +2934,7 @@ pub(crate) mod tests {
         set_clock(H13 + 11 * 60_000);
         source.engine.round = 1;
         cgroup::tests::demo_cgroups(&cgroups, "cgroup", 1);
-        source.origin = source
-            .origin
-            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
-            .expect("clock");
+        advance_monotonic(&mut source, contract::DEFAULT_SAMPLE_PERIOD);
         source.sample_stats(&logger, &|| false).expect("round 1");
         collector.stop().expect("stop");
         let lines = lines.lock().unwrap();
@@ -2988,10 +3004,7 @@ pub(crate) mod tests {
             &format!("{dir}/memory.pressure"),
             "some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n",
         );
-        source.origin = source
-            .origin
-            .checked_sub(contract::DEFAULT_SAMPLE_PERIOD)
-            .unwrap();
+        advance_monotonic(&mut source, contract::DEFAULT_SAMPLE_PERIOD);
         source.sample_stats(&logger, &|| false).expect("round 2");
         collector.stop().expect("stop");
         let line = round_line(&lines.lock().unwrap(), "Docker/gitsrv/db");

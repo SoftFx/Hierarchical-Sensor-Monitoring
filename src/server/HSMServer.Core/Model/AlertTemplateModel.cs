@@ -166,6 +166,10 @@ namespace HSMServer.Core.Model
             if (_pathConverters.Count == 0)
                 return false;
 
+            // A table sensor has no alerts (#1844): no template matches it, "any type" included.
+            if (type is HSMCommon.Model.SensorType.Table)
+                return false;
+
             if (!_pathConverters.Any(c => c.IsMatch(fullPath)))
                 return false;
 

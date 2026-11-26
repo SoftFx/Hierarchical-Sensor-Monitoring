@@ -100,10 +100,12 @@ Available at `https://{server}/api/swagger` (the single port serves every surfac
 | Server controllers | `src/server/HSMServer/Controllers` | Keep request/response docs aligned. |
 | Collector public API | `src/collector/HSMDataCollector/PublicAPI`, `Core/IDataCollector.cs`, `Core/DataCollector.cs`, and `Options` | Breaking changes affect integrators. |
 | C++ wrapper headers | `src/wrapper/include` | Keep parity with collector public API. |
+| Table block format | `src/api/HSMTableBlocks` | Byte format shared by collectors, server and clients; versioned, golden blocks. |
 
 ## Feature Folders
 
 - [`wire-contract/`](./wire-contract/feature.md) — the frozen collector↔server wire contract (enums, DTOs, JSON conventions, endpoints).
+- [`table-block/`](./table-block/feature.md) — the table block: what a collector sends for table sensors (ADR-0021); byte layout, limits, error codes, versioning, and what a writer in another language must do.
 - [`alert-administration/`](./alert-administration/feature.md) — the `/api/v1` REST surface for administering alerts (#1500): data-policy and TTL-policy CRUD on sensors and products, bearer-token authenticated.
 
 To add as work lands (from `../_TEMPLATE_feature.md`):

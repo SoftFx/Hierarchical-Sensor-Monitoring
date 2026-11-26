@@ -2,6 +2,7 @@ using HSMCommon.TaskResult;
 using HSMServer.Controllers;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableSensors;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.SensorApi;
@@ -283,6 +284,10 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public Uri SessionUri { get; }
 
+        // The block service the table connections put into (#1845): the one the test handed in,
+        // or a mock that no test of the ordinary session reaches.
+        public ITableBlockService Tables => _app.Services.GetRequiredService<ITableBlockService>();
+
 
         private SensorApiTestHost(WebApplication app, RecordingTelemetry telemetry, RecordingLog log)
         {
@@ -299,13 +304,19 @@ namespace HSMServer.Core.Tests.SensorApi
 
         // `agent` and `webRoot` are for the agent directives (#1660 step 5): the auto-update
         // setting and the folder whose agent/version.txt names the staged agent.
-        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null)
+        // `tables` and `tableSensors` are for the table connection (#1845): the block service its
+        // blocks are put into, and the section with MaxConcurrentPuts and the block limits. The
+        // ingestion checks a table registration against those limits, as in production (one
+        // source); the defaults when none is given.
+        public static async Task<SensorApiTestHost> StartAsync(ITreeValuesCache cache, CollectorSessionsConfig sessions, AgentConfig agent = null, string webRoot = null,
+            ITableBlockService tables = null, TableSensorsConfig tableSensors = null)
         {
             var telemetry = new RecordingTelemetry();
 
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.CollectorSessions).Returns(sessions);
             config.SetupGet(c => c.Agent).Returns(agent ?? new AgentConfig());
+            config.SetupGet(c => c.TableSensors).Returns(tableSensors ?? new TableSensorsConfig());
 
             var builder = webRoot is null ? WebApplication.CreateBuilder() : WebApplication.CreateBuilder(new WebApplicationOptions { WebRootPath = webRoot });
 
@@ -316,10 +327,13 @@ namespace HSMServer.Core.Tests.SensorApi
             builder.Services.AddSingleton<ISensorApiTelemetry>(telemetry);
             builder.Services.AddSingleton(config.Object);
             builder.Services.AddSingleton<TelemetryCollector>();
-            builder.Services.AddSingleton<SensorIngestionService>();
+            builder.Services.AddSingleton(provider => new SensorIngestionService(provider.GetRequiredService<ITreeValuesCache>(),
+                provider.GetRequiredService<ISensorApiTelemetry>(), config.Object.TableSensors.ToOptions().Limits));
             builder.Services.AddSingleton<AgentDirectives>();
+            builder.Services.AddSingleton<TableReadService>();
             builder.Services.AddSingleton<CollectorSessionRegistry>();
             builder.Services.AddSingleton<CollectorSessionHandler>();
+            builder.Services.AddSingleton(tables ?? new Mock<ITableBlockService>(MockBehavior.Strict).Object);
             builder.Services.AddSingleton<TimeProvider>(new ManualTimeProvider());
 
             builder.Services.AddControllers()

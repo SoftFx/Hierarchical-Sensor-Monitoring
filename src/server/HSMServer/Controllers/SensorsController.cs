@@ -50,11 +50,13 @@ namespace HSMServer.Controllers
         private readonly TelemetryCollector _telemetry;
         private readonly ITreeValuesCache _cache;
         private readonly AgentDirectives _directives;
+        private readonly TableReadService _tableReads;
 
 
         public SensorsController(SensorIngestionService ingestion, CollectorSessionHandler sessions, ITreeValuesCache cache,
-            TelemetryCollector telemetry, AgentDirectives directives)
+            TelemetryCollector telemetry, AgentDirectives directives, TableReadService tableReads)
         {
+            _tableReads = tableReads;
             _telemetry = telemetry;
             _ingestion = ingestion;
             _sessions = sessions;
@@ -337,6 +339,21 @@ namespace HSMServer.Controllers
                 return BadRequest(request);
             }
         }
+
+        /// <summary>
+        /// The rows of a table sensor in [From, To) (#1845): JSON, CSV or a sequence of table blocks, cut at a row limit
+        /// and at a time boundary. The headers X-Hsm-Row-Count, X-Hsm-Truncated, X-Hsm-Next-From (where the next page
+        /// starts) and X-Hsm-Blocks-Failed describe the answer. The contract: aicontext/features/api/wire-contract/feature.md.
+        /// </summary>
+        [HttpPost("tableHistory")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+        [TypeFilter<ReadDataKeyPermissionFilter>]
+        public Task<IActionResult> TableHistory([FromBody] TableHistoryRequest request) => _tableReads.ReadAsync(HttpContext, request);
 
         /// <summary>
         /// Get file (csv or txt) history [from, to] or [from - count] for some sensor

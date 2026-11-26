@@ -16,6 +16,7 @@ namespace HSMDatabase.Settings
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
         private const string DefaultServerLayoutDatabaseName = "ServerLayout";
         private const string DefaultChangeSetsDatabaseName = "ChangeSets";
+        private const string DefaultTableBlocksFolderName = "Tables";
 
         private const string DefaultExportFolder = "Export";
 
@@ -40,5 +41,7 @@ namespace HSMDatabase.Settings
         public string ServerLayoutDatabaseName { get; init; } = DefaultServerLayoutDatabaseName;
 
         public string ChangeSetsDatabaseName { get; init; } = DefaultChangeSetsDatabaseName;
+
+        public string TableBlocksFolderName { get; init; } = DefaultTableBlocksFolderName;
     }
 }

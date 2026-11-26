@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace HSMDatabase.SealedHistory.Format
@@ -161,6 +162,71 @@ namespace HSMDatabase.SealedHistory.Format
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Writes the column in decimal mode with the given exponent and mantissas (as found by
+        /// <see cref="TryFindDecimalExponent"/>), the mantissas as varints of their first difference, or as one constant
+        /// when they are all equal. The bytes are the decimal mode of the layout above, so <see cref="Read"/> decodes
+        /// them. Used by the batch codec of table sensors (#1850) only; the sealed chunk encoder keeps calling
+        /// <see cref="Write"/>.
+        /// </summary>
+        internal static void WriteDecimal(ByteSink sink, ReadOnlySpan<long> mantissas, int exponent)
+        {
+            if (mantissas.Length == 0)
+                throw new InvalidOperationException("A double column holds at least one value.");
+            if (exponent < 0 || exponent > MaxDecimalExponent)
+                throw new ArgumentOutOfRangeException(nameof(exponent));
+
+            sink.WriteByte(ModeDecimal);
+            sink.WriteByte((byte)exponent);
+
+            if (IntColumn.IsConstant(mantissas))
+                IntColumn.Write(sink, mantissas);
+            else
+                IntColumn.WriteVarint(sink, mantissas, IntColumn.OrderDelta);
+        }
+
+        /// <summary>
+        /// Finds the smallest e in 0..15 such that every value but at most <paramref name="maxExceptions"/> equals
+        /// <c>(double)m / 10^e</c> bit for bit for an integer m with |m| &lt;= 2^53 (the check of
+        /// <see cref="TryFindDecimalExponent"/>), and fewer values than the column holds are left out. The indices of
+        /// the values left out go to <paramref name="exceptions"/>, ascending. False, with the list empty, when no
+        /// exponent qualifies. For the batch codec of table sensors (#1850).
+        /// </summary>
+        internal static bool TryFindDecimalExponent(ReadOnlySpan<ulong> bits, int maxExceptions, List<int> exceptions, out int exponent)
+        {
+            for (exponent = 0; exponent <= MaxDecimalExponent; exponent++)
+            {
+                exceptions.Clear();
+                double scale = PowersOfTen[exponent];
+
+                for (int i = 0; i < bits.Length && exceptions.Count <= maxExceptions; i++)
+                {
+                    if (!Fits(bits[i], scale))
+                        exceptions.Add(i);
+                }
+
+                if (exceptions.Count <= maxExceptions && exceptions.Count < bits.Length)
+                    return true;
+            }
+
+            exceptions.Clear();
+            exponent = -1;
+            return false;
+        }
+
+        private static bool Fits(ulong bits, double scale)
+        {
+            double value = BitConverter.Int64BitsToDouble((long)bits);
+            if (!double.IsFinite(value))
+                return false;
+
+            double scaled = Math.Round(value * scale);
+            if (Math.Abs(scaled) > MaxExactInteger)
+                return false;
+
+            return (ulong)BitConverter.DoubleToInt64Bits((long)scaled / scale) == bits;
         }
 
         private static void WriteXorBytes(ByteSink sink, ReadOnlySpan<ulong> bits)

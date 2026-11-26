@@ -131,7 +131,8 @@ namespace HSMServer.Core.Cache
         Task<bool> RemoveSensorAliasAsync(Guid sensorId, Guid productId, string path,
             InitiatorInfo initiator = null, CancellationToken token = default);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
-        Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
+        /// <summary>Clears a sensor's history; an error for a table sensor, whose rows are not values (#1844).</summary>
+        Task<TaskResult> ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
         Task CheckSensorsHistoryAsync(CancellationToken token = default);
         Task ClearNodeHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
 

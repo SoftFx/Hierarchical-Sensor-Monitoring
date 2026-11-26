@@ -26,6 +26,7 @@ public sealed class RestoreTempCleanupServiceTests
         public string ServerLayoutDatabaseName { get; init; }
 
         public string ChangeSetsDatabaseName { get; init; } = "ChangeSets";
+        public string TableBlocksFolderName { get; init; } = "Tables";
         public string EnvironmentDatabaseName { get; init; }
         public string SnaphotsDatabaseName { get; init; }
         public string PathToServerLayoutDb { get; init; }

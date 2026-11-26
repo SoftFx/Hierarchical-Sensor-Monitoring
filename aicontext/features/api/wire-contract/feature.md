@@ -1,6 +1,6 @@
 # Feature: Sensor API Wire Contract
 
-> Owner: shared | Last reviewed: 2026-11-10 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-11-24 | Canonical: yes
 > Scope: API - the frozen wire contract between collectors (any language) and HSMServer: enums, DTOs, JSON conventions, endpoints
 
 ---
@@ -11,7 +11,9 @@ Everything in this file is **byte-for-byte compatibility-critical**: the .NET co
 
 ## Enums (numeric values are the contract)
 
-`SensorType` (`SensorType.cs`): BooleanSensor=0, IntSensor=1, DoubleSensor=2, StringSensor=3, IntegerBarSensor=4, DoubleBarSensor=5, FileSensor=6, TimeSpanSensor=7, VersionSensor=8, RateSensor=9, EnumSensor=10.
+`SensorType` (`SensorType.cs`): BooleanSensor=0, IntSensor=1, DoubleSensor=2, StringSensor=3, IntegerBarSensor=4, DoubleBarSensor=5, FileSensor=6, TimeSpanSensor=7, VersionSensor=8, RateSensor=9, EnumSensor=10, TableSensor=11 (#1845: registration only; a table sensor takes no values, see "Table sensor registration" below).
+
+`TableColumnType` (`SensorRequests/AddOrUpdateSensor/TableColumnRequest.cs`, #1845): Time=1, Int64=2, Double=3, the numbers of the table block format.
 
 `SensorStatus` (`SensorStatus.cs`): OffTime=0, Ok=1 (default), Warning=2, Error=3.
 
@@ -98,9 +100,31 @@ differ by exactly that one member (pinned by `WireFormatGoldenLockTests` ↔ `Na
 
 ## Registration / command DTOs
 
-`AddOrUpdateSensorRequest` (`SensorRequests/AddOrUpdateSensor/`): `path`, `sensorType?`, `description`, `keepHistory?`/`selfDestroy?`/TTLs (ticks), `statistics?`, `isSingletonSensor?`, `aggregateData?`, `enableGrafana?`, `originalUnit?`, `displayUnit?`, `isForceUpdate`, `enumOptions` (`EnumOption { key:int, value:string, description:string, color:int(ARGB) }`), `alerts` / `ttlAlerts` (`AlertUpdateRequest { conditions[{combination, operation, property, target{type,value}}], status, template, icon, isDisabled, confirmationPeriod?, scheduledNotificationTime?, scheduledRepeatMode?, scheduledInstantSend? }`), `defaultAlertsOptions`, `previousPaths` (`string[]?`, #1724 — full product-relative paths the sensor was registered under before; the server moves the sensor found there to `path`, merging into one already there, see `features/server/sensor-move/feature.md`). Obsolete compat properties: `TTL`, `TtlAlert`, `DefaultChats`.
+`AddOrUpdateSensorRequest` (`SensorRequests/AddOrUpdateSensor/`): `path`, `sensorType?`, `description`, `keepHistory?`/`selfDestroy?`/TTLs (ticks), `statistics?`, `isSingletonSensor?`, `aggregateData?`, `enableGrafana?`, `originalUnit?`, `displayUnit?`, `isForceUpdate`, `enumOptions` (`EnumOption { key:int, value:string, description:string, color:int(ARGB) }`), `alerts` / `ttlAlerts` (`AlertUpdateRequest { conditions[{combination, operation, property, target{type,value}}], status, template, icon, isDisabled, confirmationPeriod?, scheduledNotificationTime?, scheduledRepeatMode?, scheduledInstantSend? }`), `defaultAlertsOptions`, `previousPaths` (`string[]?`, #1724 — full product-relative paths the sensor was registered under before; the server moves the sensor found there to `path`, merging into one already there, see `features/server/sensor-move/feature.md`), `tableColumns` (#1845, `List<TableColumnRequest>?`, the schema of a table sensor; see "Table sensor registration" below). Obsolete compat properties: `TTL`, `TtlAlert`, `DefaultChats`.
 
 `previousPaths` is the one member **omitted when unused** instead of serialized as `null`: both collectors leave it out of the wire when the list is null/empty (managed: `JsonRequestConverter` drops a null `PreviousPaths`; native: `BuildPreviousPathsMember` renders nothing), so a registration without previous paths is byte-identical to the pre-#1724 wire. When present it sits right after `EnumOptions` (the DTO declaration order). An older server ignores the member (System.Text.Json skips unknown properties), so a new collector against an old server simply registers the new path.
+
+### Table sensor registration (#1845)
+
+A table sensor (ADR-0021, `aicontext/features/server/table-sensors/feature.md`) is registered like any sensor, on `commands` (HTTP or the session's `commands` op) or `addOrUpdate`, with `SensorType` 11 and its schema in `TableColumns` (`List<TableColumnRequest>`, `TableColumnRequest { Name: string, Type: TableColumnType }`): the columns in order, the first of which is the time. The schema id is never sent: both sides compute it from the columns (`aicontext/features/api/table-block/feature.md`, "Table schema").
+
+```
+{"Type":0,"Alerts":null,"TtlAlerts":null,"TtlAlert":null,"SensorType":11,"Description":null,"DefaultChats":null,"KeepHistory":null,"SelfDestroy":null,"TTLs":null,"TTL":null,"Statistics":null,"IsSingletonSensor":null,"AggregateData":null,"EnableGrafana":null,"OriginalUnit":null,"DisplayUnit":null,"DefaultAlertsOptions":0,"IsForceUpdate":false,"EnumOptions":null,"TableColumns":[{"Name":"time","Type":1},{"Name":"bid","Type":3},{"Name":"volume","Type":2}],"Key":null,"Path":"quotes/EURUSD"}
+```
+
+- **`TableColumns` is omitted when unused**, like `previousPaths`: the managed collector's `JsonRequestConverter` drops a null member, so every registration without it is byte-identical to the wire before #1845 (pinned by the unchanged goldens of `WireFormatGoldenLockTests`; the table golden is `Registration_of_a_table_sensor_carries_its_columns_after_previous_paths`). When present it sits right after `PreviousPaths` (the DTO declaration order). The native collector writes the same bytes since 0.15.1 (#1848 part 4; pinned by `native_table_block_after_hello_and_probe`).
+- **`KeepHistory`** is the table sensor's retention, as for any sensor (owner decision of 2026-11-24): stored with the sensor; it is applied in whole weeks by #1850. The other settings a table sensor cannot take (alerts, TTL alerts, aggregation) are refused (table-sensors feature, "Registration rules").
+- **Refusals** (answered as every refusal of a registration: an error under the path in a `200` on `commands` and in the session's ack, `406` with the text on `addOrUpdate`; never a fault), each text starting `The table sensor registration is refused: `:
+  - `TableColumns` on a registration that is not of type 11 (also one without a type): `only a registration of a table sensor (SensorType 11) carries table columns`;
+  - a schema that breaks the rules: `its table schema is invalid: <the rule>`, e.g. no column, a first column that is not the time, a column type that is not 1, 2 or 3 (`column 1 has the unknown type 7`), a `null` column, a name that is empty, too long or used twice, more columns than `TableSensors.MaxColumnsPerTable` (64 by default);
+  - **a path not in normalized form**: a block names its tables by the registered path byte for byte, and the server stores a path normalized (no leading separator, no empty segments, no spaces around segments), so a table sensor is registered only under that form: `a table sensor is registered under its normalized path "a/b", and blocks name it so; this registration names "/a/b"`. A collector sends the normalized path, in registrations and in blocks.
+  - **a path longer in UTF-8 than `TableSensors.MaxTableIdLength`** (1,024 bytes by default): a block names its table by that path and the block format refuses a longer identifier, so no row could ever reach it: `blocks name a table sensor by its path in UTF-8, at most 1024 bytes, this one has 1025`. Bytes, not characters.
+  - A registration refused for any of these reasons **moves nothing**: in a `commands` batch or a session batch the move pre-pass (`PreviousPaths`, #1724) knows them too.
+  - type 11 without `TableColumns`, another schema on a path that holds a table sensor, a path held by a sensor of another kind: the cache's refusals (table-sensors feature).
+- **Against an older server** (verified by running `TableRegistrationWireTests` before the server change): type 11 is a value its converter does not know, so the registration is refused under its path, `The registration cannot be converted: it carries a value this server does not know …` in a `200` (`406` on `addOrUpdate`), and the rest of the package is applied; `TableColumns` is an unknown member and is ignored. A server before #1749 answers a `commands` batch with such a registration `400` as a whole, which a collector takes as final for the whole package: **a collector sends its table registrations in a `commands` request of their own**, never together with the registrations of other sensors.
+- An older collector never sends type 11 or `TableColumns`; nothing changes for it.
+
+`TableHistoryRequest` (`HistoryRequests/TableHistoryRequest.cs`, #1845): `Path`, `From`, `To`, `MaxRows?`, `Format` (`TableHistoryFormat`: Json=0, Csv=1, Blocks=2, a number), `MaxBlockFormatVersion?`. See "Table history".
 
 History DTOs (`HistoryRequests/`): `HistoryRequest { path, from, to?, count?, options }`, `FileHistoryRequest { +fileName="temp", extension="csv", isZipArchive }` — used by server tooling; the collector itself does not query history.
 
@@ -133,6 +157,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `addOrUpdate` | `AddOrUpdateSensorRequest` (statuses below) |
 | `testConnection` | — ; the dual-purpose pre-flight, decided by the `Key` header: a KEYLESS call is the liveness probe the Docker healthcheck, docker-compose and CI rely on — a constant 200, nothing more (#1678 review: answering 406 there marked every deployed container unhealthy and kept Caddy from starting); a KEYED call is the auth check — an unusable key (expired/blocked, or without send permission) answers the key's own 406 reason (#1649/#1678), and only a usable send key answers 200. The 200s carry the header `X-Hsm-Server: 1`, which identifies an HSM server — the HSM Agent's retired-port check relies on it (#1655) |
 | `session` (GET, WebSocket upgrade) | collector session, see below |
+| `tableHistory` | `TableHistoryRequest`: the rows of a table sensor (#1845), see "Table history" below |
 
 ### Statuses of the registration routes (#1749)
 
@@ -194,7 +219,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 | either | `op` = `ping` / `pong` | heartbeat; no `id` |
 
 ```json
-{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30}}
+{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"sessionId":"20e46170c0a84f6e9b0d6a1f3c2e5b77"}}
 
 {"id":17,"op":"list","body":[{"Type":1,"Value":42,"Comment":null,"Time":"2026-11-10T10:00:00Z","Status":1,"Key":null,"Path":"p/int"}]}
 {"ack":17,"status":200,"body":{}}
@@ -211,7 +236,7 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 {"op":"directive","body":"sensor-disable:network"}
 ```
 
-- **`hello`** is the first frame the server sends.
+- **`hello`** is the first frame the server sends. Its `sessionId` (32 hex digits, #1845) is what a table connection of the same collector names in `X-Hsm-Session` (below); a collector without table sensors ignores it.
 - **`directive`** (#1660 step 5) is a push: one server directive, its `body` the text of one `X-Hsm-Directive` header line (`name:argument` or a bare name). The server pushes directives only to a session whose upgrade stated `X-Agent-Version`, as it puts the headers only on the answers to such a client. The set is the one the headers carry (`update-available:<staged>` when auto-update is on and the staged agent is newer, then `sensor-enable:` / `sensor-disable:` for `computer`, `system`, `disk`, `network`, `module`, `process`), in that order; it is pushed whole right after the `hello`, a directive again when it is not in the set of the previous check (every 15 s), and whole again every 5 minutes. A collector hands each directive, in order, to what takes a header directive (managed: the internal `ServerDirectives`; native: the host callback, as verb and payload split at the first `:`). A `directive` whose `body` is not a string, or is empty or whitespace only, carries nothing and is ignored by both collectors, on the header path as well (whitespace as .NET's `char.IsWhiteSpace` counts it). `maxFrameBytes` is the largest frame it accepts; `heartbeatSeconds` is the heartbeat interval.
 - **Request ops**: `list` and `commands`. The `body` is **exactly the JSON the collector would have sent as the HTTP body of the route of the same name**, read by the server with the same options. The typed single-value routes have no op and need none, as both collectors batch. **A file value is an element of a `list` frame** (#1660 step 2b): the `/list` batch takes a `FileSensorValue` (`"Type":6`, `Value` the numeric array of `List<byte>`) as it takes any other value, and the server stores it as `/file` would. There is no `file` op. A collector must split a batch so that every frame fits `maxFrameBytes` (a requirement on the collectors that use the session; both collectors split `list` and `commands` batches), and an element that cannot fit on its own has no way through: both collectors drop such a value, a file included, report it and count it in `Queue overflow`. A byte of a file is up to four bytes of JSON, so the default limit of 4 MiB carries a file of about 1 MiB; larger files need `CollectorSessions.MaxFrameBytes` raised on the server (up to 64 MiB, enough for the 10 MiB the collectors accept by default). One thing has no way through a session: an element larger than any frame the server allows.
 - **`status` is the HTTP status the same request would have got** on that route. A body the server cannot parse — an unknown, missing or non-numeric `Type` discriminator above all — is `400` on both transports for `list` (#1672): `"malformed body"` on the session, a `400` problem-details answer naming the position in the body on HTTP. A `commands` body the server cannot parse is `400` on both (#1749), and so is a `commands` list with a `null` element or with a command without a `Path` (`"malformed body"` on the session): nothing of it is applied.
@@ -226,6 +251,84 @@ A collector either uses the session or the HTTP routes, by its own setting; the 
 - **What the collector expects of the server's frames.** A collector waits for an ack as long as it waits for an HTTP response (`RequestTimeout`, 30 s by default) and then closes the session, so a server that takes longer than that to store a batch loses the session as it would lose the HTTP request. The managed collector accepts frames of up to 8 MiB from the server (the native bound) and ends the session on a larger one.
 
 Server behaviour, settings and tests: `aicontext/features/server/collector-session/feature.md`.
+
+### Table connection (#1845, ADR-0021 point 7)
+
+A collector with table sensors sends their rows as blocks (`aicontext/features/api/table-block/feature.md`) on a **second WebSocket of the same session protocol**, used only for blocks, so that a large block never waits ahead of a value or a command. Table sensors need the session transport: there is no HTTP route for sending blocks.
+
+**Handshake.** `GET {base}session` with `Sec-WebSocket-Protocol: hsm.tables.v1` (echoed), the same `Key` / `ClientName` (and optional `X-Collector-Kind` / `X-Collector-Version`) headers, and `X-Hsm-Session: <sessionId>`, the id from the `hello` of the collector's live ordinary session. A refused upgrade is an HTTP status, checked in this order: `406` no usable key (as for the session); `404` sessions off, or **table connections off** (`CollectorSessions.MaxTableFrameBytes = 0`: table ingest stops, sessions go on); `400` neither subprotocol offered; `503` shutting down; **`409` `X-Hsm-Session` is missing, malformed, or names no live session of the same key** (open the session first, then the table connection). An older server knows only `hsm.sensors.v1` and answers `400` before anything is upgraded.
+
+- **The pair.** A table connection belongs to one live session of the same key. It takes **no slot**: neither `MaxSessions` nor `MaxSessionsPerAddress` counts it, so the limits count collectors and a server holds at most twice `MaxSessions` sockets. A session has at most one table connection: **a new one replaces the old** (the old is closed with `1000`, reason `replaced by a new table connection of its session`, after the ack of a block it is storing). **When the session ends, its table connection is closed** with `1000`, reason `its session ended`, again after the ack of a block in progress. A collector reconnects the session first and the table connection after it.
+- **Hello.** The server's first frame: `{"op":"hello","body":{"maxFrameBytes":4194304,"heartbeatSeconds":30,"blockLimits":{"maxDecompressedBytes":67108864,"maxTables":65536,"maxRows":8388608,"maxColumnsPerTable":64,"maxTableIdLength":1024}}}`. `maxFrameBytes` is the largest binary frame (`CollectorSessions.MaxTableFrameBytes`, 4 MiB by default; a real tick of a thousand tables is 25–50 KB), header included; `blockLimits` are the limits a block is checked against (section `TableSensors`). A collector splits a tick's rows into blocks that keep to both.
+- **Text frames** are those of the session: `ping` / `pong` (the heartbeat and the silence limit are the session's), acks. A text request with any `op` is answered `400` `unknown op`: the table connection takes no `list` or `commands`. A text frame that is not JSON closes with `1007`, a request without `id` with `1002`, as on the session.
+- **Binary frames** carry the requests. Version 1, little-endian, a 40-byte header and then the block:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1 | frame version, `1` |
+| 1 | 1 | kind: `1` block, `2` probe |
+| 2 | 2 | reserved, `0` |
+| 4 | 4 | header length (u32): where the block starts; `40` in version 1, the server accepts more and skips the rest |
+| 8 | 8 | request id (i64), chosen by the collector, echoed as `ack` |
+| 16 | 16 | producer id: 16 opaque bytes, read as a .NET `Guid` (`new Guid(bytes)`) and stored as they are; not all zero |
+| 32 | 8 | producer sequence (i64, ≥ 0) |
+| 40 | … | the block, to the end of the frame; nothing for a probe |
+
+  A frame shorter than 40 bytes, of another version or kind, with reserved bytes set, or with a header length below 40 or past the frame, cannot be answered (its id is not trusted) and closes the connection with **`1002`**. A frame over `maxFrameBytes` closes with **`1009`**.
+- **Probe** (kind 2): answered `{"ack":<id>,"status":200,"body":{}}`. A collector sends one after the hello to see that binary frames get through whatever is between it and the server; a path that drops them shows here, before any block waits on it.
+- **Acknowledgement of a block**, a text frame; the collector decides by `status`:
+
+```json
+{"ack":17,"status":200,"body":{"outcome":"stored","tables":1000,"refusedCount":1,"refused":[{"index":3,"table":"quotes/XAUUSD","reason":"UnknownSensor"}]}}
+{"ack":18,"status":200,"body":{"outcome":"duplicate","tables":1000,"refusedCount":0,"refused":[]}}
+{"ack":18,"status":200,"body":{"outcome":"duplicate","tables":1000,"refusedKnown":false}}
+{"ack":19,"status":200,"body":{"outcome":"allRefused","tables":2,"refusedCount":2,"refused":[{"index":0,"table":"a/b","reason":"SchemaIdMismatch"},{"index":1,"table":"a/c","reason":"SensorBlocked"}]}}
+{"ack":20,"status":400,"error":"invalid block: ChecksumMismatch"}
+{"ack":21,"status":503,"error":"the block store cannot take blocks now","retryAfter":60}
+```
+
+  - `200` settles the block. `stored`: the tables not in `refused` were taken. `duplicate`: the producer's block with this sequence was taken before, and the answer is that first one's. `allRefused`: every table was refused and nothing was stored; a final answer: the collector drops the block and does not send its producer sequence again (once a later block of the producer is merged, #1850, a resend at or below the producer's watermark is answered `duplicate` without being stored; rows sent after the sensors are registered come in later blocks). `refused` lists the refused tables by directory index, name (the identifier as text) and reason: `UnknownSensor`, `NotATableSensor`, `SensorBlocked`, `SensorCreatedAfterBlock`, `SchemaIdMismatch`, `ColumnTypesMismatch`, `InvalidIdentifier` (strings; a collector logs a reason it does not know as it is). The rows of a refused table are dropped and counted; a refused table stays refused in a resend.
+  - **`refusedCount` is the exact number of refused tables; `refused` lists at most the first 100** of them, in directory order, each name cut to 256 characters (with `...`): a block of tens of thousands of unknown tables gets an ack of a few kilobytes, not of tens of megabytes. The block itself is judged on every table, and the server records every refused table with the stored block. A collector that needs the rest knows them by their indexes in its own block.
+  - **`refused` may be absent, with `"refusedKnown":false`**, on a `duplicate` whose first put's refusals the server cannot tell (a stored envelope it cannot read, or a block whose hour the batch store has merged, #1850: its producer sequence is at or below the producer's watermark). A collector reads both forms; the rows were settled by the first put either way.
+  - `400` is final: a block that breaks the format or the limits (`invalid block: <TableBlockError>`), an empty producer id or a negative producer sequence (`invalid producer: …`). The collector drops the block and counts it.
+  - **`503` is a fault, never a refusal**: the block store could not take the block (a failed write, too little disk, a store reopening after a failure). Nothing was stored. The collector keeps the block and sends the same frame again (same producer id and sequence) after `retryAfter` seconds. A `500` (`failed to store the block`, an error of the server) is handled the same way.
+- **Access** is checked again for every binary frame, as for every request on the session: a key that can no longer send closes the connection with `1008`, and the block is not stored. A block counts as a use of the key; a probe does not.
+- **One block in flight (stop and wait).** A collector sends the next block after the ack of the previous one. **The order is a rule the server relies on, not only what the transport happens to do**: the merge (#1850) keeps, per product and producer, the highest producer sequence it has merged and answers anything at or below it as a duplicate. So a producer sends its blocks in sequence order; it never sends a lower sequence after a higher one was acknowledged; a block that got a final refusal (`allRefused`, `400`) is dropped and its number is not reused; its sequence never goes back, across restarts included; and a collector that cannot read its producer state (the id and the next sequence, kept with its file of undelivered blocks) takes a new producer id and starts again.
+- **Blocks in flight when a connection drops** may or may not have been stored. The collector sends the same block (same producer id and sequence) on its next table connection; one that was stored is answered `duplicate`. A block that a replaced connection is still storing when the resend arrives is stored once: the store appends in the order it reserved and the second put finds the first.
+- **A collector's rules, besides the order above**: a table goes into a block only after its registration was acknowledged without an error under its path on the session (the two connections are separate sockets, and a block could overtake its registration); the table identifier is the registered path in normal form (see "Table sensor registration"); on `UnknownSensor` for a table it registered, the collector registers that table again (an operator may have removed the sensor) and the rows of the refused block are lost and counted; each collector installation has its own producer id (the server logs a `Warn`, at most once a minute, when two live table connections of one product send blocks of one producer id, and refuses nothing).
+- **Shutdown**: the table connection is closed with `1001` like the session, after the ack of a block being stored (within the shutdown budget).
+- **Back-pressure on memory.** A frame larger than 64 KiB waits, unread, while the server holds as much for table frames as it allows (`CollectorSessions.MaxTableBytesInFlight`); a collector sees only a slower send. A wait longer than twice the silence limit (3 minutes by default) closes the connection with **`1013`** (Try Again Later): the frame was not complete, so there is no request id to answer; the block was not stored, and the collector sends it again on its next table connection. **A reserved frame has a deadline**: from the moment the server reserves its bytes, the whole frame must arrive within the silence limit (90 s by default; 4 MiB in that time is about 47 KB/s), however its bytes trickle in, or the connection is cut and the reservation goes back. **One access key holds at most one reservation at a time**: a second large frame of the same key (another connection of the same key) waits for the first like any other waiter, so the connections of one key cannot fill the budget for the others. **The limit that follows:** collectors that share one access key (a product key installed on many hosts) send their frames larger than 64 KiB one at a time, each holding the key's reservation from its first byte past 64 KiB until its put is answered. With N such collectors sending a large frame at once, the last waits (N − 1) × that time; past twice the silence limit (180 s by default) it is closed with `1013` and sends the block again on its next table connection, queuing again. The bound is passed beyond about 91 collectors of one key at 2 s a frame, beyond 3 at the 90 s worst case of a trickled frame. Frames up to 64 KiB, and collectors with keys of their own, are not affected. A collector that sees repeated `1013`s for this reason needs a key of its own; the server logs such a close as a `Warn` naming its own key as the cause.
+- **Close codes from the server on a table connection**: `1000` replaced or its session ended, `1001` shutdown, `1013` the wait for the frame budget passed its bound, `1002` a binary frame without a trusted header or a text request without `id`, `1007` a text frame that is not a JSON object, `1008` the key can no longer send, `1009` a frame over `maxFrameBytes`. The session keeps `1003` for a binary frame: it stays text-only.
+
+## Table history (#1845, ADR-0021 point 13)
+
+`POST {base}tableHistory` reads the rows of one table sensor in `[From, To)`, for the client library (blocks) and for clients without it (CSV, JSON). The same `Key` header as every route, and only the header: the obsolete body `Key` of `BaseRequest` is not honoured on this route (it is on `history` and `historyFile`). The key must be able to read (`CanReadSensorData`), and the sensor is found by its path in the root product of the key, in normal form (`/a// b` finds `a/b`). Rows not merged yet and, after #1850, merged ones, joined by time; equal times in the order they arrived.
+
+```json
+{"Path":"quotes/EURUSD","From":"2026-11-25T09:00:00Z","To":"2026-11-25T10:00:00Z","MaxRows":100000,"Format":0}
+```
+
+- **Times** are UTC (a time without a kind is UTC). `MaxRows` is optional and capped: by `TableSensors.MaxTextReadRows` (100,000 by default) for CSV and JSON, by `TableSensors.MaxReadRows` (1,000,000) for blocks.
+- **A cut answer ends at a time boundary.** When more rows match than the limit allows, the answer holds the earliest ones but never only some of the rows of one time: those are left for the next page, which starts at their time. `X-Hsm-Next-From` (and `nextFrom` in JSON) is where the next page starts: send it as `From` and every row comes exactly once. The one exception is a single time with more rows than the limit: the answer is those rows cut at the limit, `X-Hsm-Rows-At-Time-Omitted: true` says the rest of that time is skipped, and the next page starts one tick later; when that time is the last tick of the range there is no next page. A client that needs those rows asks with a larger `MaxRows`. **A client pages until an answer has no `X-Hsm-Next-From`** (no `nextFrom` in JSON); `X-Hsm-Truncated` says whether rows were left out, not whether there is a next page.
+- **Headers** of every answer: `X-Hsm-Row-Count`, `X-Hsm-Truncated` (`true` / `false`), `X-Hsm-Next-From` (ISO, when there is a next page), `X-Hsm-Rows-At-Time-Omitted` (only when `true`), `X-Hsm-Blocks-Failed` (stored blocks that could not be read: of hours not merged yet, and of merged hours whose merge kept them as unreadable, #1850 part 4b; such a block counts whether or not it held rows of the table asked for, which cannot be known), `X-Hsm-Batches-Failed` (batches of merged hours that could not be read, #1850). Both are always present, in every format; JSON also carries them in the body as `blocksFailed` and `batchesFailed`. **The answer is incomplete when either is not `0`**: the rows of those blocks or batches are missing, and asking again returns the same answer until the store is repaired, so a client reports it (an error, or a warning next to the rows) and does not treat the rows as the whole range. Two figures, not one sum: they name the store that is damaged.
+- **JSON** (`Format` 0, `application/json`): the columns, the counts and the rows as arrays in column order. A time is ISO 8601 with seven fraction digits (exact to the tick); a double is the shortest text that reads back to the same value; NaN and the infinities, which JSON numbers cannot carry, are the strings `"NaN"`, `"Infinity"`, `"-Infinity"`; a cell without a value is `null`. An int64 beyond 2^53 is written as the exact number, which JavaScript readers round.
+
+```json
+{"path":"quotes/EURUSD","columns":[{"name":"time","type":"time"},{"name":"bid","type":"double"},{"name":"size","type":"int64"}],"rowCount":3,"truncated":true,"nextFrom":"2026-11-25T09:00:00.3000000Z","rowsAtTimeOmitted":false,"blocksFailed":0,"batchesFailed":0,"rows":[["2026-11-25T09:00:00.1000000Z",1.0841,100],["2026-11-25T09:00:00.2000000Z",null,7],["2026-11-25T09:00:00.2500000Z","NaN",5]]}
+```
+
+- **CSV** (`Format` 1, `text/csv; charset=utf-8`): RFC 4180, CRLF line ends, a header line with the column names (quoted when a name holds a comma, a quote or a line break), the values as in JSON without quotes; **a cell without a value is empty**.
+
+```
+time,bid,size
+2026-11-25T09:00:00.1000000Z,1.0841,100
+2026-11-25T09:00:00.2000000Z,,7
+2026-11-25T09:00:00.2500000Z,NaN,5
+```
+
+- **Blocks** (`Format` 2, `application/vnd.hsm.table-blocks`): the rows as table blocks of the one table (identifier: the sensor path; schema id: the sensor's; null maps as the format defines), one after another, at most 65,536 rows each; a reader takes them apart by the compressed length in each 44-byte header. `X-Hsm-Table-Columns: time;1,bid;3,size;2` names the columns (names percent-encoded, types the format's numbers). No rows, no body. `MaxBlockFormatVersion` (default 1) is the newest block format the client reads: the server never writes a newer one, and answers 400 when it cannot write one that old.
+- **Statuses**: `200`; `400` a body that cannot be read, no path, `From` not before `To`, an unknown format, `MaxRows` not positive, a block format the server cannot write, a sensor that is not a table sensor; `404` no sensor with that path in the product of the key; `406` no key, or a key that may not read; `503` with `Retry-After: 60` when the block store cannot be read now, or when the server failed while it looked the access key up (a fault, the same request later is answered; not the `406` of a key that may not read); `503` with `Retry-After: 1` and the text `The table store changed during the read; the request can be sent again.` when the store changed (an hour was merged, a week dropped) while each of three plans of the read was taken (#1847): nothing was read, and the same request a second later is answered.
+- **Cost**: reads run at most `TableSensors.MaxConcurrentReads` (2) at a time, a count shared with the table pages of the web UI (`TableReadGate`, #1847); others wait. Until a range is merged (#1850) a read decompresses every stored block whose time range meets it, whatever `MaxRows` is: about 60–160 ms per hour of one table. A client that goes away stops the read before its next block.
 
 ## Invariants
 

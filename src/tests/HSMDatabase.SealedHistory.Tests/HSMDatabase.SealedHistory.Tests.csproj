@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <None Include="Golden\**\*.bin" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="GoldenTableBatches\**\*.htbatch" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
