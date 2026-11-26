@@ -9,7 +9,6 @@ using Xunit;
 
 namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
 
-[CollectionDefinition("Database collection")]
 public class JournalCacheTests : DatabaseCoreTestsBase<JournalDatabaseFixture>, IClassFixture<DatabaseRegisterFixture>
 {
     private readonly IJournalService _journal;

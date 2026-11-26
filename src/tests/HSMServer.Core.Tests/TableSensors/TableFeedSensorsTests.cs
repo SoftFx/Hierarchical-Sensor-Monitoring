@@ -34,7 +34,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// the paths it must leave alone. No timing: the service's tick takes its time as a parameter and is awaited, the
     /// store's clock is a seam.
     /// </summary>
-    [Collection("Database collection")]
     public class TableFeedSensorsTests : MonitoringCoreTestsBase<TableFeedSensorsFixture>
     {
         // On the 5-minute grid: the first tick at T0 + 1 minute drains the tables too (the first tick always does).

@@ -21,6 +21,13 @@ using Xunit.Abstractions;
 
 namespace HSMServer.Core.Tests.SensorApi
 {
+    [CollectionDefinition(Name, DisableParallelization = true)]
+    public sealed class ProcessWideMeasurementCollection
+    {
+        public const string Name = "Process-wide measurement";
+    }
+
+
     // The collector session (#1664, epic #1660, ADR-0017) over a real WebSocket: a real
     // ClientWebSocket against the real Sensor API on a real Kestrel listener, with the real
     // cache underneath. The HTTP routes run in the same host, so "the ack carries the status
@@ -29,6 +36,11 @@ namespace HSMServer.Core.Tests.SensorApi
     //
     // The wire strings (header names, subprotocol, ops, error texts) are written out here
     // on purpose: the tests pin the contract, not the server's constants.
+    //
+    // Runs alone (#1943): IdleSession_CostsTensOfKilobytes reads the process-wide managed
+    // heap (GC.GetTotalMemory), so allocations of a test class running beside it would land
+    // in its per-session figure, and the shutdown test bounds a wall-clock time.
+    [Collection(ProcessWideMeasurementCollection.Name)]
     public class CollectorSessionTests : MonitoringCoreTestsBase<CollectorSessionFixture>
     {
         private const string Subprotocol = "hsm.sensors.v1";

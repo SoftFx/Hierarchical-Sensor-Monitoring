@@ -20,7 +20,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     // #1803: a sealed week's unreadable chunk surfaces from GetLatestValue as SealedChunkReadException. The
     // clear-history / retention path reads the value bordering its range only to widen or narrow that range;
     // it must still delete when that read fails, or a corrupt chunk would block the delete that removes it.
-    [Collection("Database collection")]
     public class SealedHistoryReadFailureTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     {
         private FailingDatabaseCore _failing;

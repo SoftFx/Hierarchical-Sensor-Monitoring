@@ -43,7 +43,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// FOLDER is the other thing templates and subscriptions match that a product
     /// update changes for every sensor at once, and it is followed the same way.
     /// </summary>
-    [Collection("Database collection")]
     public class RootRenameTests : MonitoringCoreTestsBase<RootRenameFixture>
     {
         public RootRenameTests(RootRenameFixture fixture, DatabaseRegisterFixture registerFixture)

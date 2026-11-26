@@ -34,7 +34,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// <c>HSM_TABLE_STORE_BENCH=1 dotnet test --filter "FullyQualifiedName~TableMergeBenchmark" --logger "console;verbosity=detailed"</c>
     /// </summary>
     [Trait("Category", "Benchmark")]
-    [Collection("Database collection")]
     public sealed class TableMergeBenchmark : MonitoringCoreTestsBase<TableMergeBenchmarkFixture>
     {
         private const int Tables = 1000;

@@ -32,7 +32,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// <c>HSM_TABLE_STORE_BENCH=1 dotnet test --filter "FullyQualifiedName~TableChartBenchmark" --logger "console;verbosity=detailed"</c>
     /// </summary>
     [Trait("Category", "Benchmark")]
-    [Collection("Database collection")]
     public sealed class TableChartBenchmark : MonitoringCoreTestsBase<TableChartBenchmarkFixture>
     {
         private static readonly DateTime Hour0 = new(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc);
