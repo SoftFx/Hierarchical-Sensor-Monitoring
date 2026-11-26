@@ -30,7 +30,7 @@ namespace HSMServer.Model.FileSensors
         {
             Time = file.Time,
             ReceivingTime = file.ReceivingTime,
-            Name = file.GetDisplayName(),
+            Name = file.GetDisplayName().WithoutBidiControls(),
             Extension = file.Extension,
             OriginalSize = file.OriginalSize,
             IsLarge = FileSensorPageService.IsLarge(file),
@@ -53,6 +53,9 @@ namespace HSMServer.Model.FileSensors
         Ready,
         Missing,
         Unavailable,
+
+        /// <summary>An upload whose collector stopped sending: every piece in without its end, or no piece for a while.</summary>
+        WaitingForCollector,
     }
 
 
@@ -120,11 +123,11 @@ namespace HSMServer.Model.FileSensors
         {
             TimeTicks = file.Time.Ticks,
             Time = file.Time,
-            Name = file.GetDisplayName(),
+            Name = file.GetDisplayName().WithoutBidiControls(),
             Extension = file.Extension,
             Size = file.FileSizeToNormalString(),
             Status = file.Status,
-            Comment = file.Comment,
+            Comment = file.Comment.WithoutBidiControls(),
             IsPreviewEnabled = FileSensorPageService.IsPreviewEnabled(file),
             IsLarge = FileSensorPageService.IsLarge(file),
         };
@@ -148,6 +151,12 @@ namespace HSMServer.Model.FileSensors
 
         public int Percent { get; init; }
 
+        /// <summary>When the last piece came (the start, before any piece).</summary>
+        public DateTime LastPieceUtc { get; init; }
+
+        /// <summary>When the store removes the part if no piece comes.</summary>
+        public DateTime ExpiresUtc { get; init; }
+
         public DateTime StartedUtc { get; init; }
 
         public DateTime SourceModified { get; init; }
@@ -165,13 +174,23 @@ namespace HSMServer.Model.FileSensors
 
         /// <summary>The list holds the most recent records only.</summary>
         public bool IsCut { get; init; }
+
+        /// <summary>The download log could not be read now.</summary>
+        public bool IsUnavailable { get; init; }
     }
+
+
+    /// <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+    public sealed record FileRead(FileValue Value, bool Busy);
 
 
     /// <summary>A page of the file values of one File sensor, newest first.</summary>
     public sealed class FileValuesPageViewModel
     {
         public string EncodedId { get; init; }
+
+        /// <summary>The sensor's history was being read by another reader: nothing was read, ask again.</summary>
+        public bool IsBusy { get; init; }
 
         /// <summary>The uploads in progress, on the first page only, at most a page of them.</summary>
         public IReadOnlyList<LargeFileUploadRowViewModel> Uploads { get; init; } = [];

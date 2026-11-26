@@ -52,6 +52,9 @@ namespace HSMServer.Core.Tests.Controllers
 
         private readonly FakeLargeFiles _largeFiles = new();
 
+        // Sensors whose history is being read by another reader: the cache answers them an empty page.
+        private readonly HashSet<Guid> _busy = [];
+
         private readonly BaseSensorModel _sensor;
         private readonly BaseSensorModel _hidden;
 
@@ -65,7 +68,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             _cache.Setup(c => c.GetProducts()).Returns([_product, _hiddenProduct]);
             _cache.Setup(c => c.GetSensorValuesPage(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<RequestOptions>()))
-                  .Returns((Guid id, DateTime from, DateTime to, int count, RequestOptions _) => ReadRows(id, from, to, count));
+                  .Returns((Guid id, DateTime from, DateTime to, int count, RequestOptions _) => _busy.Contains(id) ? Empty() : ReadRows(id, from, to, count));
+            _cache.Setup(c => c.IsFileHistoryReadInProgress(It.IsAny<Guid>())).Returns((Guid id) => _busy.Contains(id));
 
             _users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns([]);
             _schedules.Setup(p => p.GetAllSchedules()).Returns([]);
@@ -235,16 +239,111 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal((LargeFileRowState.Missing, "file is missing"), FileSensorPageService.Decide((LargeFileStoredFacts)null, true));
         }
 
+        // Being checked only while the store checks; every piece in without a check, or no piece for longer than the lease,
+        // waits for the collector (it left before its end, or the check failed) until the store removes the part.
         [Theory]
-        [InlineData(0, 10, false, LargeFileRowState.Uploading, "uploading, 0%", 0)]
-        [InlineData(3, 10, false, LargeFileRowState.Uploading, "uploading, 30%", 30)]
-        [InlineData(10, 10, false, LargeFileRowState.Checking, "being checked", 100)]
-        [InlineData(4, 10, true, LargeFileRowState.Checking, "being checked", 100)]
-        public void AnUpload_ShowsItsPercent_UntilEveryPieceIsIn(long received, long total, bool checking, LargeFileRowState expected, string text, int percent)
+        [InlineData(0, 10, false, 10, LargeFileRowState.Uploading, "uploading, 0%", 0)]
+        [InlineData(3, 10, false, 10, LargeFileRowState.Uploading, "uploading, 30%", 30)]
+        [InlineData(4, 10, true, 10, LargeFileRowState.Checking, "being checked", 100)]
+        [InlineData(10, 10, true, 10, LargeFileRowState.Checking, "being checked", 100)]
+        [InlineData(10, 10, false, 10, LargeFileRowState.WaitingForCollector, "waiting for the collector to finish", 100)]
+        [InlineData(3, 10, false, 600, LargeFileRowState.WaitingForCollector, "waiting for the collector, 30%", 30)]
+        [InlineData(3, 10, true, 600, LargeFileRowState.Checking, "being checked", 100)]
+        public void AnUpload_ShowsItsPercent_ItsCheck_OrThatItWaitsForItsCollector(long received, long total, bool checking, int secondsSinceLastPiece,
+            LargeFileRowState expected, string text, int percent)
         {
-            var upload = new LargeFileUploadFacts { PiecesReceived = received, PiecesTotal = total, IsChecking = checking };
+            var now = new DateTime(2026, 11, 26, 12, 0, 0, DateTimeKind.Utc);
+            var upload = new LargeFileUploadFacts
+            {
+                PiecesReceived = received, PiecesTotal = total, IsChecking = checking,
+                LastPieceUtc = now.AddSeconds(-secondsSinceLastPiece), StalledAfter = TimeSpan.FromSeconds(180),
+            };
 
-            Assert.Equal((expected, text, percent), FileSensorPageService.Decide(upload));
+            Assert.Equal((expected, text, percent), FileSensorPageService.Decide(upload, now));
+        }
+
+        [Fact]
+        public async Task AStalledUpload_ShowsItsLastPiece_AndWhenItIsRemoved_AndIsNotPolled()
+        {
+            var lastPiece = new DateTime(2026, 11, 26, 10, 0, 0, DateTimeKind.Utc);
+
+            _largeFiles.Uploads[_sensor.Id] =
+            [
+                new LargeFileUploadFacts
+                {
+                    FileId = Guid.NewGuid(), Name = "left.dmp", PiecesReceived = 2, PiecesTotal = 5,
+                    LastPieceUtc = lastPiece, ExpiresUtc = lastPiece.AddDays(7), StalledAfter = TimeSpan.FromMinutes(3),
+                },
+            ];
+
+            var controller = Controller(Viewer());
+            var service = new FileSensorPageService(_cache.Object, _largeFiles) { Clock = () => lastPiece.AddHours(1) };
+            var upload = Assert.Single((await service.GetPageAsync(_sensor.Id, Encode(_sensor), null, Viewer())).Uploads);
+
+            Assert.Equal(LargeFileRowState.WaitingForCollector, upload.State);
+            Assert.Equal((lastPiece, lastPiece.AddDays(7)), (upload.LastPieceUtc, upload.ExpiresUtc));
+            Assert.NotNull(controller);
+        }
+
+        // S1: the history of one File sensor is read by one reader at a time; a refused read is "busy", never "none".
+        [Fact]
+        public async Task ABusyHistory_IsAnsweredAsBusy_NeverAsNoFiles()
+        {
+            AddValues(_sensor, 25);
+            var oldest = _rows[_sensor.Id][0];
+
+            _busy.Add(_sensor.Id);
+
+            var file = Assert.IsType<ObjectResult>(await Controller(Viewer()).GetFile(Encode(_sensor), oldest.Time.Ticks));
+            Assert.Equal(503, file.StatusCode);
+
+            var stream = Assert.IsType<ObjectResult>(await Controller(Viewer()).GetFileStream(Encode(_sensor), oldest.Time.Ticks));
+            Assert.Equal(503, stream.StatusCode);
+
+            var older = Assert.IsType<ObjectResult>(await Controller(Viewer()).GetFilesPage(Encode(_sensor), oldest.Time.Ticks + 1));
+            Assert.Equal(503, older.StatusCode);
+
+            var first = Assert.IsType<ObjectResult>(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor)));
+            Assert.Equal(503, first.StatusCode);
+
+            // Once free, the same requests are served; an unknown time is still 404.
+            _busy.Remove(_sensor.Id);
+
+            Assert.IsType<FileContentResult>(await Controller(Viewer()).GetFile(Encode(_sensor), oldest.Time.Ticks));
+            Assert.IsType<NotFoundResult>(await Controller(Viewer()).GetFile(Encode(_sensor), oldest.Time.Ticks + 1));
+            Assert.IsType<PartialViewResult>(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor)));
+        }
+
+        [Fact]
+        public void AFaultOfTheDownloadLog_AnswersTheRowWithAMessage_NotAnError()
+        {
+            var file = AddLarge(_sensor, "ready.dmp", 100);
+            _largeFiles.Files[file.FileId] = new LargeFileStoredFacts { FileId = file.FileId, SensorId = _sensor.Id, State = "packed" };
+            _largeFiles.DownloadsFault = new InvalidOperationException("the log is gone");
+
+            var partial = Assert.IsType<PartialViewResult>(Controller(Manager()).GetLargeFileDownloads(Encode(_sensor), file.FileId));
+
+            Assert.True(Assert.IsType<LargeFileDownloadsViewModel>(partial.Model).IsUnavailable);
+        }
+
+        [Fact]
+        public async Task BidiControlCharacters_AreShownNeutralized()
+        {
+            var value = new FileValue
+            {
+                Time = Start.AddMinutes(-10), Name = "invoice\u202Efdp", Extension = "exe", Value = [1], OriginalSize = 1,
+                Comment = "a\u2066b", Status = SensorStatus.Ok,
+            };
+
+            _rows[_sensor.Id].Add(value);
+            _sensor.TryAddValue(value);
+            AddValues(_sensor, 1);
+
+            var row = PageOf(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor))).Rows.Single(r => r.TimeTicks == value.Time.Ticks);
+
+            Assert.DoesNotContain('\u202E', row.Name);
+            Assert.Contains(HSMServer.Core.Extensions.DisplayTextExtensions.Neutralized, row.Name);
+            Assert.DoesNotContain('\u2066', row.Comment);
         }
 
         [Fact]
@@ -558,6 +657,12 @@ namespace HSMServer.Core.Tests.Controllers
             return content;
         }
 
+        private static async IAsyncEnumerable<List<BaseValue>> Empty()
+        {
+            await Task.CompletedTask;
+            yield return [];
+        }
+
         // The sensor-values database as the cache reads it: from..to inclusive, newest first, at most |count|.
         private async IAsyncEnumerable<List<BaseValue>> ReadRows(Guid id, DateTime from, DateTime to, int count)
         {
@@ -635,6 +740,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             public bool HasPassword { get; set; } = true;
 
+            public Exception DownloadsFault { get; set; }
+
 
             public IReadOnlyList<LargeFileUploadFacts> GetUploads(Guid sensorId) => Uploads.TryGetValue(sensorId, out var list) ? list : [];
 
@@ -643,7 +750,7 @@ namespace HSMServer.Core.Tests.Controllers
             public bool HasDumpPassword(Guid productId) => HasPassword;
 
             public IReadOnlyList<LargeFileDownloadFacts> GetDownloads(Guid productId, Guid fileId, int limit) =>
-                Downloads.TryGetValue(fileId, out var list) ? list.Take(limit).ToList() : [];
+                DownloadsFault is { } fault ? throw fault : Downloads.TryGetValue(fileId, out var list) ? list.Take(limit).ToList() : [];
         }
     }
 }

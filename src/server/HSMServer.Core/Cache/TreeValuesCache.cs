@@ -4610,8 +4610,10 @@ namespace HSMServer.Core.Cache
 
                 // A File sensor created by a registration for large files (#1886) gets "new data has been received". Only
                 // at creation: a sensor that exists already gets nothing from a later registration with the flag.
-                if (type is SensorType.File && options.HasFlag(DefaultAlertsOptions.LargeFiles))
-                    sensor.Policies.AddLargeFileAlert(server is null ? InitiatorInfo.System : InitiatorInfo.AsSystemInfo(server.Initiator));
+                // Journaled below, once the sensor is stored: a creation that fails leaves no record of its alert.
+                var largeFileAlert = type is SensorType.File && options.HasFlag(DefaultAlertsOptions.LargeFiles)
+                    ? sensor.Policies.AddLargeFileAlert()
+                    : null;
 
                 // Persist first so a DB failure can't leave an orphan in the in-memory
                 // caches. Any later failure (ChangeSensorEvent, ApplyTemplateToSensor,
@@ -4641,6 +4643,9 @@ namespace HSMServer.Core.Cache
                     Kind = JournalKinds.TreeCrud,
                     ProductId = sensor.Root?.Id.ToString(),
                 });
+
+                if (largeFileAlert is not null)
+                    sensor.Policies.JournalAddedPolicy(largeFileAlert, server is null ? InitiatorInfo.System : InitiatorInfo.AsSystemInfo(server.Initiator));
 
                 return true;
             }

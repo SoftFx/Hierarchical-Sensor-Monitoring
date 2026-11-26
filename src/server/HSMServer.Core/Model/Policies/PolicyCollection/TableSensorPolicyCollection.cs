@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void AddDefault(DefaultAlertsOptions options) { }
 
-        internal override void AddLargeFileAlert(InitiatorInfo initiator) { }
+        internal override Policy AddLargeFileAlert() => null;
 
         internal override void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies)
         {

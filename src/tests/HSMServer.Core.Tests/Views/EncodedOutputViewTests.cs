@@ -188,8 +188,10 @@ namespace HSMServer.Core.Tests.Views
 
             Assert.Contains("data-extension='x&#x27;&#x2B;alert(1)&#x2B;&#x27;'", html);
 
-            // No handler attribute at all, so none carries the extension.
+            // No handler attribute at all, so none carries the extension; the raw payload and any script are absent.
             Assert.DoesNotContain("onclick", html);
+            Assert.DoesNotContain(extension, html);
+            Assert.DoesNotContain("<script", html);
         }
 
 

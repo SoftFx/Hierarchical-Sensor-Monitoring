@@ -5,7 +5,11 @@
 
 @* Who downloaded one large file (#1886), from the download log (#1885); every name is HTML-encoded text. *@
 
-@if (Model.Downloads.Count == 0)
+@if (Model.IsUnavailable)
+{
+    <div class="text-muted large-file-downloads-unavailable">The download log cannot be read now. Try again later.</div>
+}
+else if (Model.Downloads.Count == 0)
 {
     <div class="text-muted">Nobody has downloaded this file.</div>
 }

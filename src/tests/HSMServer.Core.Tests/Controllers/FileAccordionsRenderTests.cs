@@ -116,8 +116,9 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.DoesNotContain("file-row-download", html);
             Assert.Contains("data-preview='false'", html);
 
-            // Ready and missing are final; the others make the tab read the list again.
-            Assert.Contains($"data-live='{(state is LargeFileRowState.Ready or LargeFileRowState.Missing ? "false" : "true")}'", html);
+            // Only a file being packed makes the tab read the list again; a file waiting for a password, for room or after a
+            // failed build changes rarely and is not polled.
+            Assert.Contains($"data-live='{(state == LargeFileRowState.Packing ? "true" : "false")}'", html);
         }
 
         [Fact]
@@ -142,6 +143,39 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Contains(">TTS<", html);
             Assert.Contains(">10.0.0.7<", html);
             Assert.Contains("and 3 more uploads in progress", html);
+        }
+
+        [Theory]
+        [InlineData(LargeFileRowState.Uploading, true)]
+        [InlineData(LargeFileRowState.Checking, true)]
+        [InlineData(LargeFileRowState.WaitingForCollector, false)]
+        public async Task An_upload_is_polled_while_it_moves_and_a_stalled_one_says_when_it_goes(LargeFileRowState state, bool live)
+        {
+            var html = await RenderAsync(new FileValuesPageViewModel
+            {
+                EncodedId = "s",
+                Uploads =
+                [
+                    new LargeFileUploadRowViewModel
+                    {
+                        Name = "a.dmp", Size = "1 B", State = state, StateText = "x",
+                        LastPieceUtc = new DateTime(2026, 11, 26, 10, 0, 0, DateTimeKind.Utc), ExpiresUtc = new DateTime(2026, 12, 3, 10, 0, 0, DateTimeKind.Utc),
+                    },
+                ],
+            });
+
+            Assert.Contains($"data-live=\"{(live ? "true" : "false")}\"", html);
+            Assert.Equal(state == LargeFileRowState.WaitingForCollector, html.Contains("large-file-stalled"));
+        }
+
+        [Fact]
+        public async Task The_downloads_of_a_file_say_when_the_log_cannot_be_read()
+        {
+            _holder.View = "~/Views/Home/_LargeFileDownloads.cshtml";
+
+            var html = await RenderAsync(new LargeFileDownloadsViewModel { IsUnavailable = true });
+
+            Assert.Contains("The download log cannot be read now.", html);
         }
 
         [Fact]

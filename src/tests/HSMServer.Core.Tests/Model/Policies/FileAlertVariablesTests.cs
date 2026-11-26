@@ -184,7 +184,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             var collected = sensor.Policies.Single();
 
             // The default alert of a sensor created for large files.
-            sensor.Policies.AddLargeFileAlert(InitiatorInfo.System);
+            sensor.Policies.AddLargeFileAlert();
             var byDefault = sensor.Policies.Single(p => p.Template == SensorPolicyCollection.LargeFileAlertTemplate);
 
             foreach (var policy in new[] { updated, loaded, collected, byDefault })
@@ -204,9 +204,14 @@ namespace HSMServer.Core.Tests.Model.Policies
             sensor.Policies.ChangesHandler += record => journal.Add(record.NewValue);
             sensor.Policies.Uploaded += (_, policy) => uploaded.Add(policy);
 
-            sensor.Policies.AddLargeFileAlert(InitiatorInfo.System);
+            var added = sensor.Policies.AddLargeFileAlert();
+
+            // Journaled by the creation once the sensor is stored, not by the add.
+            Assert.Empty(journal);
+            sensor.Policies.JournalAddedPolicy(added, InitiatorInfo.System);
 
             var policy = Assert.Single(sensor.Policies);
+            Assert.Same(added, policy);
             var condition = Assert.Single(policy.Conditions);
 
             Assert.Equal(PolicyProperty.NewSensorData, condition.Property);

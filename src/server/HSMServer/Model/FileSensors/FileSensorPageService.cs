@@ -29,6 +29,7 @@ namespace HSMServer.Model.FileSensors
 
         private readonly ITreeValuesCache _cache;
         private readonly ILargeFilePageSource _largeFiles;
+        private readonly NLog.Logger _logger = NLog.LogManager.GetLogger(nameof(FileSensorPageService));
 
 
         internal FileSensorPageService(ITreeValuesCache cache) : this(cache, new NoLargeFilePageSource()) { }
@@ -53,23 +54,35 @@ namespace HSMServer.Model.FileSensors
 
         /// <summary>
         /// The value at <paramref name="timeTicks"/> (the key of its row), read by that time alone; the last value when it is
-        /// 0. Null when there is none. The content is decompressed for an ordinary file value.
+        /// 0. Null when there is none; <see cref="FileRead.Busy"/> when the sensor's history was being read by another reader,
+        /// which is not "none": ask again. The content is decompressed for an ordinary file value.
         /// </summary>
-        public async Task<FileValue> GetFileAsync(Guid sensorId, long timeTicks)
+        public async Task<FileRead> GetFileAsync(Guid sensorId, long timeTicks)
         {
             if (timeTicks == default)
-                return GetLastValue(sensorId)?.DecompressContent();
+                return new FileRead(GetLastValue(sensorId)?.DecompressContent(), false);
 
             if (timeTicks < DateTime.MinValue.Ticks || timeTicks > DateTime.MaxValue.Ticks)
-                return null;
+                return new FileRead(null, false);
 
             // Never a range of one tick: the weekly databases are chosen by a strict overlap, so [t, t] misses a value at
             // the very first tick of a week. One tick more, and the value is picked by its time.
             var from = new DateTime(timeTicks, DateTimeKind.Utc);
             var to = new DateTime(Math.Min(timeTicks + 1, DateTime.MaxValue.Ticks), DateTimeKind.Utc);
-            var values = await _cache.GetSensorValuesPage(sensorId, from, to, 2).Flatten();
+            var (values, busy) = await ReadAsync(sensorId, from, to, 2);
 
-            return values.OfType<FileValue>().FirstOrDefault(file => file.Time.Ticks == timeTicks)?.DecompressContent();
+            return new FileRead(values.OfType<FileValue>().FirstOrDefault(file => file.Time.Ticks == timeTicks)?.DecompressContent(), busy);
+        }
+
+        // The history of one File sensor is read by one reader at a time; the cache answers a refused read with an empty
+        // page. An empty page while the lock is held (before or after this read) is a refusal, not the absence of values.
+        private async Task<(List<BaseValue> Values, bool Busy)> ReadAsync(Guid sensorId, DateTime from, DateTime to, int count)
+        {
+            var heldBefore = _cache.IsFileHistoryReadInProgress(sensorId);
+            var values = await _cache.GetSensorValuesPage(sensorId, from, to, count).Flatten();
+            var busy = values.Count == 0 && (heldBefore || _cache.IsFileHistoryReadInProgress(sensorId));
+
+            return (values, busy);
         }
 
         /// <summary>
@@ -96,7 +109,11 @@ namespace HSMServer.Model.FileSensors
 
             // One more than a page tells whether an older page exists; one more for the last value skipped, one more for
             // the value at the end of the range.
-            var read = await _cache.GetSensorValuesPage(sensorId, DateTime.MinValue, to, PageSize + 3).Flatten();
+            var (read, busy) = await ReadAsync(sensorId, DateTime.MinValue, to, PageSize + 3);
+
+            if (busy)
+                return new FileValuesPageViewModel { EncodedId = encodedId, IsBusy = true };
+
             var files = read.OfType<FileValue>().Where(file => olderThanTicks is null || file.Time.Ticks < olderThanTicks).ToList();
 
             // An ordinary last value is shown above the list with its preview; a large one has no preview and stays in it.
@@ -107,7 +124,8 @@ namespace HSMServer.Model.FileSensors
             var productId = sensor.Root?.Id ?? Guid.Empty;
             var canManage = user is not null && user.IsManager(productId);
             var allUploads = firstPage ? _largeFiles.GetUploads(sensorId) : [];
-            var uploads = allUploads.Take(PageSize).Select(ToUploadRow).ToList();
+            var now = Clock();
+            var uploads = allUploads.Take(PageSize).Select(upload => ToUploadRow(upload, now)).ToList();
             var hasPassword = _largeFiles.HasDumpPassword(productId);
             var rows = page.Select(file => ToRow(file, sensorId, productId, hasPassword, canManage)).ToList();
 
@@ -144,7 +162,17 @@ namespace HSMServer.Model.FileSensors
             if (sensor is null || user is null || !user.IsManager(productId) || _largeFiles.Describe(fileId)?.SensorId != sensorId)
                 return null;
 
-            var downloads = _largeFiles.GetDownloads(productId, fileId, MaxDownloadsShown + 1);
+            IReadOnlyList<LargeFileDownloadFacts> downloads;
+
+            try
+            {
+                downloads = _largeFiles.GetDownloads(productId, fileId, MaxDownloadsShown + 1);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"The download log of large file {fileId} could not be read: {ex.Message}");
+                return new LargeFileDownloadsViewModel { IsUnavailable = true };
+            }
 
             return new LargeFileDownloadsViewModel
             {
@@ -186,15 +214,30 @@ namespace HSMServer.Model.FileSensors
             };
         }
 
-        internal static (LargeFileRowState State, string Text, int Percent) Decide(LargeFileUploadFacts upload)
+        /// <summary>
+        /// The state of an upload that is not a value yet. Being checked only while the store runs its end check. An upload
+        /// whose every piece is in without a check, or that got no piece for longer than <see cref="LargeFileUploadFacts.StalledAfter"/>
+        /// (the collector went away, a check failed), waits for its collector; the store removes it at <see cref="LargeFileUploadFacts.ExpiresUtc"/>.
+        /// </summary>
+        internal static (LargeFileRowState State, string Text, int Percent) Decide(LargeFileUploadFacts upload, DateTime utcNow)
         {
             var percent = upload.PiecesTotal <= 0 ? 0 : (int)Math.Min(100, upload.PiecesReceived * 100 / upload.PiecesTotal);
             var allIn = upload.PiecesTotal > 0 && upload.PiecesReceived >= upload.PiecesTotal;
 
-            return upload.IsChecking || allIn
-                ? (LargeFileRowState.Checking, "being checked", 100)
-                : (LargeFileRowState.Uploading, $"uploading, {percent}%", percent);
+            if (upload.IsChecking)
+                return (LargeFileRowState.Checking, "being checked", 100);
+
+            if (allIn)
+                return (LargeFileRowState.WaitingForCollector, "waiting for the collector to finish", 100);
+
+            if (upload.StalledAfter > TimeSpan.Zero && utcNow - upload.LastPieceUtc > upload.StalledAfter)
+                return (LargeFileRowState.WaitingForCollector, $"waiting for the collector, {percent}%", percent);
+
+            return (LargeFileRowState.Uploading, $"uploading, {percent}%", percent);
         }
+
+        /// <summary>The page's clock (the time an upload is judged stalled at). Test seam.</summary>
+        internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
 
         private FileValueRowViewModel ToRow(FileValue file, Guid sensorId, Guid productId, bool hasPassword, bool canManage)
@@ -235,14 +278,16 @@ namespace HSMServer.Model.FileSensors
             };
         }
 
-        private static LargeFileUploadRowViewModel ToUploadRow(LargeFileUploadFacts upload)
+        private static LargeFileUploadRowViewModel ToUploadRow(LargeFileUploadFacts upload, DateTime utcNow)
         {
-            var (state, text, percent) = Decide(upload);
+            var (state, text, percent) = Decide(upload, utcNow);
 
             return new LargeFileUploadRowViewModel
             {
                 FileId = upload.FileId,
-                Name = upload.Name,
+                Name = upload.Name.WithoutBidiControls(),
+                LastPieceUtc = upload.LastPieceUtc,
+                ExpiresUtc = upload.ExpiresUtc,
                 Size = upload.Size.ToReadableMemoryFormat(),
                 Kind = KindOf(upload.IsSecure),
                 State = state,
@@ -257,7 +302,7 @@ namespace HSMServer.Model.FileSensors
 
         private static string KindOf(bool secure) => secure ? SecureKind : NotSecureKind;
 
-        private static string Shown(string value) => string.IsNullOrWhiteSpace(value) ? FileValueRowViewModel.Unknown : value;
+        private static string Shown(string value) => string.IsNullOrWhiteSpace(value) ? FileValueRowViewModel.Unknown : value.WithoutBidiControls();
 
         private FileValue GetLastValue(Guid sensorId) => _cache.GetSensor(sensorId)?.LastValue as FileValue;
     }

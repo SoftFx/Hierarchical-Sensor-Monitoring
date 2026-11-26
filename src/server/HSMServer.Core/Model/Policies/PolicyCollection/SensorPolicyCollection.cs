@@ -51,7 +51,11 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void AddDefault(DefaultAlertsOptions options);
 
-        internal abstract void AddLargeFileAlert(InitiatorInfo initiator);
+        internal abstract Policy AddLargeFileAlert();
+
+        /// <summary>The journal record of a policy added before its sensor existed, written once the sensor is stored.</summary>
+        internal void JournalAddedPolicy(Policy policy, InitiatorInfo initiator) =>
+            CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator, stampOwnership: false);
 
         internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);
 
@@ -563,10 +567,11 @@ namespace HSMServer.Core.Model.Policies
 
         // The default alert of a File sensor created for large files (#1886): "new data has been received", sent where
         // the product's other alerts go, with the file's name, size and page. A policy like any other: persisted through
-        // Uploaded and journaled; the user may change or remove it, and nothing adds it again. It is the server's, not the
-        // collector's: the alert list a registration carries (the creating one too) reconciles the collector's own
-        // alerts, so it neither removes this one nor is blocked by it (see TryUpdate). A forced registration still may.
-        internal override void AddLargeFileAlert(InitiatorInfo initiator)
+        // Uploaded, and journaled by the caller once the sensor is stored (JournalAddedPolicy); the user may change or
+        // remove it, and nothing adds it again. It is the server's, not the collector's: the alert list a registration
+        // carries (the creating one too) reconciles the collector's own alerts, so it neither removes this one nor is
+        // blocked by it (see TryUpdate). A forced registration still may.
+        internal override Policy AddLargeFileAlert()
         {
             var policy = new PolicyType();
 
@@ -585,14 +590,15 @@ namespace HSMServer.Core.Model.Policies
                 ],
             };
 
-            if (policy.TryUpdate(update, out _, _sensor))
-            {
-                AddPolicy(policy);
+            if (!policy.TryUpdate(update, out _, _sensor))
+                return null;
 
-                CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator, stampOwnership: false);
-                AlertChangeTable[policy.Id.ToString()].SetUpdate(LargeFileAlertOwner);
-                Uploaded?.Invoke(ActionType.Add, policy);
-            }
+            AddPolicy(policy);
+
+            AlertChangeTable[policy.Id.ToString()].SetUpdate(LargeFileAlertOwner);
+            Uploaded?.Invoke(ActionType.Add, policy);
+
+            return policy;
         }
 
         internal const string LargeFileAlertOwnerInfo = "default alert of large files";

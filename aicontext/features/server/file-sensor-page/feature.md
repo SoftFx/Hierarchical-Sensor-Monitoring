@@ -21,21 +21,24 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 - Every file action (`GetFile`, `GetFileStream`, `GetFileInfo`, `GetRecentFilesView`, `GetFilesPage`) answers an unknown sensor and a sensor of a product the user may not see the same way (404); it relies on the web UI access-check work.
 - Nothing a client sent (a file name, an extension, a comment, an application, a host) goes into a script or an event attribute: rows carry it as HTML-encoded text and `data-*` attributes, element ids are made of the value's time only, and the handlers in `_SensorFileContent.cshtml` read the attributes.
 - A large value never reaches the text preview or the content download of an ordinary file, whatever its extension and size (a routed `SendFile` of a small txt included): the row offers no Preview and only the archive's download, and `GetFile` / `GetFileStream` answer 404 for it.
-- The download log of a file is shown to a Manager of the product and an admin only, and read only when they ask for it in the row (`GetLargeFileDownloads`), never with a page: the log is not read on every view.
+- The download log of a file is shown to a Manager of the product and an admin only, and read only when they ask for it in the row (`GetLargeFileDownloads`), never with a page: the log is not read on every view. A log that cannot be read answers the row "the download log cannot be read now", not an error.
+- A client's name, extension, comment, application and host are shown with their bidirectional control characters replaced by U+FFFD, so the text reads in the order it was written; the export writes them the same way.
 
 ## Primary Workflows
 
 1. The page loads the tab: `GetFileInfo` describes the last value. An ordinary csv/txt small enough is previewed; a large last value shows no preview and no buttons above the list.
 2. `GetRecentFilesView` returns the first page: the uploads of the sensor in progress, then up to 20 values (an ordinary last value is left out: it is shown above). "Older files" asks `GetFilesPage?olderThan=<ticks>` and replaces itself with the next page.
-3. While the list shows an upload or a large file not yet ready, the tab reads the first page again every 10 seconds (the percentage, "being checked", "being packed" turning "ready"), unless the user went to older pages or opened a row.
+3. While the list shows an upload in progress, a check, or a large file being packed, the tab reads the first page again every 10 seconds (the percentage, "being checked", "being packed" turning "ready"), only while the browser tab is visible, and not once the user went to older pages or opened a row. A file waiting for a password, for room, after a failed build, or an upload waiting for its collector is not polled: it changes rarely.
 4. A row of a large value shows its state; its download button links the archive (`/LargeFiles/Download/{fileId}/{archiveId}`, step 3), which checks access again and records the download.
 
 ## States of a large file on the page
 
 | Where it comes from | State on the page |
 |---|---|
-| store record `Uploading`, pieces missing | uploading, N% |
-| store record `Uploading`, every piece in or the end check running | being checked |
+| store record `Uploading`, pieces missing, a piece within the store's lease time (`LargeFiles.LeaseTimeoutSeconds`) | uploading, N% |
+| store record `Uploading`, the store's end check running now (`IsChecking`) | being checked |
+| store record `Uploading`, every piece in and no check running (the collector left before its end, or a check failed) | waiting for the collector to finish |
+| store record `Uploading`, no piece for longer than the lease time | waiting for the collector, N%; the time of the last piece and the day the store removes the part (`LargeFiles.AbandonedUploadDays` after it) |
 | `verified`, secure, the product has no dump password (asked before the builder's state) | waiting for the product's password |
 | `verified`, builder `none`, `queued`, `building` (none: after a restart, before the builder lists the file) | being packed |
 | `verified`, builder `waitingForRoom` | being packed (waiting for disk space) |
@@ -49,17 +52,17 @@ There is no "removed by retention" state: retention removes a value's row by its
 
 ## History export
 
-The CSV export of the History tab (`SensorHistoryController.ExportHistory`) and of the Sensor API history write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
+The CSV export of the History tab (`SensorHistoryController.ExportHistory`, the archive store injected) and of the Sensor API history write every cell as text: quoted, a quote doubled, a text that starts with `=`, `+`, `-`, `@`, a tab or a carriage return and is not a number prefixed with an apostrophe, the bidirectional control characters neutralized. They write a large value as a row with an empty content column, its name (without the extension) and its extension in their columns, its status and comment, and a last column `Large file` that holds `Large file <file id>; <size> bytes; secure|not secure; <state>` (the kind and the state read from the store; without them when the store cannot be read). The column is there only when the exported values hold a large one, so an ordinary File sensor's export keeps its columns.
 
 ## API / Public Contracts
 
 | Route | Answer |
 |---|---|
 | `GET /Home/GetFileInfo?Selected=<id>` | `FileInfoDto`, or 404 |
-| `GET /Home/GetFile?Selected=<id>&dateTime=<ticks>` | the content of an ordinary file value (the last one for 0); 404 for a large value, an unknown time, an unknown or invisible sensor |
+| `GET /Home/GetFile?Selected=<id>&dateTime=<ticks>` | the content of an ordinary file value (the last one for 0); 404 for a large value, an unknown time, an unknown or invisible sensor; 503 with `Retry-After: 1` when the sensor's history is being read by another reader |
 | `POST /Home/GetFileStream?Selected=<id>&dateTime=<ticks>` | the same as a stream, for the preview |
 | `GET /Home/GetRecentFilesView?fileId=<id>` | the first page (partial `_FileAccordions`) |
-| `GET /Home/GetFilesPage?fileId=<id>&olderThan=<ticks>` | the page of values older than the time |
+| `GET /Home/GetFilesPage?fileId=<id>&olderThan=<ticks>` | the page of values older than the time; 503 with `Retry-After: 1` when the history is busy (also for `GetRecentFilesView` and `GetFileStream`) |
 | `GET /Home/GetLargeFileDownloads?fileId=<sensor id>&file=<file id>` | who downloaded the file and when, the 20 most recent (partial `_LargeFileDownloads`); 404 for a Viewer, a file of another sensor, an unknown file or sensor |
 
 ## Key Files
@@ -93,4 +96,5 @@ The CSV export of the History tab (`SensorHistoryController.ExportHistory`) and 
 
 ## Known Issues / Limitations
 
-- The history of one File sensor is read by one reader at a time (the per-sensor file-history lock of the cache): a page, a download or a preview asked while another read of the same sensor runs answers an empty page or 404; asking again reads it. The live refresh keeps the list it has when its read met another one.
+- The history of one File sensor is read by one reader at a time (the per-sensor file-history lock of the cache). A read refused by it is told from "no values" (an empty answer while the lock is held, before or after the read) and answered 503 with `Retry-After`: the first load asks again up to five times and then says the files cannot be read now; "Older files" keeps its button and asks again up to three times; a download asks again up to three times and then shows a message, the browser stays on the page; the live refresh keeps the list it has.
+- The list reads the rows of the sensor's history whole, so an ordinary file value's content is read with its row (as the History tab does); the list shows only its description. A page reads at most 23 rows.

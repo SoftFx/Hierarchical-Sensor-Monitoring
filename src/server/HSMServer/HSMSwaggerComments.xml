@@ -19,6 +19,13 @@
             the kind and the state read from <paramref name="largeFiles"/> when it is given.
             </summary>
         </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvCell(System.String)">
+            <summary>
+            One CSV cell, written as text: quoted, a quote doubled, the bidirectional control characters neutralized, and a
+            text that a spreadsheet would read as a formula (it starts with = + - @, a tab or a carriage return and is not a
+            number) prefixed with an apostrophe.
+            </summary>
+        </member>
         <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
@@ -2153,6 +2160,9 @@
             history (retention, a clear); "missing" is a value whose file the store has no record of.
             </summary>
         </member>
+        <member name="F:HSMServer.Model.FileSensors.LargeFileRowState.WaitingForCollector">
+            <summary>An upload whose collector stopped sending: every piece in without its end, or no piece for a while.</summary>
+        </member>
         <member name="T:HSMServer.Model.FileSensors.FileValueRowViewModel">
             <summary>One file value in the list of a File sensor's page.</summary>
         </member>
@@ -2192,14 +2202,32 @@
         <member name="T:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel">
             <summary>An upload of the sensor that is not a value yet.</summary>
         </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel.LastPieceUtc">
+            <summary>When the last piece came (the start, before any piece).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel.ExpiresUtc">
+            <summary>When the store removes the part if no piece comes.</summary>
+        </member>
         <member name="T:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel">
             <summary>Who downloaded one large file and when, newest first (the download log, #1885).</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel.IsCut">
             <summary>The list holds the most recent records only.</summary>
         </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel.IsUnavailable">
+            <summary>The download log could not be read now.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileRead">
+            <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileRead.#ctor(HSMCommon.Model.FileValue,System.Boolean)">
+            <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+        </member>
         <member name="T:HSMServer.Model.FileSensors.FileValuesPageViewModel">
             <summary>A page of the file values of one File sensor, newest first.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.IsBusy">
+            <summary>The sensor's history was being read by another reader: nothing was read, ask again.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.Uploads">
             <summary>The uploads in progress, on the first page only, at most a page of them.</summary>
@@ -2235,7 +2263,8 @@
         <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetFileAsync(System.Guid,System.Int64)">
             <summary>
             The value at <paramref name="timeTicks"/> (the key of its row), read by that time alone; the last value when it is
-            0. Null when there is none. The content is decompressed for an ordinary file value.
+            0. Null when there is none; <see cref="P:HSMServer.Model.FileSensors.FileRead.Busy"/> when the sensor's history was being read by another reader,
+            which is not "none": ask again. The content is decompressed for an ordinary file value.
             </summary>
         </member>
         <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetPageAsync(System.Guid,System.String,System.Nullable{System.Int64},HSMServer.Model.Authentication.User)">
@@ -2263,6 +2292,16 @@
             secure file never waits for a password.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.Decide(HSMServer.Model.FileSensors.LargeFileUploadFacts,System.DateTime)">
+            <summary>
+            The state of an upload that is not a value yet. Being checked only while the store runs its end check. An upload
+            whose every piece is in without a check, or that got no piece for longer than <see cref="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.StalledAfter"/>
+            (the collector went away, a check failed), waits for its collector; the store removes it at <see cref="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.ExpiresUtc"/>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileSensorPageService.Clock">
+            <summary>The page's clock (the time an upload is judged stalled at). Test seam.</summary>
+        </member>
         <member name="T:HSMServer.Model.FileSensors.LargeFileUploadFacts">
             <summary>An upload of a File sensor that is not a value yet: its part in the large file store.</summary>
         </member>
@@ -2270,7 +2309,16 @@
             <summary>The original file name, as the collector named it.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsChecking">
-            <summary>The end check of the upload is running (or every piece is in and the file is not verified yet).</summary>
+            <summary>The store's end check of the upload is running now.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.LastPieceUtc">
+            <summary>When the last piece came; the start of the upload before any piece.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.ExpiresUtc">
+            <summary>When the store removes the part if no piece comes (the last piece plus LargeFiles.AbandonedUploadDays).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.StalledAfter">
+            <summary>No piece for longer than this (the store's lease time) and the upload waits for its collector; zero: never.</summary>
         </member>
         <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsSecure">
             <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>

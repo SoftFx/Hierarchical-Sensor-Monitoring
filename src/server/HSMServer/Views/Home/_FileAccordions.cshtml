@@ -24,7 +24,8 @@
 
 @foreach (var upload in Model.Uploads)
 {
-    <div class="card my-1 large-file-upload" data-state="@upload.State" data-live="true">
+    <div class="card my-1 large-file-upload" data-state="@upload.State"
+         data-live="@(upload.State is LargeFileRowState.Uploading or LargeFileRowState.Checking ? "true" : "false")">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between flex-wrap">
                 <div class="text-break">
@@ -36,6 +37,10 @@
                 <div class="d-flex flex-md-column align-items-end" style="font-size: smaller">
                     <span>Size: @upload.Size</span>
                     <span>Started: @upload.StartedUtc.ToDefaultFormat()</span>
+                    @if (upload.State == LargeFileRowState.WaitingForCollector)
+                    {
+                        <span class="large-file-stalled">Last piece: @upload.LastPieceUtc.ToDefaultFormat(); removed on @upload.ExpiresUtc.ToDefaultFormat() unless the collector continues</span>
+                    }
                 </div>
             </div>
             <div class="progress mt-1" style="height: 4px">
@@ -53,7 +58,7 @@
     <div class='accordion my-1 file-row' id='@row.RowId' data-time='@row.TimeTicks' data-extension='@row.Extension'
          data-preview='@(row.IsPreviewEnabled ? "true" : "false")' data-large='@(row.IsLarge ? "true" : "false")'
          data-state='@(row.IsLarge ? row.LargeState.ToString() : string.Empty)'
-         data-live='@(row.IsLarge && row.LargeState is not (LargeFileRowState.Ready or LargeFileRowState.Missing or LargeFileRowState.Unavailable) ? "true" : "false")'>
+         data-live='@(row.IsLarge && row.LargeState == LargeFileRowState.Packing ? "true" : "false")'>
         <div class='accordion-item'>
             <h2 class='accordion-header'>
                 <button class='accordion-button collapsed pt-2 pb-1 file-row-toggle' type='button' data-bs-toggle='collapse'

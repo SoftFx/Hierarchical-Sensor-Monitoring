@@ -61,9 +61,8 @@ namespace HSMServer.Core.Model.Policies
 
 
         /// <summary>
-        /// The file name for a message. A name is the client's text and a message is rendered as markup on the way (the
-        /// web comment, Telegram, which honours tags and HTML entities): angle brackets and the ampersand are replaced by
-        /// look-alikes, line breaks, control and format characters (a right-to-left override) by a space; then it is cut to
+        /// The file name for a message, neutralized for the message's markup: angle brackets and the ampersand are replaced
+        /// by look-alikes, line breaks, control and format characters by a space; then it is cut to
         /// <see cref="MaxFileNameLength"/>.
         /// </summary>
         public static string FileName(FileValue file)

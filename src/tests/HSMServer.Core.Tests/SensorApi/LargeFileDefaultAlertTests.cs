@@ -116,6 +116,38 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // A creation the store fails rolls the sensor back; the alert it was given leaves no journal record behind.
+        [Fact]
+        public async Task ACreationThatFails_LeavesNoJournalRecordOfTheDefaultAlert()
+        {
+            var records = new System.Collections.Generic.List<HSMServer.Core.Model.JournalRecordModel>();
+            var journal = new Moq.Mock<HSMServer.Core.Journal.IJournalService>();
+            journal.Setup(j => j.AddRecord(Moq.It.IsAny<HSMServer.Core.Model.JournalRecordModel>()))
+                   .Callback((HSMServer.Core.Model.JournalRecordModel record) => records.Add(record));
+
+            var failing = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailSensorAdd = entity => entity.DisplayName == "failing",
+            };
+            var snapshot = new Moq.Mock<HSMServer.Core.TreeStateSnapshot.ITreeStateSnapshot>();
+            snapshot.Setup(a => a.Keys).Returns(new HSMServer.Core.TreeStateSnapshot.StateCollection<HSMServer.Core.TreeStateSnapshot.States.LastKeyState, HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity.LastKeyStateEntity>());
+
+            await using var cache = new HSMServer.Core.Cache.TreeValuesCache(failing, snapshot.Object, journal.Object, _alertScheduleProvider,
+                new HSMServer.Core.ChangeSets.ChangeSetJournal(failing));
+
+            var result = await cache.AddOrUpdateSensorAsync(new HSMServer.Core.Model.Requests.SensorAddOrUpdateRequest(TestProductsManager.ProductId, "large/failing")
+            {
+                Update = new HSMServer.Core.Cache.UpdateEntities.SensorUpdate { Id = Guid.Empty, DefaultAlertsOptions = DefaultAlertsOptions.LargeFiles },
+                Type = HSMCommon.Model.SensorType.File,
+                TypeIsExplicit = true,
+            });
+
+            Assert.False(result.IsOk);
+            Assert.False(cache.TryGetSensorByPath(TestProductsManager.ProductId, "large/failing", out _));
+            Assert.DoesNotContain(records, record => record.PropertyName?.StartsWith("Alert", StringComparison.Ordinal) == true);
+        }
+
+
         private string[] Templates(string path) => Sensor(path).Policies.Select(p => p.Template).Order(StringComparer.Ordinal).ToArray();
 
         private BaseSensorModel Sensor(string path)

@@ -56,6 +56,8 @@ namespace HSMServer.Model.FileSensors
             if (Store is not { } store)
                 return [];
 
+            var limits = store.Limits ?? new LargeFileStoreLimits();
+
             return store.GetFiles(LargeFileState.Uploading)
                         .Where(record => record.SensorId == sensorId)
                         .OrderByDescending(record => record.CreatedUtc)
@@ -69,6 +71,9 @@ namespace HSMServer.Model.FileSensors
                             PiecesReceived = record.PieceCount,
                             PiecesTotal = record.TotalPieces,
                             IsChecking = store.IsChecking(record.FileId),
+                            LastPieceUtc = LastPieceOf(record),
+                            ExpiresUtc = LastPieceOf(record) + limits.AbandonedUploadAge,
+                            StalledAfter = limits.LeaseTimeout,
                             IsSecure = record.Secure,
                             Application = record.ClientName,
                             Host = record.RemoteAddress,
@@ -142,6 +147,9 @@ namespace HSMServer.Model.FileSensors
                        .ToList();
         }
 
+
+        // A record before its first piece counts from its start.
+        private static DateTime LastPieceOf(LargeFileRecord record) => record.PieceCount > 0 && record.LastPieceUtc > DateTime.MinValue ? record.LastPieceUtc : record.CreatedUtc;
 
         private static string Who(DownloadRecord record) =>
             record.TokenId is null ? record.UserName : $"{record.UserName} (token {record.TokenName})";

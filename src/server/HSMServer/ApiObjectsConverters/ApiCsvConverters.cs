@@ -154,7 +154,7 @@ namespace HSMServer.ApiObjectsConverters
                     if (ReferenceEquals(column, _largeFileHeader))
                     {
                         var description = value is LargeFileValue large ? LargeFileValueDescriptions.ToText(LargeFileValueDescriptions.Describe(large, largeFiles)) : string.Empty;
-                        rowValues.Add($"\"{description}\"");
+                        rowValues.Add(CsvCell(description));
                         continue;
                     }
 
@@ -185,9 +185,7 @@ namespace HSMServer.ApiObjectsConverters
                 return propValue;
             }
 
-            static string GetCsvValue(Header column, BaseValue value, string propValue) => $"""
-                                                                                            "{GetTransformedValue(column, value, propValue)}"
-                                                                                            """;
+            static string GetCsvValue(Header column, BaseValue value, string propValue) => CsvCell(GetTransformedValue(column, value, propValue));
         }
 
         private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)
@@ -205,5 +203,22 @@ namespace HSMServer.ApiObjectsConverters
         }
 
         private static string BuildRow(this List<string> values) => string.Join(_columnSeparator, values);
+
+        /// <summary>
+        /// One CSV cell, written as text: quoted, a quote doubled, the bidirectional control characters neutralized, and a
+        /// text that a spreadsheet would read as a formula (it starts with = + - @, a tab or a carriage return and is not a
+        /// number) prefixed with an apostrophe.
+        /// </summary>
+        internal static string CsvCell(string text)
+        {
+            text = (text ?? string.Empty).WithoutBidiControls();
+
+            if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r' &&
+                !double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _) &&
+                !double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out _))
+                text = "'" + text;
+
+            return $"\"{text.Replace("\"", "\"\"")}\"";
+        }
     }
 }

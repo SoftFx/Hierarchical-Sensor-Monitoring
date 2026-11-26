@@ -45,8 +45,9 @@ namespace HSMServer.Core.Tests.LargeFiles
             var service = new FileSensorPageService(_valuesCache);
 
             var found = await service.GetFileAsync(sensor.Id, weekStart.Ticks);
-            Assert.NotNull(found);
-            Assert.Equal(weekStart.Ticks, found.Time.Ticks);
+            Assert.False(found.Busy);
+            Assert.NotNull(found.Value);
+            Assert.Equal(weekStart.Ticks, found.Value.Time.Ticks);
 
             // The page before the newest value reaches back over the start of the week.
             var page = await service.GetPageAsync(sensor.Id, "id", weekStart.AddMinutes(1).Ticks, user: null);

@@ -85,7 +85,13 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.False(upload.IsSecure);
             Assert.False(upload.IsChecking);
             Assert.Equal(("TTS", "10.0.0.7"), (upload.Application, upload.Host));
-            Assert.Equal("uploading, 33%", FileSensorPageService.Decide(upload).Text);
+            Assert.Equal("uploading, 33%", FileSensorPageService.Decide(upload, upload.LastPieceUtc).Text);
+
+            // The store's own times: the last piece, when the part is removed, when the upload counts as stalled.
+            Assert.Equal(_store.Limits.AbandonedUploadAge, upload.ExpiresUtc - upload.LastPieceUtc);
+            Assert.Equal(_store.Limits.LeaseTimeout, upload.StalledAfter);
+            Assert.Equal(LargeFileRowState.WaitingForCollector,
+                FileSensorPageService.Decide(upload, upload.LastPieceUtc + _store.Limits.LeaseTimeout + TimeSpan.FromSeconds(1)).State);
 
             Assert.Empty(_source.GetUploads(Guid.NewGuid()));
             Assert.Null(_source.Describe(begin.FileId));

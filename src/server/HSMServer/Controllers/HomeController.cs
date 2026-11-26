@@ -642,9 +642,12 @@ namespace HSMServer.Controllers
             if (!TryGetSensor(encodedId, out var sensor))
                 return NotFound();
 
-            var value = await _files.GetFileAsync(sensor.Id, dateTime);
+            var read = await _files.GetFileAsync(sensor.Id, dateTime);
 
-            if (value is null || FileSensorPageService.IsLarge(value))
+            if (read.Busy)
+                return FileHistoryBusy();
+
+            if (read.Value is not { } value || FileSensorPageService.IsLarge(value))
                 return NotFound();
 
             var fileName = $"{sensor.Path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
@@ -658,9 +661,12 @@ namespace HSMServer.Controllers
             if (!TryGetSensor(encodedId, out var sensor))
                 return NotFound();
 
-            var value = await _files.GetFileAsync(sensor.Id, dateTime);
+            var read = await _files.GetFileAsync(sensor.Id, dateTime);
 
-            if (value is null || FileSensorPageService.IsLarge(value))
+            if (read.Busy)
+                return FileHistoryBusy();
+
+            if (read.Value is not { } value || FileSensorPageService.IsLarge(value))
                 return NotFound();
 
             if (value.Value is null)
@@ -695,7 +701,17 @@ namespace HSMServer.Controllers
             if (!TryGetSensor(fileId, out var sensor) || sensor.Type is not SensorType.File)
                 return NotFound();
 
-            return PartialView("_FileAccordions", await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan, CurrentUser));
+            var page = await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan, CurrentUser);
+
+            return page.IsBusy ? FileHistoryBusy() : PartialView("_FileAccordions", page);
+        }
+
+        // The history of the sensor was being read by another reader (one at a time): not "no file", ask again.
+        private IActionResult FileHistoryBusy()
+        {
+            Response.Headers.RetryAfter = "1";
+
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, "The files of this sensor are being read; try again.");
         }
 
         // Who downloaded a large file of the sensor, for a Manager of the product or an admin, read when the row asks for it.

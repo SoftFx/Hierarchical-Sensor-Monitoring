@@ -21,8 +21,17 @@ namespace HSMServer.Model.FileSensors
 
         public long PiecesTotal { get; init; }
 
-        /// <summary>The end check of the upload is running (or every piece is in and the file is not verified yet).</summary>
+        /// <summary>The store's end check of the upload is running now.</summary>
         public bool IsChecking { get; init; }
+
+        /// <summary>When the last piece came; the start of the upload before any piece.</summary>
+        public DateTime LastPieceUtc { get; init; }
+
+        /// <summary>When the store removes the part if no piece comes (the last piece plus LargeFiles.AbandonedUploadDays).</summary>
+        public DateTime ExpiresUtc { get; init; }
+
+        /// <summary>No piece for longer than this (the store's lease time) and the upload waits for its collector; zero: never.</summary>
+        public TimeSpan StalledAfter { get; init; }
 
         /// <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
         public bool IsSecure { get; init; } = true;
