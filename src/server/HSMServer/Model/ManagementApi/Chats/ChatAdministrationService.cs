@@ -12,16 +12,15 @@ using System.Threading.Tasks;
 namespace HSMServer.Model.ManagementApi.Chats
 {
     /// <summary>
-    /// The write engine behind the chat web flows (#1825): create (idempotent towards a row
-    /// pre-created by the Telegram /start flow), partial update with the explicit channel-clear
-    /// flags, webhook URL-shape validation in one place, and the chat-folder binding under the
-    /// "only folders the caller manages" rule. The web controller delegates here; the
-    /// /api/v1 + MCP surface (#1829) will call the same engine. Transport-agnostic: it answers
-    /// the area's write envelope (<see cref="PolicyWriteResult"/>), never an IActionResult.
-    /// The NAME rule (required, at most 100 characters) is not here yet — it lives in the
-    /// view model's DataAnnotations, so the web flow enforces it but a non-MVC caller does
-    /// not; #1829 moves it behind the shared name validator of the chat-setup initiative
-    /// (docs/initiatives/chat-setup-via-mcp.md) before the API/MCP write surface ships.
+    /// The write engine behind the chat web flows (#1825) and the management surface
+    /// (#1829): create (idempotent towards a row pre-created by the Telegram /start flow),
+    /// partial update with the explicit channel-clear flags, the chat name rule
+    /// (<see cref="ChatNameValidator"/>), webhook URL-shape validation in one place, and the
+    /// chat-folder binding under the "only folders the caller manages" rule. Transport-
+    /// agnostic: it answers the area's write envelope (<see cref="PolicyWriteResult"/>),
+    /// never an IActionResult. Admission is the caller's — the web controller's filters and
+    /// the management surface's service decide who may write; the engine decides what a
+    /// valid write is.
     /// </summary>
     public sealed class ChatAdministrationService
     {
@@ -47,18 +46,24 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         public async Task<PolicyWriteResult> CreateChatAsync(ChatUpdate update, ChatFolderBinding binding, Guid authorId, InitiatorInfo initiator)
         {
-            var stamped = update with { Initiator = initiator };
+            var stamped = Stamp(update, initiator);
             var withId = stamped.Id == Guid.Empty ? stamped with { Id = Guid.NewGuid() } : stamped;
 
-            if (ValidateWebhooks(withId) is { } invalid)
+            _chats.TryGetValue(withId.Id, out var existing);
+
+            if (existing is not null)
+                withId = KeepingItsStoredName(withId, existing);
+
+            // The row may already exist (pre-created by /start): a name it already holds is no clash.
+            if (Validate(withId, nameRequired: true, existing?.Name) is { } invalid)
                 return invalid;
 
             Chat chat;
 
-            if (_chats.TryGetValue(withId.Id, out var existing))
+            if (existing is not null)
             {
                 if (!await _chats.TryUpdate(withId))
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+                    return RefusedWrite(withId, nameRequired: true, existing.Name);
 
                 chat = existing;
             }
@@ -67,7 +72,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 chat = BuildChat(withId, authorId);
 
                 if (!await _chats.TryAdd(chat))
-                    return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+                    return RefusedWrite(withId, nameRequired: true);
             }
 
             await BindFoldersAsync(chat, binding, initiator);
@@ -81,16 +86,18 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         public async Task<PolicyWriteResult> UpdateChatAsync(ChatUpdate update, ChatFolderBinding binding, InitiatorInfo initiator)
         {
-            var stamped = update with { Initiator = initiator };
-
-            if (ValidateWebhooks(stamped) is { } invalid)
-                return invalid;
+            var stamped = Stamp(update, initiator);
 
             if (!_chats.TryGetValue(stamped.Id, out var chat))
                 return PolicyWriteResult.Fail(PolicyWriteOutcome.NotFound);
 
+            stamped = KeepingItsStoredName(stamped, chat);
+
+            if (Validate(stamped, currentName: chat.Name) is { } invalid)
+                return invalid;
+
             if (!await _chats.TryUpdate(stamped))
-                return PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+                return RefusedWrite(stamped, currentName: chat.Name);
 
             await BindFoldersAsync(chat, binding, initiator);
 
@@ -120,22 +127,42 @@ namespace HSMServer.Model.ManagementApi.Chats
         }
 
 
-        // The same webhook URL-shape rule the web form enforced (NotificationsController's
-        // ValidateWebhooks, #1329), in one place now: a non-null webhook field of a write must
-        // be an absolute http/https URL. Null means "no change" and passes. Field keys match
-        // the form's property names, so the web re-render finds its spans.
-        private static PolicyWriteResult ValidateWebhooks(ChatUpdate update)
+        // The write rules of both surfaces: the chat name (#1829 — required on a creation,
+        // at most 100 characters, unique per server ignoring case and surrounding spaces; an
+        // omitted name, a partial update, is not checked, and a row keeping its own name
+        // breaks nothing — compared trimmed, like every stored name), the aggregation delay
+        // (0..a day — a negative delay never flushes a channel's accumulator, so a chat
+        // holding one drops its alerts in silence), and the webhook
+        // URL-shape rule the web form enforced (NotificationsController's
+        // ValidateWebhooks, #1329): a non-null webhook field of a write must be an absolute
+        // http/https URL. Null means "no change" and passes. Every problem answers in one
+        // body, keyed by the update's property names — the API's wire names in camelCase,
+        // and the web form's own where they coincide (the form carries the delay rule as a
+        // Range attribute under its own field name). Internal: the management surface runs
+        // the same validation first, to answer a request's every problem in one body before
+        // the engine applies anything — it passes the row's current name as the engine does.
+        internal PolicyWriteResult Validate(ChatUpdate update, bool nameRequired = false, string currentName = null)
         {
             Dictionary<string, string[]> errors = null;
+            var name = nameRequired ? update.Name ?? string.Empty : update.Name;
 
-            Validate(update.SlackWebhookUrl, nameof(ChatUpdate.SlackWebhookUrl));
-            Validate(update.MattermostWebhookUrl, nameof(ChatUpdate.MattermostWebhookUrl));
+            if (name is not null && ChatNameValidator.FindError(name, update.Id, _chats.GetValues() ?? [], currentName) is { } nameError)
+                (errors ??= []).Add(nameof(ChatUpdate.Name), [nameError]);
+
+            if (update.MessagesAggregationTimeSec is { } delay
+                && (delay < Chat.MinMessagesAggregationTimeSec || delay > Chat.MaxMessagesAggregationTimeSec))
+            {
+                (errors ??= []).Add(nameof(ChatUpdate.MessagesAggregationTimeSec), [Chat.AggregationTimeRangeText]);
+            }
+
+            ValidateWebhook(update.SlackWebhookUrl, nameof(ChatUpdate.SlackWebhookUrl));
+            ValidateWebhook(update.MattermostWebhookUrl, nameof(ChatUpdate.MattermostWebhookUrl));
 
             return errors is null
                 ? null
                 : PolicyWriteResult.Fail(PolicyWriteOutcome.Invalid, errors);
 
-            void Validate(string url, string field)
+            void ValidateWebhook(string url, string field)
             {
                 if (url is null)
                     return;
@@ -145,6 +172,32 @@ namespace HSMServer.Model.ManagementApi.Chats
                     (errors ??= []).Add(field, ["Webhook URL must be a valid URL"]);
             }
         }
+
+        // The write's initiator on the update, and the name trimmed — it is stored exactly
+        // as it was validated.
+        private static ChatUpdate Stamp(ChatUpdate update, InitiatorInfo initiator) =>
+            update with { Initiator = initiator, Name = update.Name?.Trim() };
+
+        // A posted name that is the row's stored name once trimmed is no change: the web
+        // form shows a row stored with surrounding spaces (from before the name was held
+        // trimmed) trimmed, and posts that back on an untouched save. The stored name is
+        // kept as it is, so the row is neither refused as a clash with another chat's name
+        // nor renamed — and journaled as renamed — behind the user's back.
+        private static ChatUpdate KeepingItsStoredName(ChatUpdate update, Chat chat) =>
+            update.Name is not null && ChatNameValidator.SameName(update.Name, chat.Name)
+                ? update with { Name = chat.Name }
+                : update;
+
+        // A write the store refused. The store repeats the name rule in front of its own
+        // write (ChatsManager), so this is where two writes of one name end: the loser's
+        // write is refused there and, back here, the winner is in the store. The rules are
+        // run once more against the store as it is NOW: a name that is taken answers the
+        // same 422 as up front, naming the field. Nothing else can have changed since the
+        // write passed the same rules a moment ago, so a refusal that still breaks none of
+        // them is the store's own failure — the fixed-message conflict.
+        private PolicyWriteResult RefusedWrite(ChatUpdate update, bool nameRequired = false, string currentName = null) =>
+            Validate(update, nameRequired, currentName)
+            ?? PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
 
         // A brand-new chat is built from the update the same way the web form built it
         // (ChatViewModel.ToNewChat): defaults for the omitted settings, author + creation time

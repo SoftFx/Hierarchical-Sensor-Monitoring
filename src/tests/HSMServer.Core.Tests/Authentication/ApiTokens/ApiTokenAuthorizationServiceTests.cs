@@ -769,6 +769,185 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
 
+        // ---- chat creation (the admin-only boundary-less write, #1829) ------------
+
+
+        [Fact]
+        public void ChatCreate_AdminOwner_ReadWriteToken_Allowed()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Allowed, CreateService().AuthorizeChatCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ChatCreate_NonAdminOwner_Forbidden()
+        {
+            // The web UI's AddChat is admin-only — a chat created with an attacker-supplied
+            // webhook would exfiltrate every alert sent to it — and the mirror keeps that.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, CreateService().AuthorizeChatCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ChatCreate_ReadOnlyToken_Forbidden()
+        {
+            // Even an admin's read-only credential cannot create.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: true);
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, CreateService().AuthorizeChatCreate(Principal()));
+        }
+
+
+        [Fact]
+        public void ChatCreate_Denial_IsRecordedOnceAsDenied_NeverAsNotFound()
+        {
+            // A creation has no target, so there is nothing to enumerate: the refusal is the
+            // 403 signal — one AuthorizationDenied record, never the per-target 404 signal.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeChatCreate(Principal()));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+        }
+
+        [Fact]
+        public void ChatCreate_RevokedToken_Forbidden_AndDeniedRecorded()
+        {
+            // A token revoked between authentication and this authorization fails closed:
+            // not an admin's read-write credential any more.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+            _tokens.Setup(t => t.IsTokenLive(TokenId)).Returns(false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeChatCreate(Principal()));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+        }
+
+
+        // ---- changing an existing chat (#1829) -------------------------------------
+
+        // A chat is no boundary of its own: its sight is the read surface's composition
+        // (global, or bound to a folder the owner can see) and its write gate the detail
+        // rule (an admin, or the manager of a bound folder). Unlike the body-shaping
+        // predicates it composes, this decision is a WRITE: its denials are recorded.
+
+        [Theory]
+        [InlineData(true, ProductRoleEnum.ProductManager)]  // an admin changes everything
+        [InlineData(false, ProductRoleEnum.ProductManager)] // the manager of a bound folder
+        public void ChatWrite_Admin_OrManagerOfABoundFolder_Allowed_AndNothingRecorded(bool isAdmin, ProductRoleEnum role)
+        {
+            _owner.IsAdmin = isAdmin;
+            _owner.FoldersRoles.Add(FolderG, role);        // the OTHER folder: only one bound folder needs to be managed
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Allowed, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), [FolderF, FolderG]));
+
+            Assert.Empty(events);
+        }
+
+        [Fact]
+        public void ChatWrite_BoundOnlyToFoldersOutsideTheOwnersSight_IsNotFound_AndRecordedAsNotFound()
+        {
+            // The area's anti-enumeration answer for a chat the owner cannot see: the 404
+            // that feeds the enumeration-probe signal.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.NotFound, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), [FolderF]));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationNotFound, denial.Kind);
+        }
+
+        [Fact]
+        public void ChatWrite_GlobalChat_NonAdmin_IsForbidden_AndRecordedAsDenied()
+        {
+            // A global chat is offered to every manager (it is in everyone's sight) but is
+            // admin-only to change: visible, not changeable — the 403.
+            _owner.IsAdmin = false;
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), []));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+        }
+
+        [Fact]
+        public void ChatWrite_GlobalChat_OwnerWhoSeesNoBoundary_IsNotFound_LikeAnUnknownChat_AndRecordedAsNotFound()
+        {
+            // The read surface's caller-wide gate, in the write's terms. An owner who sees
+            // no boundary sees no chat at all, a global one included, and could never pass
+            // the change gate. Answering Forbidden for a global chat would tell it apart
+            // from an unknown id, which the write answers 404 before asking the evaluator.
+            _owner.IsAdmin = false;
+            _owner.FoldersRoles.Clear();
+            _owner.ProductsRoles.Clear();
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.NotFound, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), []));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationNotFound, denial.Kind);
+        }
+
+        [Fact]
+        public void ChatWrite_VisibleChatTheOwnerCannotChange_IsForbidden_AndRecordedAsDenied()
+        {
+            // The owner sees the folder the chat is bound to (a Viewer role on it) but
+            // does not manage it.
+            _owner.IsAdmin = false;
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductViewer);
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), [FolderF]));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+        }
+
+        [Fact]
+        public void ChatWrite_ReadOnlyToken_Forbidden_AndRecordedAsDenied()
+        {
+            // Even an admin's read-only credential cannot change a chat — a webhook is
+            // an exfiltration channel, and the flag constrains writes.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: true);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), [FolderF]));
+
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, Assert.Single(events).Kind);
+        }
+
+
         private static ApiTokenInfo BuildInfo(bool readOnly = false) => new()
         {
             EntityId = Guid.NewGuid(),
