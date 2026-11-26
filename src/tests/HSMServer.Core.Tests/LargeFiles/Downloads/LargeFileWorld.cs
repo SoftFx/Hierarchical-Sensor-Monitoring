@@ -90,6 +90,12 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
         public FakeLargeFileArchiveStore Store { get; } = new();
 
+        // The real pieces an end-to-end test puts in place of the fake store and the mocks; the fakes when null.
+        public ILargeFileArchiveStore ArchiveStore { get; set; }
+        public IArchiveBuilder ArchiveBuilder { get; set; }
+        public IDumpPasswordService PasswordService { get; set; }
+        public IDownloadLog DownloadLog { get; set; }
+
         public Mock<ITreeValuesCache> Cache { get; } = new();
         public Mock<IUserManager> Users { get; } = new();
         public Mock<IApiTokenManager> Tokens { get; } = new();
@@ -140,8 +146,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
         public LargeFileDownloadService CreateService() =>
-            new(Store, Cache.Object, CreateEvaluator(), Tokens.Object, Users.Object, Builder.Object, Passwords.Object, Log.Object,
-                Monitor.Object, TimeProvider.System, NullLogger<LargeFileDownloadService>.Instance);
+            new(ArchiveStore ?? Store, Cache.Object, CreateEvaluator(), Tokens.Object, Users.Object, ArchiveBuilder ?? Builder.Object,
+                PasswordService ?? Passwords.Object, DownloadLog ?? Log.Object, Monitor.Object, TimeProvider.System, NullLogger<LargeFileDownloadService>.Instance);
 
         public ApiTokenAuthorizationService CreateEvaluator() =>
             new(Users.Object, Tokens.Object, Folders.Object, Cache.Object, SecurityEvents.Object);
@@ -168,15 +174,15 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
                         services.AddHsmApiTokenAuthorization();
 
                         services.AddSingleton(Store);
-                        services.AddSingleton<ILargeFileArchiveStore>(Store);
+                        services.AddSingleton(ArchiveStore ?? Store);
                         services.AddSingleton(Cache.Object);
                         services.AddSingleton(Users.Object);
                         services.AddSingleton(Tokens.Object);
                         services.AddSingleton(Folders.Object);
                         services.AddSingleton(SecurityEvents.Object);
-                        services.AddSingleton(Builder.Object);
-                        services.AddSingleton(Passwords.Object);
-                        services.AddSingleton(Log.Object);
+                        services.AddSingleton(ArchiveBuilder ?? Builder.Object);
+                        services.AddSingleton(PasswordService ?? Passwords.Object);
+                        services.AddSingleton(DownloadLog ?? Log.Object);
                         services.AddSingleton(Monitor.Object);
                         services.AddSingleton(Config.Object);
                         services.AddSingleton(TimeProvider.System);
