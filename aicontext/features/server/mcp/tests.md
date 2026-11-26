@@ -54,6 +54,12 @@
 - `ListChats_DeniedGate_IsToolError_ChatsNeverQueried` — the caller-wide gate; nothing is resolved for a denied caller.
 - `ListChats_MemoizesVisibility_PerDistinctFolder` — the evaluator is resolved once per distinct folder (Times.Exactly(2)).
 - `GetChat_Visible_MapsDto`.
+
+`ChatsMcpToolsTests` also carries the #1826 verification tools (the semantics live in `ChatVerificationServiceTests` and `ChannelTestSendResultTests` — these pin the TOOL contracts):
+
+- `SendChatTestMessage_AnswersTheDeliveryOutcome` — the outcome DTO through the tool.
+- `SendChatTestMessage_ChannelNotCarried_IsAToolErrorNamingTheChannel` — the field-keyed rejection as tool-error text.
+- `CreateChatTelegramInvitation_BotNotRunning_IsAToolErrorPointingAtTheBotCredential` — the remedy text names `update_telegram_bot`.
 - `GetChat_UnknownId_IsToolError` / `GetChat_InvisibleFolderChat_SameToolErrorAsUnknown` — anti-enumeration carried into MCP.
 
 `FoldersMcpToolsTests` — the folder tools as renderings of `FoldersReadService` (the service itself is pinned by `FoldersApiControllerTests` — the shared regression net):

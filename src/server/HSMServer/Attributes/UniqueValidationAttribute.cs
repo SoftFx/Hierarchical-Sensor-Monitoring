@@ -43,6 +43,10 @@ namespace HSMServer.Attributes
             {
                 var key = cache.GetAccessKey(model.Id);
 
+                // No such key, so no name to clash with: the action answers 404 for it.
+                if (key is null)
+                    return true;
+
                 keys = key.IsMaster ? cache.GetMasterKeys() : GetProductKeys(cache, key.ProductId);
             }
             else

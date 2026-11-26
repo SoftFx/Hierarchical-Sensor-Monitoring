@@ -85,7 +85,8 @@ namespace HSMServer.Core.Tests.Folders
 
 
         private static ChatsManager BuildChatsManager()
-            => new(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object);
+            => new(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object,
+                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
 
         private static (FolderManager manager, Mock<ITreeValuesCache> cacheMock) BuildFolderManager(ChatsManager chats)
         {

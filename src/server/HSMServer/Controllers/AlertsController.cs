@@ -6,7 +6,6 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
-using HSMServer.Folders;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
@@ -37,6 +36,11 @@ namespace HSMServer.Controllers
             WriteIndented = true,
         };
 
+        // What the import answers for a group it could not place. The same for an unknown id or name and
+        // for one the user does not manage.
+        internal const string ImportTargetNotFound = "This file names no products: select a node you manage to import it";
+        internal const string ProductNotFound = "No product you manage has this name";
+
         private static readonly JsonSerializerOptions _deserializeOptions = new()
         {
             AllowTrailingCommas = true,
@@ -44,8 +48,10 @@ namespace HSMServer.Controllers
 
         private readonly IChatsManager _chats;
         private readonly ITreeValuesCache _cache;
-        private readonly IFolderManager _folders;
-        private readonly TreeViewModel _tree;
+        // The export and the import are offered by the tree to a node's and a folder's Managers. Every id
+        // from the client is resolved through the Managed lookups, which answer "not found" for an
+        // entity the user does not manage; the controller holds no reference to the global tree.
+        private readonly UserTreeAccess _tree;
         private readonly PolicyAdministrationService _policies;
 
 
@@ -57,24 +63,25 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(IChatsManager chats, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
+        public AlertsController(IChatsManager chats, UserTreeAccess tree, ITreeValuesCache cache,
             IUserManager users, PolicyAdministrationService policies) : base(users)
         {
             _chats = chats;
-            _folders = folders;
             _cache = cache;
             _tree = tree;
+            _policies = policies;
         }
 
 
         [HttpGet]
         public IActionResult ExportFolderAlerts(Guid folderId)
         {
-            if (_folders.TryGetValue(folderId, out var folder))
+            if (_tree.TryGetManagedFolder(CurrentUser, folderId, out var folder))
             {
                 var exportGroup = new PolicyExportGroup();
 
-                foreach (var (productId, product) in folder.Products)
+                // The folder Manager role does not imply the Manager role on every product in it.
+                foreach (var (productId, product) in _tree.GetManagedProducts(CurrentUser, folder))
                     exportGroup = AddNodeAlertsToGroup(exportGroup.SetProduct(product.Name), productId);
 
                 return ExportModelToFile(folder.Name, exportGroup);
@@ -86,7 +93,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult ExportAlerts(Guid selectedId)
         {
-            if (_cache.TryGetProduct(selectedId, out var product))
+            if (_tree.TryGetManagedNode(CurrentUser, selectedId, out _) && _cache.TryGetProduct(selectedId, out var product))
                 return ExportModelToFile(product.FullPath, AddNodeAlertsToGroup(new PolicyExportGroup(), product.Id));
             
             return _emptyResult;
@@ -97,26 +104,45 @@ namespace HSMServer.Controllers
         public async ValueTask<string> ImportAlerts([FromBody] AlertImportViewModel model)
         {
             var toast = new ImportAlertsToastViewModel();
-            var targetId = _tree.Nodes.TryGetValue(model.NodeId, out var target) ? target.Id : Guid.Empty;
+
+            // A node the user does not manage is no target, like an unknown id: nothing is looked up in
+            // it, so the answer says nothing about what it holds. A folder is no target either: a file
+            // exported from a folder names its products.
+            _tree.TryGetManagedNode(CurrentUser, model.NodeId, out var target);
+            var targetReported = false;
 
             try
             {
                 var importList = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _deserializeOptions);
                 var newAlerts = new CDict<List<PolicyUpdate>>();
+                var sensorNames = new Dictionary<Guid, string>();
 
                 foreach (var importGroup in importList)
                 {
                     if (importGroup.Products is null)
-                        ImportAlertsToProduct(targetId, importGroup, newAlerts, toast);
+                    {
+                        if (target is not null)
+                            ImportAlertsToProduct(target, importGroup, newAlerts, sensorNames, toast);
+                        else if (!targetReported)
+                        {
+                            toast.AddError(ImportTargetNotFound, "the selected item");
+                            targetReported = true;
+                        }
+                    }
                     else
                     {
+                        // The names of a file are looked up over the whole server: a product the user
+                        // does not manage is reported like a name no product has.
                         foreach (var productName in importGroup.Products)
-                            if (_cache.TryGetProductByName(productName, out var product))
-                                ImportAlertsToProduct(product.Id, importGroup, newAlerts, toast);
+                            if (_cache.TryGetProductByName(productName, out var product) &&
+                                _tree.TryGetManagedNode(CurrentUser, product.Id, out var namedProduct))
+                                ImportAlertsToProduct(namedProduct, importGroup, newAlerts, sensorNames, toast);
+                            else
+                                toast.AddError(ProductNotFound, productName);
                     }
                 }
 
-                await SendAlertUpdatesAsync(newAlerts, toast);
+                await SendAlertUpdatesAsync(newAlerts, sensorNames, toast);
             }
             catch (Exception ex)
             {
@@ -127,27 +153,29 @@ namespace HSMServer.Controllers
         }
 
 
-        private void ImportAlertsToProduct(Guid nodeId, AlertExportViewModel importGroup, CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        // targetNode is a node the user manages; the callers resolve it through the Managed lookup.
+        private void ImportAlertsToProduct(ProductNodeViewModel targetNode, AlertExportViewModel importGroup,
+            CDict<List<PolicyUpdate>> newAlerts, Dictionary<Guid, string> sensorNames, ImportAlertsToastViewModel toast)
         {
-            if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
+            var availableChats = targetNode.GetAvailableChats(_chats)
+                .ToDictionary(k => k.Value, v => v.Key);
+            var productId = targetNode.RootProduct.Id;
+
+            foreach (var sensorPath in importGroup.Sensors)
             {
-                var availableChats = targetNode.GetAvailableChats(_chats)
-                    .ToDictionary(k => k.Value, v => v.Key);
-                var productId = targetNode.RootProduct.Id;
+                // A root product has an empty path of its own: its sensors are indexed by their bare path.
+                var fullSensorPath = string.IsNullOrEmpty(targetNode.Path) ? sensorPath : $"{targetNode.Path}/{sensorPath}";
 
-                foreach (var sensorPath in importGroup.Sensors)
+                if (_cache.TryGetSensorByPath(productId, fullSensorPath, out var sensor))
                 {
-                    var fullSensorPath = $"{targetNode.Path}/{sensorPath}";
+                    var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
 
-                    if (_cache.TryGetSensorByPath(productId, fullSensorPath, out var sensor))
-                    {
-                        var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
-
-                        newAlerts[sensor.Id].Add(newAlert);
-                    }
-                    else
-                        toast.AddError("Sensor by path not found", $"{productId}{fullSensorPath}");
+                    newAlerts[sensor.Id].Add(newAlert);
+                    // The path names the sensor in a rejected write's report: names repeat across nodes.
+                    sensorNames[sensor.Id] = sensor.FullPath;
                 }
+                else
+                    toast.AddError("Sensor by path not found", $"{productId}/{fullSensorPath}");
             }
         }
 
@@ -155,7 +183,8 @@ namespace HSMServer.Controllers
         // administration service — the same write gates, authorization and
         // undo journaling as every other configuration write (one import
         // request = one undo group).
-        private async ValueTask SendAlertUpdatesAsync(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        private async ValueTask SendAlertUpdatesAsync(CDict<List<PolicyUpdate>> newAlerts, Dictionary<Guid, string> sensorNames,
+            ImportAlertsToastViewModel toast)
         {
             var write = new ChangeSetWriteOptions { ChangeSetId = ChangeSetHeaders.RequestGroupId(HttpContext) };
 
@@ -167,11 +196,11 @@ namespace HSMServer.Controllers
                         User, write, new CookieUserAccess(CurrentUser, _cache));
 
                     if (!result.Success)
-                        toast.AddError(result.Failure.Message ?? "The import was rejected.", _tree.Sensors[sensorId].Name);
+                        toast.AddError(result.Failure.Message ?? "The import was rejected.", sensorNames[sensorId]);
                 }
                 catch (Exception ex)
                 {
-                    toast.AddError(ex.Message, _tree.Sensors[sensorId].Name);
+                    toast.AddError(ex.Message, sensorNames[sensorId]);
                 }
             }
         }

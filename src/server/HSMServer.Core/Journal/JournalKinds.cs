@@ -22,6 +22,12 @@ public static class JournalKinds
     public const string TreeCrud = "treeCrud";
     public const string Folder = "folder";
 
+    // Journal-visible only, never rollbackable: a chat holds webhooks and the
+    // bot settings hold the token, and a secret cannot sit in a rollback's
+    // before/after images (#1828).
+    public const string Chat = "chat";
+    public const string ServerSettings = "serverSettings";
+
     public static readonly IReadOnlyList<string> Rollbackable =
     [
         SensorDataPolicies, SensorTtlPolicies, ProductTtlPolicies, AlertTemplate, AlertSchedule,
@@ -29,7 +35,7 @@ public static class JournalKinds
 
     public static readonly IReadOnlyList<string> All =
     [
-        .. Rollbackable, NodeSettings, TreeCrud, Folder,
+        .. Rollbackable, NodeSettings, TreeCrud, Folder, Chat, ServerSettings,
     ];
 
     public static bool IsRollbackable(string kind) => Rollbackable.Contains(kind);

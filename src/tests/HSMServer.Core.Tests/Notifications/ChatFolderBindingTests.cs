@@ -1,6 +1,8 @@
 using System;
+using System.Net.Http;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -16,6 +18,8 @@ using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using HSMServer.Notifications.Telegram.Tokens;
 using HSMServer.ServerConfiguration;
+using Telegram.Bot;
+using Telegram.Bot.Requests.Abstractions;
 using Moq;
 using User = HSMServer.Model.Authentication.User;
 using Xunit;
@@ -467,6 +471,60 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
 
+        // #1826: an invitation issued with the management-surface lifetime flows through the
+        // SAME one-shot store and /start consumer as a web-issued one — binds once, is
+        // consumed by that use, and an expired token is refused.
+        [Fact]
+        public async Task TryConnect_ManagementLifetimeToken_BindsOnceAndIsConsumed()
+        {
+            var manager = BuildManager();
+            var chat = BuildUnboundChat();
+            await manager.TryAdd(chat);
+
+            var link = manager.GetChatInvitationLink(chat.Id, new User("admin"), TimeSpan.FromMinutes(10));
+            var tokenValue = link.Substring(link.IndexOf("start=") + "start=".Length);
+
+            Assert.True(manager.TokenManager.TryRemoveToken(tokenValue, out var token));
+            var result = await manager.TryConnect(BuildDirectMessage(chatId: 777_111), token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(777_111L, manager[chat.Id].TelegramChatId?.Identifier);
+            Assert.False(manager.TokenManager.TryRemoveToken(tokenValue, out _)); // one-shot
+        }
+
+        // The expiry gate lives in the /start handler (TryConnect itself trusts the token it is
+        // handed), so the refusal is pinned at the handler: an expired token binds nothing and
+        // is consumed by the attempt. The reply send fails — the handler swallows it, and the
+        // assertions read the state that matters.
+        [Fact]
+        public async Task StartCommand_ExpiredManagementToken_BindsNothing()
+        {
+            var manager = BuildManager();
+            var chat = BuildUnboundChat();
+            await manager.TryAdd(chat);
+
+            var link = manager.GetChatInvitationLink(chat.Id, new User("admin"), TimeSpan.FromSeconds(-1));
+            var tokenValue = link.Substring(link.IndexOf("start=") + "start=".Length);
+
+            var handler = new TelegramUpdateHandler(null, manager, new Mock<IFolderManager>().Object,
+                new TelegramConfig { BotName = "hsm_alerts_bot" });
+
+            var client = new Mock<ITelegramBotClient>();
+            client.Setup(c => c.SendRequest<It.IsAnyType>(It.IsAny<IRequest<It.IsAnyType>>(), It.IsAny<CancellationToken>()))
+                .Throws(new HttpRequestException("reply send failed — irrelevant to this pin"));
+
+            var message = BuildDirectMessage(chatId: 777_222);
+            message.Text = $"/start {tokenValue}";
+
+            // Update.Type is computed: a set Message yields UpdateType.Message.
+            await handler.HandleUpdateAsync(client.Object,
+                new Telegram.Bot.Types.Update { Message = message },
+                CancellationToken.None);
+
+            Assert.Null(manager[chat.Id].TelegramChatId); // the expired token bound nothing
+            Assert.False(manager.TokenManager.TryRemoveToken(tokenValue, out _)); // consumed by the attempt
+        }
+
         private static Telegram.Bot.Types.Message BuildDirectMessage(long chatId = 123456) =>
             new()
             {
@@ -475,8 +533,27 @@ namespace HSMServer.Core.Tests.Notifications
             };
 
 
-        private static ChatsManager BuildManager()
-            => new(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object);
+        private static ChatsManager BuildManager() => BuildManagerWithBot();
+
+        // #1826: a chat with NO Telegram binding yet — the invitation tests bind one.
+        private static Chat BuildUnboundChat() =>
+            new(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "unbound-chat",
+            });
+
+        // #1826: the invitation link builders read the configured bot name.
+        private static ChatsManager BuildManagerWithBot(string botName = "hsm_alerts_bot")
+        {
+            var config = new Mock<IServerConfig>();
+            config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = botName });
+
+            return new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, config.Object,
+                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
+        }
 
         private static Chat BuildChat() =>
             new(new ChatEntity

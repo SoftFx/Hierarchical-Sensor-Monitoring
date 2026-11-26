@@ -367,7 +367,18 @@ namespace HSMServer.Core.Tests.Infrastructure
         public void AddAlertSchedule(AlertScheduleEntity schedule) => _inner.AddAlertSchedule(schedule);
         public void RemoveAlertSchedule(Guid id) => _inner.RemoveAlertSchedule(id);
 
-        public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value) => _inner.AddJournalValue(journalKey, value);
+        // Optional injection point for journal write failures (#1828): a journal append runs
+        // after its write landed and must never fail it.
+        internal Func<JournalKey, bool> ShouldFailJournalWrite { get; set; }
+
+        public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)
+        {
+            if (ShouldFailJournalWrite?.Invoke(journalKey) == true)
+                throw new System.IO.IOException("Journal write failed (test).");
+
+            _inner.AddJournalValue(journalKey, value);
+        }
+
         public void RemoveJournalValues(Guid id, Guid parentId) => _inner.RemoveJournalValues(id, parentId);
         public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count) => _inner.GetJournalValuesPage(sensorId, from, to, types, count);
 

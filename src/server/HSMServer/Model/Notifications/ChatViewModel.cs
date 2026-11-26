@@ -1,4 +1,3 @@
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Extensions;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Notifications;
@@ -154,26 +153,6 @@ namespace HSMServer.Model.Notifications
                 return null;
 
             return posted.Trim();
-        }
-
-        internal Chat ToNewChat(Guid authorId)
-        {
-            var entity = new ChatEntity
-            {
-                Id = (Id == Guid.Empty ? Guid.NewGuid() : Id).ToByteArray(),
-                Author = authorId.ToByteArray(),
-                CreationDate = DateTime.UtcNow.Ticks,
-                Name = Name,
-                Description = Description ?? string.Empty,
-                SendMessages = EnableMessages,
-                MessagesAggregationTimeSec = MessagesDelay,
-                // Route through ResolveWebhook so a masked/whitespace value can never be persisted
-                // as a live webhook (a brand-new chat posts a real URL, never the mask).
-                SlackWebhookUrl = ResolveWebhook(SlackWebhookUrl),
-                MattermostWebhookUrl = ResolveWebhook(MattermostWebhookUrl),
-            };
-
-            return new Chat(entity);
         }
     }
 }
