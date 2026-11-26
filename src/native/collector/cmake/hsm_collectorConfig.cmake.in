@@ -31,6 +31,12 @@ if(@HSM_COLLECTOR_TABLES@)
     find_dependency(ZLIB)
 endif()
 
+# Large files (#1887, a build with HTTP and tables) hash with OpenSSL's libcrypto off Windows (private
+# to the static core); on Windows they use the system's bcrypt, which the core links publicly.
+if(@HSM_COLLECTOR_LARGE_FILES@ AND NOT WIN32)
+    find_dependency(OpenSSL COMPONENTS Crypto)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/hsm_collectorTargets.cmake")
 
 check_required_components(hsm_collector)

@@ -135,6 +135,11 @@ namespace hsm::http
         // in time is closed with 1000, so that a late ack cannot be taken for another request's.
         AckedLinkPutResult Put(uint8_t kind, std::vector<uint8_t>& frame, int64_t send_timeout_ms, int64_t ack_timeout_ms, AckedLinkAck& ack);
 
+        // Sends one text request {"id":N,"op":op,"body":body} (`body_json` is JSON text, empty for {})
+        // and waits for its ack with the outcomes and the deadlines of Put: the ack deadline starts once
+        // the frame is written. The file connection's begin, end and discard (#1887) are such requests.
+        AckedLinkPutResult Request(const std::string& op, const std::string& body_json, int64_t send_timeout_ms, int64_t ack_timeout_ms, AckedLinkAck& ack);
+
         // Between requests: reads what the server sent meanwhile (pings are answered, pongs dropped,
         // a close or a protocol error ends the connection) and sends a ping when nothing was sent for
         // a heartbeat. Never waits for the network beyond a ping's write. False when no connection is
@@ -170,6 +175,10 @@ namespace hsm::http
             Cancelled // Cancel was called
         };
 
+        // The end of a request whose write failed: Cancelled or Lost.
+        AckedLinkPutResult SendFailed(const std::string& error);
+        // Waits for the ack of request `id` (written whole) until `ack_timeout_ms` from now.
+        AckedLinkPutResult AwaitAck(int64_t id, int64_t ack_timeout_ms, AckedLinkAck& ack);
         // One receive of up to `timeout_ms`: pings answered, pongs and unknown pushes dropped.
         Frame ReceiveOne(int64_t timeout_ms, AckedLinkAck& ack);
         // Closes with `code` after a protocol error of the server.
