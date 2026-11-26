@@ -1,3 +1,4 @@
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -87,10 +88,10 @@ namespace HSMServer.Model.LargeFiles
         /// <summary>The section of the page; null when the product is unknown or the user may not see it.</summary>
         public DumpPasswordViewModel GetSection(User user, Guid productId)
         {
-            if (!TryGetRoot(productId, out var rootId) || user is null || !user.IsProductAvailable(rootId))
+            if (!TryGetRoot(productId, out var rootId) || !UserTreeAccess.IsRootProductVisibleTo(user, rootId))
                 return null;
 
-            var canManage = user.IsManager(rootId);
+            var canManage = UserTreeAccess.CanManageRootProduct(user, rootId);
             var current = canManage ? _passwords.GetCurrent(rootId)?.Version : null;
 
             return new DumpPasswordViewModel
@@ -167,12 +168,12 @@ namespace HSMServer.Model.LargeFiles
             failure = DumpPasswordPageOutcome.NotFound;
 
             // A product the user cannot see answers as an unknown one: its existence is not disclosed.
-            if (!TryGetRoot(productId, out rootId) || user is null || !user.IsProductAvailable(rootId))
+            if (!TryGetRoot(productId, out rootId) || !UserTreeAccess.IsRootProductVisibleTo(user, rootId))
                 return false;
 
             failure = DumpPasswordPageOutcome.Forbidden;
 
-            return user.IsManager(rootId);
+            return UserTreeAccess.CanManageRootProduct(user, rootId);
         }
 
         private bool TryGetRoot(Guid productId, out Guid rootId)
