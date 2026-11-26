@@ -572,6 +572,124 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Equal(0, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
         }
 
+        // === Stopped by the shutdown (#1958 merged into #1882) ===
+
+        // The start scan reads every row of every File sensor; a stop of the server must end it inside a sensor's rows,
+        // not after them: the history read does not take the token (GetSensorValues has no cancellation), and a scan that
+        // outlives the stop of its hosted service reads the history weeks while they close.
+        [Fact]
+        public async Task A_cancelled_start_scan_stops_inside_a_sensors_rows_and_is_done_again_by_the_next_pass()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            AddRowsWithoutRecord(sensor, 20);
+            await UseTheStoreAsync();
+
+            using var cts = new CancellationTokenSource();
+            var service = new LargeFileUploadService(RowsAfterFirst.Wrap(_databaseCoreManager.DatabaseCore, cts.Cancel), _valuesCache, new LargeFileOptions { MinFreeDiskMb = 0 });
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunPassAsync(DateTime.UtcNow, atStart: true, cts.Token));
+            Assert.Equal(1, Store.Statistics.StartDisagreements);
+
+            // The scan did not complete, so the next pass does it.
+            Assert.Equal(20, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
+        }
+
+        // The history weeks closed under a scan the stop had cancelled (#1958: a read that starts on a closed week gets
+        // ObjectDisposedException): the pass ends as cancelled, not as a sensor whose rows could not be compared.
+        [Fact]
+        public async Task A_history_read_disposed_after_the_stop_ends_the_scan_as_cancelled_not_as_a_failed_sensor()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            AddRowsWithoutRecord(sensor, 20);
+            await UseTheStoreAsync();
+
+            using var cts = new CancellationTokenSource();
+            var service = new LargeFileUploadService(RowsAfterFirst.Wrap(_databaseCoreManager.DatabaseCore, () =>
+            {
+                cts.Cancel();
+                throw new ObjectDisposedException("SensorValuesWeek");
+            }), _valuesCache, new LargeFileOptions { MinFreeDiskMb = 0 });
+
+            var stopped = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunPassAsync(DateTime.UtcNow, atStart: true, cts.Token));
+            Assert.IsType<ObjectDisposedException>(stopped.InnerException);
+            Assert.Equal(1, Store.Statistics.StartDisagreements);
+        }
+
+        private void AddRowsWithoutRecord(BaseSensorModel sensor, int count)
+        {
+            var start = DateTime.UtcNow.AddHours(-1);
+
+            for (var i = 0; i < count; i++)
+            {
+                var time = start.AddSeconds(i);
+                _databaseCoreManager.DatabaseCore.AddSensorValue(sensor.Id, new LargeFileValue
+                {
+                    Time = time,
+                    ReceivingTime = time,
+                    Value = [],
+                    OriginalSize = 10,
+                    FileId = Guid.NewGuid(),
+                    Hash = new byte[32],
+                    Name = $"lost{i}.dmp",
+                });
+            }
+        }
+
+        // The scan runs only on a store that ever took a file.
+        private async Task UseTheStoreAsync()
+        {
+            var plain = await CreateFileSensorAsync("plain");
+            Assert.Equal(LargeFileBeginOutcome.Started, (await BeginAsync(plain.Path, Piece, raw: true)).Outcome);
+        }
+
+        // The real database, except that a history read calls `afterFirstRow` when its reader comes back for the second row.
+        public class RowsAfterFirst : System.Reflection.DispatchProxy
+        {
+            private HSMServer.Core.DataLayer.IDatabaseCore _inner;
+            private Action _afterFirstRow;
+
+            public static HSMServer.Core.DataLayer.IDatabaseCore Wrap(HSMServer.Core.DataLayer.IDatabaseCore inner, Action afterFirstRow)
+            {
+                var database = Create<HSMServer.Core.DataLayer.IDatabaseCore, RowsAfterFirst>();
+                var proxy = (RowsAfterFirst)(object)database;
+
+                proxy._inner = inner;
+                proxy._afterFirstRow = afterFirstRow;
+
+                return database;
+            }
+
+            protected override object Invoke(System.Reflection.MethodInfo targetMethod, object[] args)
+            {
+                try
+                {
+                    var result = targetMethod.Invoke(_inner, args);
+
+                    return targetMethod.Name == nameof(HSMServer.Core.DataLayer.IDatabaseCore.GetSensorValues)
+                        ? AfterFirst((IAsyncEnumerable<byte[]>)result)
+                        : result;
+                }
+                catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is not null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException);
+                    throw;
+                }
+            }
+
+            private async IAsyncEnumerable<byte[]> AfterFirst(IAsyncEnumerable<byte[]> rows)
+            {
+                var index = 0;
+
+                await foreach (var row in rows)
+                {
+                    if (index++ == 1)
+                        _afterFirstRow();
+
+                    yield return row;
+                }
+            }
+        }
+
         // === After the review of the branch ===
 
         [Fact]
