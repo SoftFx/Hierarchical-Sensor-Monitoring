@@ -21,6 +21,9 @@ namespace HSMServer.Core.TableSensors
             return new Releaser(_lock.ExitReadLock);
         }
 
+        // Reads waiting for the gate now. For tests.
+        internal int WaitingReads => _lock.WaitingReadCount;
+
         public IDisposable Delete()
         {
             _lock.EnterWriteLock();

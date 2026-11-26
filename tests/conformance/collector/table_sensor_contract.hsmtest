@@ -1,0 +1,303 @@
+# HSM collector conformance v1 — table sensors (#1846, ADR-0021 points 5-7).
+#
+# The managed collector implements them (4.1.0), the native collector since 0.15.0 (#1848; its driver runs this
+# fixture in the tables build, HSM_COLLECTOR_TABLES).
+#
+# Rows are compared decoded, never as bytes: two zstd libraries may compress the same block to different bytes.
+# The table tick never runs on its own in a driver: table_tick runs one, and waits for the registration and the
+# delivery it starts. Times are milliseconds since 1970-01-01 UTC.
+#
+# New verbs:
+# create_collector_without_table_transport                a collector whose sender cannot carry tables
+# create_table_sensor|path|columns                        under the collector identity (computer/module), as every sensor;
+#                                                         columns: name:type pairs, comma-separated, type double or int64,
+#                                                         "none" for no column; the time column is implicit and first
+# create_table_sensor_at_product|path|columns             the same at the product root
+# expect_create_table_sensor_rejected|path|columns        the call itself is refused (managed: ArgumentException)
+# add_table_row|path|time_ms|v1|v2...                     one row; token:null for a cell without a value
+# add_table_rows|path|count|start_ms                      count rows at once: row r has the time start_ms + r and the
+#                                                         value r in every column
+# table_tick                                              one table tick
+# table_server_refuse_registration|path|reason            the server refuses the registration of path, with reason
+# table_server_fail_registrations|count                   the next count registration requests get no answer
+# table_server_down / table_server_up                     while down, no block gets an answer
+# table_server_frame_limit|bytes                          the largest frame the table connection takes, header included
+# table_server_answer_next|outcome                        the next block is answered: stored, duplicate, all_refused,
+#                                                         invalid (400), not_delivered (503)
+# table_server_refuse_table_next|path|reason              the next block is stored with the table of path refused
+# expect_table_add_results|digits                         the add verbs so far, in order: 1 taken, 0 dropped
+# expect_table_path|path|full_path                        the path the sensor is registered and named under
+# expect_table_state|path|state                           pending, registered, refused or unavailable
+# expect_table_rows_accepted|path|count / expect_table_rows_dropped|path|count   the sensor's own counters
+# expect_table_registration_count|count                   table registration requests so far
+# expect_table_registration_size|index|count              request index carries count registrations, all of tables
+# expect_table_registration|index|path|columns            request index registers path with these columns, time first
+# expect_table_blocks|count                               blocks stored so far
+# expect_table_block_attempts|count                       blocks put so far, answered or not
+# expect_table_block_tables|index|count                   stored block index holds count tables
+# expect_table_blocks_within|bytes                        every frame put (block + 40-byte header) is within bytes
+# expect_table_sequences|s0,s1,...                        the producer sequences of every put, in order; one producer
+# expect_table_sequences_increasing                       every put repeats or exceeds the sequence before; one producer
+# expect_table_rows|path|count                            rows of path stored (refused tables do not count)
+# expect_table_row|path|index|time_ms|v1|v2...            the index-th stored row of path
+
+# --- one block per tick, rows as given ---
+
+all_tables_go_in_one_block_per_tick|create_collector
+all_tables_go_in_one_block_per_tick|create_table_sensor|quotes/A|bid:double,ask:double
+all_tables_go_in_one_block_per_tick|create_table_sensor|quotes/B|bid:double,ask:double
+all_tables_go_in_one_block_per_tick|start
+all_tables_go_in_one_block_per_tick|add_table_row|quotes/A|2000|1.5|1.6
+all_tables_go_in_one_block_per_tick|add_table_row|quotes/A|1000|2.5|token:null
+all_tables_go_in_one_block_per_tick|add_table_row|quotes/B|1500|NaN|-0.25
+all_tables_go_in_one_block_per_tick|table_tick
+all_tables_go_in_one_block_per_tick|expect_table_add_results|111
+all_tables_go_in_one_block_per_tick|expect_table_registration_count|1
+all_tables_go_in_one_block_per_tick|expect_table_registration_size|0|2
+all_tables_go_in_one_block_per_tick|expect_table_registration|0|quotes/A|time:time,bid:double,ask:double
+all_tables_go_in_one_block_per_tick|expect_table_state|quotes/A|registered
+all_tables_go_in_one_block_per_tick|expect_table_blocks|1
+all_tables_go_in_one_block_per_tick|expect_table_block_tables|0|2
+all_tables_go_in_one_block_per_tick|expect_table_sequences|0
+all_tables_go_in_one_block_per_tick|expect_table_rows|quotes/A|2
+all_tables_go_in_one_block_per_tick|expect_table_row|quotes/A|0|2000|1.5|1.6
+all_tables_go_in_one_block_per_tick|expect_table_row|quotes/A|1|1000|2.5|token:null
+all_tables_go_in_one_block_per_tick|expect_table_row|quotes/B|0|1500|NaN|-0.25
+all_tables_go_in_one_block_per_tick|table_tick
+all_tables_go_in_one_block_per_tick|expect_table_block_attempts|1
+all_tables_go_in_one_block_per_tick|expect_table_rows_accepted|quotes/A|2
+
+int64_columns_and_bulk_rows|create_collector
+int64_columns_and_bulk_rows|create_table_sensor|book|price:double,size:int64
+int64_columns_and_bulk_rows|start
+int64_columns_and_bulk_rows|add_table_rows|book|100|5000
+int64_columns_and_bulk_rows|add_table_row|book|9000|1.25|token:null
+int64_columns_and_bulk_rows|table_tick
+int64_columns_and_bulk_rows|expect_table_add_results|11
+int64_columns_and_bulk_rows|expect_table_registration|0|book|time:time,price:double,size:int64
+int64_columns_and_bulk_rows|expect_table_rows|book|101
+int64_columns_and_bulk_rows|expect_table_row|book|0|5000|0|0
+int64_columns_and_bulk_rows|expect_table_row|book|99|5099|99|99
+int64_columns_and_bulk_rows|expect_table_row|book|100|9000|1.25|token:null
+
+# --- the path and the shape ---
+
+path_is_normalized_under_the_collector_identity|create_collector
+path_is_normalized_under_the_collector_identity|create_table_sensor|q//EURUSD|bid:double
+path_is_normalized_under_the_collector_identity|create_table_sensor_at_product|quotes/GBPUSD|bid:double
+path_is_normalized_under_the_collector_identity|expect_table_path|q//EURUSD|conformance-host/conformance-module/q/EURUSD
+path_is_normalized_under_the_collector_identity|expect_table_path|quotes/GBPUSD|quotes/GBPUSD
+
+mistakes_of_the_call_are_rejected|create_collector
+mistakes_of_the_call_are_rejected|expect_create_table_sensor_rejected|t|none
+mistakes_of_the_call_are_rejected|expect_create_table_sensor_rejected|t|time:double
+mistakes_of_the_call_are_rejected|expect_create_table_sensor_rejected|t|a:double,a:int64
+mistakes_of_the_call_are_rejected|expect_create_table_sensor_rejected|repeat:x:1025|bid:double
+mistakes_of_the_call_are_rejected|create_table_sensor|t|bid:double
+mistakes_of_the_call_are_rejected|expect_create_table_sensor_rejected|t|bid:int64
+
+# --- a collector that cannot send tables, and one that is not running ---
+
+no_table_transport_gives_an_unavailable_sensor|create_collector_without_table_transport
+no_table_transport_gives_an_unavailable_sensor|create_table_sensor|t|bid:double
+no_table_transport_gives_an_unavailable_sensor|start
+no_table_transport_gives_an_unavailable_sensor|expect_table_state|t|unavailable
+no_table_transport_gives_an_unavailable_sensor|add_table_row|t|1000|1.0
+no_table_transport_gives_an_unavailable_sensor|table_tick
+no_table_transport_gives_an_unavailable_sensor|expect_table_add_results|0
+no_table_transport_gives_an_unavailable_sensor|expect_table_rows_dropped|t|1
+no_table_transport_gives_an_unavailable_sensor|expect_table_registration_count|0
+no_table_transport_gives_an_unavailable_sensor|expect_table_block_attempts|0
+
+# The rows such a sensor refuses are lost rows like any other: the Queue overflow sensor counts them (queue "Table rows").
+unavailable_table_rows_are_counted_by_queue_overflow|create_collector_without_table_transport
+unavailable_table_rows_are_counted_by_queue_overflow|add_queue_diagnostic_sensors
+unavailable_table_rows_are_counted_by_queue_overflow|create_table_sensor|t|bid:double
+unavailable_table_rows_are_counted_by_queue_overflow|start
+unavailable_table_rows_are_counted_by_queue_overflow|add_table_rows|t|10|1000
+unavailable_table_rows_are_counted_by_queue_overflow|table_tick
+unavailable_table_rows_are_counted_by_queue_overflow|stop
+unavailable_table_rows_are_counted_by_queue_overflow|expect_table_rows_dropped|t|10
+unavailable_table_rows_are_counted_by_queue_overflow|expect_bar_sum|/Queue overflow|10
+
+rows_before_start_are_dropped_and_counted|create_collector
+rows_before_start_are_dropped_and_counted|create_table_sensor|t|bid:double
+rows_before_start_are_dropped_and_counted|add_table_row|t|1000|1.0
+rows_before_start_are_dropped_and_counted|start
+rows_before_start_are_dropped_and_counted|add_table_row|t|2000|2.0
+rows_before_start_are_dropped_and_counted|table_tick
+rows_before_start_are_dropped_and_counted|expect_table_add_results|01
+rows_before_start_are_dropped_and_counted|expect_table_rows_dropped|t|1
+rows_before_start_are_dropped_and_counted|expect_table_rows|t|1
+
+# --- registration: a refusal is final, a fault is retried ---
+
+refused_registration_is_final|create_collector
+refused_registration_is_final|create_table_sensor|t|bid:double
+refused_registration_is_final|table_server_refuse_registration|t|another schema is registered under this path
+refused_registration_is_final|start
+refused_registration_is_final|add_table_row|t|1000|1.0
+refused_registration_is_final|table_tick
+refused_registration_is_final|expect_table_state|t|refused
+refused_registration_is_final|add_table_row|t|2000|2.0
+refused_registration_is_final|table_tick
+refused_registration_is_final|table_tick
+refused_registration_is_final|expect_table_add_results|10
+refused_registration_is_final|expect_table_rows_dropped|t|2
+refused_registration_is_final|expect_table_registration_count|1
+refused_registration_is_final|expect_table_block_attempts|0
+
+registration_without_an_answer_is_sent_again|create_collector
+registration_without_an_answer_is_sent_again|create_table_sensor|t|bid:double
+registration_without_an_answer_is_sent_again|table_server_fail_registrations|2
+registration_without_an_answer_is_sent_again|start
+registration_without_an_answer_is_sent_again|add_table_row|t|1000|1.0
+registration_without_an_answer_is_sent_again|table_tick
+registration_without_an_answer_is_sent_again|table_tick
+registration_without_an_answer_is_sent_again|expect_table_state|t|pending
+registration_without_an_answer_is_sent_again|expect_table_block_attempts|0
+registration_without_an_answer_is_sent_again|table_tick
+registration_without_an_answer_is_sent_again|expect_table_state|t|registered
+registration_without_an_answer_is_sent_again|expect_table_registration_count|3
+registration_without_an_answer_is_sent_again|expect_table_rows|t|1
+registration_without_an_answer_is_sent_again|expect_table_rows_dropped|t|0
+
+# --- splitting ---
+
+block_larger_than_a_frame_is_split|create_collector
+block_larger_than_a_frame_is_split|create_table_sensor|a|x:double,y:int64
+block_larger_than_a_frame_is_split|create_table_sensor|b|x:double,y:int64
+block_larger_than_a_frame_is_split|create_table_sensor|c|x:double,y:int64
+block_larger_than_a_frame_is_split|table_server_frame_limit|700
+block_larger_than_a_frame_is_split|start
+block_larger_than_a_frame_is_split|add_table_rows|a|300|1000
+block_larger_than_a_frame_is_split|add_table_rows|b|300|1000
+block_larger_than_a_frame_is_split|add_table_rows|c|300|1000
+block_larger_than_a_frame_is_split|table_tick
+block_larger_than_a_frame_is_split|expect_table_blocks_within|700
+block_larger_than_a_frame_is_split|expect_table_sequences_increasing
+block_larger_than_a_frame_is_split|expect_table_rows|a|300
+block_larger_than_a_frame_is_split|expect_table_rows|b|300
+block_larger_than_a_frame_is_split|expect_table_rows|c|300
+block_larger_than_a_frame_is_split|expect_table_row|c|299|1299|299|299
+
+# --- answers to a block ---
+
+not_delivered_block_goes_again_with_its_sequence|create_collector
+not_delivered_block_goes_again_with_its_sequence|create_table_sensor|t|bid:double
+not_delivered_block_goes_again_with_its_sequence|start
+not_delivered_block_goes_again_with_its_sequence|table_server_answer_next|not_delivered
+not_delivered_block_goes_again_with_its_sequence|add_table_row|t|1000|1.0
+not_delivered_block_goes_again_with_its_sequence|table_tick
+not_delivered_block_goes_again_with_its_sequence|add_table_row|t|2000|2.0
+not_delivered_block_goes_again_with_its_sequence|table_tick
+not_delivered_block_goes_again_with_its_sequence|expect_table_sequences|0,0,1
+not_delivered_block_goes_again_with_its_sequence|expect_table_rows|t|2
+not_delivered_block_goes_again_with_its_sequence|expect_table_row|t|0|1000|1.0
+not_delivered_block_goes_again_with_its_sequence|expect_table_rows_dropped|t|0
+
+duplicate_settles_the_block|create_collector
+duplicate_settles_the_block|create_table_sensor|t|bid:double
+duplicate_settles_the_block|start
+duplicate_settles_the_block|table_server_answer_next|duplicate
+duplicate_settles_the_block|add_table_row|t|1000|1.0
+duplicate_settles_the_block|table_tick
+duplicate_settles_the_block|table_tick
+duplicate_settles_the_block|expect_table_block_attempts|1
+duplicate_settles_the_block|expect_table_rows_dropped|t|0
+
+all_refused_is_final_and_counted|create_collector
+all_refused_is_final_and_counted|create_table_sensor|t|bid:double
+all_refused_is_final_and_counted|start
+all_refused_is_final_and_counted|table_server_answer_next|all_refused
+all_refused_is_final_and_counted|add_table_row|t|1000|1.0
+all_refused_is_final_and_counted|add_table_row|t|1001|1.0
+all_refused_is_final_and_counted|table_tick
+all_refused_is_final_and_counted|table_tick
+all_refused_is_final_and_counted|expect_table_block_attempts|1
+all_refused_is_final_and_counted|expect_table_rows_dropped|t|2
+all_refused_is_final_and_counted|expect_table_state|t|registered
+
+invalid_block_is_final_and_counted|create_collector
+invalid_block_is_final_and_counted|create_table_sensor|t|bid:double
+invalid_block_is_final_and_counted|start
+invalid_block_is_final_and_counted|table_server_answer_next|invalid
+invalid_block_is_final_and_counted|add_table_row|t|1000|1.0
+invalid_block_is_final_and_counted|table_tick
+invalid_block_is_final_and_counted|add_table_row|t|2000|2.0
+invalid_block_is_final_and_counted|table_tick
+invalid_block_is_final_and_counted|expect_table_sequences|0,1
+invalid_block_is_final_and_counted|expect_table_rows_dropped|t|1
+invalid_block_is_final_and_counted|expect_table_rows|t|1
+
+unknown_sensor_is_registered_again|create_collector
+unknown_sensor_is_registered_again|create_table_sensor|a|bid:double
+unknown_sensor_is_registered_again|create_table_sensor|b|bid:double
+unknown_sensor_is_registered_again|start
+unknown_sensor_is_registered_again|table_server_refuse_table_next|a|UnknownSensor
+unknown_sensor_is_registered_again|add_table_row|a|1000|1.0
+unknown_sensor_is_registered_again|add_table_row|b|1000|1.0
+unknown_sensor_is_registered_again|table_tick
+unknown_sensor_is_registered_again|expect_table_state|a|pending
+unknown_sensor_is_registered_again|expect_table_rows_dropped|a|1
+unknown_sensor_is_registered_again|expect_table_rows|b|1
+unknown_sensor_is_registered_again|add_table_row|a|2000|2.0
+unknown_sensor_is_registered_again|table_tick
+unknown_sensor_is_registered_again|expect_table_state|a|registered
+unknown_sensor_is_registered_again|expect_table_registration_count|2
+unknown_sensor_is_registered_again|expect_table_registration_size|1|1
+unknown_sensor_is_registered_again|expect_table_rows|a|1
+unknown_sensor_is_registered_again|expect_table_row|a|0|2000|2.0
+
+schema_mismatch_refuses_the_sensor|create_collector
+schema_mismatch_refuses_the_sensor|create_table_sensor|t|bid:double
+schema_mismatch_refuses_the_sensor|start
+schema_mismatch_refuses_the_sensor|table_server_refuse_table_next|t|SchemaIdMismatch
+schema_mismatch_refuses_the_sensor|add_table_row|t|1000|1.0
+schema_mismatch_refuses_the_sensor|table_tick
+schema_mismatch_refuses_the_sensor|expect_table_state|t|refused
+schema_mismatch_refuses_the_sensor|add_table_row|t|2000|2.0
+schema_mismatch_refuses_the_sensor|table_tick
+schema_mismatch_refuses_the_sensor|expect_table_add_results|10
+schema_mismatch_refuses_the_sensor|expect_table_rows_dropped|t|2
+schema_mismatch_refuses_the_sensor|expect_table_registration_count|1
+
+# --- stop ---
+
+stop_sends_what_it_holds_at_once|create_collector
+stop_sends_what_it_holds_at_once|create_table_sensor|t|bid:double
+stop_sends_what_it_holds_at_once|start
+stop_sends_what_it_holds_at_once|table_tick
+stop_sends_what_it_holds_at_once|add_table_row|t|1000|1.0
+stop_sends_what_it_holds_at_once|add_table_row|t|2000|2.0
+stop_sends_what_it_holds_at_once|stop
+stop_sends_what_it_holds_at_once|expect_table_rows|t|2
+stop_sends_what_it_holds_at_once|expect_table_rows_dropped|t|0
+
+stop_drops_and_counts_what_it_cannot_deliver|create_collector
+stop_drops_and_counts_what_it_cannot_deliver|create_table_sensor|t|bid:double
+stop_drops_and_counts_what_it_cannot_deliver|start
+stop_drops_and_counts_what_it_cannot_deliver|table_tick
+stop_drops_and_counts_what_it_cannot_deliver|table_server_down
+stop_drops_and_counts_what_it_cannot_deliver|add_table_row|t|1000|1.0
+stop_drops_and_counts_what_it_cannot_deliver|table_tick
+stop_drops_and_counts_what_it_cannot_deliver|add_table_row|t|2000|2.0
+stop_drops_and_counts_what_it_cannot_deliver|stop
+stop_drops_and_counts_what_it_cannot_deliver|expect_table_rows|t|0
+stop_drops_and_counts_what_it_cannot_deliver|expect_table_rows_dropped|t|2
+
+# SensorBlocked is not final: a user can unblock the sensor on the server. The rows of the refused block are lost and
+# counted, the sensor stays registered, and its later rows go out.
+blocked_sensor_is_not_final|create_collector
+blocked_sensor_is_not_final|create_table_sensor|t|bid:double
+blocked_sensor_is_not_final|start
+blocked_sensor_is_not_final|table_server_refuse_table_next|t|SensorBlocked
+blocked_sensor_is_not_final|add_table_row|t|1000|1.0
+blocked_sensor_is_not_final|table_tick
+blocked_sensor_is_not_final|expect_table_state|t|registered
+blocked_sensor_is_not_final|expect_table_rows_dropped|t|1
+blocked_sensor_is_not_final|add_table_row|t|2000|2.0
+blocked_sensor_is_not_final|table_tick
+blocked_sensor_is_not_final|expect_table_registration_count|1
+blocked_sensor_is_not_final|expect_table_rows|t|1
+blocked_sensor_is_not_final|expect_table_row|t|0|2000|2.0

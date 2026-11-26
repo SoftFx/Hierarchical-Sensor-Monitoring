@@ -72,7 +72,7 @@ namespace HSMServer.Controllers
         public IActionResult GetSensors(Guid? product = null, string search = null,
             string searchMode = null, string type = null, int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
             _reader.FindSensors(product, search, searchMode, type, page, pageSize, User,
-                    SensorTreeDtoMapper.ToSensorDto, HttpContext.RequestAborted)
+                    _reader.ToSensorDto, HttpContext.RequestAborted)
                 .ToActionResult();
 
 

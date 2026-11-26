@@ -29,7 +29,7 @@ using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Tests
 {
-    public sealed class CollectorConformanceTests
+    public sealed partial class CollectorConformanceTests
     {
         [Theory]
         [MemberData(nameof(CollectorContractCases))]
@@ -294,12 +294,25 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "add_queue_diagnostic_sensors":
+                {
                     // The ".module/Collector queue stats" group, as hsm_collector_add_all_queue_diagnostic_sensors.
+                    //
+                    // Their bars are posted on wall-clock boundaries (every 15 s, and when a 5-minute bar
+                    // closes) into the data queue the case's own values use: a case that ran across such a
+                    // boundary had diagnostic values in its parked package or evicting its queued values
+                    // from a queue of 10, and failed about once in 200 runs (requeue_drop_at_capacity:
+                    // "expected 2, got 4", "expected 10 sent, got 8"). With a post period and a bar period
+                    // whose first boundary is thousands of years away, nothing of theirs enters a queue
+                    // during a case; they post what they hold when the collector stops, which is what the
+                    // case reads (expect_bar_sum).
+                    var quiet = new BarSensorOptions { PostDataPeriod = DiagnosticsNeverPost, BarPeriod = DiagnosticsNeverPost };
+
                     if (DataCollector.IsWindowsOS)
-                        state.Collector.Windows.AddAllQueueDiagnosticSensors();
+                        state.Collector.Windows.AddAllQueueDiagnosticSensors(quiet);
                     else
-                        state.Collector.Unix.AddAllQueueDiagnosticSensors();
+                        state.Collector.Unix.AddAllQueueDiagnosticSensors(quiet);
                     break;
+                }
 
                 case "service_send_custom":
                     state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendCustomCommand(ExpandTextToken(step.Arg(1)), ExpandTextToken(step.Arg(2)));
@@ -1136,6 +1149,7 @@ namespace HSMDataCollector.Tests
                         collectPeriodMs: int.Parse(step.Arg(1)),
                         requestTimeoutMs: int.Parse(step.Arg(2)),
                         directives: state.Directives);
+                    WatchTableConnectionAtSessionClose(state, (HSMDataCollector.Client.Session.SessionDataSender)OptionsOf(state.Collector).DataSender);
                     break;
 
                 case "session_server_push_directive":
@@ -1369,9 +1383,21 @@ namespace HSMDataCollector.Tests
                     break;
 
                 default:
+                    // The table connection verbs first: on a session collector they also serve the block verbs of
+                    // the table fixture, with the scripted server in place of the recording sender.
+                    if (await ExecuteTableConnectionStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
+                    if (await ExecuteTableStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
         }
+
+        // A period whose first boundary (bars align to multiples of the period since 0001-01-01) lies in
+        // the year 8214: within DateTime's range, and never reached by a case.
+        private static readonly TimeSpan DiagnosticsNeverPost = TimeSpan.FromDays(3_000_000);
 
         // The scripted session server of a case, created by the first verb that needs it.
         private static ScriptedSessionServer SessionServer(ContractState state) =>
@@ -1402,10 +1428,23 @@ namespace HSMDataCollector.Tests
                 RequestTimeout = TimeSpan.FromMilliseconds(requestTimeoutMs),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
+                // As for the recording sender's collector: the table tick never runs on its own in a driver.
+                ManualTableTick = true,
                 SessionTimings = new HSMDataCollector.Client.Session.SessionTimings
                 {
                     MinBackoff = TimeSpan.FromMilliseconds(50),
                     MaxBackoff = TimeSpan.FromMilliseconds(500),
+
+                    // The long pauses of the table connection, shortened like the backoff so the cases are quick:
+                    // how long a refused upgrade (404, 400) waits before it is asked again, and how long a block
+                    // waits for a table connection before its tick gives up. Neither decides a case: a case waits
+                    // for the state it needs (table_wait_connection_up before a tick that must send, after every
+                    // lost connection and before a tick that follows a refusal), and a put that gave up waiting
+                    // leaves its block at the head, with its sequence, for the next tick, which the case runs
+                    // once the next connection is open. The end of a block's ack wait is the script's
+                    // (ConfigureTableConnection), not this request timeout.
+                    TableRefusedRetry = TimeSpan.FromMilliseconds(200),
+                    TableConnectionWait = TimeSpan.FromMilliseconds(200),
                 },
             };
 
@@ -1474,6 +1513,8 @@ namespace HSMDataCollector.Tests
                 ComputerName = computerName,
                 Module = module,
                 DataSender = sender,
+                // Table cases drive the table tick themselves (table_tick); no tick runs on its own.
+                ManualTableTick = true,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = maxValuesInPackage,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
@@ -2649,7 +2690,7 @@ namespace HSMDataCollector.Tests
             public override string ToString() => Action;
         }
 
-        private sealed class ContractState
+        private sealed partial class ContractState
         {
             public DataCollector Collector { get; set; }
 
@@ -2814,7 +2855,7 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        private sealed class RecordingSender : IDataSender
+        private sealed partial class RecordingSender : IDataSender
         {
             private readonly object _lock = new object();
 

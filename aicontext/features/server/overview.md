@@ -81,6 +81,7 @@ Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for pro
 - Data cleanup/retention
 - Notification delivery (Telegram, email)
 - Database backups (local + SFTP), self-monitored — see `database-backup-monitoring/`
+- Large file archives: packing, re-encryption and the download log's retention — see `large-file-download/`
 
 ## Web Frontend
 
@@ -115,6 +116,7 @@ TypeScript 5.3 + Webpack 5:
 - `sso-login/` - the optional OpenID Connect sign-in of the web UI (#1782): `Oidc` settings with an environment-only client secret, provider username = HSM login, auto-created users without roles, `IsAdmin` from an optional provider group, absolute cookie lifetime, local logout.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
+- `table-sensors-ui/` - what the web UI shows of a table sensor's rows: the chart reduced on the server to a minimum and a maximum per bucket of time, its scan limit and the hour gate held per source; the routes `POST /TableSensors/Chart` and `GET /TableSensors/Download` (CSV, paged), their access check and limits (#1847, ADR-0021 point 14).
 - `table-sensors/` - the table sensor kind: a sensor whose data is rows with a schema fixed at registration; what it refuses (values, alerts, moves) and how a server that does not know it loads the tree (#1844, ADR-0021).
 - `table-feed-sensors/` - the ordinary sensors under `.tables` of a table sensor's product that users alert on (rows, stored MB, delivery lag, refused tables, blocks the merge could not read; rows per table sensor), posted by the server per period through a keyless internal value path (#1847).
 - `sensor-move/` - moving a sensor to another path, same or another product, keeping its id, history, settings and policies; the old path becomes an alias that keeps routing values to it (#1718, ADR-0018).
@@ -123,6 +125,8 @@ TypeScript 5.3 + Webpack 5:
 - `token-usage-monitoring/` - per-token self-monitoring of `/api/v1` + `/mcp` access (#1402): request rate and duration per API token, plus the aggregate auth-failure counter.
 - `agent-download/` - admin-only per-product HSM Agent (Windows) bundle download and its `agent-release.txt` staging; also the admin **Downloads** page (#1550, Configuration menu) that offers both bundles for a chosen product.
 - `linux-probe-download/` - its Linux sibling (#1424): per-product probe `.tar.gz` with `install.sh`, staged from `probe-release.txt`.
+- `large-file-download/` - how a large file value leaves the server (#1885, ADR-0022): the AES-256 zip built once and re-encrypted per password version, the web and `/api/v1` download with its order of checks, the hand-over to the bundled Caddy, the download log and their self-monitoring.
+- `dump-password/` - the password of a root product under which its large file values are given out (#1885): set and seen by a Manager of the product or an admin on the settings page, generated or typed, versioned, never in an API answer, a log or a journal value.
 - `background-services/` - hosted services, queue workers, startup/shutdown.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.

@@ -16,6 +16,9 @@ namespace HSMServer.Core.DataLayer
         // (unlike the dashboard collection) — see ChangeSetCollection.
         IChangeSetCollection ChangeSets { get; }
 
+        // The download log (ADR-0022 point 15), a database of its own. Write failures propagate, as the change sets' do.
+        IDownloadLogStore DownloadLog { get; }
+
         ISnapshotDatabase Snapshots { get; }
 
         public bool IsCompactRunning { get; }
@@ -44,6 +47,10 @@ namespace HSMServer.Core.DataLayer
 
         // The size of its folder on disk; 0 when it does not exist (nothing is opened).
         long TableBlocksDbSize { get; }
+
+        // The large file store (#1883): files in a folder of their own, outside the databases. Nothing is created before
+        // the first upload.
+        HSMDatabase.AccessManager.LargeFiles.ILargeFileStore LargeFiles { get; }
 
         int SensorValuesPageCount { get; }
 
@@ -127,6 +134,16 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Dump passwords
+
+        // The dump passwords of products (ADR-0022 point 13), apart from the product entity. A scan failure throws; the put
+        // and the remove THROW on failure (unlike UpdateProduct), so a change of a password fails visibly.
+        List<ProductDumpPasswordsEntity> GetAllDumpPasswords();
+        void PutDumpPasswords(ProductDumpPasswordsEntity entity);
+        void RemoveDumpPasswords(Guid productId);
+
+        #endregion
+
         #region Sensors
 
         void AddSensor(SensorEntity entity);
@@ -145,6 +162,12 @@ namespace HSMServer.Core.DataLayer
         Exception UpdateSensorChecked(SensorEntity entity);
         void RemoveSensorWithMetadata(Guid sensorId);
 
+        /// <summary>
+        /// Whether the sensor's entity is in the database (#1883): true when its key is there (also when the entity cannot be
+        /// read back), false only when a read that succeeded did not find the key, null when the read failed (cannot tell).
+        /// </summary>
+        bool? SensorEntityExists(Guid sensorId);
+
         void AddSensorValue(Guid sensorId, BaseValue value);
         void ClearSensorValues(Guid sensorId, DateTime from, DateTime to);
 
@@ -157,6 +180,12 @@ namespace HSMServer.Core.DataLayer
         (long Copied, long Collisions) MergeSensorValues(Guid fromSensorId, Guid intoSensorId);
 
         byte[] GetLatestValue(Guid sensorId, long to);
+
+        /// <summary>
+        /// The stored row of a sensor at exactly <paramref name="ticks"/> (#1883): null when there is none, an empty array
+        /// when it could not be read (a read error is logged by the store). Opens or creates no week database.
+        /// </summary>
+        byte[] GetSensorValue(Guid sensorId, long ticks);
 
         byte[] GetFirstValue(Guid sensorId);
 

@@ -67,7 +67,17 @@ namespace HSMServer.Core.Model.Requests
             var value = sensor.GetEmptyValue();
             var oldValue = sensor.LastValue;
 
-            if (value is FileValue && oldValue is FileValue oldFileValue)
+            // A new value made from a large last value (#1883) is a plain file value: a copy of the large one would be a
+            // second row pointing at the same file. ChangeLast keeps the large value as it is (the same row, the same file).
+            if (value is FileValue && oldValue is LargeFileValue large && !ChangeLast)
+                value = new FileValue
+                {
+                    Name = large.Name,
+                    Extension = large.Extension,
+                    Value = Array.Empty<byte>(),
+                    OriginalSize = 0L
+                };
+            else if (value is FileValue && oldValue is FileValue oldFileValue)
                 value = ChangeLast ? oldFileValue : oldFileValue with
                 {
                     Value = Array.Empty<byte>(),

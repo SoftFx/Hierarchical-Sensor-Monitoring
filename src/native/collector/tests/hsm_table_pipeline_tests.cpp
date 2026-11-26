@@ -1,0 +1,3885 @@
+// Table sensors of the native collector (#1848): the C ABI, the C++ wrapper, the pipeline's parts, its
+// lifetime under threads, and the table verbs of the conformance driver
+// (tests/conformance/collector/table_sensor_contract.hsmtest). Compiled in every build; what needs the
+// block writer or the test block reader (libzstd) is compiled with HSM_COLLECTOR_TABLES only.
+//
+// No test decides by time: ticks run through the manual-tick seam or a manual clock, and a wait only
+// fails a test when it expires.
+
+#include "hsm_collector/hsm_collector.h"
+#include "hsm_collector/hsm_collector.hpp"
+
+#include "../src/tables/hsm_table_pipeline.hpp"
+#include "../src/tables/hsm_table_test_seams.hpp"
+
+#if defined(HSM_COLLECTOR_TABLES)
+#include "table_block_test_reader.hpp"
+#endif
+#if defined(HSM_COLLECTOR_HTTP)
+#include "ws_test_server.hpp"
+#if defined(HSM_COLLECTOR_TABLES)
+#include "../src/hsm_acked_binary_link.hpp"
+#include "../src/hsm_session_transport.hpp"
+#include "../src/hsm_ws_connection.hpp"
+#include "../src/tables/hsm_session_table_channel.hpp"
+#endif
+#endif
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <thread>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
+extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
+
+namespace tables = hsm::collector::tables;
+
+namespace
+{
+    void Check(bool condition, const std::string& message)
+    {
+        if (!condition)
+            throw std::runtime_error(message);
+    }
+
+    template <typename T>
+    std::string Text(const T& value)
+    {
+        if constexpr (std::is_same_v<T, std::string>)
+            return "'" + value + "'";
+        else
+            return std::to_string(value);
+    }
+
+    template <typename A, typename B>
+    void CheckEqual(const A& expected, const B& actual, const std::string& what)
+    {
+        if (!(expected == actual))
+            throw std::runtime_error(what + ": expected " + Text(expected) + ", actual " + Text(actual));
+    }
+
+    // A wait that only fails a test when it expires; it never decides the outcome.
+    template <typename Predicate>
+    void WaitOrFail(Predicate predicate, const std::string& what, int seconds = 60)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+        while (!predicate())
+        {
+            if (std::chrono::steady_clock::now() > deadline)
+                throw std::runtime_error("timed out waiting for " + what);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
+    hsm_collector_options_t Options()
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "test-key";
+        options.server_address = "https://localhost";
+        options.port = 443;
+        options.module = "conformance-module";
+        options.computer_name = "conformance-host";
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
+        return options;
+    }
+
+    struct Collector
+    {
+        hsm_collector_t* value = nullptr;
+
+        explicit Collector(const hsm_collector_options_t& options = Options())
+        {
+            Check(hsm_collector_create(&options, &value) == HSM_RESULT_OK, "collector create failed");
+        }
+        Collector(const Collector&) = delete;
+        Collector& operator=(const Collector&) = delete;
+        ~Collector() { Destroy(); }
+        void Destroy()
+        {
+            hsm_collector_destroy(value);
+            value = nullptr;
+        }
+    };
+
+    struct Table
+    {
+        hsm_table_sensor_t* value = nullptr;
+        Table() = default;
+        explicit Table(hsm_table_sensor_t* handle)
+            : value(handle)
+        {
+        }
+        Table(const Table&) = delete;
+        Table& operator=(const Table&) = delete;
+        Table(Table&& other) noexcept
+            : value(std::exchange(other.value, nullptr))
+        {
+        }
+        ~Table() { hsm_table_sensor_release(value); }
+    };
+
+    Table CreateTable(hsm_collector_t* collector, const std::string& path, const std::vector<hsm_table_column_t>& columns, int location = 0)
+    {
+        hsm_table_sensor_options_t options = hsm_table_sensor_options_default();
+        options.sensor_location = location;
+        hsm_table_sensor_t* sensor = nullptr;
+        const auto result = hsm_collector_create_table_sensor(collector, path.c_str(), columns.data(), columns.size(), &options, &sensor);
+        Check(result == HSM_RESULT_OK, "create_table_sensor " + path + " failed: " + std::to_string(static_cast<int>(result)) + " " +
+                                           (hsm_collector_last_error(collector) ? hsm_collector_last_error(collector) : ""));
+        return Table(sensor);
+    }
+
+    hsm_table_sensor_stats_t Stats(const Table& table)
+    {
+        hsm_table_sensor_stats_t stats{};
+        stats.struct_size = sizeof stats;
+        Check(hsm_table_sensor_get_stats(table.value, &stats) == HSM_RESULT_OK, "get_stats failed");
+        return stats;
+    }
+
+    std::string Reason(const Table& table)
+    {
+        char buffer[512];
+        hsm_table_sensor_state_reason(table.value, buffer, sizeof buffer);
+        return buffer;
+    }
+
+    hsm_result_t AddDouble(const Table& table, int64_t time_ns, double value)
+    {
+        hsm_table_cell_t cell;
+        cell.f64 = value;
+        return hsm_table_sensor_add_row(table.value, time_ns, &cell, 1, nullptr);
+    }
+
+    // ---- Parts ---------------------------------------------------------------------------------------
+
+    void PathNormalization()
+    {
+        CheckEqual(std::string("a/b"), tables::NormalizeTablePath("a//b"), "empty segment");
+        CheckEqual(std::string("a/b c/d"), tables::NormalizeTablePath(" /a/ b c /d/ "), "trimmed segments");
+        CheckEqual(std::string(""), tables::NormalizeTablePath("//  / "), "nothing left");
+        // .NET char.IsWhiteSpace: NBSP, U+2003 and U+3000 are trimmed; U+200B (zero width space) is not.
+        CheckEqual(std::string("x/y"), tables::NormalizeTablePath("\xC2\xA0x\xE2\x80\x83/\xE3\x80\x80y"), "unicode white space");
+        CheckEqual(std::string("\xE2\x80\x8Bx"), tables::NormalizeTablePath("\xE2\x80\x8Bx"), "zero width space kept");
+        std::string error;
+        Check(!tables::CheckTablePath("", "/", 1024, error), "an empty path passes");
+        Check(!tables::CheckTablePath("a\\b", "a\\b", 1024, error), "a backslash passes");
+        Check(!tables::CheckTablePath(std::string(1025, 'x'), "x", 1024, error), "1025 bytes pass");
+        Check(tables::CheckTablePath(std::string(1024, 'x'), "x", 1024, error), "1024 bytes are refused");
+    }
+
+    void TimeConversion()
+    {
+        CheckEqual(static_cast<std::uint64_t>(tables::kUnixEpochTicks), tables::TicksFromUnixNanoseconds(0), "epoch");
+        CheckEqual(static_cast<std::uint64_t>(tables::kUnixEpochTicks + 1), tables::TicksFromUnixNanoseconds(199), "rounded down");
+        CheckEqual(static_cast<std::uint64_t>(tables::kUnixEpochTicks - 2), tables::TicksFromUnixNanoseconds(-150), "rounded down before 1970");
+        Check(tables::TicksFromUnixNanoseconds((std::numeric_limits<int64_t>::max)()) <= tables::TableBlockFormat::kMaxTimeTicks, "int64 max out of range");
+        Check(tables::TicksFromUnixNanoseconds((std::numeric_limits<int64_t>::min)()) > 0, "int64 min out of range");
+    }
+
+    void BufferGrowthAndSwap()
+    {
+        tables::TableRowBuffer buffer(2);
+        CheckEqual(std::size_t{ 0 }, buffer.Capacity(), "no array before the first row");
+        std::vector<int64_t> times(300);
+        std::vector<std::uint64_t> cells(600);
+        for (std::size_t i = 0; i < 300; ++i)
+        {
+            times[i] = static_cast<int64_t>(i) * 100;
+            cells[2 * i] = i;
+            cells[2 * i + 1] = 1000 + i;
+        }
+        buffer.Append(times.data(), cells.data(), nullptr, 1);
+        CheckEqual(tables::TableRowBuffer::kInitialCapacity, buffer.Capacity(), "initial capacity");
+        buffer.Append(times.data() + 1, cells.data() + 2, nullptr, 299);
+        CheckEqual(std::size_t{ 300 }, buffer.Count(), "rows");
+        CheckEqual(std::size_t{ 512 }, buffer.Capacity(), "doubled");
+        for (std::size_t i = 0; i < 300; ++i)
+        {
+            CheckEqual(static_cast<std::uint64_t>(tables::kUnixEpochTicks + static_cast<int64_t>(i)), buffer.Times()[i], "time " + std::to_string(i));
+            CheckEqual(static_cast<std::uint64_t>(1000 + i), buffer.Values(1)[i], "value " + std::to_string(i));
+        }
+        Check(!buffer.HasNulls(0) && !buffer.HasNulls(1), "a null map without a null");
+        buffer.Clear();
+        CheckEqual(std::size_t{ 0 }, buffer.Capacity(), "a buffer past 256 rows gives its arrays up");
+        buffer.Append(times.data(), cells.data(), nullptr, 10);
+        buffer.Clear();
+        CheckEqual(tables::TableRowBuffer::kInitialCapacity, buffer.Capacity(), "a small buffer keeps its arrays");
+    }
+
+    void BufferFailedGrowth()
+    {
+        tables::TableRowBuffer buffer(1);
+        std::vector<int64_t> times(100, 0);
+        std::vector<std::uint64_t> cells(100, 7);
+        buffer.Append(times.data(), cells.data(), nullptr, 64);
+        buffer.before_growth = [] { throw std::bad_alloc(); };
+        bool threw = false;
+        try
+        {
+            buffer.Append(times.data(), cells.data(), nullptr, 1);
+        }
+        catch (const std::bad_alloc&)
+        {
+            threw = true;
+        }
+        Check(threw, "the growth did not fail");
+        CheckEqual(std::size_t{ 64 }, buffer.Count(), "rows after a failed growth");
+        CheckEqual(std::size_t{ 64 }, buffer.Capacity(), "arrays after a failed growth");
+        // A first null map is a growth too, and fails the same way.
+        std::uint8_t null_bit = 1;
+        threw = false;
+        try
+        {
+            tables::TableRowBuffer small(1);
+            small.Append(times.data(), cells.data(), nullptr, 1);
+            small.before_growth = [] { throw std::bad_alloc(); };
+            small.Append(times.data(), cells.data(), &null_bit, 1);
+        }
+        catch (const std::bad_alloc&)
+        {
+            threw = true;
+        }
+        Check(threw, "the first null map did not fail");
+
+        // Through the sensor: the rows of the call are dropped and counted, the reservation goes back.
+        auto shared = std::make_shared<tables::TableShared>(1 << 20);
+        shared->accepting = true;
+        shared->ledger_open = true;
+        tables::TableSchema schema;
+        std::string error;
+        Check(tables::TableSchema::Create({ { "time", tables::TableColumnType::Time }, { "v", tables::TableColumnType::Double } }, 64, schema, error), error);
+        tables::TableSensor sensor(shared, "p", { { "v", tables::TableColumnType::Double } }, schema, "", 0);
+        sensor.SetBeforeGrowthForTests([] { throw std::bad_alloc(); });
+        hsm_table_cell_t cell;
+        cell.f64 = 1.5;
+        int64_t time = 0;
+        CheckEqual(static_cast<int>(HSM_RESULT_LIMIT_EXCEEDED), static_cast<int>(sensor.Add(&time, &cell, nullptr, 1)), "result of a failed growth");
+        CheckEqual(std::uint64_t{ 1 }, sensor.RowsDropped(), "dropped");
+        CheckEqual(std::int64_t{ 0 }, shared->reserved.load(), "reservation given back");
+        CheckEqual(std::int64_t{ 1 }, shared->ledger.Total(tables::TableDropReason::BufferGrowthFailed), "ledger");
+    }
+
+    void BufferNullMapOnFirstUse()
+    {
+        tables::TableRowBuffer buffer(3);
+        std::vector<int64_t> times(4, 0);
+        std::vector<std::uint64_t> cells(12, 5);
+        buffer.Append(times.data(), cells.data(), nullptr, 2);
+        Check(!buffer.HasNulls(0) && !buffer.HasNulls(1) && !buffer.HasNulls(2), "maps before a null");
+        // The call's row 0, column 1 has no value: bit 0 * 3 + 1. It lands in the buffer's row 2.
+        std::uint8_t nulls = 0x02;
+        buffer.Append(times.data(), cells.data(), &nulls, 1);
+        Check(!buffer.HasNulls(0) && buffer.HasNulls(1) && !buffer.HasNulls(2), "only column 1 gets a map");
+        Check(buffer.IsNull(1, 2) && !buffer.IsNull(1, 0) && !buffer.IsNull(1, 1), "the null cell");
+        CheckEqual(std::uint64_t{ 0 }, buffer.Values(1)[2], "a null cell is zero");
+        std::uint8_t map = 0;
+        Check(buffer.CopyNullMap(1, 1, 2, &map), "slice has a null");
+        CheckEqual(std::uint8_t{ 2 }, map, "slice map shifted");
+        buffer.Clear();
+        Check(!buffer.HasNulls(1), "map flag after clear");
+        buffer.Append(times.data(), cells.data(), nullptr, 3);
+        Check(!buffer.IsNull(1, 2), "a stale bit after clear");
+    }
+
+    void BoundNeverOvershoots()
+    {
+        tables::TableShared shared(100);
+        Check(!shared.TryReserve(101), "a request above the bound");
+        CheckEqual(std::int64_t{ 0 }, shared.reserved.load(), "a refused request touched the counter");
+        Check(shared.TryReserve(60), "60 of 100");
+        Check(!shared.TryReserve(41), "101 of 100");
+        Check(shared.TryReserve(40), "100 of 100");
+        shared.Release(100);
+
+        // Many threads: the counter never passes the bound, and every reservation is given back.
+        tables::TableShared bounded(1000);
+        std::atomic<std::int64_t> peak{ 0 };
+        std::vector<std::thread> threads;
+        for (int t = 0; t < 8; ++t)
+            threads.emplace_back([&] {
+                for (int i = 0; i < 20000; ++i)
+                {
+                    if (bounded.TryReserve(24))
+                    {
+                        const auto now = bounded.reserved.load();
+                        std::int64_t seen = peak.load();
+                        while (now > seen && !peak.compare_exchange_weak(seen, now))
+                        {
+                        }
+                        bounded.Release(24);
+                    }
+                }
+            });
+        for (auto& thread : threads)
+            thread.join();
+        Check(peak.load() <= 1000, "the counter passed the bound: " + std::to_string(peak.load()));
+        CheckEqual(std::int64_t{ 0 }, bounded.reserved.load(), "reservations left");
+    }
+
+    void LedgerCountsByReason()
+    {
+        tables::TableLedger ledger;
+        ledger.Add(3, tables::TableDropReason::BufferFull);
+        ledger.Add(2, tables::TableDropReason::BufferFull);
+        ledger.Add(1, tables::TableDropReason::NotRunning);
+        ledger.Add(0, tables::TableDropReason::BacklogFull);
+        const auto reasons = ledger.TakeReasons();
+        CheckEqual(std::size_t{ 2 }, reasons.size(), "reasons");
+        Check(ledger.TakeReasons().empty(), "reasons are taken once");
+        CheckEqual(std::int64_t{ 6 }, ledger.TakeUnreported(), "unreported");
+        CheckEqual(std::int64_t{ 0 }, ledger.TakeUnreported(), "taken");
+        ledger.GiveBack(4);
+        CheckEqual(std::int64_t{ 4 }, ledger.TakeUnreported(), "given back");
+        CheckEqual(std::int64_t{ 5 }, ledger.Total(tables::TableDropReason::BufferFull), "total");
+    }
+
+    std::shared_ptr<tables::PendingBlock> Block(std::int64_t sequence, std::size_t bytes, const std::shared_ptr<tables::TableSensor>& sensor)
+    {
+        auto block = std::make_shared<tables::PendingBlock>();
+        block->sequence = sequence;
+        block->frame.assign(tables::kTableFrameHeaderBytes + bytes, 0);
+        block->tables.push_back({ sensor, 1 });
+        block->rows = 1;
+        return block;
+    }
+
+    void BacklogKeepsBlockInFlight()
+    {
+        auto shared = std::make_shared<tables::TableShared>(1 << 20);
+        shared->ledger_open = true;
+        tables::TableSchema schema;
+        std::string error;
+        Check(tables::TableSchema::Create({ { "time", tables::TableColumnType::Time }, { "v", tables::TableColumnType::Double } }, 64, schema, error), error);
+        auto sensor = std::make_shared<tables::TableSensor>(shared, "p", std::vector<tables::TableRegistrationColumn>{ { "v", tables::TableColumnType::Double } }, schema, "", 0);
+
+        tables::TableBacklog backlog(250);
+        CheckEqual(std::size_t{ 0 }, backlog.Append(Block(0, 100, sensor)), "first");
+        const auto head = backlog.BeginHead();
+        CheckEqual(std::int64_t{ 0 }, head->sequence, "head");
+        CheckEqual(std::size_t{ 0 }, backlog.Append(Block(1, 100, sensor)), "second");
+        // 300 bytes: the oldest that is not in flight goes, leaving a gap, and its rows are counted.
+        CheckEqual(std::size_t{ 1 }, backlog.Append(Block(2, 100, sensor)), "dropped");
+        CheckEqual(std::uint64_t{ 1 }, sensor->RowsDropped(), "dropped rows counted");
+        CheckEqual(std::int64_t{ 1 }, shared->ledger.Total(tables::TableDropReason::BacklogFull), "in the ledger as backlog full");
+        const auto sequences = backlog.Sequences();
+        Check(sequences == std::vector<std::int64_t>{ 0, 2 }, "sequences after the drop: the one after the head went");
+        // Not delivered: stays at the head.
+        backlog.EndFlight(head);
+        CheckEqual(std::int64_t{ 0 }, backlog.BeginHead()->sequence, "head again");
+        Check(backlog.Settle(head), "settle");
+        Check(!backlog.Settle(head), "settled twice");
+        CheckEqual(std::int64_t{ 100 }, backlog.Bytes(), "bytes");
+        // With nothing in flight, the bound drops the head too.
+        backlog.EndFlight(head);
+        CheckEqual(std::size_t{ 1 }, backlog.Append(Block(3, 200, sensor)), "head dropped when idle");
+        Check(backlog.Sequences() == std::vector<std::int64_t>{ 3 }, "the oldest went");
+    }
+
+    // ---- The C ABI in every build --------------------------------------------------------------------
+
+    void AbiRejectsWrongShapes()
+    {
+        Collector collector;
+        const hsm_table_column_t bid{ "bid", HSM_TABLE_COLUMN_DOUBLE };
+        hsm_table_sensor_t* sensor = reinterpret_cast<hsm_table_sensor_t*>(1);
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &bid, 0, nullptr, &sensor)), "no column");
+        Check(sensor == nullptr, "out not cleared");
+        const hsm_table_column_t time_column{ "time", HSM_TABLE_COLUMN_DOUBLE };
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &time_column, 1, nullptr, &sensor)), "time");
+        const hsm_table_column_t twice[] = { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "a", HSM_TABLE_COLUMN_INT64 } };
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", twice, 2, nullptr, &sensor)), "duplicate");
+        const hsm_table_column_t bad_type{ "x", static_cast<hsm_table_column_type_t>(1) };
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &bad_type, 1, nullptr, &sensor)), "type");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, nullptr, &bid, 1, nullptr, &sensor)), "null path");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "a\\b", &bid, 1, nullptr, &sensor)), "backslash");
+        hsm_table_sensor_options_t options = hsm_table_sensor_options_default();
+        options.sensor_location = 7;
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &bid, 1, &options, &sensor)), "location");
+        options.struct_size = 0;
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &bid, 1, &options, &sensor)), "struct_size 0");
+        Check(std::string(hsm_collector_last_error(collector.value)).find("struct_size") != std::string::npos, "last error names the field");
+        Check(tables::test::Pipeline(collector.value) == nullptr, "a refused create made the pipeline");
+
+        // An old caller's shorter options struct: only description is read, the rest are defaults.
+        struct OldOptions
+        {
+            size_t struct_size;
+            const char* description;
+        } old{ sizeof(OldOptions), "old" };
+        Table table(nullptr);
+        CheckEqual(static_cast<int>(HSM_RESULT_OK),
+                   static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &bid, 1, reinterpret_cast<const hsm_table_sensor_options_t*>(&old), &table.value)),
+                   "short options");
+
+        // The same path and columns: a handle to the same sensor; other columns: refused.
+        Table again = CreateTable(collector.value, "t", { bid });
+        CheckEqual(std::string(hsm_table_sensor_path(table.value)), std::string(hsm_table_sensor_path(again.value)), "same sensor");
+        const hsm_table_column_t other{ "bid", HSM_TABLE_COLUMN_INT64 };
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "t", &other, 1, nullptr, &sensor)), "other columns");
+
+        // Shapes of the add calls: refused, not counted.
+        hsm_table_cell_t cells[2];
+        cells[0].f64 = 1;
+        cells[1].f64 = 2;
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_row(table.value, 0, cells, 2, nullptr)), "two cells");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_row(table.value, 0, nullptr, 1, nullptr)), "null cells");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_row(nullptr, 0, cells, 1, nullptr)), "null sensor");
+        size_t taken = 99;
+        CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_table_sensor_add_rows(table.value, nullptr, nullptr, nullptr, 0, &taken)), "zero rows");
+        CheckEqual(size_t{ 0 }, taken, "zero rows taken");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_rows(table.value, nullptr, cells, nullptr, 1, &taken)), "null times");
+        // A row count no array can have (SIZE_MAX: an n - 1 below zero) is a wrong shape too.
+        std::int64_t time = 0;
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_rows(table.value, &time, cells, nullptr, SIZE_MAX, &taken)), "SIZE_MAX rows");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "a wrong shape counted");
+
+        // After dispose: a row is refused (and counted on the sensor), a create is refused.
+        hsm_collector_dispose(collector.value);
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(hsm_table_sensor_add_row(table.value, 0, cells, 1, nullptr)), "after dispose");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(hsm_collector_create_table_sensor(collector.value, "u", &bid, 1, nullptr, &sensor)), "create after dispose");
+
+        // Stats of a short struct: nothing written past struct_size.
+        struct ShortStats
+        {
+            size_t struct_size;
+            hsm_table_sensor_state_t state;
+            std::uint64_t guard;
+        } short_stats{ offsetof(hsm_table_sensor_stats_t, rows_accepted), HSM_TABLE_SENSOR_REGISTERED, 0xABCDEF };
+        Check(hsm_table_sensor_get_stats(table.value, reinterpret_cast<hsm_table_sensor_stats_t*>(&short_stats)) == HSM_RESULT_OK, "short stats");
+        CheckEqual(std::uint64_t{ 0xABCDEF }, short_stats.guard, "wrote past struct_size");
+
+        // Table options: after the first table sensor they are refused.
+        hsm_table_options_t table_options{};
+        table_options.struct_size = sizeof table_options;
+        Collector fresh;
+        table_options.tick_period_ms = 999;
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_collector_set_table_options(fresh.value, &table_options)), "tick below 1 s");
+        table_options.tick_period_ms = 2000;
+        CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_set_table_options(fresh.value, &table_options)), "options");
+        Table first = CreateTable(fresh.value, "x", { bid });
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(hsm_collector_set_table_options(fresh.value, &table_options)), "options after a sensor");
+    }
+
+    // A create that races a dispose is ordered with it under the lock of the table state: a dispose
+    // between the create's first check and that lock refuses the create, and nothing is made (no
+    // pipeline when there was none, no sensor in one that existed).
+    void CreateRacingDisposeIsRefused()
+    {
+        const hsm_table_column_t column{ "v", HSM_TABLE_COLUMN_DOUBLE };
+        for (const bool with_pipeline : { false, true })
+        {
+            const std::string what = with_pipeline ? "with a pipeline" : "first table sensor";
+            Collector collector;
+            std::unique_ptr<Table> first;
+            if (with_pipeline)
+                first = std::make_unique<Table>(CreateTable(collector.value, "first", { column }));
+            // Once: the hook may not reset itself (that would destroy it while it runs).
+            bool disposed = false;
+            tables::test::SetBeforeCreateLock(collector.value, [&] {
+                if (!std::exchange(disposed, true))
+                    hsm_collector_dispose(collector.value);
+            });
+            hsm_table_sensor_t* sensor = reinterpret_cast<hsm_table_sensor_t*>(1);
+            CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE),
+                       static_cast<int>(hsm_collector_create_table_sensor(collector.value, "raced", &column, 1, nullptr, &sensor)), what + ": create");
+            Check(sensor == nullptr, what + ": a handle was returned");
+            Check((tables::test::Pipeline(collector.value) != nullptr) == with_pipeline, what + ": a pipeline was made after the dispose");
+        }
+    }
+
+    // Without a channel a sensor is Unavailable and says why; its rows are dropped and counted, and the
+    // losses of the run are reported (logger and the stop line).
+    void UnavailableSaysWhy()
+    {
+        Collector collector;
+        std::vector<std::string> logged;
+        std::mutex log_mutex;
+        struct Log
+        {
+            std::vector<std::string>* lines;
+            std::mutex* mutex;
+        } log{ &logged, &log_mutex };
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* user) {
+                auto* target = static_cast<Log*>(user);
+                std::lock_guard<std::mutex> guard(*target->mutex);
+                target->lines->push_back(message);
+            },
+            &log);
+
+        Table table = CreateTable(collector.value, "quotes", { { "bid", HSM_TABLE_COLUMN_DOUBLE } });
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(table).state), "state");
+#if defined(HSM_COLLECTOR_TABLES)
+        Check(Reason(table).find("session transport") != std::string::npos, "reason: " + Reason(table));
+#else
+        Check(Reason(table).find("HSM_COLLECTOR_TABLES=OFF") != std::string::npos, "reason: " + Reason(table));
+#endif
+        Check(hsm_table_sensor_state_reason(table.value, nullptr, 0) == Reason(table).size(), "needed length");
+        char small[5];
+        hsm_table_sensor_state_reason(table.value, small, sizeof small);
+        CheckEqual(std::size_t{ 4 }, std::strlen(small), "cut to the buffer");
+
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 0, 1.0)), "add to an unavailable sensor");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_accepted, "accepted");
+
+        std::lock_guard<std::mutex> guard(log_mutex);
+        bool unavailable = false;
+        bool stop_line = false;
+        for (const auto& line : logged)
+        {
+            unavailable = unavailable || line.find("cannot send its rows") != std::string::npos;
+            stop_line = stop_line || line.find("1 table row(s) were lost during this run") != std::string::npos;
+        }
+        Check(unavailable, "the unavailable sensor was not reported");
+        Check(stop_line, "the stop line did not count the row");
+    }
+
+    // A host without table sensors pays nothing: no pipeline, so no zstd context, no tick, no thread.
+    void HostWithoutTableSensors()
+    {
+        Collector collector;
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_int_sensor(collector.value, "plain", &sensor) == HSM_RESULT_OK, "plain sensor");
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        Check(tables::test::Pipeline(collector.value) == nullptr, "a pipeline exists while running");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start again");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop again");
+        Check(tables::test::Pipeline(collector.value) == nullptr, "a pipeline exists after stop");
+        hsm_sensor_release(sensor);
+
+        // The first table sensor makes it, with no thread while stopped and no compressor before a pack.
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_INT64 } });
+        auto* pipeline = tables::test::Pipeline(collector.value);
+        Check(pipeline != nullptr, "no pipeline after the first table sensor");
+        Check(!pipeline->TickAlive() && !pipeline->DeliveryThreadAlive(), "threads while stopped");
+        Check(!pipeline->HasWriter(), "a compressor before any pack");
+    }
+
+    // A handle may outlive its collector: every call is refused, nothing is touched after the free.
+    void HandleOutlivesCollector()
+    {
+        auto collector = std::make_unique<Collector>();
+        Table table = CreateTable(collector->value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        const std::string path = hsm_table_sensor_path(table.value);
+        Check(hsm_collector_start(collector->value) == HSM_RESULT_OK, "start");
+        collector.reset();
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 0, 1)), "add after destroy");
+        CheckEqual(path, std::string(hsm_table_sensor_path(table.value)), "path after destroy");
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "counted after destroy");
+    }
+
+    void WrapperMatchesAbi()
+    {
+        hsm::collector::CollectorOptions options;
+        options.access_key = "k";
+        options.server_address = "https://localhost";
+        options.module = "m";
+        options.computer_name = "c";
+        hsm::collector::Collector collector(options);
+        hsm::collector::TableSensorOptions table_options;
+        table_options.columns = { hsm::collector::TableColumn::Double("bid"), hsm::collector::TableColumn::Int64("size") };
+        table_options.location = hsm::collector::SensorLocation::Module;
+        hsm::collector::TableSensor quotes = collector.CreateTableSensor("quotes / EURUSD", table_options);
+        CheckEqual(std::string("c/m/quotes/EURUSD"), quotes.Path(), "path");
+
+        bool threw = false;
+        try
+        {
+            collector.CreateTableSensor("x", hsm::collector::TableSensorOptions{});
+        }
+        catch (const hsm::collector::Error& error)
+        {
+            threw = std::string(error.what()).find("at least one value column") != std::string::npos;
+        }
+        Check(threw, "create without columns did not throw with the reason");
+
+        threw = false;
+        try
+        {
+            quotes.AddRow(std::chrono::system_clock::now(), { 1.0 });
+        }
+        catch (const hsm::collector::Error&)
+        {
+            threw = true;
+        }
+        Check(threw, "a wrong cell count did not throw");
+        threw = false;
+        try
+        {
+            quotes.AddRow(std::chrono::system_clock::now(), { 1.0, 2.5 });
+        }
+        catch (const hsm::collector::Error&)
+        {
+            threw = true;
+        }
+        Check(threw, "a double in an int64 column did not throw");
+
+        // Not running: a drop, false, counted.
+        Check(!quotes.AddRow(std::chrono::system_clock::now(), { 1, hsm::collector::TableCell::Null() }), "taken while stopped");
+        const auto stats = quotes.Stats();
+        CheckEqual(std::uint64_t{ 1 }, stats.rows_dropped, "dropped");
+        Check(stats.state == hsm::collector::TableSensorState::Unavailable && !stats.reason.empty(), "unavailable with a reason");
+        hsm::collector::TableSensor moved = std::move(quotes);
+        Check(quotes.handle() == nullptr && moved.handle() != nullptr, "move");
+    }
+
+#if defined(HSM_COLLECTOR_TABLES)
+    namespace reader = hsm::collector::tables::test;
+
+    // ---- The recording channel (the scripted server side of the tests) -------------------------------
+
+    class RecordingChannel : public tables::ITableChannel
+    {
+    public:
+        struct Row
+        {
+            std::uint64_t ticks;
+            std::vector<std::uint64_t> values;
+            std::vector<bool> nulls;
+        };
+
+        struct PutRecord
+        {
+            tables::TableProducerId producer{};
+            std::int64_t sequence = 0;
+            std::size_t frame_bytes = 0;
+            tables::TableBlockOutcome outcome = tables::TableBlockOutcome::NotDelivered;
+            std::set<int> refused;
+            reader::ReadBlock block;
+
+            std::vector<std::string> TableNames() const
+            {
+                std::vector<std::string> names;
+                for (const auto& table : block.tables)
+                    names.emplace_back(table.id.begin(), table.id.end());
+                return names;
+            }
+        };
+
+        using Answer = std::function<tables::TableBlockAck(const PutRecord&)>;
+
+        std::size_t MaxBlockBytes() const override
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return max_block_;
+        }
+
+        tables::TableBlockLimits Limits() const override
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return limits_;
+        }
+
+        tables::TableRegistrationResult Register(const std::vector<tables::TableRegistration>& registrations) override
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            registrations_.push_back(registrations);
+            tables::TableRegistrationResult result;
+            if (fail_registrations_ > 0)
+            {
+                --fail_registrations_;
+                result.unsettled_reason = "scripted: no answer";
+                return result;
+            }
+            for (const auto& registration : registrations)
+            {
+                const auto refused = refuse_.find(registration.path);
+                if (refused != refuse_.end())
+                    result.refused[registration.path] = refused->second;
+                else
+                    result.accepted.insert(registration.path);
+            }
+            return result;
+        }
+
+        tables::TableBlockAck Put(const tables::TableProducerId& producer, std::int64_t sequence, std::vector<std::uint8_t>& frame) override
+        {
+            if (on_put)
+                on_put();
+
+            PutRecord put;
+            put.producer = producer;
+            put.sequence = sequence;
+            put.frame_bytes = frame.size();
+            // The block as the server reads it: every check of the reader.
+            put.block = reader::ReadTableBlock(frame.data() + tables::kTableFrameHeaderBytes, frame.size() - tables::kTableFrameHeaderBytes);
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            tables::TableBlockAck ack;
+            if (cancelled_)
+            {
+                ack.error = "cancelled";
+            }
+            else if (!answers_.empty())
+            {
+                ack = answers_.front()(put);
+                answers_.pop_front();
+            }
+            else if (down_)
+            {
+                ack.error = "scripted: down";
+            }
+            else
+            {
+                ack.outcome = tables::TableBlockOutcome::Stored;
+            }
+            put.outcome = ack.outcome;
+            for (const auto& refusal : ack.refused)
+                put.refused.insert(refusal.index);
+            puts_.push_back(std::move(put));
+            return ack;
+        }
+
+        void Cancel() override
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                cancelled_ = true;
+            }
+            cancel_cv_.notify_all();
+        }
+
+        void Reset() override
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            cancelled_ = false;
+        }
+
+        // ---- Scripting ----
+        void SetMaxBlock(std::size_t bytes)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            max_block_ = bytes;
+        }
+        void SetLimits(const tables::TableBlockLimits& limits)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            limits_ = limits;
+        }
+        void RefuseRegistration(const std::string& path, const std::string& reason)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            refuse_[path] = reason;
+        }
+        void FailRegistrations(int count)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            fail_registrations_ += count;
+        }
+        void SetDown(bool down)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            down_ = down;
+        }
+        void AnswerNext(Answer answer)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            answers_.push_back(std::move(answer));
+        }
+        // Blocks a Put until Cancel (the stop's drain budget expiring).
+        void WaitForCancel()
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cancel_cv_.wait(lock, [this] { return cancelled_; });
+        }
+
+        // ---- Records ----
+        std::vector<std::vector<tables::TableRegistration>> Registrations() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return registrations_;
+        }
+        std::vector<PutRecord> Puts() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return puts_;
+        }
+        std::vector<PutRecord> Stored() const
+        {
+            std::vector<PutRecord> stored;
+            for (auto& put : Puts())
+                if (put.outcome == tables::TableBlockOutcome::Stored)
+                    stored.push_back(std::move(put));
+            return stored;
+        }
+        // The rows of `path` over every stored block, refused tables excluded.
+        std::vector<Row> RowsOf(const std::string& path) const { return RowsIn(Stored(), path); }
+
+        static std::vector<Row> RowsIn(const std::vector<PutRecord>& stored, const std::string& path)
+        {
+            std::vector<Row> rows;
+            for (const auto& put : stored)
+            {
+                const auto names = put.TableNames();
+                const auto it = std::find(names.begin(), names.end(), path);
+                if (it == names.end())
+                    continue;
+                const int index = static_cast<int>(it - names.begin());
+                if (put.refused.count(index) != 0)
+                    continue;
+                const auto& table = put.block.tables[static_cast<std::size_t>(index)];
+                for (std::int32_t row = 0; row < table.rows; ++row)
+                {
+                    Row out;
+                    out.ticks = table.columns[0].values[static_cast<std::size_t>(row)];
+                    for (std::size_t column = 1; column < table.columns.size(); ++column)
+                    {
+                        out.values.push_back(table.columns[column].values[static_cast<std::size_t>(row)]);
+                        out.nulls.push_back(table.columns[column].IsNull(static_cast<std::size_t>(row)));
+                    }
+                    rows.push_back(std::move(out));
+                }
+            }
+            return rows;
+        }
+
+        std::function<void()> on_put;
+
+    private:
+        mutable std::mutex mutex_;
+        std::condition_variable cancel_cv_;
+        std::size_t max_block_ = 4 * 1024 * 1024 - 40;
+        tables::TableBlockLimits limits_{};
+        std::vector<std::vector<tables::TableRegistration>> registrations_;
+        std::vector<PutRecord> puts_;
+        std::map<std::string, std::string> refuse_;
+        std::deque<Answer> answers_;
+        int fail_registrations_ = 0;
+        bool down_ = false;
+        bool cancelled_ = false;
+    };
+#endif
+} // namespace
+
+// ---- The conformance verbs (driven by hsm_collector_tests.cpp) -------------------------------------------
+
+struct TableConformanceState
+{
+#if defined(HSM_COLLECTOR_TABLES)
+    std::shared_ptr<RecordingChannel> channel;
+#endif
+#if defined(HSM_COLLECTOR_HTTP)
+    // A collector on the scripted session (create_collector_on_session): its server stands in for the
+    // recording channel, and takes the table connection.
+    hsm::test::WebSocketTestServer* server = nullptr;
+    hsm_collector_t* session_collector = nullptr;
+    // Whether the table connection was up each time the collector's close of a session reached the
+    // server. Shared with the server's hook, which may run while the collector is destroyed.
+    struct SessionCloses
+    {
+        std::mutex mutex;
+        std::vector<bool> table_up;
+#if defined(HSM_COLLECTOR_TABLES)
+        std::shared_ptr<tables::SessionTableChannel> channel;
+#endif
+    };
+    std::shared_ptr<SessionCloses> closes = std::make_shared<SessionCloses>();
+#endif
+    struct Sensor
+    {
+        std::unique_ptr<Table> handle;
+        std::vector<hsm_table_column_type_t> types;
+    };
+    std::map<std::string, Sensor> sensors;
+    std::string results;
+};
+
+std::shared_ptr<TableConformanceState> NewTableConformanceState()
+{
+    return std::make_shared<TableConformanceState>();
+}
+
+// Every collector of the corpus gets the recording channel and the manual tick (a collector without table
+// sensors has no pipeline, so this costs the other fixtures nothing); create_collector_without_table_transport
+// gets neither channel.
+void PrepareTableConformanceCollector(TableConformanceState& state, hsm_collector_t* collector, bool with_channel)
+{
+    state.sensors.clear();
+    state.results.clear();
+#if defined(HSM_COLLECTOR_TABLES)
+    // Without a channel the collector has none, and the record stays empty (the managed driver's
+    // recording sender keeps its scripted table channel either way).
+    state.channel = std::make_shared<RecordingChannel>();
+    if (with_channel)
+        tables::test::InstallChannel(collector, state.channel);
+#else
+    (void)with_channel;
+#endif
+    tables::test::SetManualTick(collector, true);
+}
+
+#if defined(HSM_COLLECTOR_HTTP)
+// The session server of create_collector_on_session takes the table connection: the table script with
+// the test block reader, a manual tick, the table channel's pauses shortened (as the managed driver's
+// SessionTimings), and the end of an ack wait decided by the script, never by a clock.
+void PrepareTableConformanceSession(TableConformanceState& state, hsm_collector_t* collector, hsm::test::WebSocketTestServer& server)
+{
+    state.sensors.clear();
+    state.results.clear();
+    state.server = &server;
+    state.session_collector = collector;
+    tables::test::SetManualTick(collector, true);
+#if defined(HSM_COLLECTOR_TABLES)
+    server.EnableTableScript([](const std::string& block) {
+        const auto read = reader::ReadTableBlock(reinterpret_cast<const std::uint8_t*>(block.data()), block.size());
+        std::vector<std::string> names;
+        for (const auto& table : read.tables)
+            names.emplace_back(table.id.begin(), table.id.end());
+        return names;
+    });
+    hsm::test::WebSocketTestServer* scripted = &server;
+    tables::test::SetSessionChannelOptions(collector, [scripted](tables::SessionTableChannelOptions& options) {
+        options.backoff_ms = [](int) { return std::int64_t{ 50 }; };
+        options.refused_retry_ms = 200;
+        options.connection_wait_ms = 200;
+        options.ack_abandoned_for_tests = [scripted](std::int64_t id) { return scripted->TableFrameUnanswered(id); };
+    });
+    auto closes = state.closes;
+    server.SetSessionCloseReceived([closes] {
+        std::lock_guard<std::mutex> guard(closes->mutex);
+        closes->table_up.push_back(closes->channel && closes->channel->IsServing());
+    });
+#endif
+}
+#endif
+
+namespace
+{
+#if defined(HSM_COLLECTOR_TABLES)
+    std::int64_t ToInt64(const std::string& text)
+    {
+        return std::stoll(text);
+    }
+
+#if defined(HSM_COLLECTOR_HTTP)
+    bool OnSession(const TableConformanceState& state)
+    {
+        return state.server != nullptr;
+    }
+
+    // Re-checks until the condition holds or the timeout (seconds) runs out; 0 checks once. With a
+    // collector, each pass also does what its delivery thread would do between ticks (the manual tick
+    // has no such thread): the table connection is opened, kept and reopened.
+    template <typename Condition>
+    bool PollTables(Condition condition, const std::string& seconds, hsm_collector_t* service = nullptr)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(std::stoi(seconds));
+        for (;;)
+        {
+            if (service != nullptr)
+                tables::test::ServiceChannelNow(service);
+            if (condition())
+                return true;
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    // The block frames of the scripted server as the recording channel's puts: decoded, with what was
+    // stored and refused.
+    std::vector<RecordingChannel::PutRecord> SessionPuts(const hsm::test::WebSocketTestServer& server)
+    {
+        std::vector<RecordingChannel::PutRecord> puts;
+        for (const auto& frame : server.TableFrames())
+        {
+            RecordingChannel::PutRecord put;
+            std::copy(frame.producer.begin(), frame.producer.end(), put.producer.begin());
+            put.sequence = frame.sequence;
+            put.frame_bytes = frame.frame_bytes;
+            put.outcome = frame.stored ? tables::TableBlockOutcome::Stored : tables::TableBlockOutcome::NotDelivered;
+            put.block = reader::ReadTableBlock(reinterpret_cast<const std::uint8_t*>(frame.block.data()), frame.block.size());
+            const auto names = put.TableNames();
+            for (std::size_t i = 0; i < names.size(); ++i)
+                if (frame.refused.count(names[i]) != 0)
+                    put.refused.insert(static_cast<int>(i));
+            puts.push_back(std::move(put));
+        }
+        return puts;
+    }
+
+    std::vector<RecordingChannel::PutRecord> StoredOf(const std::vector<RecordingChannel::PutRecord>& puts)
+    {
+        std::vector<RecordingChannel::PutRecord> stored;
+        for (const auto& put : puts)
+            if (put.outcome == tables::TableBlockOutcome::Stored)
+                stored.push_back(put);
+        return stored;
+    }
+
+    hsm::test::WebSocketTestServer::TableAnswer SessionAnswer(const std::string& outcome)
+    {
+        using Answer = hsm::test::WebSocketTestServer::TableAnswer;
+        if (outcome == "stored")
+            return Answer::Stored();
+        if (outcome == "duplicate")
+            return Answer::WithText("{\"ack\":{id},\"status\":200,\"body\":{\"outcome\":\"duplicate\",\"tables\":1,\"refusedKnown\":false}}");
+        if (outcome == "all_refused")
+            return Answer::RefuseAll();
+        if (outcome == "invalid")
+            return Answer::WithStatus(400);
+        if (outcome == "not_delivered")
+            return Answer::WithStatus(503, 0);
+        if (outcome == "store_without_ack")
+            return Answer::StoredSilently();
+        if (outcome == "no_answer")
+            return Answer::NoAnswer();
+        if (outcome == "close_1013")
+            return Answer::CloseWith(1013, "the server holds too many table frames; try again later");
+        if (outcome == "drop_session")
+            return Answer::DropSession();
+        if (outcome == "binary_frame")
+            return Answer::BinaryFrame();
+        if (outcome == "garbage_text")
+            return Answer::WithText("this is not json");
+        throw std::runtime_error("Unknown block answer '" + outcome + "' on a session.");
+    }
+#endif
+
+    double ParseTableNumber(const std::string& text)
+    {
+        if (text == "NaN")
+            return std::numeric_limits<double>::quiet_NaN();
+        if (text == "Infinity")
+            return std::numeric_limits<double>::infinity();
+        if (text == "-Infinity")
+            return -std::numeric_limits<double>::infinity();
+        return std::stod(text);
+    }
+
+    std::string ExpandRepeat(const std::string& value)
+    {
+        // repeat:<char>:<count>
+        if (value.rfind("repeat:", 0) != 0)
+            return value;
+        const auto separator = value.find(':', 7);
+        return std::string(static_cast<std::size_t>(std::stoul(value.substr(separator + 1))), value[7]);
+    }
+
+    std::vector<hsm_table_column_t> ParseColumns(const std::string& text, std::vector<std::string>& names)
+    {
+        std::vector<hsm_table_column_t> columns;
+        names.clear();
+        if (text == "none")
+            return columns;
+        std::size_t start = 0;
+        while (start <= text.size())
+        {
+            auto end = text.find(',', start);
+            if (end == std::string::npos)
+                end = text.size();
+            const std::string pair = text.substr(start, end - start);
+            const auto colon = pair.find(':');
+            names.push_back(pair.substr(0, colon));
+            const std::string type = pair.substr(colon + 1);
+            if (type != "double" && type != "int64")
+                throw std::runtime_error("Unknown table column type '" + type + "' (double, int64).");
+            columns.push_back({ nullptr, type == "double" ? HSM_TABLE_COLUMN_DOUBLE : HSM_TABLE_COLUMN_INT64 });
+            start = end + 1;
+        }
+        for (std::size_t i = 0; i < columns.size(); ++i)
+            columns[i].name = names[i].c_str();
+        return columns;
+    }
+
+    TableConformanceState::Sensor& SensorNamed(TableConformanceState& state, const std::string& name)
+    {
+        const auto it = state.sensors.find(name);
+        if (it == state.sensors.end())
+            throw std::runtime_error("No table sensor '" + name + "' was created in this case.");
+        return it->second;
+    }
+
+    std::string PathOf(TableConformanceState& state, const std::string& name)
+    {
+        return hsm_table_sensor_path(SensorNamed(state, name).handle->value);
+    }
+
+    RecordingChannel& ChannelOf(TableConformanceState& state)
+    {
+        if (!state.channel)
+            throw std::runtime_error("this case has no table channel");
+        return *state.channel;
+    }
+
+    const char* StateName(hsm_table_sensor_state_t state)
+    {
+        switch (state)
+        {
+        case HSM_TABLE_SENSOR_PENDING:
+            return "pending";
+        case HSM_TABLE_SENSOR_REGISTERED:
+            return "registered";
+        case HSM_TABLE_SENSOR_REFUSED:
+            return "refused";
+        case HSM_TABLE_SENSOR_UNAVAILABLE:
+            return "unavailable";
+        }
+        return "?";
+    }
+
+    const char* TypeName(tables::TableColumnType type)
+    {
+        switch (type)
+        {
+        case tables::TableColumnType::Time:
+            return "time";
+        case tables::TableColumnType::Int64:
+            return "int64";
+        case tables::TableColumnType::Double:
+            return "double";
+        }
+        return "?";
+    }
+
+    RecordingChannel::Answer ScriptedAnswer(const std::string& outcome)
+    {
+        using tables::TableBlockAck;
+        using tables::TableBlockOutcome;
+        if (outcome == "stored")
+            return [](const RecordingChannel::PutRecord&) { TableBlockAck ack; ack.outcome = TableBlockOutcome::Stored; return ack; };
+        if (outcome == "duplicate")
+            return [](const RecordingChannel::PutRecord&) { TableBlockAck ack; ack.outcome = TableBlockOutcome::Duplicate; return ack; };
+        if (outcome == "all_refused")
+            return [](const RecordingChannel::PutRecord& put) {
+                TableBlockAck ack;
+                ack.outcome = TableBlockOutcome::AllRefused;
+                const auto names = put.TableNames();
+                for (std::size_t i = 0; i < names.size(); ++i)
+                    ack.refused.push_back({ static_cast<std::int32_t>(i), names[i], "SensorCreatedAfterBlock" });
+                ack.refused_count = static_cast<std::int32_t>(names.size());
+                return ack;
+            };
+        if (outcome == "invalid")
+            return [](const RecordingChannel::PutRecord&) { TableBlockAck ack; ack.outcome = TableBlockOutcome::Invalid; ack.error = "invalid block: scripted"; return ack; };
+        if (outcome == "not_delivered")
+            return [](const RecordingChannel::PutRecord&) { TableBlockAck ack; ack.error = "scripted: 503"; ack.retry_after_ms = 0; return ack; };
+        throw std::runtime_error("Unknown block answer '" + outcome + "' (stored, duplicate, all_refused, invalid, not_delivered).");
+    }
+
+    std::uint64_t TicksOfMs(const std::string& ms)
+    {
+        return static_cast<std::uint64_t>(tables::kUnixEpochTicks + ToInt64(ms) * 10000);
+    }
+#endif
+} // namespace
+
+// True when `step` is a table verb (and was run); false for any other verb.
+bool ExecuteTableConformanceStep(TableConformanceState& state, hsm_collector_t* collector, const std::vector<std::string>& step)
+{
+    static const std::set<std::string> verbs = {
+        "create_table_sensor",
+        "create_table_sensor_at_product",
+        "expect_create_table_sensor_rejected",
+        "add_table_row",
+        "add_table_rows",
+        "table_tick",
+        "table_server_refuse_registration",
+        "table_server_fail_registrations",
+        "table_server_down",
+        "table_server_up",
+        "table_server_frame_limit",
+        "table_server_answer_next",
+        "table_server_refuse_table_next",
+        "expect_table_add_results",
+        "expect_table_path",
+        "expect_table_state",
+        "expect_table_rows_accepted",
+        "expect_table_rows_dropped",
+        "expect_table_registration_count",
+        "expect_table_registration_size",
+        "expect_table_registration",
+        "expect_table_blocks",
+        "expect_table_block_attempts",
+        "expect_table_block_tables",
+        "expect_table_blocks_within",
+        "expect_table_sequences",
+        "expect_table_sequences_increasing",
+        "expect_table_rows",
+        "expect_table_row",
+        // The table connection (table_connection_contract.hsmtest): a collector on the scripted session.
+        "table_register",
+        "table_wait_connection_up",
+        "table_server_refuse_upgrades",
+        "table_server_accept_upgrades",
+        "expect_table_connections",
+        "expect_refused_table_upgrades_at_least",
+        "expect_table_upgrade_names_session",
+        "expect_table_probe_before_blocks",
+        "expect_table_frame_connections",
+        "expect_table_close_code",
+        "expect_table_closed_before_session",
+    };
+    const std::string& action = step[0];
+    if (verbs.count(action) == 0)
+        return false;
+
+#if !defined(HSM_COLLECTOR_TABLES)
+    (void)state;
+    (void)collector;
+    throw std::runtime_error("The table verbs need the tables build (HSM_COLLECTOR_TABLES): " + action);
+#else
+    const auto arg = [&](std::size_t index) -> const std::string& {
+        if (index + 1 >= step.size())
+            throw std::runtime_error(action + ": argument " + std::to_string(index) + " is missing");
+        return step[index + 1];
+    };
+
+#if defined(HSM_COLLECTOR_HTTP)
+    if (OnSession(state))
+    {
+        auto& server = *state.server;
+        const auto join = [](const auto& items, const auto& text) {
+            std::string joined;
+            for (const auto& item : items)
+                joined += (joined.empty() ? "" : ",") + text(item);
+            return joined;
+        };
+
+        if (action == "table_register")
+        {
+            auto& sensor = SensorNamed(state, arg(0));
+            const auto pending = [&] { return Stats(*sensor.handle).state == HSM_TABLE_SENSOR_PENDING; };
+            Check(PollTables(
+                      [&] {
+                          if (!pending())
+                              return true;
+                          tables::test::RunTick(collector);
+                          return !pending();
+                      },
+                      arg(1)),
+                  "table_register: " + PathOf(state, arg(0)) + " is still pending");
+            return true;
+        }
+        if (action == "table_wait_connection_up")
+        {
+            const auto channel = tables::test::SessionChannel(collector);
+            Check(channel != nullptr, "table_wait_connection_up needs a table sensor on a collector on the scripted session");
+            const auto expected = ToInt64(arg(0));
+            const bool up = PollTables([&] { return channel->ConnectionsOpened() >= expected && channel->IsServing(); }, arg(1), collector);
+            Check(up, "table_wait_connection_up: table connection " + arg(0) + " is not open (opened " + std::to_string(channel->ConnectionsOpened()) +
+                          ", serving " + std::to_string(channel->IsServing()) + ", " + channel->DownReason() + ")");
+            CheckEqual(expected, channel->ConnectionsOpened(), "table connections opened");
+            return true;
+        }
+        if (action == "table_server_refuse_upgrades" || action == "table_server_accept_upgrades")
+        {
+            server.RefuseSideUpgradesWith(action == "table_server_refuse_upgrades" ? static_cast<int>(ToInt64(arg(0))) : 0);
+            return true;
+        }
+        if (action == "expect_table_connections")
+        {
+            const auto expected = static_cast<int>(ToInt64(arg(0)));
+            PollTables([&] { return server.TableConnections() >= expected; }, arg(1));
+            CheckEqual(expected, server.TableConnections(), "table connections accepted");
+            return true;
+        }
+        if (action == "expect_refused_table_upgrades_at_least")
+        {
+            const auto expected = static_cast<int>(ToInt64(arg(0)));
+            Check(PollTables([&] { return server.RefusedTableUpgrades() >= expected; }, arg(1), collector),
+                  "expected at least " + arg(0) + " refused table upgrade(s), got " + std::to_string(server.RefusedTableUpgrades()));
+            return true;
+        }
+        if (action == "expect_table_upgrade_names_session")
+        {
+            const auto upgrades = server.TableUpgradeSessionIds();
+            const auto sessions = server.HelloSessionIds();
+            const auto upgrade = static_cast<std::size_t>(ToInt64(arg(0)));
+            const auto session = static_cast<std::size_t>(ToInt64(arg(1)));
+            Check(upgrade < upgrades.size(), "no table upgrade " + arg(0));
+            Check(session < sessions.size(), "no session " + arg(1));
+            CheckEqual(sessions[session], upgrades[upgrade], "X-Hsm-Session of table upgrade " + arg(0));
+            return true;
+        }
+        if (action == "expect_table_probe_before_blocks")
+        {
+            const auto frames = server.TableFrames();
+            const auto probes = server.TableProbes();
+            std::set<int> connections;
+            for (const auto& frame : frames)
+                connections.insert(frame.connection);
+            Check(probes.size() >= connections.size(), std::to_string(probes.size()) + " probe(s) for " + std::to_string(connections.size()) + " table connection(s) that carried blocks");
+            if (!frames.empty())
+            {
+                std::int64_t first_frame = frames.front().id;
+                for (const auto& frame : frames)
+                    first_frame = (std::min)(first_frame, frame.id);
+                Check(!probes.empty() && *std::min_element(probes.begin(), probes.end()) < first_frame, "a block came before the first probe");
+            }
+            return true;
+        }
+        if (action == "expect_table_frame_connections")
+        {
+            CheckEqual(arg(0), join(server.TableFrames(), [](const auto& frame) { return std::to_string(frame.connection); }), "table connections of the frames");
+            return true;
+        }
+        if (action == "expect_table_close_code")
+        {
+            const int code = static_cast<int>(ToInt64(arg(0)));
+            const auto has = [&] {
+                const auto codes = server.SideCloseCodes();
+                return std::find(codes.begin(), codes.end(), code) != codes.end();
+            };
+            Check(PollTables(has, arg(1)), "the collector closed no table connection with " + arg(0) + "; closes: " +
+                                               join(server.SideCloseCodes(), [](int c) { return std::to_string(c); }));
+            return true;
+        }
+        if (action == "expect_table_closed_before_session")
+        {
+            const auto closes = state.closes;
+            const auto recorded = [&] {
+                std::lock_guard<std::mutex> guard(closes->mutex);
+                return closes->table_up;
+            };
+            Check(PollTables([&] { return !recorded().empty(); }, arg(0)), "the collector did not close its session");
+            const auto codes = [&] { return server.SideCloseCodes(); };
+            Check(PollTables([&] { const auto c = codes(); return std::find(c.begin(), c.end(), 1000) != c.end(); }, arg(0)),
+                  "the collector closed no table connection with 1000");
+            for (const bool up : recorded())
+                Check(!up, "the table connection was still up when the session was closed");
+            return true;
+        }
+
+        // The block verbs of table_sensor_contract.hsmtest, against the scripted server.
+        if (action == "table_server_frame_limit")
+        {
+            server.SetTableMaxFrameBytes(static_cast<int>(ToInt64(arg(0))));
+            return true;
+        }
+        if (action == "table_server_answer_next")
+        {
+            server.AnswerTableNext(SessionAnswer(arg(0)));
+            return true;
+        }
+        if (action == "table_server_refuse_table_next")
+        {
+            server.AnswerTableNext(hsm::test::WebSocketTestServer::TableAnswer::Stored({ { PathOf(state, arg(0)), arg(1) } }));
+            return true;
+        }
+        if (action == "expect_table_block_attempts")
+        {
+            CheckEqual(static_cast<std::size_t>(ToInt64(arg(0))), server.TableFrames().size(), "block frames");
+            return true;
+        }
+        if (action == "expect_table_blocks_within")
+        {
+            for (const auto& frame : server.TableFrames())
+                Check(frame.frame_bytes <= static_cast<std::size_t>(ToInt64(arg(0))), "a frame of " + std::to_string(frame.frame_bytes) + " bytes");
+            return true;
+        }
+        if (action == "expect_table_sequences" || action == "expect_table_sequences_increasing")
+        {
+            const auto frames = server.TableFrames();
+            std::set<std::string> producers;
+            for (std::size_t i = 0; i < frames.size(); ++i)
+            {
+                producers.insert(frames[i].producer);
+                if (action == "expect_table_sequences_increasing" && i > 0)
+                    Check(frames[i].sequence >= frames[i - 1].sequence, "sequence " + std::to_string(frames[i].sequence) + " after " + std::to_string(frames[i - 1].sequence));
+            }
+            if (action == "expect_table_sequences")
+                CheckEqual(arg(0), join(frames, [](const auto& frame) { return std::to_string(frame.sequence); }), "producer sequences");
+            CheckEqual(std::size_t{ 1 }, producers.size(), "producers");
+            return true;
+        }
+    }
+#endif
+
+    // The rows the server stored for a table: the scripted session server's, or the recording channel's.
+    const auto stored_rows = [&](const std::string& path) {
+#if defined(HSM_COLLECTOR_HTTP)
+        if (OnSession(state))
+            return RecordingChannel::RowsIn(StoredOf(SessionPuts(*state.server)), path);
+#endif
+        return ChannelOf(state).RowsOf(path);
+    };
+
+    if (action == "create_table_sensor" || action == "create_table_sensor_at_product")
+    {
+        std::vector<std::string> names;
+        auto columns = ParseColumns(arg(1), names);
+        hsm_table_sensor_options_t options = hsm_table_sensor_options_default();
+        options.sensor_location = action == "create_table_sensor_at_product" ? 1 : 0;
+        hsm_table_sensor_t* sensor = nullptr;
+        const auto result = hsm_collector_create_table_sensor(collector, ExpandRepeat(arg(0)).c_str(), columns.data(), columns.size(), &options, &sensor);
+        Check(result == HSM_RESULT_OK, action + " " + arg(0) + " failed: " + std::string(hsm_collector_last_error(collector) ? hsm_collector_last_error(collector) : ""));
+#if defined(HSM_COLLECTOR_HTTP)
+        if (OnSession(state))
+        {
+            std::lock_guard<std::mutex> guard(state.closes->mutex);
+            state.closes->channel = tables::test::SessionChannel(collector);
+        }
+#endif
+        TableConformanceState::Sensor entry;
+        entry.handle = std::make_unique<Table>(sensor);
+        for (const auto& column : columns)
+            entry.types.push_back(column.type);
+        state.sensors[arg(0)] = std::move(entry);
+        return true;
+    }
+    if (action == "expect_create_table_sensor_rejected")
+    {
+        std::vector<std::string> names;
+        auto columns = ParseColumns(arg(1), names);
+        hsm_table_sensor_t* sensor = nullptr;
+        const auto result = hsm_collector_create_table_sensor(collector, ExpandRepeat(arg(0)).c_str(), columns.data(), columns.size(), nullptr, &sensor);
+        hsm_table_sensor_release(sensor);
+        Check(result == HSM_RESULT_INVALID_ARGUMENT, "create_table_sensor " + arg(0) + " was not rejected (" + std::to_string(static_cast<int>(result)) + ")");
+        return true;
+    }
+    if (action == "add_table_row")
+    {
+        auto& sensor = SensorNamed(state, arg(0));
+        const std::size_t columns = sensor.types.size();
+        std::vector<hsm_table_cell_t> cells(columns);
+        std::vector<std::uint8_t> nulls((columns + 7) / 8, 0);
+        bool any_null = false;
+        for (std::size_t c = 0; c < columns; ++c)
+        {
+            const std::string& text = arg(2 + c);
+            if (text == "token:null")
+            {
+                cells[c].i64 = 0;
+                nulls[c / 8] = static_cast<std::uint8_t>(nulls[c / 8] | (1u << (c % 8)));
+                any_null = true;
+            }
+            else if (sensor.types[c] == HSM_TABLE_COLUMN_INT64)
+                cells[c].i64 = ToInt64(text);
+            else
+                cells[c].f64 = ParseTableNumber(text);
+        }
+        const auto result = hsm_table_sensor_add_row(sensor.handle->value, ToInt64(arg(1)) * 1000000, cells.data(), columns, any_null ? nulls.data() : nullptr);
+        Check(result != HSM_RESULT_INVALID_ARGUMENT, "add_table_row: wrong shape");
+        state.results += result == HSM_RESULT_OK ? '1' : '0';
+        return true;
+    }
+    if (action == "add_table_rows")
+    {
+        // path|count|start_ms: row r has the time start_ms + r and the value r in every column.
+        auto& sensor = SensorNamed(state, arg(0));
+        const std::size_t columns = sensor.types.size();
+        const auto count = static_cast<std::size_t>(ToInt64(arg(1)));
+        const std::int64_t start = ToInt64(arg(2));
+        std::vector<std::int64_t> times(count);
+        std::vector<hsm_table_cell_t> cells(count * columns);
+        for (std::size_t row = 0; row < count; ++row)
+        {
+            times[row] = (start + static_cast<std::int64_t>(row)) * 1000000;
+            for (std::size_t c = 0; c < columns; ++c)
+            {
+                if (sensor.types[c] == HSM_TABLE_COLUMN_INT64)
+                    cells[row * columns + c].i64 = static_cast<std::int64_t>(row);
+                else
+                    cells[row * columns + c].f64 = static_cast<double>(row);
+            }
+        }
+        std::size_t taken = 0;
+        const auto result = hsm_table_sensor_add_rows(sensor.handle->value, times.data(), cells.data(), nullptr, count, &taken);
+        Check(result != HSM_RESULT_INVALID_ARGUMENT, "add_table_rows: wrong shape");
+        state.results += taken == count ? '1' : '0';
+        return true;
+    }
+    if (action == "table_tick")
+    {
+        tables::test::RunTick(collector);
+        return true;
+    }
+    if (action == "table_register" || action == "table_wait_connection_up" || action == "table_server_refuse_upgrades" ||
+        action == "table_server_accept_upgrades" || action == "expect_table_connections" || action == "expect_refused_table_upgrades_at_least" ||
+        action == "expect_table_upgrade_names_session" || action == "expect_table_probe_before_blocks" || action == "expect_table_frame_connections" ||
+        action == "expect_table_close_code" || action == "expect_table_closed_before_session")
+        throw std::runtime_error(action + " needs a collector on the scripted session (create_collector_on_session)");
+    if (action == "table_server_refuse_registration")
+    {
+        ChannelOf(state).RefuseRegistration(PathOf(state, arg(0)), arg(1));
+        return true;
+    }
+    if (action == "table_server_fail_registrations")
+    {
+        ChannelOf(state).FailRegistrations(static_cast<int>(ToInt64(arg(0))));
+        return true;
+    }
+    if (action == "table_server_down" || action == "table_server_up")
+    {
+        ChannelOf(state).SetDown(action == "table_server_down");
+        return true;
+    }
+    if (action == "table_server_frame_limit")
+    {
+        ChannelOf(state).SetMaxBlock(static_cast<std::size_t>(ToInt64(arg(0))) - tables::kTableFrameHeaderBytes);
+        return true;
+    }
+    if (action == "table_server_answer_next")
+    {
+        ChannelOf(state).AnswerNext(ScriptedAnswer(arg(0)));
+        return true;
+    }
+    if (action == "table_server_refuse_table_next")
+    {
+        const std::string path = PathOf(state, arg(0));
+        const std::string reason = arg(1);
+        ChannelOf(state).AnswerNext([path, reason](const RecordingChannel::PutRecord& put) {
+            tables::TableBlockAck ack;
+            ack.outcome = tables::TableBlockOutcome::Stored;
+            const auto names = put.TableNames();
+            const auto it = std::find(names.begin(), names.end(), path);
+            ack.refused.push_back({ it == names.end() ? -1 : static_cast<std::int32_t>(it - names.begin()), path, reason });
+            ack.refused_count = 1;
+            return ack;
+        });
+        return true;
+    }
+    if (action == "expect_table_add_results")
+    {
+        Check(arg(0) == state.results, "table add results: expected " + arg(0) + ", actual " + state.results);
+        return true;
+    }
+    if (action == "expect_table_path")
+    {
+        CheckEqual(arg(1), PathOf(state, arg(0)), "table path");
+        return true;
+    }
+    if (action == "expect_table_state" || action == "expect_table_rows_accepted" || action == "expect_table_rows_dropped")
+    {
+        const auto stats = Stats(*SensorNamed(state, arg(0)).handle);
+        if (action == "expect_table_state")
+            CheckEqual(arg(1), std::string(StateName(stats.state)), "table state of " + arg(0));
+        else if (action == "expect_table_rows_accepted")
+            CheckEqual(static_cast<std::uint64_t>(ToInt64(arg(1))), stats.rows_accepted, "rows accepted by " + arg(0));
+        else
+            CheckEqual(static_cast<std::uint64_t>(ToInt64(arg(1))), stats.rows_dropped, "rows dropped by " + arg(0));
+        return true;
+    }
+    if (action == "expect_table_registration_count")
+    {
+        CheckEqual(static_cast<std::size_t>(ToInt64(arg(0))), ChannelOf(state).Registrations().size(), "table registration requests");
+        return true;
+    }
+    if (action == "expect_table_registration_size")
+    {
+        const auto requests = ChannelOf(state).Registrations();
+        const auto index = static_cast<std::size_t>(ToInt64(arg(0)));
+        Check(index < requests.size(), "no registration request " + arg(0));
+        CheckEqual(static_cast<std::size_t>(ToInt64(arg(1))), requests[index].size(), "registrations in request " + arg(0));
+        return true;
+    }
+    if (action == "expect_table_registration")
+    {
+        const auto requests = ChannelOf(state).Registrations();
+        const auto index = static_cast<std::size_t>(ToInt64(arg(0)));
+        Check(index < requests.size(), "no registration request " + arg(0));
+        const std::string path = PathOf(state, arg(1));
+        int found = 0;
+        for (const auto& registration : requests[index])
+        {
+            if (registration.path != path)
+                continue;
+            ++found;
+            std::string columns;
+            for (const auto& column : registration.columns)
+                columns += (columns.empty() ? "" : ",") + column.name + ":" + TypeName(column.type);
+            CheckEqual(arg(2), columns, "registered columns of " + path);
+        }
+        CheckEqual(1, found, "registrations of " + path + " in request " + arg(0));
+        return true;
+    }
+    if (action == "expect_table_blocks")
+    {
+        CheckEqual(static_cast<std::size_t>(ToInt64(arg(0))), ChannelOf(state).Stored().size(), "stored blocks");
+        return true;
+    }
+    if (action == "expect_table_block_attempts")
+    {
+        CheckEqual(static_cast<std::size_t>(ToInt64(arg(0))), ChannelOf(state).Puts().size(), "block attempts");
+        return true;
+    }
+    if (action == "expect_table_block_tables")
+    {
+        const auto stored = ChannelOf(state).Stored();
+        const auto index = static_cast<std::size_t>(ToInt64(arg(0)));
+        Check(index < stored.size(), "no stored block " + arg(0));
+        CheckEqual(static_cast<std::size_t>(ToInt64(arg(1))), stored[index].block.tables.size(), "tables of block " + arg(0));
+        return true;
+    }
+    if (action == "expect_table_blocks_within")
+    {
+        for (const auto& put : ChannelOf(state).Puts())
+            Check(put.frame_bytes <= static_cast<std::size_t>(ToInt64(arg(0))), "a frame of " + std::to_string(put.frame_bytes) + " bytes");
+        return true;
+    }
+    if (action == "expect_table_sequences" || action == "expect_table_sequences_increasing")
+    {
+        const auto puts = ChannelOf(state).Puts();
+        std::string sequences;
+        std::set<tables::TableProducerId> producers;
+        for (std::size_t i = 0; i < puts.size(); ++i)
+        {
+            sequences += (i == 0 ? "" : ",") + std::to_string(puts[i].sequence);
+            producers.insert(puts[i].producer);
+            if (action == "expect_table_sequences_increasing" && i > 0)
+                Check(puts[i].sequence >= puts[i - 1].sequence, "sequence " + std::to_string(puts[i].sequence) + " after " + std::to_string(puts[i - 1].sequence));
+        }
+        if (action == "expect_table_sequences")
+            CheckEqual(arg(0), sequences, "producer sequences");
+        CheckEqual(std::size_t{ 1 }, producers.size(), "producers");
+        return true;
+    }
+    if (action == "expect_table_rows")
+    {
+        CheckEqual(static_cast<std::size_t>(ToInt64(arg(1))), stored_rows(PathOf(state, arg(0))).size(), "stored rows of " + arg(0));
+        return true;
+    }
+    if (action == "expect_table_row")
+    {
+        auto& sensor = SensorNamed(state, arg(0));
+        const auto rows = stored_rows(PathOf(state, arg(0)));
+        const auto index = static_cast<std::size_t>(ToInt64(arg(1)));
+        Check(index < rows.size(), "no stored row " + arg(1) + " of " + arg(0));
+        const auto& row = rows[index];
+        CheckEqual(TicksOfMs(arg(2)), row.ticks, "time of row " + arg(1));
+        for (std::size_t c = 0; c < sensor.types.size(); ++c)
+        {
+            const std::string& expected = arg(3 + c);
+            const std::string what = "column " + std::to_string(c) + " of row " + arg(1) + " of " + arg(0);
+            if (expected == "token:null")
+            {
+                Check(row.nulls[c], what + " has a value");
+                continue;
+            }
+            Check(!row.nulls[c], what + " is null");
+            const double wanted = ParseTableNumber(expected);
+            double actual = 0;
+            if (sensor.types[c] == HSM_TABLE_COLUMN_INT64)
+                actual = static_cast<double>(static_cast<std::int64_t>(row.values[c]));
+            else
+                std::memcpy(&actual, &row.values[c], sizeof actual);
+            Check(std::isnan(wanted) ? std::isnan(actual) : (actual == wanted && std::signbit(actual) == std::signbit(wanted)),
+                  what + ": expected " + expected + ", actual " + std::to_string(actual));
+        }
+        return true;
+    }
+    return false;
+#endif
+}
+
+#if defined(HSM_COLLECTOR_TABLES)
+namespace
+{
+    // ---- The pipeline with threads -------------------------------------------------------------------
+
+    struct ThreadedCollector
+    {
+        Collector collector;
+        std::shared_ptr<RecordingChannel> channel = std::make_shared<RecordingChannel>();
+
+        explicit ThreadedCollector(std::int64_t request_timeout_ms = 0)
+            : collector(OptionsWithTimeout(request_timeout_ms))
+        {
+            hsm_collector_test_install_manual_clock(collector.value, 1000000);
+            tables::test::InstallChannel(collector.value, channel);
+            hsm_table_options_t options{};
+            options.struct_size = sizeof options;
+            options.tick_period_ms = 1000;
+            Check(hsm_collector_set_table_options(collector.value, &options) == HSM_RESULT_OK, "table options");
+        }
+
+        static hsm_collector_options_t OptionsWithTimeout(std::int64_t timeout)
+        {
+            auto options = Options();
+            options.request_timeout_ms = static_cast<int32_t>(timeout);
+            return options;
+        }
+
+        tables::TablePipeline& Pipeline() { return *tables::test::Pipeline(collector.value); }
+    };
+
+    // The threads of a run exist from Start to Stop, and none after: a tick, a registration answer or an
+    // ack of one run can never reach the next (the managed collector needed a run object for that).
+    void ThreadsOnlyWhileRunning()
+    {
+        ThreadedCollector host;
+        Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        auto& pipeline = host.Pipeline();
+        for (int run = 1; run <= 3; ++run)
+        {
+            Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+            Check(pipeline.TickAlive() && pipeline.DeliveryThreadAlive(), "threads after start");
+            CheckEqual(std::int64_t{ run }, pipeline.RunCount(), "runs");
+            WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+            Check(AddDouble(table, run, run) == HSM_RESULT_OK, "add");
+            Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop");
+            Check(!pipeline.TickAlive() && !pipeline.DeliveryThreadAlive(), "threads after stop");
+            CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "reserved bytes after stop");
+            CheckEqual(std::size_t{ 0 }, pipeline.BacklogBlocks(), "backlog after stop");
+        }
+        // Each run delivered its own row under its own producer, at sequence 0.
+        const auto puts = host.channel->Puts();
+        CheckEqual(std::size_t{ 3 }, puts.size(), "puts");
+        std::set<tables::TableProducerId> producers;
+        for (const auto& put : puts)
+        {
+            producers.insert(put.producer);
+            CheckEqual(std::int64_t{ 0 }, put.sequence, "sequence of a run's first block");
+        }
+        CheckEqual(std::size_t{ 3 }, producers.size(), "a producer per run");
+        CheckEqual(std::size_t{ 3 }, host.channel->RowsOf(hsm_table_sensor_path(table.value)).size(), "rows");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+    }
+
+    // Unavailable is decided at each Start: a channel installed later makes the sensor Pending, and a
+    // Refused one stays refused.
+    void UnavailableDecidedAtEachStart()
+    {
+        Collector collector;
+        tables::test::SetManualTick(collector.value, true);
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(table).state), "without a channel");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start again");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_PENDING), static_cast<int>(Stats(table).state), "with a channel");
+        CheckEqual(std::string(), Reason(table), "reason cleared");
+        Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+        tables::test::RunTick(collector.value);
+        CheckEqual(std::size_t{ 1 }, channel->RowsOf(hsm_table_sensor_path(table.value)).size(), "delivered");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop again");
+    }
+
+    // A writer preempted between its reservation and its append across a whole Stop and Start: its row
+    // belongs to the run that was accepting when it appended, the buffer bound stays exact, and the row
+    // goes out under that run's producer only.
+    void WriterAcrossStopAndStart()
+    {
+        ThreadedCollector host;
+        Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        auto& pipeline = host.Pipeline();
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+        WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+        const auto first_producer = pipeline.Producer();
+
+        std::mutex mutex;
+        std::condition_variable cv;
+        bool parked = false;
+        bool release = false;
+        pipeline.Shared().before_append = [&] {
+            std::unique_lock<std::mutex> lock(mutex);
+            parked = true;
+            cv.notify_all();
+            cv.wait(lock, [&] { return release; });
+        };
+
+        hsm_result_t result = HSM_RESULT_INTERNAL_ERROR;
+        std::thread writer([&] { result = AddDouble(table, 42, 4.2); });
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            if (!cv.wait_for(lock, std::chrono::seconds(60), [&] { return parked; }))
+                throw std::runtime_error("the writer never reserved");
+        }
+        CheckEqual(std::int64_t{ 16 }, pipeline.ReservedBytes(), "the parked reservation");
+        Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop");
+        CheckEqual(std::int64_t{ 16 }, pipeline.ReservedBytes(), "the stop kept the writer's reservation");
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start again");
+        const auto second_producer = pipeline.Producer();
+        Check(first_producer != second_producer, "a new producer");
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            release = true;
+        }
+        cv.notify_all();
+        writer.join();
+        pipeline.Shared().before_append = nullptr;
+        CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(result), "the second run took the row");
+        Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop again");
+        CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "every reservation went back");
+
+        // Registered in the second run before its stop? Then delivered under the second producer only;
+        // else dropped and counted at that stop. Never under the first.
+        const auto rows = host.channel->RowsOf(hsm_table_sensor_path(table.value));
+        for (const auto& put : host.channel->Stored())
+            Check(put.producer == second_producer, "a block under the first run's producer");
+        CheckEqual(std::uint64_t{ 1 }, rows.size() + Stats(table).rows_dropped, "the row is delivered or counted");
+    }
+
+    // The stop's drain is bounded: a put that never answers is cancelled when the budget runs out, and
+    // its rows are counted as not delivered at stop.
+    void StopDrainIsBounded()
+    {
+        ThreadedCollector host(/*request_timeout_ms=*/1000);
+        Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+        WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+        Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+        std::atomic<bool> hung{ false };
+        host.channel->on_put = [&] {
+            hung = true;
+            host.channel->WaitForCancel();
+        };
+        Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop");
+        Check(hung.load(), "the drain never put the block");
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "the undelivered row");
+        CheckEqual(std::int64_t{ 1 }, host.Pipeline().Ledger().Total(tables::TableDropReason::NotDeliveredAtStop), "its reason");
+        Check(!host.Pipeline().DeliveryThreadAlive(), "a delivery thread after stop");
+    }
+
+    // Rows refused while the collector is stopping are counted in the run's losses and named by the
+    // one stop line; refused after the stop line, on the sensor only.
+    void LossesAtStopReachTheStopLine()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        std::vector<std::string> lines;
+        hsm_collector_set_logger(
+            collector.value, [](hsm_log_level_t, const char* message, void* user) { static_cast<std::vector<std::string>*>(user)->push_back(message); }, &lines);
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+        Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+        channel->SetDown(true);
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "dropped at stop");
+        bool stop_line = false;
+        for (const auto& line : lines)
+            stop_line = stop_line || line.find("1 table row(s) were lost during this run") != std::string::npos;
+        Check(stop_line, "no stop line for the undelivered row");
+        Check(AddDouble(table, 2, 2) == HSM_RESULT_INVALID_STATE, "add after stop");
+        CheckEqual(std::uint64_t{ 2 }, Stats(table).rows_dropped, "counted on the sensor");
+        CheckEqual(std::int64_t{ 0 }, tables::test::Pipeline(collector.value)->Ledger().Total(tables::TableDropReason::NotRunning), "a closed ledger took it");
+    }
+
+    // A block over the frame limit is split by tables, then rows; a row that cannot fit is dropped.
+    // Too large is final, and a sequence that was on the wire is never given to other rows (#1848, the
+    // defects the managed review found): N blocks the channel answers "too large" cost exactly N puts and
+    // N dropped rows, the next block takes the next sequence, and a row larger than the frame limit on
+    // its own is dropped at packing, once, with no put at all.
+    void TooLargeIsFinalAndSequencesNeverGoBack()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+
+        constexpr int kRefused = 5;
+        for (int i = 0; i < kRefused; ++i)
+        {
+            channel->AnswerNext([](const RecordingChannel::PutRecord&) {
+                tables::TableBlockAck ack;
+                ack.outcome = tables::TableBlockOutcome::TooLarge;
+                ack.error = "scripted: frame too large";
+                return ack;
+            });
+            Check(AddDouble(table, i, i) == HSM_RESULT_OK, "add");
+            tables::test::RunTick(collector.value);
+        }
+        // More ticks with nothing new: nothing is sent again.
+        tables::test::RunTick(collector.value);
+        tables::test::RunTick(collector.value);
+        Check(AddDouble(table, 99, 99) == HSM_RESULT_OK, "add after the refusals");
+        tables::test::RunTick(collector.value);
+
+        const auto puts = channel->Puts();
+        CheckEqual(std::size_t{ kRefused + 1 }, puts.size(), "puts");
+        for (std::size_t i = 0; i < puts.size(); ++i)
+            CheckEqual(static_cast<std::int64_t>(i), puts[i].sequence, "sequence of put " + std::to_string(i));
+        CheckEqual(std::uint64_t{ kRefused }, Stats(table).rows_dropped, "dropped");
+        auto* pipeline = tables::test::Pipeline(collector.value);
+        CheckEqual(std::int64_t{ kRefused }, pipeline->Ledger().Total(tables::TableDropReason::RowTooLarge), "counted once each");
+        CheckEqual(std::size_t{ 1 }, channel->RowsOf(hsm_table_sensor_path(table.value)).size(), "the later row");
+
+        // A row that alone breaks the frame limit: dropped at packing, never put.
+        channel->SetMaxBlock(30);
+        for (int i = 0; i < 3; ++i)
+            Check(AddDouble(table, 1000 + i, i) == HSM_RESULT_OK, "add");
+        tables::test::RunTick(collector.value);
+        tables::test::RunTick(collector.value);
+        CheckEqual(puts.size(), channel->Puts().size(), "puts of rows that cannot fit");
+        CheckEqual(std::int64_t{ kRefused + 3 }, pipeline->Ledger().Total(tables::TableDropReason::RowTooLarge), "the split ends at one row");
+        CheckEqual(std::uint64_t{ kRefused + 3 }, Stats(table).rows_dropped, "every row that cannot fit is counted");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        CheckEqual(puts.size(), channel->Puts().size(), "the stop sent nothing again");
+    }
+
+    void SplitKeepsEveryRow()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        std::vector<Table> sensors;
+        for (const char* name : { "a", "b", "c", "d", "e" })
+            sensors.push_back(CreateTable(collector.value, name, { { "x", HSM_TABLE_COLUMN_DOUBLE }, { "y", HSM_TABLE_COLUMN_INT64 } }));
+        channel->SetMaxBlock(400);
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+        std::uint64_t seed = 1;
+        for (auto& sensor : sensors)
+        {
+            std::vector<std::int64_t> times(500);
+            std::vector<hsm_table_cell_t> cells(1000);
+            for (std::size_t r = 0; r < 500; ++r)
+            {
+                seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+                times[r] = static_cast<std::int64_t>(seed >> 20);
+                cells[2 * r].i64 = static_cast<std::int64_t>(seed);
+                cells[2 * r + 1].i64 = static_cast<std::int64_t>(seed * 31);
+            }
+            Check(hsm_table_sensor_add_rows(sensor.value, times.data(), cells.data(), nullptr, 500, nullptr) == HSM_RESULT_OK, "add rows");
+        }
+        tables::test::RunTick(collector.value);
+        const auto puts = channel->Puts();
+        Check(puts.size() > 5, "no split happened");
+        for (const auto& put : puts)
+            Check(put.frame_bytes <= 440, "a frame of " + std::to_string(put.frame_bytes));
+        for (std::size_t i = 1; i < puts.size(); ++i)
+            CheckEqual(puts[i - 1].sequence + 1, puts[i].sequence, "sequences");
+        for (auto& sensor : sensors)
+            CheckEqual(std::size_t{ 500 }, channel->RowsOf(hsm_table_sensor_path(sensor.value)).size(), "rows of a sensor");
+
+        // A frame too small for one row: that row is dropped and counted.
+        channel->SetMaxBlock(30);
+        hsm_table_cell_t cells[2];
+        cells[0].f64 = 1;
+        cells[1].i64 = 2;
+        Check(hsm_table_sensor_add_row(sensors[0].value, 1, cells, 2, nullptr) == HSM_RESULT_OK, "add");
+        tables::test::RunTick(collector.value);
+        CheckEqual(std::int64_t{ 1 }, tables::test::Pipeline(collector.value)->Ledger().Total(tables::TableDropReason::RowTooLarge), "row too large");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+    }
+
+    // A table the channel's limits can never take (its identifier, its column count; the create checks
+    // the default limits only) is Unavailable once those limits are known: at Start, or at its creation
+    // in a run. Limits that change inside a run do not split such a table down to single rows: its rows
+    // of each pack are one "packing failed" loss, reported once.
+    void TableOverConnectionLimits()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::TableBlockLimits limits;
+        limits.max_columns_per_table = 3;
+        limits.max_table_id_length = 40; // "conformance-host/conformance-module/" is 36 bytes
+        channel->SetLimits(limits);
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        std::vector<std::string> lines;
+        hsm_collector_set_logger(
+            collector.value, [](hsm_log_level_t, const char* message, void* user) { static_cast<std::vector<std::string>*>(user)->push_back(message); }, &lines);
+        const auto count_lines = [&](const std::string& text) {
+            return std::count_if(lines.begin(), lines.end(), [&](const std::string& line) { return line.find(text) != std::string::npos; });
+        };
+
+        Table wide = CreateTable(collector.value, "w", { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "b", HSM_TABLE_COLUMN_DOUBLE }, { "c", HSM_TABLE_COLUMN_DOUBLE } });
+        Table named = CreateTable(collector.value, "a-longer-name", { { "a", HSM_TABLE_COLUMN_DOUBLE } });
+        Table narrow = CreateTable(collector.value, "n", { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "b", HSM_TABLE_COLUMN_DOUBLE } });
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(wide).state), "too many columns, at create");
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(wide).state), "too many columns");
+        Check(Reason(wide).find("4 columns with the time and a table may have 3") != std::string::npos, "reason '" + Reason(wide) + "'");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(named).state), "too long a name");
+        Check(Reason(named).find("a table name may have 40") != std::string::npos, "reason '" + Reason(named) + "'");
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_PENDING), static_cast<int>(Stats(narrow).state), "a table that fits");
+        Table late = CreateTable(collector.value, "late", { { "a", HSM_TABLE_COLUMN_DOUBLE }, { "b", HSM_TABLE_COLUMN_DOUBLE }, { "c", HSM_TABLE_COLUMN_DOUBLE } });
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(late).state), "too many columns, created in a run");
+        tables::test::RunTick(collector.value);
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(narrow).state), "registered");
+        for (const auto& registrations : channel->Registrations())
+            for (const auto& registration : registrations)
+                Check(registration.path.find("/n") != std::string::npos, "a table the connection cannot take was registered: " + registration.path);
+
+        // The limits shrink inside the run: 1000 rows a tick, one loss each, one report.
+        limits.max_columns_per_table = 2;
+        channel->SetLimits(limits);
+        auto* pipeline = tables::test::Pipeline(collector.value);
+        std::vector<std::int64_t> times(1000);
+        std::vector<hsm_table_cell_t> cells(2000);
+        for (int tick = 1; tick <= 2; ++tick)
+        {
+            Check(hsm_table_sensor_add_rows(narrow.value, times.data(), cells.data(), nullptr, 1000, nullptr) == HSM_RESULT_OK, "add rows");
+            tables::test::RunTick(collector.value);
+            CheckEqual(std::int64_t{ 1000 } * tick, pipeline->Ledger().Total(tables::TableDropReason::PackingFailed), "packing failed after tick " + std::to_string(tick));
+            CheckEqual(std::int64_t{ 0 }, pipeline->Ledger().Total(tables::TableDropReason::RowTooLarge), "no row is too large");
+            CheckEqual(std::uint64_t{ 1000 } * static_cast<std::uint64_t>(tick), Stats(narrow).rows_dropped, "dropped on the sensor");
+            CheckEqual(std::int64_t{ 0 }, pipeline->ReservedBytes(), "reserved bytes");
+        }
+        CheckEqual(std::size_t{ 0 }, channel->Puts().size(), "puts");
+        CheckEqual(static_cast<std::ptrdiff_t>(1), count_lines("cannot be packed"), "reported once");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+    }
+
+    // The stop's final pack observes the stop budget before every compression pass (the managed drain
+    // budget): when it runs out, what is not packed yet is dropped and counted as not delivered at stop,
+    // in one report, and nothing is packed after it.
+    void FinalPackObservesTheStopBudget()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::TableBlockLimits limits;
+        limits.max_tables = 1; // a block per sensor: a pass per sensor
+        channel->SetLimits(limits);
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        std::vector<std::string> lines;
+        hsm_collector_set_logger(
+            collector.value, [](hsm_log_level_t, const char* message, void* user) { static_cast<std::vector<std::string>*>(user)->push_back(message); }, &lines);
+        std::vector<Table> sensors;
+        for (const char* name : { "a", "b", "c" })
+            sensors.push_back(CreateTable(collector.value, name, { { "v", HSM_TABLE_COLUMN_DOUBLE } }));
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+        for (auto& sensor : sensors)
+            for (int r = 0; r < 5; ++r)
+                Check(AddDouble(sensor, r, r) == HSM_RESULT_OK, "add");
+
+        auto& pipeline = *tables::test::Pipeline(collector.value);
+        pipeline.IgnoreStopClockForTests();
+        int passes = 0;
+        // The budget runs out during the second pass.
+        pipeline.on_pack_pass_for_tests = [&] {
+            if (++passes == 2)
+                pipeline.ExpireStopBudgetForTests();
+        };
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        pipeline.on_pack_pass_for_tests = nullptr;
+
+        CheckEqual(2, passes, "passes of the final pack");
+        CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "reserved bytes");
+        // Two blocks were packed and not delivered (the budget is spent), the third sensor never packed.
+        CheckEqual(std::size_t{ 0 }, channel->Puts().size(), "puts after the budget");
+        std::uint64_t dropped = 0;
+        for (auto& sensor : sensors)
+            dropped += Stats(sensor).rows_dropped;
+        CheckEqual(std::uint64_t{ 15 }, dropped, "dropped");
+        CheckEqual(std::int64_t{ 15 }, pipeline.Ledger().Total(tables::TableDropReason::NotDeliveredAtStop), "not delivered at stop");
+        bool cut = false;
+        for (const auto& line : lines)
+            cut = cut || line.find("cut short by the stop budget (5 row(s)") != std::string::npos;
+        Check(cut, "no report of the rows the final pack did not pack");
+    }
+
+    // A row count that cannot be a real array (its rows would take more than INT64_MAX bytes) is a wrong
+    // shape on a sensor that accepts rows: refused, counted nowhere (not as a full buffer).
+    void ImpossibleRowCountIsAWrongShape()
+    {
+        Collector collector;
+        auto channel = std::make_shared<RecordingChannel>();
+        tables::test::InstallChannel(collector.value, channel);
+        tables::test::SetManualTick(collector.value, true);
+        Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        tables::test::RunTick(collector.value);
+        CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(table).state), "registered");
+        std::int64_t time = 0;
+        hsm_table_cell_t cell;
+        cell.f64 = 1;
+        // 16 bytes a row: INT64_MAX / 16 + 1 rows pass INT64_MAX bytes; SIZE_MAX is an n - 1 below zero.
+        const std::size_t counts[] = { SIZE_MAX, static_cast<std::size_t>((std::numeric_limits<std::int64_t>::max)() / 16) + 1,
+                                       static_cast<std::size_t>((std::numeric_limits<std::int64_t>::max)()) };
+        for (const std::size_t count : counts)
+        {
+            std::size_t taken = 99;
+            CheckEqual(static_cast<int>(HSM_RESULT_INVALID_ARGUMENT), static_cast<int>(hsm_table_sensor_add_rows(table.value, &time, &cell, nullptr, count, &taken)),
+                       "rows " + std::to_string(count));
+            CheckEqual(std::size_t{ 0 }, taken, "taken");
+        }
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_accepted, "accepted");
+        CheckEqual(std::int64_t{ 0 }, tables::test::Pipeline(collector.value)->Ledger().Total(tables::TableDropReason::BufferFull), "buffer full");
+        CheckEqual(std::int64_t{ 0 }, tables::test::Pipeline(collector.value)->ReservedBytes(), "reserved");
+        Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+    }
+
+    // A table run whose threads cannot be made (the host's thread limit: std::thread throws) is rolled
+    // back: the collector's Start returns OK and runs, no thread of the table run is left, rows are
+    // refused and counted, the sensors say why; the stop and the next Start work as usual. For the tick's
+    // thread and for the delivery thread.
+    void StartFailureRollsBack()
+    {
+        for (int fail_at = 0; fail_at < 2; ++fail_at)
+        {
+            const std::string what = fail_at == 0 ? "tick thread" : "delivery thread";
+            ThreadedCollector host;
+            Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            auto& pipeline = host.Pipeline();
+            int calls = 0;
+            pipeline.before_thread_start_for_tests = [&] {
+                if (calls++ == fail_at)
+                    throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+            };
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_start(host.collector.value)), what + ": start");
+            CheckEqual(static_cast<int>(HSM_COLLECTOR_STATUS_RUNNING), static_cast<int>(hsm_collector_status(host.collector.value)), what + ": status");
+            Check(calls > fail_at, what + ": the seam was not reached");
+            Check(!pipeline.Running() && !pipeline.TickAlive() && !pipeline.DeliveryThreadAlive(), what + ": a table thread was left");
+            CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_UNAVAILABLE), static_cast<int>(Stats(table).state), what + ": state");
+            Check(Reason(table).find("could not start their threads") != std::string::npos, what + ": reason '" + Reason(table) + "'");
+            CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 1, 1)), what + ": add");
+            CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, what + ": the refused row is counted");
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_stop(host.collector.value)), what + ": stop");
+
+            pipeline.before_thread_start_for_tests = nullptr;
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_start(host.collector.value)), what + ": start again");
+            Check(pipeline.Running() && pipeline.TickAlive() && pipeline.DeliveryThreadAlive(), what + ": threads of the next run");
+            WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, what + ": the registration");
+            Check(AddDouble(table, 2, 2) == HSM_RESULT_OK, what + ": add in the next run");
+            CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_stop(host.collector.value)), what + ": stop again");
+            CheckEqual(std::size_t{ 1 }, host.channel->RowsOf(hsm_table_sensor_path(table.value)).size(), what + ": delivered in the next run");
+        }
+    }
+
+    // A stop whose drain fails (a step that throws) still completes: Stop returns, the delivery thread is
+    // joined, what was not delivered is counted; a destroy that runs such a stop deletes the collector.
+    void StopFailureCompletes()
+    {
+        ThreadedCollector host;
+        Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+        auto& pipeline = host.Pipeline();
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+        WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+        host.channel->SetDown(true);
+        Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+        pipeline.in_finish_drain_for_tests = [] { throw std::bad_alloc(); };
+        CheckEqual(static_cast<int>(HSM_RESULT_OK), static_cast<int>(hsm_collector_stop(host.collector.value)), "stop");
+        CheckEqual(static_cast<int>(HSM_COLLECTOR_STATUS_STOPPED), static_cast<int>(hsm_collector_status(host.collector.value)), "status");
+        Check(!pipeline.Running() && !pipeline.TickAlive() && !pipeline.DeliveryThreadAlive(), "a table thread after stop");
+        CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "reserved bytes");
+        CheckEqual(std::size_t{ 0 }, pipeline.BacklogBlocks(), "backlog");
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "the undelivered row is counted");
+        CheckEqual(std::int64_t{ 1 }, pipeline.Ledger().Total(tables::TableDropReason::NotDeliveredAtStop), "its reason");
+
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start again");
+        Check(AddDouble(table, 2, 2) == HSM_RESULT_OK, "add again");
+        host.collector.Destroy();
+        CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 3, 3)), "add after destroy");
+        CheckEqual(std::uint64_t{ 3 }, Stats(table).rows_dropped, "every row of the destroyed run is counted");
+    }
+
+    // A host log sink that calls back into the collector from inside its callback: it creates a table
+    // sensor and reads its stats. A report written under a lock of the collector or of the pipeline that
+    // these calls take again would lock a std::mutex twice on one thread (a deadlock, or an error).
+    struct ReentrantSink
+    {
+        hsm_collector_t* collector = nullptr;
+        std::atomic<int> table_reports{ 0 };
+        std::atomic<int> failures{ 0 };
+        inline static thread_local int depth = 0;
+
+        static void Log(hsm_log_level_t, const char* message, void* user)
+        {
+            auto& sink = *static_cast<ReentrantSink*>(user);
+            if (depth > 0)
+                return;
+            ++depth;
+            // Only table reports call back: a call back from a lifecycle line would make the pipeline
+            // before the path under test does.
+            const std::string text = message;
+            if (text.find("table") == std::string::npos && text.find("Table") == std::string::npos)
+            {
+                --depth;
+                return;
+            }
+            ++sink.table_reports;
+            const hsm_table_column_t column{ "v", HSM_TABLE_COLUMN_DOUBLE };
+            hsm_table_sensor_t* handle = nullptr;
+            const auto created = hsm_collector_create_table_sensor(sink.collector, "reentrant", &column, 1, nullptr, &handle);
+            if (created == HSM_RESULT_OK)
+            {
+                hsm_table_sensor_stats_t stats{};
+                stats.struct_size = sizeof stats;
+                if (hsm_table_sensor_get_stats(handle, &stats) != HSM_RESULT_OK)
+                    ++sink.failures;
+                hsm_table_sensor_release(handle);
+            }
+            else if (created != HSM_RESULT_INVALID_STATE)
+            {
+                ++sink.failures;
+            }
+            --depth;
+        }
+
+        void Attach(hsm_collector_t* value)
+        {
+            collector = value;
+            hsm_collector_set_logger(value, &ReentrantSink::Log, this);
+        }
+
+        // Runs `step` and checks that it wrote a table report and that every call back succeeded.
+        template <typename Step>
+        void Expect(const std::string& path, Step step)
+        {
+            const int before = table_reports.load();
+            step();
+            Check(table_reports.load() > before, path + ": no table report reached the sink");
+            CheckEqual(0, failures.load(), path + ": a call back into the collector failed");
+        }
+    };
+
+    // Every path that writes a table report writes it with no lock held: a create while running (the
+    // first table sensor makes the pipeline and starts its run), a start, a tick (registration and
+    // delivery), the delivery thread, a stop and a dispose.
+    void ReportsReachTheHostWithNoLockHeld()
+    {
+        {
+            // The first table sensor, created while running, with no channel: its run starts at once and
+            // says the sensor cannot send.
+            Collector collector;
+            ReentrantSink sink;
+            sink.Attach(collector.value);
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            sink.Expect("create while running", [&] { CreateTable(collector.value, "first", { { "v", HSM_TABLE_COLUMN_DOUBLE } }); });
+            Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        }
+        {
+            // A start that makes a sensor Unavailable, rows lost at stop, a dispose of a running collector.
+            Collector collector;
+            ReentrantSink sink;
+            sink.Attach(collector.value);
+            tables::test::InstallChannel(collector.value, std::make_shared<RecordingChannel>());
+            tables::test::SetManualTick(collector.value, true);
+            Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            tables::test::InstallChannel(collector.value, nullptr);
+            sink.Expect("start", [&] { Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start"); });
+            sink.Expect("create in a run", [&] { CreateTable(collector.value, "u", { { "v", HSM_TABLE_COLUMN_DOUBLE } }); });
+            Check(AddDouble(table, 1, 1) == HSM_RESULT_INVALID_STATE, "add to an Unavailable sensor");
+            sink.Expect("stop", [&] { Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop"); });
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start again");
+            Check(AddDouble(table, 2, 2) == HSM_RESULT_INVALID_STATE, "add to an Unavailable sensor");
+            sink.Expect("dispose", [&] { hsm_collector_dispose(collector.value); });
+        }
+        {
+            // A tick: a registration without an answer, then a block that is not delivered.
+            Collector collector;
+            ReentrantSink sink;
+            sink.Attach(collector.value);
+            auto channel = std::make_shared<RecordingChannel>();
+            tables::test::InstallChannel(collector.value, channel);
+            tables::test::SetManualTick(collector.value, true);
+            Table table = CreateTable(collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            channel->FailRegistrations(1);
+            sink.Expect("tick: registration", [&] { tables::test::RunTick(collector.value); });
+            tables::test::RunTick(collector.value);
+            Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+            channel->SetDown(true);
+            sink.Expect("tick: delivery", [&] { tables::test::RunTick(collector.value); });
+            Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+        }
+        {
+            // The delivery thread.
+            ThreadedCollector host;
+            ReentrantSink sink;
+            sink.Attach(host.collector.value);
+            Table table = CreateTable(host.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } });
+            Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+            WaitOrFail([&] { return Stats(table).state == HSM_TABLE_SENSOR_REGISTERED; }, "the registration");
+            host.channel->SetDown(true);
+            Check(AddDouble(table, 1, 1) == HSM_RESULT_OK, "add");
+            sink.Expect("delivery thread", [&] {
+                const int before = sink.table_reports.load();
+                hsm_collector_test_advance_clock_ms(host.collector.value, 1000);
+                WaitOrFail([&] { return sink.table_reports.load() > before; }, "a report of the delivery thread");
+            });
+            Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop");
+            CheckEqual(0, sink.failures.load(), "a call back into the collector failed");
+        }
+    }
+
+    // Three sensors of 100 rows each, registered on a channel whose limits cut them into pieces of 40 rows
+    // and whose frame limit makes most blocks split: every allocation point of a pack is met.
+    struct PackFixture
+    {
+        static constexpr int kRows = 100;
+        Collector collector;
+        std::shared_ptr<RecordingChannel> channel = std::make_shared<RecordingChannel>();
+        std::vector<Table> sensors;
+
+        PackFixture()
+        {
+            tables::TableBlockLimits limits;
+            limits.max_rows = 40;
+            channel->SetLimits(limits);
+            channel->SetMaxBlock(600);
+            tables::test::InstallChannel(collector.value, channel);
+            tables::test::SetManualTick(collector.value, true);
+            for (const char* name : { "a", "b", "c" })
+                sensors.push_back(CreateTable(collector.value, name, { { "x", HSM_TABLE_COLUMN_INT64 } }));
+            Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            tables::test::RunTick(collector.value);
+            std::uint64_t seed = 7;
+            for (auto& sensor : sensors)
+            {
+                CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(sensor).state), "registered");
+                std::vector<std::int64_t> times(kRows);
+                std::vector<hsm_table_cell_t> cells(kRows);
+                for (int r = 0; r < kRows; ++r)
+                {
+                    seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+                    times[static_cast<std::size_t>(r)] = r;
+                    cells[static_cast<std::size_t>(r)].i64 = static_cast<std::int64_t>(seed);
+                }
+                Check(hsm_table_sensor_add_rows(sensor.value, times.data(), cells.data(), nullptr, kRows, nullptr) == HSM_RESULT_OK, "add rows");
+            }
+        }
+
+        tables::TablePipeline& Pipeline() { return *tables::test::Pipeline(collector.value); }
+
+        // Rows of all sensors still in their buffers: accepted, neither delivered nor counted as lost.
+        std::int64_t Buffered()
+        {
+            std::int64_t rows = 0;
+            for (auto& sensor : sensors)
+            {
+                const auto stats = Stats(sensor);
+                rows += static_cast<std::int64_t>(stats.rows_accepted) - static_cast<std::int64_t>(channel->RowsOf(hsm_table_sensor_path(sensor.value)).size()) -
+                        static_cast<std::int64_t>(stats.rows_dropped);
+            }
+            return rows;
+        }
+    };
+
+    // A pack that fails at any of its allocations (the writer, the takes, the pieces, the groups, a
+    // split, a block, the backlog, a report) settles every row it took: in a queued block or counted
+    // once as "packing failed", on its sensor and in the ledger, with its room given back. The tick's
+    // pack and the stop's final pack alike.
+    void PackFailureSettlesEveryRow()
+    {
+        for (const bool at_stop : { false, true })
+        {
+            int failures = 0;
+            for (int fail_at = 0;; ++fail_at)
+            {
+                PackFixture fixture;
+                auto& pipeline = fixture.Pipeline();
+                int calls = 0;
+                pipeline.on_pack_allocation_for_tests = [&] {
+                    if (calls++ == fail_at)
+                        throw std::bad_alloc();
+                };
+                const std::string what = std::string(at_stop ? "stop" : "tick") + ", failure at allocation " + std::to_string(fail_at);
+                if (at_stop)
+                {
+                    Check(hsm_collector_stop(fixture.collector.value) == HSM_RESULT_OK, what + ": stop");
+                }
+                else
+                {
+                    tables::test::RunTick(fixture.collector.value);
+                    // What the pack did not take is still buffered and holds exactly its room.
+                    CheckEqual(fixture.Buffered() * 16, pipeline.ReservedBytes(), what + ": reserved bytes after the failed pack");
+                }
+                pipeline.on_pack_allocation_for_tests = nullptr;
+                const bool failed = calls > fail_at;
+
+                if (!at_stop)
+                {
+                    tables::test::RunTick(fixture.collector.value);
+                    Check(hsm_collector_stop(fixture.collector.value) == HSM_RESULT_OK, what + ": stop");
+                }
+                CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), what + ": reserved bytes after stop");
+                std::uint64_t dropped = 0;
+                for (auto& sensor : fixture.sensors)
+                {
+                    const auto stats = Stats(sensor);
+                    CheckEqual(std::uint64_t{ PackFixture::kRows }, stats.rows_accepted, what + ": accepted");
+                    CheckEqual(std::uint64_t{ PackFixture::kRows }, fixture.channel->RowsOf(hsm_table_sensor_path(sensor.value)).size() + stats.rows_dropped,
+                               what + ": delivered + dropped");
+                    dropped += stats.rows_dropped;
+                }
+                const auto& ledger = pipeline.Ledger();
+                CheckEqual(static_cast<std::int64_t>(dropped),
+                           ledger.Total(tables::TableDropReason::PackingFailed) + ledger.Total(tables::TableDropReason::NotDeliveredAtStop),
+                           what + ": the ledger has every dropped row");
+                if (!failed)
+                {
+                    CheckEqual(std::int64_t{ 0 }, ledger.Total(tables::TableDropReason::PackingFailed), what + ": nothing failed, nothing failed to pack");
+                    break;
+                }
+                ++failures;
+            }
+            Check(failures >= 10, "only " + std::to_string(failures) + " allocation points were met");
+        }
+    }
+
+    // Writer threads against ticks and Stop / Start / Stop on every boundary, a fixed number of rows and
+    // runs. Per sensor: offered = accepted + refused at the add call; dropped = refused + lost after
+    // acceptance; every accepted row is in exactly one stored block of a run that was accepting while
+    // its call ran, or among the sensor's losses; never under another run's producer.
+    void StressWritersTicksAndRestarts()
+    {
+        constexpr int kWriters = 4;
+        constexpr int kSensors = 3;
+        constexpr int kRowsPerWriter = 6000;
+        constexpr int kRuns = 8;
+
+        ThreadedCollector host;
+        std::vector<Table> sensors;
+        for (int s = 0; s < kSensors; ++s)
+            sensors.push_back(CreateTable(host.collector.value, "s" + std::to_string(s), { { "id", HSM_TABLE_COLUMN_INT64 } }));
+        auto& pipeline = host.Pipeline();
+
+        std::map<std::int64_t, tables::TableProducerId> producer_of_run;
+        std::mutex producers_mutex;
+
+        struct Accepted
+        {
+            std::int64_t id;
+            std::int64_t run_before;
+            std::int64_t run_after;
+            int sensor;
+        };
+        std::vector<std::vector<Accepted>> accepted(kWriters);
+        std::vector<std::array<std::uint64_t, kSensors>> refused(kWriters);
+        std::vector<std::atomic<int>> progress(kWriters);
+        for (auto& p : progress)
+            p = 0;
+        for (auto& r : refused)
+            r.fill(0);
+
+        Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+        producer_of_run[pipeline.RunCount()] = pipeline.Producer();
+
+        // The boundaries: per run three ticks, a stop and a start. Boundary b releases chunk b of every
+        // writer and is done while the writers write it, so every boundary meets writes in flight; the
+        // next boundary waits until every writer has finished its chunk (a wait that only fails).
+        constexpr int kBoundaries = kRuns * 5;
+        constexpr int kChunk = kRowsPerWriter / kBoundaries;
+        static_assert(kChunk * kBoundaries == kRowsPerWriter, "whole chunks");
+        std::atomic<int> released{ 0 };
+
+        std::vector<std::thread> writers;
+        for (int w = 0; w < kWriters; ++w)
+            writers.emplace_back([&, w] {
+                for (int i = 0; i < kRowsPerWriter; ++i)
+                {
+                    if (i % kChunk == 0)
+                    {
+                        const int chunk = i / kChunk;
+                        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
+                        while (released.load() <= chunk)
+                        {
+                            if (std::chrono::steady_clock::now() > deadline)
+                                return; // the main thread fails on its own wait
+                            std::this_thread::yield();
+                        }
+                    }
+                    const int s = (w + i) % kSensors;
+                    hsm_table_cell_t cell;
+                    cell.i64 = (static_cast<std::int64_t>(w) << 32) | i;
+                    const auto before = pipeline.RunCount();
+                    const auto result = hsm_table_sensor_add_row(sensors[static_cast<std::size_t>(s)].value, i, &cell, 1, nullptr);
+                    const auto after = pipeline.RunCount();
+                    if (result == HSM_RESULT_OK)
+                        accepted[static_cast<std::size_t>(w)].push_back({ cell.i64, before, after, s });
+                    else
+                        ++refused[static_cast<std::size_t>(w)][static_cast<std::size_t>(s)];
+                    progress[static_cast<std::size_t>(w)].store(i + 1);
+                }
+            });
+
+        const auto chunk_done = [&](int chunk) {
+            for (int w = 0; w < kWriters; ++w)
+                if (progress[static_cast<std::size_t>(w)].load() < (chunk + 1) * kChunk)
+                    return false;
+            return true;
+        };
+        int boundary = 0;
+        for (int run = 1; run <= kRuns; ++run)
+        {
+            for (int step = 0; step < 5; ++step, ++boundary)
+            {
+                released.store(boundary + 1);
+                if (step < 3)
+                    hsm_collector_test_advance_clock_ms(host.collector.value, 1000);
+                else if (step == 3)
+                    Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "stop");
+                else
+                {
+                    Check(hsm_collector_start(host.collector.value) == HSM_RESULT_OK, "start");
+                    std::lock_guard<std::mutex> guard(producers_mutex);
+                    producer_of_run[pipeline.RunCount()] = pipeline.Producer();
+                }
+                WaitOrFail([&] { return chunk_done(boundary); }, "the writers' chunk " + std::to_string(boundary), 120);
+            }
+        }
+        for (auto& writer : writers)
+            writer.join();
+        Check(hsm_collector_stop(host.collector.value) == HSM_RESULT_OK, "final stop");
+        CheckEqual(std::int64_t{ 0 }, pipeline.ReservedBytes(), "reservations left");
+
+        std::map<tables::TableProducerId, std::int64_t> run_of_producer;
+        for (const auto& entry : producer_of_run)
+            run_of_producer[entry.second] = entry.first;
+
+        // Delivered rows: id -> run.
+        std::map<std::int64_t, std::int64_t> delivered;
+        std::array<std::uint64_t, kSensors> delivered_per_sensor{};
+        for (const auto& put : host.channel->Stored())
+        {
+            const auto run = run_of_producer.find(put.producer);
+            Check(run != run_of_producer.end(), "a block under an unknown producer");
+            const auto names = put.TableNames();
+            for (std::size_t t = 0; t < put.block.tables.size(); ++t)
+            {
+                const int s = std::stoi(names[t].substr(names[t].rfind('s') + 1));
+                for (const auto value : put.block.tables[t].columns[1].values)
+                {
+                    Check(delivered.emplace(static_cast<std::int64_t>(value), run->second).second, "a row delivered twice");
+                    ++delivered_per_sensor[static_cast<std::size_t>(s)];
+                }
+            }
+        }
+
+        std::array<std::uint64_t, kSensors> accepted_per_sensor{};
+        std::array<std::uint64_t, kSensors> refused_per_sensor{};
+        std::size_t accepted_rows = 0;
+        for (int w = 0; w < kWriters; ++w)
+        {
+            for (const auto& row : accepted[static_cast<std::size_t>(w)])
+            {
+                ++accepted_per_sensor[static_cast<std::size_t>(row.sensor)];
+                ++accepted_rows;
+                const auto it = delivered.find(row.id);
+                if (it == delivered.end())
+                    continue;
+                Check(it->second >= row.run_before && it->second <= row.run_after,
+                      "a row of runs " + std::to_string(row.run_before) + ".." + std::to_string(row.run_after) + " under run " + std::to_string(it->second));
+                delivered.erase(it);
+            }
+            for (int s = 0; s < kSensors; ++s)
+                refused_per_sensor[static_cast<std::size_t>(s)] += refused[static_cast<std::size_t>(w)][static_cast<std::size_t>(s)];
+        }
+        Check(delivered.empty(), std::to_string(delivered.size()) + " delivered row(s) were never accepted");
+
+        std::uint64_t offered = 0;
+        for (int s = 0; s < kSensors; ++s)
+        {
+            const auto stats = Stats(sensors[static_cast<std::size_t>(s)]);
+            const auto si = static_cast<std::size_t>(s);
+            CheckEqual(accepted_per_sensor[si], stats.rows_accepted, "accepted by sensor " + std::to_string(s));
+            CheckEqual(refused_per_sensor[si] + (accepted_per_sensor[si] - delivered_per_sensor[si]), stats.rows_dropped,
+                       "dropped by sensor " + std::to_string(s));
+            offered += accepted_per_sensor[si] + refused_per_sensor[si];
+        }
+        CheckEqual(static_cast<std::uint64_t>(kWriters) * kRowsPerWriter, offered, "offered");
+        Check(accepted_rows > 0, "no row was accepted");
+    }
+} // namespace
+#endif
+
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+namespace
+{
+    // ---- The table connection of the session (#1848 part 4) --------------------------------------------
+    // Against the scripted table side of tests/ws_test_server.hpp. Named after the managed
+    // TableConnectionTests. No case is decided by a duration: every wait is for a state, and the end of an
+    // ack wait is the script's (the server marks a frame it leaves unanswered); a timeout only fails a case.
+
+    using Server = hsm::test::WebSocketTestServer;
+    using Answer = Server::TableAnswer;
+
+    bool WebSocketOrSkip(const char* test)
+    {
+        std::string reason;
+        if (hsm::http::WebSocketConnection::Supported(&reason))
+            return true;
+        std::string required;
+#if defined(_MSC_VER)
+        char* env = nullptr;
+        std::size_t env_length = 0;
+        if (_dupenv_s(&env, &env_length, "HSM_REQUIRE_WEBSOCKET") == 0 && env != nullptr)
+        {
+            required = env;
+            std::free(env);
+        }
+#else
+        if (const char* env = std::getenv("HSM_REQUIRE_WEBSOCKET"))
+            required = env;
+#endif
+        Check(required != "1", std::string("this lane requires a libcurl with WebSocket support: ") + reason);
+        std::printf("%s: skipped (%s)\n", test, reason.c_str());
+        return false;
+    }
+
+    std::vector<std::string> BlockTableNames(const std::string& block)
+    {
+        const auto read = reader::ReadTableBlock(reinterpret_cast<const std::uint8_t*>(block.data()), block.size());
+        std::vector<std::string> names;
+        for (const auto& table : read.tables)
+            names.emplace_back(table.id.begin(), table.id.end());
+        return names;
+    }
+
+    struct LogSink
+    {
+        std::mutex mutex;
+        std::vector<std::string> lines;
+
+        void Attach(hsm_collector_t* collector)
+        {
+            hsm_collector_set_logger(
+                collector,
+                [](hsm_log_level_t, const char* message, void* user) {
+                    auto* sink = static_cast<LogSink*>(user);
+                    std::lock_guard<std::mutex> guard(sink->mutex);
+                    sink->lines.emplace_back(message != nullptr ? message : "");
+                },
+                this);
+        }
+
+        int Count(const std::string& text)
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            int count = 0;
+            for (const auto& line : lines)
+                count += line.find(text) != std::string::npos ? 1 : 0;
+            return count;
+        }
+    };
+
+    struct RigOptions
+    {
+        bool manual_tick = true;
+        std::int32_t request_timeout_ms = 30000;
+        std::function<void(Server&)> script;
+        std::function<void(tables::SessionTableChannelOptions&)> adjust;
+    };
+
+    // A collector on the session of a scripted server whose table side is on. The server is declared
+    // first, so it outlives the collector (its stop closes against a server that is still there); the
+    // log sink outlives both.
+    struct SessionRig
+    {
+        LogSink log;
+        Server server;
+        Collector collector;
+        bool manual;
+
+        static Server::Options ServerOptions()
+        {
+            Server::Options options;
+            options.session = true;
+            options.side_subprotocol = "hsm.tables.v1";
+            return options;
+        }
+
+        static hsm_collector_options_t CollectorOptions(const Server& server, std::int32_t request_timeout_ms)
+        {
+            auto options = Options();
+            options.server_address = "http://127.0.0.1";
+            options.port = server.Port();
+            options.allow_plaintext_transport = true;
+            options.request_timeout_ms = request_timeout_ms;
+            options.exception_deduplicator_window_ms = 0;
+            return options;
+        }
+
+        explicit SessionRig(RigOptions options = {})
+            : server(ServerOptions()),
+              collector(CollectorOptions(server, options.request_timeout_ms)),
+              manual(options.manual_tick)
+        {
+            server.EnableTableScript(BlockTableNames);
+            if (options.script)
+                options.script(server);
+            log.Attach(collector.value);
+            Check(hsm_collector_use_session_transport(collector.value) == HSM_RESULT_OK, "the session transport");
+            if (manual)
+                tables::test::SetManualTick(collector.value, true);
+            else
+                hsm_collector_test_install_manual_clock(collector.value, 1000000);
+            Server* scripted = &server;
+            auto adjust = options.adjust;
+            tables::test::SetSessionChannelOptions(collector.value, [scripted, adjust](tables::SessionTableChannelOptions& channel) {
+                channel.backoff_ms = [](int) { return std::int64_t{ 20 }; };
+                channel.connection_wait_ms = 5000;
+                channel.ack_abandoned_for_tests = [scripted](std::int64_t id) { return scripted->TableFrameUnanswered(id); };
+                if (adjust)
+                    adjust(channel);
+            });
+        }
+
+        std::shared_ptr<tables::SessionTableChannel> Channel() { return tables::test::SessionChannel(collector.value); }
+
+        // What the delivery thread does between ticks; with a manual tick the test does it.
+        void Service()
+        {
+            if (manual)
+                tables::test::ServiceChannelNow(collector.value);
+        }
+
+        void Tick() { tables::test::RunTick(collector.value); }
+
+        void Register(const Table& table)
+        {
+            WaitOrFail(
+                [&] {
+                    if (Stats(table).state != HSM_TABLE_SENSOR_PENDING)
+                        return true;
+                    // A registration without an answer goes again at the next tick.
+                    if (manual)
+                        Tick();
+                    else
+                        hsm_collector_test_advance_clock_ms(collector.value, 10000);
+                    return Stats(table).state != HSM_TABLE_SENSOR_PENDING;
+                },
+                "the registration");
+            CheckEqual(static_cast<int>(HSM_TABLE_SENSOR_REGISTERED), static_cast<int>(Stats(table).state), "registered");
+        }
+
+        void WaitUp(std::int64_t count)
+        {
+            const auto channel = Channel();
+            Check(channel != nullptr, "no table channel");
+            WaitOrFail(
+                [&] {
+                    Service();
+                    return channel->ConnectionsOpened() >= count && channel->IsServing();
+                },
+                "table connection " + std::to_string(count));
+            CheckEqual(count, channel->ConnectionsOpened(), "table connections opened");
+        }
+
+        std::vector<RecordingChannel::PutRecord> Stored() { return StoredOf(SessionPuts(server)); }
+        std::size_t StoredRows(const std::string& path) { return RecordingChannel::RowsIn(Stored(), path).size(); }
+
+        void Start() { Check(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start"); }
+        void Stop() { Check(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop"); }
+    };
+
+    std::string Sequences(const Server& server)
+    {
+        std::string text;
+        for (const auto& frame : server.TableFrames())
+            text += (text.empty() ? "" : ",") + std::to_string(frame.sequence);
+        return text;
+    }
+
+    std::string FrameConnections(const Server& server)
+    {
+        std::string text;
+        for (const auto& frame : server.TableFrames())
+            text += (text.empty() ? "" : ",") + std::to_string(frame.connection);
+        return text;
+    }
+
+    bool ClosedWith(const Server& server, int code)
+    {
+        const auto codes = server.SideCloseCodes();
+        return std::find(codes.begin(), codes.end(), code) != codes.end();
+    }
+
+    // The upgrade, the hello and the probe; then one block as one frame with the 40-byte header.
+    void NativeTableBlockAfterHelloAndProbe()
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "quotes/A", { { "bid", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        Check(AddDouble(table, 2000000, 1.5) == HSM_RESULT_OK, "add");
+        rig.Tick();
+
+        const auto frames = rig.server.TableFrames();
+        CheckEqual(std::size_t{ 1 }, frames.size(), "frames");
+        const auto probes = rig.server.TableProbes();
+        Check(probes.size() == 1 && probes[0] < frames[0].id, "the probe came first");
+        CheckEqual(std::int64_t{ 0 }, frames[0].sequence, "sequence");
+        Check(frames[0].producer != std::string(16, '\0'), "an empty producer id");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("quotes/A"), "stored rows");
+        const auto heads = rig.server.SideUpgradeHeads();
+        CheckEqual(std::size_t{ 1 }, heads.size(), "upgrades");
+        CheckEqual(rig.server.HelloSessionIds().at(0), hsm::test::ws_detail::HeaderValue(heads[0], "x-hsm-session"), "X-Hsm-Session");
+        Check(heads[0].find("Key: test-key") != std::string::npos, "the upgrade carries the key");
+        Check(heads[0].find("Sec-WebSocket-Protocol: hsm.tables.v1") != std::string::npos, "the subprotocol");
+        Check(heads[0].find("X-Collector-Kind: native") != std::string::npos, "the collector headers");
+
+        // The registration, alone in its commands request, byte-identical to the managed golden
+        // (WireFormatGoldenLockTests: Registration_of_a_table_sensor_carries_its_columns_after_previous_paths).
+        const std::string golden =
+            "\"op\":\"commands\",\"body\":[{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":11,\"Description\":null,"
+            "\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":null,\"TTL\":null,\"Statistics\":null,\"IsSingletonSensor\":null,"
+            "\"AggregateData\":null,\"EnableGrafana\":null,\"OriginalUnit\":null,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+            "\"EnumOptions\":null,\"TableColumns\":[{\"Name\":\"time\",\"Type\":1},{\"Name\":\"bid\",\"Type\":3}],\"Key\":null,\"Path\":\"quotes/A\"}]}";
+        int registrations = 0;
+        for (const auto& request : rig.server.SessionRequests())
+            registrations += request.frame.find(golden) != std::string::npos ? 1 : 0;
+        CheckEqual(1, registrations, "the table registration as the managed wire");
+
+        // With a description and a retention: the description escaped as every wire string, KeepHistory in ticks.
+        hsm_table_sensor_options_t options = hsm_table_sensor_options_default();
+        options.description = "bid <&> \"quotes\"";
+        options.keep_history_ms = 7LL * 24 * 3600 * 1000;
+        options.sensor_location = 1;
+        const hsm_table_column_t column{ "volume", HSM_TABLE_COLUMN_INT64 };
+        hsm_table_sensor_t* described = nullptr;
+        Check(hsm_collector_create_table_sensor(rig.collector.value, "quotes/B", &column, 1, &options, &described) == HSM_RESULT_OK, "create");
+        Table described_table(described);
+        rig.Register(described_table);
+        const std::string described_golden =
+            "\"SensorType\":11,\"Description\":\"bid \\u003C\\u0026\\u003E \\u0022quotes\\u0022\",\"DefaultChats\":null,\"KeepHistory\":6048000000000,"
+            "\"SelfDestroy\":null";
+        const std::string described_columns = "\"TableColumns\":[{\"Name\":\"time\",\"Type\":1},{\"Name\":\"volume\",\"Type\":2}],\"Key\":null,\"Path\":\"quotes/B\"}]}";
+        registrations = 0;
+        for (const auto& request : rig.server.SessionRequests())
+            registrations += request.frame.find(described_golden) != std::string::npos && request.frame.find(described_columns) != std::string::npos ? 1 : 0;
+        CheckEqual(1, registrations, "the described table registration");
+        rig.Stop();
+        Check(ClosedWith(rig.server, 1000), "a stop closes the table connection with 1000");
+    }
+
+    // Each ack status, as the managed ack table says: the rows dropped and whether the block goes again.
+    void NativeTableEveryAckStatusMapsToItsAnswer()
+    {
+        struct Case
+        {
+            const char* name;
+            std::function<Answer(const std::string& path)> answer;
+            std::uint64_t dropped;
+            bool sent_again;
+            hsm_table_sensor_state_t state;
+        };
+        const auto text = [](std::string body) { return Answer::WithText("{\"ack\":{id},\"status\":200,\"body\":" + body + "}"); };
+        const std::vector<Case> cases = {
+            { "stored-unknown-sensor", [](const std::string& path) { return Answer::Stored({ { path, "UnknownSensor" } }); }, 1, false, HSM_TABLE_SENSOR_PENDING },
+            { "duplicate-with-refusals",
+              [&](const std::string& path) {
+                  return text("{\"outcome\":\"duplicate\",\"tables\":1,\"refusedCount\":1,\"refused\":[{\"index\":0,\"table\":\"" + path + "\",\"reason\":\"SchemaIdMismatch\"}]}");
+              },
+              1, false, HSM_TABLE_SENSOR_REFUSED },
+            { "duplicate-refusals-unknown", [&](const std::string&) { return text("{\"outcome\":\"duplicate\",\"tables\":1,\"refusedKnown\":false}"); }, 0, false, HSM_TABLE_SENSOR_REGISTERED },
+            { "all-refused", [](const std::string&) { return Answer::RefuseAll(); }, 1, false, HSM_TABLE_SENSOR_REGISTERED },
+            { "unknown-outcome", [&](const std::string&) { return text("{\"outcome\":\"somethingNew\"}"); }, 0, false, HSM_TABLE_SENSOR_REGISTERED },
+            { "400", [](const std::string&) { return Answer::WithStatus(400); }, 1, false, HSM_TABLE_SENSOR_REGISTERED },
+            { "404", [](const std::string&) { return Answer::WithStatus(404); }, 1, false, HSM_TABLE_SENSOR_REGISTERED },
+            { "408", [](const std::string&) { return Answer::WithStatus(408); }, 0, true, HSM_TABLE_SENSOR_REGISTERED },
+            { "429", [](const std::string&) { return Answer::WithStatus(429); }, 0, true, HSM_TABLE_SENSOR_REGISTERED },
+            { "500", [](const std::string&) { return Answer::WithStatus(500); }, 0, true, HSM_TABLE_SENSOR_REGISTERED },
+            { "503", [](const std::string&) { return Answer::WithStatus(503, 0); }, 0, true, HSM_TABLE_SENSOR_REGISTERED },
+        };
+        for (const auto& item : cases)
+        {
+            SessionRig rig;
+            Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+            rig.Start();
+            rig.Register(table);
+            rig.WaitUp(1);
+            rig.server.AnswerTableNext(item.answer("t"));
+            Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+            rig.Tick();
+            const std::string what = std::string(item.name) + ": ";
+            CheckEqual(static_cast<int>(item.state), static_cast<int>(Stats(table).state), what + "state");
+            rig.Tick();
+            CheckEqual(item.dropped, Stats(table).rows_dropped, what + "rows dropped");
+            CheckEqual(std::string(item.sent_again ? "0,0" : "0"), Sequences(rig.server), what + "sequences");
+            CheckEqual(std::int64_t{ 1 }, rig.Channel()->ConnectionsOpened(), what + "one connection carried it all");
+            rig.Stop();
+        }
+    }
+
+    // A block without an ack goes again on the next connection with its producer and sequence, and the
+    // repeat is answered duplicate: the rows are stored once and none is counted as lost.
+    void NativeTableLostAckThenDuplicate()
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        rig.server.AnswerTableNext(Answer::StoredSilently());
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        CheckEqual(std::string("0,0"), Sequences(rig.server), "sequences");
+        CheckEqual(std::string("1,2"), FrameConnections(rig.server), "connections");
+        const auto frames = rig.server.TableFrames();
+        CheckEqual(frames[0].producer, frames[1].producer, "the same producer");
+        CheckEqual(frames[0].block, frames[1].block, "the same block");
+        CheckEqual(std::string("duplicate"), frames[1].outcome, "the repeat");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "stored once");
+        Check(ClosedWith(rig.server, 1000), "the connection without an ack was closed with 1000");
+        rig.Stop();
+    }
+
+    // A close the server says instead of an answer (1013: its frame budget; 1000: replaced): the block is
+    // kept, and the same frame goes on the next connection.
+    void NativeTableCloseSendsTheSameFrameAgain(int code)
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        rig.server.AnswerTableNext(Answer::CloseWith(code, "scripted"));
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        rig.WaitUp(2);
+        rig.Tick();
+        CheckEqual(std::string("0,0"), Sequences(rig.server), "sequences");
+        CheckEqual(std::string("1,2"), FrameConnections(rig.server), "connections");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "stored");
+        rig.Stop();
+    }
+
+    // 404 and 400 are refusals for good: said once, the blocks kept, asked again after the long pause.
+    void NativeTableUpgradeRefusedForGoodIsAskedAgainLater(int status)
+    {
+        SessionRig rig(RigOptions{ true, 30000, [status](Server& server) { server.RefuseSideUpgradesWith(status); },
+                                   [](tables::SessionTableChannelOptions& options) { options.refused_retry_ms = 100; options.connection_wait_ms = 50; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        WaitOrFail(
+            [&] {
+                rig.Service();
+                rig.Tick();
+                return rig.server.RefusedTableUpgrades() >= 3;
+            },
+            "the refusal asked again");
+        CheckEqual(std::size_t{ 0 }, rig.server.TableFrames().size(), "a frame went out");
+        CheckEqual(1, rig.log.Count("refused the table connection with " + std::to_string(status)), "the refusal is said once");
+        rig.server.RefuseSideUpgradesWith(0);
+        rig.WaitUp(1);
+        rig.Tick();
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "the kept block");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        rig.Stop();
+    }
+
+    // ... and with the next session at once, the long pause notwithstanding.
+    void NativeTableUpgradeRefusedForGoodIsAskedWithTheNextSession(int status)
+    {
+        SessionRig rig(RigOptions{ true, 30000, [status](Server& server) { server.RefuseSideUpgradesWith(status); },
+                                   [](tables::SessionTableChannelOptions& options) { options.refused_retry_ms = 3600000; options.connection_wait_ms = 50; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        WaitOrFail([&] { return rig.server.RefusedTableUpgrades() >= 1; }, "the refusal");
+        rig.server.RefuseSideUpgradesWith(0);
+        rig.Service();
+        rig.Service();
+        CheckEqual(0, rig.server.TableConnections(), "asked again within the pause");
+        rig.server.Drop();
+        rig.WaitUp(1);
+        CheckEqual(rig.server.HelloSessionIds().at(1), rig.server.TableUpgradeSessionIds().back(), "the new session is named");
+        rig.Stop();
+    }
+
+    // 406 and 503 pass: tried again with the backoff.
+    void NativeTableUpgradeRefusedForNowUsesTheBackoff(int status)
+    {
+        SessionRig rig(RigOptions{ true, 30000, [status](Server& server) { server.RefuseSideUpgradesWith(status); }, {} });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        WaitOrFail(
+            [&] {
+                rig.Service();
+                return rig.server.RefusedTableUpgrades() >= 3;
+            },
+            "attempts with the backoff");
+        CheckEqual(1, rig.log.Count("refused the table connection with " + std::to_string(status)), "said once");
+        rig.server.RefuseSideUpgradesWith(0);
+        rig.WaitUp(1);
+        rig.Stop();
+    }
+
+    // A 409 waits for the next session: no attempt with the session it named.
+    void NativeTable409WaitsForTheNextSession()
+    {
+        SessionRig rig(RigOptions{ true, 30000, [](Server& server) { server.RefuseSideUpgradesWith(409); },
+                                   [](tables::SessionTableChannelOptions& options) { options.connection_wait_ms = 50; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        WaitOrFail([&] { return rig.server.RefusedTableUpgrades() >= 1; }, "the refusal");
+        rig.server.RefuseSideUpgradesWith(0);
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        for (int i = 0; i < 5; ++i)
+        {
+            rig.Service();
+            rig.Tick();
+        }
+        CheckEqual(1, static_cast<int>(rig.server.SideUpgradeHeads().size()), "an attempt with the refused session");
+        rig.server.Drop();
+        rig.WaitUp(1);
+        rig.Tick();
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "stored on the next session");
+        rig.Stop();
+    }
+
+    // The session ends while a block waits for its ack: the block goes on the table connection of the
+    // next session, which names it.
+    void NativeTableBlockInFlightAcrossANewSession()
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        rig.server.AnswerTableNext(Answer::DropSession());
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        rig.WaitUp(2);
+        rig.Tick();
+        CheckEqual(std::string("0,0"), Sequences(rig.server), "sequences");
+        CheckEqual(std::string("1,2"), FrameConnections(rig.server), "connections");
+        CheckEqual(rig.server.HelloSessionIds().at(1), rig.server.TableUpgradeSessionIds().at(1), "the second names the new session");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "stored");
+        rig.Stop();
+    }
+
+    // The hello's frame limit and block limits split a tick's rows.
+    void NativeTableSplitsByTheHelloLimits()
+    {
+        {
+            SessionRig rig(RigOptions{ true, 30000, [](Server& server) { server.SetTableHello(2000, 30); }, {} });
+            Table table = CreateTable(rig.collector.value, "book", { { "price", HSM_TABLE_COLUMN_DOUBLE }, { "size", HSM_TABLE_COLUMN_INT64 } }, 1);
+            rig.Start();
+            rig.Register(table);
+            rig.WaitUp(1);
+            CheckEqual(std::size_t{ 2000 - 40 }, rig.Channel()->MaxBlockBytes(), "the hello's frame limit");
+            for (int i = 0; i < 600; ++i)
+            {
+                hsm_table_cell_t cells[2];
+                cells[0].f64 = i;
+                cells[1].i64 = i;
+                Check(hsm_table_sensor_add_row(table.value, (1000 + i) * 1000000LL, cells, 2, nullptr) == HSM_RESULT_OK, "add");
+            }
+            rig.Tick();
+            const auto frames = rig.server.TableFrames();
+            Check(frames.size() > 1, "not split");
+            for (const auto& frame : frames)
+                Check(frame.frame_bytes <= 2000, "a frame of " + std::to_string(frame.frame_bytes));
+            CheckEqual(std::size_t{ 600 }, rig.StoredRows("book"), "rows");
+            rig.Stop();
+        }
+        {
+            SessionRig rig(RigOptions{ true, 30000, [](Server& server) { server.SetTableHello(4 * 1024 * 1024, 30, 50); }, {} });
+            Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+            rig.Start();
+            rig.Register(table);
+            rig.WaitUp(1);
+            CheckEqual(std::int32_t{ 50 }, rig.Channel()->Limits().max_rows, "the hello's block limits");
+            for (int i = 0; i < 120; ++i)
+                Check(AddDouble(table, (1000 + i) * 1000000LL, i) == HSM_RESULT_OK, "add");
+            rig.Tick();
+            for (const auto& put : rig.Stored())
+                Check(put.block.row_count <= 50, "a block of " + std::to_string(put.block.row_count) + " rows");
+            CheckEqual(std::size_t{ 120 }, rig.StoredRows("t"), "rows");
+            rig.Stop();
+        }
+    }
+
+    // A block packed before a smaller hello: the native answer is final (TooLarge, rows dropped once as
+    // too large, the sequence never given to other rows); the managed collector packs it again.
+    void NativeTableBlockPackedBeforeASmallerHello()
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        // The next connection allows less than a block of these rows takes.
+        rig.server.SetTableHello(300, 30);
+        rig.server.CloseTableConnections(1000, "replaced");
+        for (int i = 0; i < 200; ++i)
+            Check(AddDouble(table, (1000 + i) * 1000000LL, i) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        CheckEqual(std::size_t{ 0 }, rig.server.TableFrames().size(), "the oversized frame went out");
+        CheckEqual(std::uint64_t{ 200 }, Stats(table).rows_dropped, "dropped as too large");
+        Check(AddDouble(table, 5000 * 1000000LL, 1) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        const auto frames = rig.server.TableFrames();
+        Check(!frames.empty() && frames.front().sequence >= 1, "a later block took a sequence at or below the dropped one");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "the small block");
+        rig.Stop();
+    }
+
+    // A stop with a block in flight: the table connection is closed (1000) before the session, within the
+    // stop budget, and the block's rows are counted once as not delivered.
+    void NativeTableStopWithABlockInFlight()
+    {
+        // The ack wait never ends by itself: the stop's budget ends it (Cancel).
+        SessionRig rig(RigOptions{ false, 1000, [](Server& server) { server.AnswerTableNext(Answer::NoAnswer()); },
+                                   [](tables::SessionTableChannelOptions& options) { options.ack_abandoned_for_tests = [](std::int64_t) { return false; }; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        std::mutex mutex;
+        std::vector<bool> up_at_session_close;
+        auto channel_holder = std::make_shared<std::shared_ptr<tables::SessionTableChannel>>();
+        rig.server.SetSessionCloseReceived([&mutex, &up_at_session_close, channel_holder] {
+            std::lock_guard<std::mutex> guard(mutex);
+            up_at_session_close.push_back(*channel_holder && (*channel_holder)->IsServing());
+        });
+        rig.Start();
+        *channel_holder = rig.Channel();
+        rig.Register(table);
+        rig.WaitUp(1);
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        hsm_collector_test_advance_clock_ms(rig.collector.value, 10000);
+        WaitOrFail([&] { return rig.server.TableFrames().size() == 1; }, "the block in flight");
+        rig.Stop();
+        CheckEqual(std::uint64_t{ 1 }, Stats(table).rows_dropped, "counted once");
+        Check(ClosedWith(rig.server, 1000), "the table connection was closed with 1000");
+        WaitOrFail(
+            [&] {
+                std::lock_guard<std::mutex> guard(mutex);
+                return !up_at_session_close.empty();
+            },
+            "the session's close");
+        std::lock_guard<std::mutex> guard(mutex);
+        for (const bool up : up_at_session_close)
+            Check(!up, "the table connection was up when the session was closed");
+    }
+
+    // What the server must not send: the connection is closed with the code, the error said once, and the
+    // block goes again on the next connection.
+    void NativeTableProtocolErrors()
+    {
+        struct Case
+        {
+            const char* name;
+            Answer answer;
+            int code;
+        };
+        const std::vector<Case> cases = {
+            { "binary", Answer::BinaryFrame(), 1003 },
+            { "oversized", Answer::WithText("{\"op\":\"x\",\"pad\":\"" + std::string(1024 * 1024 + 16, 'a') + "\"}"), 1009 },
+            { "not-json", Answer::WithText("this is not json"), 1007 },
+            { "foreign-ack", Answer::WithText("{\"ack\":999999,\"status\":200,\"body\":{}}"), 1002 },
+            { "no-ack-no-op", Answer::WithText("{\"status\":200}"), 1002 },
+            { "status-302", Answer::WithText("{\"ack\":{id},\"status\":302}"), 1002 },
+        };
+        for (const auto& item : cases)
+        {
+            SessionRig rig;
+            Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+            rig.Start();
+            rig.Register(table);
+            rig.WaitUp(1);
+            rig.server.AnswerTableNext(item.answer);
+            Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+            rig.Tick();
+            const std::string what = std::string(item.name) + ": ";
+            WaitOrFail([&] { return ClosedWith(rig.server, item.code); }, what + "the close " + std::to_string(item.code));
+            rig.WaitUp(2);
+            rig.Tick();
+            CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), what + "stored");
+            CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, what + "dropped");
+            Check(rig.log.Count("The table connection to") == 1, what + "the protocol error is said once");
+            rig.Stop();
+        }
+    }
+
+    // An idle table connection sends the heartbeat (the delivery thread wakes for it).
+    void NativeTableHeartbeat()
+    {
+        SessionRig rig(RigOptions{ false, 30000, [](Server& server) { server.SetTableHello(4 * 1024 * 1024, 1); }, {} });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        WaitOrFail([&] { return rig.server.TablePings() >= 2; }, "two heartbeats");
+        CheckEqual(std::int64_t{ 1 }, rig.Channel()->ConnectionsOpened(), "the connection held");
+        rig.Stop();
+    }
+
+    // Start, stop, start: a new table connection and a new producer at every run.
+    void NativeTableStartStopStart()
+    {
+        SessionRig rig(RigOptions{ false, 30000, {}, {} });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        for (int run = 1; run <= 3; ++run)
+        {
+            rig.Start();
+            rig.Register(table);
+            rig.WaitUp(run);
+            Check(AddDouble(table, run * 1000000LL, run) == HSM_RESULT_OK, "add");
+            rig.Stop();
+            Check(!rig.Channel()->IsServing(), "serving after stop");
+            CheckEqual(std::size_t{ static_cast<std::size_t>(run) }, rig.StoredRows("t"), "rows after run " + std::to_string(run));
+        }
+        std::set<std::string> producers;
+        for (const auto& frame : rig.server.TableFrames())
+        {
+            producers.insert(frame.producer);
+            CheckEqual(std::int64_t{ 0 }, frame.sequence, "every run starts at 0");
+        }
+        CheckEqual(std::size_t{ 3 }, producers.size(), "a producer per run");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+    }
+
+    // Dispose (and destroy) from every state of the table connection: never throws, never hangs, joins
+    // every thread.
+    void NativeTableDisposeFromEveryState()
+    {
+        enum class State
+        {
+            Created,
+            StartedNoSession,
+            Registered,
+            Up,
+            InFlight,
+            Refusing,
+            Stopped,
+        };
+        for (const State state : { State::Created, State::StartedNoSession, State::Registered, State::Up, State::InFlight, State::Refusing, State::Stopped })
+        {
+            for (const bool destroy_only : { false, true })
+            {
+                RigOptions options{ false, 2000, {}, [](tables::SessionTableChannelOptions& channel) { channel.ack_abandoned_for_tests = [](std::int64_t) { return false; }; } };
+                if (state == State::StartedNoSession)
+                    options.script = [](Server& server) { server.RefuseUpgradesWith(503); };
+                if (state == State::Refusing)
+                    options.script = [](Server& server) { server.RefuseSideUpgradesWith(503); };
+                auto rig = std::make_unique<SessionRig>(options);
+                Table table = CreateTable(rig->collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+                if (state != State::Created)
+                    rig->Start();
+                if (state == State::Registered || state == State::Up || state == State::InFlight || state == State::Stopped || state == State::Refusing)
+                    rig->Register(table);
+                if (state == State::Up || state == State::InFlight || state == State::Stopped)
+                    rig->WaitUp(1);
+                if (state == State::Refusing)
+                    WaitOrFail([&] { return rig->server.RefusedTableUpgrades() >= 1; }, "a refusal");
+                if (state == State::InFlight)
+                {
+                    rig->server.AnswerTableNext(Answer::NoAnswer());
+                    Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+                    hsm_collector_test_advance_clock_ms(rig->collector.value, 10000);
+                    WaitOrFail([&] { return rig->server.TableFrames().size() == 1; }, "the block in flight");
+                }
+                if (state == State::Stopped)
+                    rig->Stop();
+                if (destroy_only)
+                    rig->collector.Destroy();
+                else
+                    hsm_collector_dispose(rig->collector.value);
+                auto* pipeline = rig->collector.value != nullptr ? tables::test::Pipeline(rig->collector.value) : nullptr;
+                Check(pipeline == nullptr || (!pipeline->TickAlive() && !pipeline->DeliveryThreadAlive()), "a thread outlived the dispose");
+                rig.reset();
+                CheckEqual(static_cast<int>(HSM_RESULT_INVALID_STATE), static_cast<int>(AddDouble(table, 1, 1)), "add after the end");
+            }
+        }
+    }
+
+    // A collector on the session without a table sensor makes nothing of the table connection: no channel,
+    // no upgrade, no line.
+    void NativeTableNoConnectionWithoutATableSensor()
+    {
+        SessionRig rig(RigOptions{ false, 30000, {}, {} });
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_int_sensor(rig.collector.value, "plain", &sensor) == HSM_RESULT_OK, "plain sensor");
+        rig.Start();
+        Check(hsm_sensor_add_int(sensor, 5, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add");
+        WaitOrFail(
+            [&] {
+                for (const auto& request : rig.server.SessionRequests())
+                    if (request.frame.find("\"op\":\"list\"") != std::string::npos && request.status == 200)
+                        return true;
+                return false;
+            },
+            "a value on the session");
+        rig.Stop();
+        hsm_sensor_release(sensor);
+        Check(rig.Channel() == nullptr, "a table channel exists");
+        Check(tables::test::Pipeline(rig.collector.value) == nullptr, "a pipeline exists");
+        CheckEqual(std::size_t{ 0 }, rig.server.SideUpgradeHeads().size(), "table upgrades");
+        CheckEqual(0, rig.log.Count("table connection") + rig.log.Count("Table") + rig.log.Count("table sensor"), "a line about tables");
+    }
+
+    // A session of its own and a link to the same server, for the tests that drive the link or the
+    // channel directly (as the delivery thread would).
+    struct LinkRig
+    {
+        Server server{ SessionRig::ServerOptions() };
+        hsm::http::SessionOptions session_options;
+        std::unique_ptr<hsm::http::SessionTransport> session;
+
+        LinkRig()
+        {
+            server.EnableTableScript([](const std::string&) { return std::vector<std::string>(); });
+            session_options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+            session_options.headers = { { "Key", "k" } };
+            session = std::make_unique<hsm::http::SessionTransport>(session_options);
+            session->Start();
+            WaitOrFail([&] { return !session->CurrentSession().session_id.empty(); }, "the session");
+        }
+
+        ~LinkRig() { session->Stop(0); }
+
+        hsm::http::AckedLinkOptions LinkOptions() const
+        {
+            hsm::http::AckedLinkOptions options;
+            options.url = session_options.url;
+            options.headers = session_options.headers;
+            options.subprotocol = "hsm.tables.v1";
+            options.header_bytes = 40;
+            return options;
+        }
+    };
+
+    std::vector<std::uint8_t> TestFrame()
+    {
+        std::vector<std::uint8_t> frame(40 + 64, 0);
+        frame[16] = 7; // a producer that is not all zero
+        return frame;
+    }
+
+    // A Cancel while a connection is closing reaches it: the close's wait for the server's answer ends at
+    // the cancel. The server never answers a close, so without the cancel the close could only end by
+    // running out its linger; the assertion is on what ended it (the closing connection saw the cancel),
+    // never on a duration. Both closes with a linger of the link: the no-ack close of a put and the close
+    // of a protocol error.
+    void NativeTableCancelReachesAClosingConnection()
+    {
+        for (const bool protocol_error : { false, true })
+        {
+            LinkRig rig;
+            rig.server.SetTableAnswerCloses(false);
+            rig.server.AnswerTableNext(protocol_error ? Answer::WithText("this is not json") : Answer::NoAnswer());
+
+            // The hook holds the close at the moment it has taken its connection out of use, until the
+            // test has called Cancel: the cancel lands on the closing connection, whatever the timing.
+            std::atomic<bool> lingering{ false };
+            std::atomic<bool> cancel_sent{ false };
+            auto options = rig.LinkOptions();
+            Server* server = &rig.server;
+            options.ack_abandoned_for_tests = [server](std::int64_t id) { return server->TableFrameUnanswered(id); };
+            options.on_close_linger_for_tests = [&lingering, &cancel_sent] {
+                lingering.store(true);
+                const auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+                while (!cancel_sent.load() && std::chrono::steady_clock::now() < bound)
+                    std::this_thread::yield();
+            };
+            hsm::http::AckedBinaryLink link(options);
+            const auto opened = link.Open(rig.session->CurrentSession().session_id, {});
+            Check(opened.ok, "open: " + opened.why);
+
+            hsm::http::AckedLinkPutResult result = hsm::http::AckedLinkPutResult::NotOpen;
+            std::thread owner([&] {
+                auto frame = TestFrame();
+                hsm::http::AckedLinkAck ack;
+                result = link.Put(1, frame, 10000, 600000, ack);
+            });
+            WaitOrFail([&] { return lingering.load(); }, "the close's linger");
+            link.Cancel();
+            cancel_sent.store(true);
+            owner.join();
+
+            const std::string what = protocol_error ? "a protocol error's close: " : "the no-ack close: ";
+            Check(result == hsm::http::AckedLinkPutResult::Lost, what + "the put did not end as lost");
+            Check(link.LastEnd().close_cancelled, what + "the cancel did not reach the closing connection");
+            CheckEqual(protocol_error ? 1007 : 1000, link.LastEnd().close_code, what + "close code");
+        }
+    }
+
+    // A refusal is said once per kind (the step and the status or libcurl's code), whatever its words: two
+    // timeouts of the upgrade with different elapsed times are one line, another kind is a new one; the
+    // line for an ack body that is not JSON follows the same rule.
+    void NativeTableReportsAreSaidOncePerKind()
+    {
+        std::mutex mutex;
+        std::vector<std::string> lines;
+        tables::SessionTableChannelOptions options;
+        options.log = [&](bool, const std::string& line) {
+            std::lock_guard<std::mutex> guard(mutex);
+            lines.push_back(line);
+        };
+        tables::SessionTableChannel channel(options);
+
+        hsm::http::AckedLinkOpen first;
+        first.kind = "upgrade:curl:28";
+        first.why = "the upgrade failed: Connection timed out after 15001 milliseconds";
+        hsm::http::AckedLinkOpen second = first;
+        second.why = "the upgrade failed: Connection timed out after 15002 milliseconds";
+        hsm::http::AckedLinkOpen other;
+        other.kind = "upgrade:curl:7";
+        other.why = "the upgrade failed: Failed to connect to h port 443 after 2034 ms";
+        channel.ReportOpenFailureForTests(first);
+        channel.ReportOpenFailureForTests(second);
+        channel.ReportOpenFailureForTests(second);
+        channel.WriteReports();
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            CheckEqual(std::size_t{ 1 }, lines.size(), "lines for one kind");
+            Check(lines[0].find("15001 milliseconds") != std::string::npos, "the line carries the first words: " + lines[0]);
+        }
+        channel.ReportOpenFailureForTests(other);
+        channel.WriteReports();
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            CheckEqual(std::size_t{ 2 }, lines.size(), "lines after another kind");
+        }
+
+        hsm::http::AckedLinkAck ack;
+        ack.id = 1;
+        ack.status = 200;
+        ack.body = "{ not json";
+        CheckEqual(static_cast<int>(tables::TableBlockOutcome::Stored), static_cast<int>(channel.AnswerForTests(ack).outcome), "taken as stored");
+        channel.AnswerForTests(ack);
+        channel.AnswerForTests(ack);
+        channel.WriteReports();
+        std::lock_guard<std::mutex> guard(mutex);
+        CheckEqual(std::size_t{ 3 }, lines.size(), "one line for three acks whose body is not JSON");
+    }
+
+    // retryAfter as the managed collector reads it: an integer that fits an int32, else absent (1.5 is
+    // absent); the channel caps what it takes at 5 minutes (2,000,000,000 s gives 5 minutes).
+    void NativeTableRetryAfterAsManaged()
+    {
+        LinkRig rig;
+        auto options = rig.LinkOptions();
+        hsm::http::AckedBinaryLink link(options);
+        Check(link.Open(rig.session->CurrentSession().session_id, {}).ok, "open");
+
+        struct Case
+        {
+            const char* retry;
+            std::int64_t seconds;
+            std::int64_t answer_ms;
+        };
+        const std::vector<Case> cases = {
+            { "1.5", -1, -1 },
+            { "2000000000", 2000000000, 5 * 60 * 1000 },
+            { "3000000000", -1, -1 },
+            { "-5", -5, -1 },
+            { "0", 0, -1 },
+            { "7", 7, 7000 },
+            { "\"7\"", -1, -1 },
+        };
+        tables::SessionTableChannel channel(tables::SessionTableChannelOptions{});
+        for (const auto& item : cases)
+        {
+            rig.server.AnswerTableNext(Answer::WithText(std::string("{\"ack\":{id},\"status\":503,\"error\":\"x\",\"retryAfter\":") + item.retry + "}"));
+            auto frame = TestFrame();
+            hsm::http::AckedLinkAck ack;
+            Check(link.Put(1, frame, 10000, 60000, ack) == hsm::http::AckedLinkPutResult::Acked, std::string("no ack for retryAfter ") + item.retry);
+            CheckEqual(item.seconds, ack.retry_after_seconds, std::string("retryAfter ") + item.retry + " as read");
+            const auto answer = channel.AnswerForTests(ack);
+            CheckEqual(static_cast<int>(tables::TableBlockOutcome::NotDelivered), static_cast<int>(answer.outcome), "a 503 is not delivered");
+            CheckEqual(item.answer_ms, answer.retry_after_ms, std::string("retryAfter ") + item.retry + " as answered");
+        }
+        link.Close(0, 1000, "done");
+    }
+
+    // One Service call that closes the connection of an ended session and opens the one of the new
+    // session says that a connection came up, so the blocks that waited go at once.
+    void NativeTableServiceReportsTheConnectionOfANewSession()
+    {
+        LinkRig rig;
+        tables::SessionTableChannelOptions options;
+        options.registration_json = [](const tables::TableRegistration& registration) { return "{\"Path\":\"" + registration.path + "\"}"; };
+        options.backoff_ms = [](int) { return std::int64_t{ 20 }; };
+        tables::SessionTableChannel channel(options);
+        channel.Attach(rig.session.get());
+        tables::TableRegistration registration;
+        registration.path = "t";
+        registration.columns = { { "time", tables::TableColumnType::Time }, { "v", tables::TableColumnType::Double } };
+        const auto result = channel.Register({ registration });
+        CheckEqual(std::size_t{ 1 }, result.accepted.size(), "accepted");
+        Check(channel.IsServing(), "the connection after the registration: " + channel.DownReason());
+        const auto generation = rig.session->CurrentSession().generation;
+
+        rig.server.Drop();
+        WaitOrFail([&] { return rig.session->CurrentSession().generation > generation; }, "the next session");
+        Check(channel.Service(), "Service did not say that the connection of the new session came up");
+        CheckEqual(std::int64_t{ 2 }, channel.ConnectionsOpened(), "connections");
+        CheckEqual(rig.server.HelloSessionIds().back(), rig.server.TableUpgradeSessionIds().back(), "the new connection names the new session");
+        channel.Close(0);
+        channel.Attach(nullptr);
+    }
+
+    // A put follows its block across three lost connections and then answers not delivered: the block
+    // stays at the head with its producer and sequence, and the next tick sends the same frame again.
+    void NativeTableThreeLostConnectionsKeepTheBlockAtTheHead()
+    {
+        SessionRig rig;
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        for (int i = 0; i < 3; ++i)
+            rig.server.AnswerTableNext(Answer::NoAnswer());
+        Check(AddDouble(table, 1000000, 1.0) == HSM_RESULT_OK, "add");
+        rig.Tick();
+        CheckEqual(std::string("0,0,0"), Sequences(rig.server), "sequences of the put");
+        CheckEqual(std::string("1,2,3"), FrameConnections(rig.server), "connections of the put");
+        CheckEqual(std::size_t{ 1 }, tables::test::Pipeline(rig.collector.value)->BacklogBlocks(), "the block at the head");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+
+        rig.WaitUp(4);
+        rig.Tick();
+        CheckEqual(std::string("0,0,0,0"), Sequences(rig.server), "sequences");
+        CheckEqual(std::string("1,2,3,4"), FrameConnections(rig.server), "connections");
+        std::set<std::string> producers;
+        for (const auto& frame : rig.server.TableFrames())
+            producers.insert(frame.producer);
+        CheckEqual(std::size_t{ 1 }, producers.size(), "one producer");
+        CheckEqual(std::size_t{ 1 }, rig.StoredRows("t"), "stored");
+        CheckEqual(std::size_t{ 0 }, tables::test::Pipeline(rig.collector.value)->BacklogBlocks(), "backlog");
+        rig.Stop();
+    }
+
+    // ---- #1848 step 6: a block whose write does not finish (a server that stopped reading) ----
+    //
+    // Plaintext, like every test server here: the connection's own wait bounds the write (libcurl
+    // answers CURLE_AGAIN). The Schannel case these guard is a manual check
+    // (docs/test/NativeWsStalledPeer.md); what these pin is what the caller does with a
+    // write that ended at its bound or at a cancel.
+
+    // Rows enough for one block larger than the loopback buffers hold (about 21 MB packed): values
+    // that do not compress.
+    constexpr std::size_t kStuckRows = 2500000;
+
+    void AddIncompressibleRows(const Table& table)
+    {
+        std::uint64_t state = 0x2545f4914f6cdd1dull;
+        for (std::size_t i = 0; i < kStuckRows; ++i)
+        {
+            state = state * 6364136223846793005ull + 1442695040888963407ull;
+            const double value = static_cast<double>(state >> 11) / 9007199254740992.0;
+            Check(AddDouble(table, 1000000 + static_cast<int64_t>(i) * 1000, value) == HSM_RESULT_OK, "add");
+        }
+    }
+
+    // The first table connection stops reading before its block: the block's write ends at its bound
+    // ("send timed out"), the put sees the connection lost, and the SAME frame (producer, sequence)
+    // goes whole on the next connection and is stored. The rows are stored once and none is counted as
+    // dropped; what the first connection got is a frame cut short with the same header.
+    void NativeTableStuckWriteSendsTheSameFrameOnTheNextConnection()
+    {
+        SessionRig rig(RigOptions{ true, 30000,
+                                   [](Server& server) {
+                                       server.SetTableHello(64 * 1024 * 1024, 30);
+                                       server.PauseTableReading(1);
+                                   },
+                                   [](tables::SessionTableChannelOptions& options) {
+                                       // A short bound only on the first connection, the one that reads nothing;
+                                       // the second carries the block under a bound no healthy write comes near.
+                                       options.send_bound_ms_for_tests = [](std::int64_t connection) {
+                                           return connection == 1 ? std::int64_t{ 1000 } : std::int64_t{ 600000 };
+                                       };
+                                   } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        AddIncompressibleRows(table);
+        rig.Tick();
+        if (rig.server.TableFrames().empty())
+        {
+            rig.WaitUp(2);
+            rig.Tick();
+        }
+        rig.server.ResumeTableReading();
+        WaitOrFail([&] { return !rig.server.TableTruncatedFrames().empty(); }, "the cut frame of the first connection");
+
+        const auto frames = rig.server.TableFrames();
+        CheckEqual(std::string("0"), Sequences(rig.server), "sequences stored whole");
+        CheckEqual(std::string("2"), FrameConnections(rig.server), "the connection that carried it whole");
+        const auto cut = rig.server.TableTruncatedFrames();
+        CheckEqual(std::size_t{ 1 }, cut.size(), "frames cut short");
+        CheckEqual(1, cut[0].connection, "the connection of the cut frame");
+        CheckEqual(std::int64_t{ 0 }, cut[0].sequence, "the cut frame's sequence");
+        CheckEqual(frames[0].producer, cut[0].producer, "the cut frame's producer");
+        CheckEqual("truncated of " + std::to_string(frames[0].frame_bytes), cut[0].outcome, "the cut frame declared the whole frame");
+        Check(cut[0].frame_bytes < frames[0].frame_bytes, "the first connection got only part of the frame");
+        Check(rig.log.Count("send timed out") >= 1, "the write's end is said");
+        CheckEqual(std::size_t{ kStuckRows }, rig.StoredRows("t"), "stored once");
+        CheckEqual(std::uint64_t{ 0 }, Stats(table).rows_dropped, "dropped");
+        CheckEqual(std::size_t{ 0 }, tables::test::Pipeline(rig.collector.value)->BacklogBlocks(), "backlog");
+        rig.Stop();
+    }
+
+    // A stop while a block's write is stuck (every table connection reads nothing): the stop returns,
+    // the write ends at the stop's cancel, and the block's rows are counted once as not delivered and
+    // never stored. A write that held the stop would fail by the test's CTest TIMEOUT.
+    void NativeTableStopDuringAStuckWriteCountsTheRowsOnce()
+    {
+        SessionRig rig(RigOptions{ false, 1000,
+                                   [](Server& server) {
+                                       server.SetTableHello(64 * 1024 * 1024, 30);
+                                       server.PauseTableReading(0);
+                                   },
+                                   [](tables::SessionTableChannelOptions& options) { options.ack_abandoned_for_tests = [](std::int64_t) { return false; }; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "v", HSM_TABLE_COLUMN_DOUBLE } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+        AddIncompressibleRows(table);
+        hsm_collector_test_advance_clock_ms(rig.collector.value, 10000);
+        // The block's write is under way: the paused connection holds bytes of it.
+        WaitOrFail([&] { return rig.server.PausedTableBytes() > 0; }, "the block's write under way");
+        rig.Stop();
+        CheckEqual(std::uint64_t{ kStuckRows }, Stats(table).rows_dropped, "counted once as not delivered");
+        CheckEqual(std::size_t{ 0 }, rig.StoredRows("t"), "nothing stored");
+        Check(rig.server.TableFrames().empty(), "no block arrived whole");
+    }
+
+    // The link itself: a 4 MiB and a 16 MiB binary frame go whole, each answered by its ack.
+    void NativeTableLinkCarriesLargeFrames()
+    {
+        Server server(SessionRig::ServerOptions());
+        server.EnableTableScript([](const std::string&) { return std::vector<std::string>(); });
+        server.SetTableHello(32 * 1024 * 1024, 30);
+
+        hsm::http::SessionOptions session_options;
+        session_options.url = "ws://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/session";
+        session_options.headers = { { "Key", "k" } };
+        hsm::http::SessionTransport session(session_options);
+        session.Start();
+        WaitOrFail([&] { return !session.CurrentSession().session_id.empty(); }, "the session");
+
+        hsm::http::AckedLinkOptions options;
+        options.url = session_options.url;
+        options.headers = session_options.headers;
+        options.subprotocol = "hsm.tables.v1";
+        options.header_bytes = 40;
+        hsm::http::AckedBinaryLink link(options);
+        std::string hello_body;
+        const auto opened = link.Open(session.CurrentSession().session_id, [&](const std::string& body, std::string&) {
+            hello_body = body;
+            return true;
+        });
+        Check(opened.ok, "open: " + opened.why);
+        Check(hello_body.find("\"maxFrameBytes\":33554432") != std::string::npos, "the hello body reaches the caller: " + hello_body);
+
+        std::int64_t sequence = 0;
+        for (const std::size_t bytes : { std::size_t{ 4 } * 1024 * 1024, std::size_t{ 16 } * 1024 * 1024 })
+        {
+            std::vector<std::uint8_t> frame(40 + bytes);
+            for (std::size_t i = 40; i < frame.size(); ++i)
+                frame[i] = static_cast<std::uint8_t>((i * 31) ^ (i >> 9));
+            frame[16] = 7; // a producer that is not all zero
+            frame[32] = static_cast<std::uint8_t>(sequence);
+            hsm::http::AckedLinkAck ack;
+            const auto result = link.Put(1, frame, 120000, 120000, ack);
+            Check(result == hsm::http::AckedLinkPutResult::Acked, "a frame of " + std::to_string(bytes) + " bytes got no ack: " + link.LastEnd().why);
+            CheckEqual(200L, ack.status, "status");
+            const auto frames = server.TableFrames();
+            Check(!frames.empty(), "no frame recorded");
+            CheckEqual(frame.size(), frames.back().frame_bytes, "the frame arrived whole");
+            Check(frames.back().block == std::string(reinterpret_cast<const char*>(frame.data()) + 40, bytes), "the bytes arrived as sent");
+            CheckEqual(ack.id, frames.back().id, "the ack of that request");
+            ++sequence;
+        }
+        link.Close(1000, 1000, "done");
+        session.Stop(0);
+    }
+
+    // Writers against ticks, reconnects (1013, a dropped session) and Stop: every accepted row is stored
+    // once or counted as dropped, never both and never twice; a sequence that was on the wire always carries
+    // the same bytes.
+    void NativeTableStressWritersTicksReconnectsAndStop()
+    {
+        constexpr int kWriters = 4;
+        SessionRig rig(RigOptions{ false, 5000, {}, [](tables::SessionTableChannelOptions& options) { options.ack_abandoned_for_tests = {}; } });
+        Table table = CreateTable(rig.collector.value, "t", { { "w", HSM_TABLE_COLUMN_INT64 } }, 1);
+        rig.Start();
+        rig.Register(table);
+        rig.WaitUp(1);
+
+        std::atomic<bool> stop_writers{ false };
+        std::array<std::atomic<std::uint64_t>, kWriters> offered{};
+        std::array<std::atomic<std::uint64_t>, kWriters> refused{};
+        std::vector<std::thread> writers;
+        // The writers end and are joined on every way out, a failed check included.
+        struct JoinWriters
+        {
+            std::atomic<bool>& stop;
+            std::vector<std::thread>& threads;
+            ~JoinWriters()
+            {
+                stop.store(true);
+                for (auto& thread : threads)
+                    if (thread.joinable())
+                        thread.join();
+            }
+        } join_writers{ stop_writers, writers };
+        // Each writer writes kRowsPerRound rows per round, the rounds released by the test, so a tick packs a
+        // bounded number of rows (a debug build compresses slowly) while the writers write through it.
+        constexpr std::int64_t kRowsPerRound = 2000;
+        std::atomic<int> released_rounds{ 0 };
+        std::atomic<std::uint64_t> written{ 0 };
+        for (int w = 0; w < kWriters; ++w)
+        {
+            writers.emplace_back([&, w] {
+                std::int64_t i = 0;
+                for (int round = 0; !stop_writers.load(); ++round)
+                {
+                    while (released_rounds.load() <= round && !stop_writers.load())
+                        std::this_thread::yield();
+                    for (std::int64_t n = 0; n < kRowsPerRound && !stop_writers.load(); ++n, ++i)
+                    {
+                        hsm_table_cell_t cell;
+                        cell.i64 = w;
+                        // A time unique to the row: the writer and its index.
+                        const auto result = hsm_table_sensor_add_row(table.value, (w * 1000000000LL + i + 1) * 100, &cell, 1, nullptr);
+                        offered[static_cast<std::size_t>(w)].fetch_add(1);
+                        written.fetch_add(1);
+                        if (result != HSM_RESULT_OK)
+                            refused[static_cast<std::size_t>(w)].fetch_add(1);
+                    }
+                }
+            });
+        }
+        for (int round = 0; round < 12; ++round)
+        {
+            // Every other round the server breaks the connection instead of answering: a close 1013, or the
+            // whole session dropped. The block goes again on the next connection.
+            if (round % 4 == 1)
+                rig.server.AnswerTableNext(Answer::CloseWith(1013, "budget"));
+            if (round % 4 == 3)
+                rig.server.AnswerTableNext(Answer::DropSession());
+            const auto before = rig.server.TableFrames().size();
+            const auto written_before = written.load();
+            released_rounds.store(round + 1);
+            // Rows of this round are in before its tick, which then meets the writers still writing.
+            WaitOrFail([&] { return written.load() > written_before; }, "rows of round " + std::to_string(round));
+            hsm_collector_test_advance_clock_ms(rig.collector.value, 10000);
+            WaitOrFail([&] { return rig.server.TableFrames().size() > before; }, "a frame of round " + std::to_string(round));
+        }
+        stop_writers.store(true);
+        for (auto& writer : writers)
+            writer.join();
+        writers.clear();
+        // The disturbances are over: the stop drains on a connection that is up.
+        WaitOrFail([&] { return rig.Channel()->IsServing(); }, "the table connection after the disturbances");
+        rig.Stop();
+
+        const auto stats = Stats(table);
+        std::map<std::pair<std::string, std::int64_t>, std::string> by_sequence;
+        for (const auto& frame : rig.server.TableFrames())
+        {
+            const auto key = std::make_pair(frame.producer, frame.sequence);
+            const auto found = by_sequence.find(key);
+            if (found != by_sequence.end())
+                Check(found->second == frame.block, "sequence " + std::to_string(frame.sequence) + " carried other rows");
+            else
+                by_sequence[key] = frame.block;
+        }
+        std::set<std::uint64_t> times;
+        std::uint64_t stored = 0;
+        for (const auto& row : RecordingChannel::RowsIn(StoredOf(SessionPuts(rig.server)), "t"))
+        {
+            Check(times.insert(row.ticks).second, "a row stored twice");
+            ++stored;
+        }
+        std::uint64_t all_offered = 0;
+        std::uint64_t all_refused = 0;
+        for (int w = 0; w < kWriters; ++w)
+        {
+            all_offered += offered[static_cast<std::size_t>(w)].load();
+            all_refused += refused[static_cast<std::size_t>(w)].load();
+        }
+        CheckEqual(all_offered, stats.rows_accepted + all_refused, "offered = accepted + refused");
+        CheckEqual(stats.rows_accepted, stored + (stats.rows_dropped - all_refused), "accepted = stored + lost after acceptance");
+        Check(stored > 0, "nothing stored");
+    }
+} // namespace
+#endif
+
+const std::map<std::string, std::function<void(const std::string&)>>& TablePipelineTests()
+{
+    static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+        { "native_table_path_normalization", [](const std::string&) { PathNormalization(); } },
+        { "native_table_time_conversion", [](const std::string&) { TimeConversion(); } },
+        { "native_table_buffer_growth_and_swap", [](const std::string&) { BufferGrowthAndSwap(); } },
+        { "native_table_buffer_failed_growth", [](const std::string&) { BufferFailedGrowth(); } },
+        { "native_table_buffer_null_map_on_first_use", [](const std::string&) { BufferNullMapOnFirstUse(); } },
+        { "native_table_bound_never_overshoots", [](const std::string&) { BoundNeverOvershoots(); } },
+        { "native_table_ledger_counts_by_reason", [](const std::string&) { LedgerCountsByReason(); } },
+        { "native_table_backlog_keeps_block_in_flight", [](const std::string&) { BacklogKeepsBlockInFlight(); } },
+        { "native_table_abi_rejects_wrong_shapes", [](const std::string&) { AbiRejectsWrongShapes(); } },
+        { "native_table_create_racing_dispose_is_refused", [](const std::string&) { CreateRacingDisposeIsRefused(); } },
+        { "native_table_unavailable_says_why", [](const std::string&) { UnavailableSaysWhy(); } },
+        { "native_table_host_without_table_sensors", [](const std::string&) { HostWithoutTableSensors(); } },
+        { "native_table_handle_outlives_collector", [](const std::string&) { HandleOutlivesCollector(); } },
+        { "native_table_wrapper_matches_abi", [](const std::string&) { WrapperMatchesAbi(); } },
+#if defined(HSM_COLLECTOR_TABLES)
+        { "native_table_threads_only_while_running", [](const std::string&) { ThreadsOnlyWhileRunning(); } },
+        { "native_table_unavailable_decided_at_each_start", [](const std::string&) { UnavailableDecidedAtEachStart(); } },
+        { "native_table_writer_across_stop_and_start", [](const std::string&) { WriterAcrossStopAndStart(); } },
+        { "native_table_stop_drain_is_bounded", [](const std::string&) { StopDrainIsBounded(); } },
+        { "native_table_losses_at_stop_reach_the_stop_line", [](const std::string&) { LossesAtStopReachTheStopLine(); } },
+        { "native_table_split_keeps_every_row", [](const std::string&) { SplitKeepsEveryRow(); } },
+        { "native_table_too_large_is_final_and_sequences_never_go_back", [](const std::string&) { TooLargeIsFinalAndSequencesNeverGoBack(); } },
+        { "native_table_over_connection_limits", [](const std::string&) { TableOverConnectionLimits(); } },
+        { "native_table_final_pack_observes_the_stop_budget", [](const std::string&) { FinalPackObservesTheStopBudget(); } },
+        { "native_table_impossible_row_count_is_a_wrong_shape", [](const std::string&) { ImpossibleRowCountIsAWrongShape(); } },
+        { "native_table_start_failure_rolls_back", [](const std::string&) { StartFailureRollsBack(); } },
+        { "native_table_stop_failure_completes", [](const std::string&) { StopFailureCompletes(); } },
+        { "native_table_reports_reach_the_host_with_no_lock_held", [](const std::string&) { ReportsReachTheHostWithNoLockHeld(); } },
+        { "native_table_pack_failure_settles_every_row", [](const std::string&) { PackFailureSettlesEveryRow(); } },
+        { "native_table_stress_writers_ticks_and_restarts", [](const std::string&) { StressWritersTicksAndRestarts(); } },
+#endif
+#if defined(HSM_COLLECTOR_HTTP) && defined(HSM_COLLECTOR_TABLES)
+        // The table connection of the session (#1848 part 4). Like the session tests they need a libcurl with
+        // WebSocket: without one they skip and say so, unless HSM_REQUIRE_WEBSOCKET=1.
+        { "native_table_block_after_hello_and_probe", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableBlockAfterHelloAndProbe(); } },
+        { "native_table_every_ack_status_maps_to_its_answer", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableEveryAckStatusMapsToItsAnswer(); } },
+        { "native_table_lost_ack_then_duplicate", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableLostAckThenDuplicate(); } },
+        { "native_table_close_1013_sends_the_same_frame", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableCloseSendsTheSameFrameAgain(1013); } },
+        { "native_table_close_1000_sends_the_same_frame", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableCloseSendsTheSameFrameAgain(1000); } },
+        { "native_table_upgrade_404_asked_again_later", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableUpgradeRefusedForGoodIsAskedAgainLater(404); } },
+        { "native_table_upgrade_400_asked_again_later", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableUpgradeRefusedForGoodIsAskedAgainLater(400); } },
+        { "native_table_upgrade_404_asked_with_the_next_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableUpgradeRefusedForGoodIsAskedWithTheNextSession(404); } },
+        { "native_table_upgrade_400_asked_with_the_next_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableUpgradeRefusedForGoodIsAskedWithTheNextSession(400); } },
+        { "native_table_upgrade_406_uses_the_backoff", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableUpgradeRefusedForNowUsesTheBackoff(406); } },
+        { "native_table_upgrade_503_uses_the_backoff", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableUpgradeRefusedForNowUsesTheBackoff(503); } },
+        { "native_table_upgrade_409_waits_for_the_next_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTable409WaitsForTheNextSession(); } },
+        { "native_table_block_in_flight_across_a_new_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableBlockInFlightAcrossANewSession(); } },
+        { "native_table_splits_by_the_hello_limits", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableSplitsByTheHelloLimits(); } },
+        { "native_table_block_packed_before_a_smaller_hello", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableBlockPackedBeforeASmallerHello(); } },
+        { "native_table_stop_with_a_block_in_flight", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStopWithABlockInFlight(); } },
+        { "native_table_server_protocol_errors", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableProtocolErrors(); } },
+        { "native_table_heartbeat", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableHeartbeat(); } },
+        { "native_table_start_stop_start", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStartStopStart(); } },
+        { "native_table_dispose_from_every_state", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableDisposeFromEveryState(); } },
+        { "native_table_no_connection_without_a_table_sensor", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableNoConnectionWithoutATableSensor(); } },
+        { "native_table_link_carries_4_and_16_mib_frames", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableLinkCarriesLargeFrames(); } },
+        { "native_table_cancel_reaches_a_closing_connection", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableCancelReachesAClosingConnection(); } },
+        { "native_table_reports_are_said_once_per_kind", [](const std::string&) { NativeTableReportsAreSaidOncePerKind(); } },
+        { "native_table_retry_after_as_managed", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableRetryAfterAsManaged(); } },
+        { "native_table_service_reports_the_connection_of_a_new_session", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableServiceReportsTheConnectionOfANewSession(); } },
+        { "native_table_three_lost_connections_keep_the_block_at_the_head", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableThreeLostConnectionsKeepTheBlockAtTheHead(); } },
+        { "native_table_stuck_write_sends_the_same_frame_on_the_next_connection", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStuckWriteSendsTheSameFrameOnTheNextConnection(); } },
+        { "native_table_stop_during_a_stuck_write_counts_the_rows_once", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStopDuringAStuckWriteCountsTheRowsOnce(); } },
+        { "native_table_stress_writers_reconnects_and_stop", [](const std::string&) { if (WebSocketOrSkip("the table connection test")) NativeTableStressWritersTicksReconnectsAndStop(); } },
+#endif
+    };
+    return tests;
+}

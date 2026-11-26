@@ -92,9 +92,13 @@ services:
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
+      # Large file values (#1882): HSM keeps uploads and finished archives here. Caddy reads
+      # its archives/ subtree (below); both mounts come from HSM_LARGE_FILES, so they cannot
+      # point at different folders.
+      - '${HSM_LARGE_FILES:-./LargeFiles}:/app/LargeFiles'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-8'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-9'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -117,3 +121,6 @@ services:
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro
+      # Finished large file archives, read-only: Caddy serves one only when HSM answers a
+      # checked download with an instruction naming it (#1885).
+      - '${HSM_LARGE_FILES:-./LargeFiles}/archives:/srv/hsm-archives:ro'

@@ -126,6 +126,38 @@ namespace HSMCommon.Model
         }
     }
 
+    /// <summary>
+    /// A large file value (ADR-0022, #1883): a value of a File sensor whose content is not part of the value. It holds the
+    /// description of the file; the content lies in the large file store under <see cref="FileId"/>. <c>Value</c> is
+    /// always empty and <c>OriginalSize</c> is the size of the file. Its time is the time the server accepted the file,
+    /// unique within the sensor; the modification time of the source file is <see cref="SourceModified"/>. The state of
+    /// the file (uploading, verified, packed) is in the store's record, never in the row, so the row is never rewritten.
+    /// <para>
+    /// A derived record under a union tag of its own (<see cref="UnionTag"/>), so the rows of ordinary file values keep
+    /// their bytes; a server without this type fails on the large rows only: the sensor loads without a value, the rows
+    /// stay untouched.
+    /// </para>
+    /// </summary>
+    [MemoryPackable]
+    public partial record LargeFileValue : FileValue
+    {
+        /// <summary>The MemoryPack union tag of the record on <see cref="BaseValue"/>; the first byte of its row.</summary>
+        public const byte UnionTag = 12;
+
+        /// <summary>The id of the file in the large file store, made by the server.</summary>
+        public Guid FileId { get; init; }
+
+        /// <summary>SHA-256 of the original content of the file, found by the server's end check of the upload (32 bytes).</summary>
+        public byte[] Hash { get; init; }
+
+        /// <summary>The modification time of the source file, UTC.</summary>
+        public DateTime SourceModified { get; init; }
+
+
+        /// <summary>True when a stored row holds a large file value: recognised by its union tag, without deserializing it.</summary>
+        public static bool IsLargeFileRow(ReadOnlySpan<byte> row) => row.Length > 0 && row[0] == UnionTag;
+    }
+
     [MemoryPackable]
     public partial record IntegerBarValue : BarBaseValue<int>
     {

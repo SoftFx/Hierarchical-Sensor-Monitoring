@@ -50,6 +50,15 @@ All accept POST with JSON body.
 | `/api/sensors/testConnection` | GET | Check connectivity + auth |
 | `/api/sensors/addOrUpdate` | POST | Register one sensor or update its metadata |
 | `/api/sensors/commands` | POST | A batch of commands from the collector; today every command is a sensor registration. Answers a dictionary of errors keyed by sensor path |
+| `/api/sensors/history` | POST | The values of one sensor (`HistoryRequest`) as JSON; a key that can read sensor data |
+| `/api/sensors/historyFile` | POST | The same as a CSV (or text) file, optionally zipped (`FileHistoryRequest`) |
+
+### A large file value in the history (#1885)
+
+A File sensor may hold large file values (a file whose content the server keeps in its large file store, ADR-0022). An access key reads their description, never their content; the archive is downloaded only through the management API or the web UI (`../server/large-file-download/feature.md`).
+
+- `history`: the value keeps the members of a file value (`Comment`, `Time`, `Status`, `Value`, `FileName`, `Extension`) with an empty `Value`, and gets an additive member `LargeFile { FileId, Name, Extension, Size, Secure, State }`. `Secure` and `State` come from the store's record: `State` is `verified`, `packed`, `removed` (the store no longer holds the file; `Secure` is null) or `unavailable` (the store could not be read; the rest of the history is still answered). An ordinary file value has no `LargeFile` member: its JSON is what it was.
+- `historyFile`: the content cell of a large value is empty, and a last column `Large file` holds `Large file <fileId>; <size> bytes; secure|not secure; <state>`. The column is present only when the values hold a large one, so the columns of a File sensor without one are what they were.
 
 ### Statuses of the two registration routes (#1749)
 
@@ -71,7 +80,7 @@ All DTOs live in `HSMSensorDataObjects` (shared library):
 - `SensorValueBase` — base class with `Path`, `Time`, `Status`, `Comment`
 - Typed descendants add the `Value` field of the appropriate type
 - `BarSensorValueBase` adds `Min`, `Max`, `Mean`, `Count`, `OpenTime`, `CloseTime`; the concrete `IntBarSensorValue` / `DoubleBarSensorValue` add `StdDev?` (#1509, optional, `null`/absent = unknown — sent by the native collector only, #1529)
-- `FileSensorValue` adds `Value` (bytes), `Name`, `Extension`
+- `FileSensorValue` adds `Value` (bytes), `Name`, `Extension`. A File sensor may also hold **large file values** (ADR-0022, #1883): uploaded in pieces over the file connection (#1884), never through this DTO. Stored as `LargeFileValue` rows (the description and the file id, no content; MemoryPack union tag 12, so ordinary file rows keep their bytes, and a server without the type loads the tree and skips only those rows): `aicontext/features/storage/large-files/feature.md`
 - `CommandRequestBase` — collector-to-server command (registration etc.)
 
 Full wire contract (enum numeric values, JSON conventions, every DTO property): [`wire-contract/feature.md`](./wire-contract/feature.md).

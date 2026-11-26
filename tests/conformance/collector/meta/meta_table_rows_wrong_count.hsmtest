@@ -1,0 +1,9 @@
+# Must FAIL: two rows are stored, the expectation says three (#1846). A driver that passes it does not count
+# the rows of a table.
+meta_table_rows_wrong_count|create_collector
+meta_table_rows_wrong_count|create_table_sensor|t|bid:double
+meta_table_rows_wrong_count|start
+meta_table_rows_wrong_count|add_table_row|t|1000|1.0
+meta_table_rows_wrong_count|add_table_row|t|2000|2.0
+meta_table_rows_wrong_count|table_tick
+meta_table_rows_wrong_count|expect_table_rows|t|3

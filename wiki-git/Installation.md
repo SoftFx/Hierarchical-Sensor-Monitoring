@@ -286,9 +286,13 @@ services:
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
+      # Large file values (#1882): HSM keeps uploads and finished archives here. Caddy reads
+      # its archives/ subtree (below); both mounts come from HSM_LARGE_FILES, so they cannot
+      # point at different folders.
+      - '${HSM_LARGE_FILES:-./LargeFiles}:/app/LargeFiles'
 
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-8'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-9'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -311,6 +315,9 @@ services:
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro
+      # Finished large file archives, read-only: Caddy serves one only when HSM answers a
+      # checked download with an instruction naming it (#1885).
+      - '${HSM_LARGE_FILES:-./LargeFiles}/archives:/srv/hsm-archives:ro'
 ```
 
 What must stay as it is, if you ever adapt it:
@@ -373,6 +380,7 @@ docker run -u 0 -d \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
   -v /host/path/DatabasesBackups:/app/DatabasesBackups \
+  -v /host/path/LargeFiles:/app/LargeFiles \
   -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -388,6 +396,7 @@ docker run -u 0 -d ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^
   -v C:\HSM\DatabasesBackups:/app/DatabasesBackups ^
+  -v C:\HSM\LargeFiles:/app/LargeFiles ^
   -p 443:443 ^
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -429,6 +438,7 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
+| `./LargeFiles` | `/app/LargeFiles` | Large files of File sensors (dumps): not a database and not in the backups |
 
 > The `Databases` volume is the most critical — it contains all sensor history and configuration. Never remove it without a backup.
 

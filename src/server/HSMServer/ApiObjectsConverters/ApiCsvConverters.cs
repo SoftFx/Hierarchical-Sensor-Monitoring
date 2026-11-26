@@ -8,6 +8,8 @@ using System.Text.Json.Serialization;
 using HSMCommon.Model;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.LargeFiles;
+using HSMServer.Core.LargeFiles.Archives;
 
 
 namespace HSMServer.ApiObjectsConverters
@@ -108,6 +110,10 @@ namespace HSMServer.ApiObjectsConverters
             new(nameof(SensorValueBase.Comment)),
         };
 
+        // The description of a large file value (#1885), appended LAST and only when the values hold a large one, so the
+        // columns of an ordinary File sensor stay what they were; empty for an ordinary file value.
+        private static readonly Header _largeFileHeader = new("Large file", nameof(Core.Model.HistoryValues.FileSensorHistory.LargeFile));
+
         private static readonly HashSet<string> _validProperties = new()
         {
             nameof(DoubleBarValue.Time),
@@ -123,7 +129,11 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        internal static string ConvertToCsv(this List<BaseValue> values, ExportOptions options = ExportOptions.Hidden)
+        /// <summary>
+        /// The values as CSV. A large file value has an empty content column and its description in the last column, with
+        /// the kind and the state read from <paramref name="largeFiles"/> when it is given.
+        /// </summary>
+        internal static string ConvertToCsv(this List<BaseValue> values, ExportOptions options = ExportOptions.Hidden, ILargeFileArchiveStore largeFiles = null)
         {
             if ((values?.Count ?? 0) == 0)
                 return string.Empty;
@@ -141,6 +151,13 @@ namespace HSMServer.ApiObjectsConverters
 
                 foreach (var column in header)
                 {
+                    if (ReferenceEquals(column, _largeFileHeader))
+                    {
+                        var description = value is LargeFileValue large ? LargeFileValueDescriptions.ToText(LargeFileValueDescriptions.Describe(large, largeFiles)) : string.Empty;
+                        rowValues.Add($"\"{description}\"");
+                        continue;
+                    }
+
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
@@ -181,6 +198,7 @@ namespace HSMServer.ApiObjectsConverters
                     _simpleSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
                 IntegerBarValue or DoubleBarValue =>
                     _barSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
+                FileValue when values.Any(value => value is LargeFileValue) => [.. _fileSensorHeader, _largeFileHeader],
                 FileValue => _fileSensorHeader,
                 _ => new List<Header>()
             };

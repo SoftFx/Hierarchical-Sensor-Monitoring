@@ -46,6 +46,11 @@ void DataCollectorImplWrapper::StopAsync()
 	impl->StopAsync();
 }
 
+void DataCollectorImplWrapper::UseHttpTransport()
+{
+	impl->UseHttpTransport();
+}
+
 hsm::collector::Collector& DataCollectorImplWrapper::Native()
 {
 	return impl->Native();
@@ -256,6 +261,11 @@ void DataCollectorProxy::StartAsync()
 void DataCollectorProxy::StopAsync()
 {
 	impl_wrapper->StopAsync();
+}
+
+void DataCollectorProxy::UseHttpTransport()
+{
+	impl_wrapper->UseHttpTransport();
 }
 
 hsm::collector::Collector& DataCollectorProxy::Native()

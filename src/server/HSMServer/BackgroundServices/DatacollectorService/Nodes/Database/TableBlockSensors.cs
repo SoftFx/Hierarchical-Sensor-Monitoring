@@ -136,6 +136,18 @@ namespace HSMServer.BackgroundServices
             Add("Merged hours holding blocks", () => Interlocked.Read(ref merge.MergedHoursHoldingBlocks), false,
                 "Arrival hours merged for every product whose blocks are still in the block store, waiting for TableSensors.DeleteMergedBlocksAfterHours.", _batchCounters);
 
+            // Retention (#1850 part 4).
+            Add("Batch weeks dropped", () => Interlocked.Read(ref stats.WeeksDropped), false,
+                "Week databases of the batch store dropped since the server started because the period of their class had passed for their week (rows are kept by whole weeks and may stay up to a week past their period).", _batchCounters);
+            Add("Retention faults", () => Interlocked.Read(ref merge.RetentionFaults), true,
+                "Faults of retention since the server started: a week database not dropped, expired blocks not deleted. Tried again an hour later; the log has the reason. Error in the sample in which it grew.", _batchCounters);
+            Add("Expired blocks deleted", () => Interlocked.Read(ref merge.ExpiredBlocksDeleted), false,
+                "Blocks never merged into batches (their product's hour not committed, or unreadable) that retention deleted since the server started because the period of every table sensor with rows in them had passed. Each deletion is logged as an Error.", _batchCounters);
+            Add("Expired block rows deleted", () => Interlocked.Read(ref merge.ExpiredBlockRowsDeleted), false,
+                "Rows of the expired blocks deleted since the server started (every table of a block, from the block index).", _batchCounters);
+            Add("Move weeks pending", () => Interlocked.Read(ref merge.MoveWeeksPending), false,
+                "Week databases whose period has passed that retention keeps at its last run because they hold rows of a table sensor whose period changed since and has not passed: they wait for the move of those rows to the new period.", _batchCounters);
+
             _batchesCreated = true;
         }
 
@@ -164,7 +176,7 @@ namespace HSMServer.BackgroundServices
         // Posts a counter when it changes. A failure counter (errorWhenGrown) is Error when it grew since the previous
         // sample and goes back to Ok at the next sample without growth. One that must stay 0 (errorWhenNonZero) is Error
         // whenever it is above 0.
-        private sealed class Counter(Func<long> read, bool errorWhenGrown, Action<long, bool> post, bool errorWhenNonZero = false)
+        internal sealed class Counter(Func<long> read, bool errorWhenGrown, Action<long, bool> post, bool errorWhenNonZero = false)
         {
             private long? _posted;
             private bool _postedError;

@@ -7,6 +7,8 @@ using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.LargeFiles;
+using HSMServer.Core.LargeFiles.Archives;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Policies;
@@ -217,6 +219,23 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
+        /// <summary>
+        /// A large file value (#1885): its description with the kind and the state from the store, and never its content
+        /// (<c>Value</c> stays empty). An access key never downloads the file.
+        /// </summary>
+        public static FileSensorHistory Convert(this LargeFileValue value, ILargeFileArchiveStore largeFiles) =>
+            new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.ToString(),
+                Value = [],
+                FileName = value.Name,
+                Extension = value.Extension,
+                LargeFile = LargeFileValueDescriptions.Describe(value, largeFiles),
+            };
+
+
         public static FileSensorHistory Convert(this FileValue fileValue)
         {
             var value = fileValue.DecompressContent(); // TODO smth with this crutch
@@ -260,6 +279,7 @@ namespace HSMServer.ApiObjectsConverters
                 StringValue sv => sv.Convert(),
                 IntegerBarValue sv => sv.Convert(),
                 DoubleBarValue sv => sv.Convert(),
+                LargeFileValue sv => sv.Convert(null),
                 FileValue sv => sv.Convert(),
                 RateValue sv => sv.Convert(),
                 EnumValue sv => sv.Convert(),
@@ -269,13 +289,14 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static List<object> Convert(this List<BaseValue> values)
+        /// <summary>The history values for the Sensor API; a large file value is described from <paramref name="largeFiles"/>.</summary>
+        public static List<object> Convert(this List<BaseValue> values, ILargeFileArchiveStore largeFiles = null)
         {
             var apiValues = new List<object>(values.Count);
 
             foreach (var value in values)
             {
-                var apiValue = value.Convert();
+                var apiValue = value is LargeFileValue large ? large.Convert(largeFiles) : value.Convert();
                 if (apiValue != null)
                     apiValues.Add(apiValue);
             }

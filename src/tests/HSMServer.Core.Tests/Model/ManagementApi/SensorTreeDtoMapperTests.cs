@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -113,6 +113,25 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var typed = Assert.IsType<FileValueDto>(dto.Value);
             Assert.Equal(("log", ".txt", 4L), (typed.Name, typed.Extension, typed.Size));
             Assert.IsNotType<byte[]>(dto.Value);
+            Assert.Null(typed.LargeFile);
+        }
+
+
+        // #1885: a large file value carries the large file block; without a describer (no store read) it names the file
+        // id only, with a describer the block is the describer's.
+        [Fact]
+        public void ToValueDto_LargeFile_CarriesTheBlock()
+        {
+            var fileId = Guid.NewGuid();
+            var value = new LargeFileValue { Value = [], Name = "core.dmp", Extension = "dmp", OriginalSize = 1L << 33, FileId = fileId, Time = Time };
+
+            var bare = Assert.IsType<FileValueDto>(SensorTreeDtoMapper.ToValueDto(BuildSensor(SensorType.File), value).Value);
+            Assert.Equal(("core.dmp", "dmp", 1L << 33), (bare.Name, bare.Extension, bare.Size));
+            Assert.Equal(new LargeFileValueDto { FileId = fileId }, bare.LargeFile);
+
+            var described = new LargeFileValueDto { FileId = fileId, Secure = false, State = "packed" };
+            var typed = Assert.IsType<FileValueDto>(SensorTreeDtoMapper.ToValueDto(BuildSensor(SensorType.File), value, large => large.FileId == fileId ? described : null).Value);
+            Assert.Same(described, typed.LargeFile);
         }
 
 

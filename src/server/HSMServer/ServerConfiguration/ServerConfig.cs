@@ -94,6 +94,9 @@ namespace HSMServer.ServerConfiguration
 
         public TableSensorsConfig TableSensors { get; }
 
+        public LargeFileArchivesConfig LargeFileArchives { get; }
+        public LargeFilesConfig LargeFiles { get; }
+
         public OidcConfig Oidc { get; }
 
         // A client secret found in the settings file (#1782): ignored, dropped by the resave,
@@ -143,6 +146,8 @@ namespace HSMServer.ServerConfiguration
             HistorySealing = Register<HistorySealingConfig>(nameof(HistorySealing));
             HistoryCompaction = Register<HistoryCompactionConfig>(nameof(HistoryCompaction));
             TableSensors = Register<TableSensorsConfig>(nameof(TableSensors));
+            LargeFileArchives = Register<LargeFileArchivesConfig>(nameof(LargeFileArchives));
+            LargeFiles = Register<LargeFilesConfig>(nameof(LargeFiles));
             Oidc = OidcConfig.Bind(configuration.GetSection(OidcConfig.SectionName));
 
             // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
@@ -167,6 +172,8 @@ namespace HSMServer.ServerConfiguration
             HistorySealing.Validate();
             HistoryCompaction.Validate();
             TableSensors.Validate();
+            LargeFileArchives.Validate();
+            LargeFiles.Validate();
             OidcErrors = Oidc.Validate();
 
             ResaveSettings();

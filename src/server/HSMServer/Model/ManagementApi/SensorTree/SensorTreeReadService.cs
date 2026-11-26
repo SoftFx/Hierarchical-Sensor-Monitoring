@@ -12,6 +12,8 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Model.ManagementApi.LargeFiles;
+using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Model.ManagementApi.SensorTree
 {
@@ -50,12 +52,23 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         private readonly ITreeValuesCache _cache;
         private readonly IApiTokenAuthorizationService _authorization;
+        private readonly LargeFileDownloadService _largeFiles;
+        private readonly IHttpContextAccessor _http;
 
-        public SensorTreeReadService(ITreeValuesCache cache, IApiTokenAuthorizationService authorization)
+        // largeFiles and http describe the large file values of File sensors (#1885); without them the large file block
+        // of a value carries its file id only.
+        public SensorTreeReadService(ITreeValuesCache cache, IApiTokenAuthorizationService authorization,
+            LargeFileDownloadService largeFiles = null, IHttpContextAccessor http = null)
         {
             _cache = cache;
             _authorization = authorization;
+            _largeFiles = largeFiles;
+            _http = http;
         }
+
+
+        /// <summary>The sensor DTO with its current value, a large file value described from the store.</summary>
+        public SensorDto ToSensorDto(BaseSensorModel sensor) => SensorTreeDtoMapper.ToSensorDto(sensor, LargeFileDescriber(sensor));
 
 
         /// <summary>
@@ -233,7 +246,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             if (!TryGetVisibleSensor(id, user, out var sensor, out var failure))
                 return ManagementReadResult<SensorDto>.FromFailure(failure);
 
-            return ManagementReadResult<SensorDto>.Ok(SensorTreeDtoMapper.ToSensorDto(sensor));
+            return ManagementReadResult<SensorDto>.Ok(ToSensorDto(sensor));
         }
 
 
@@ -297,6 +310,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             // (decompressed) byte payloads (#1387 review). includeTtl: OffTime
             // markers are part of the honest picture of a sensor's timeline.
             var points = new List<SensorValueDto>(maxPoints + 1);
+            var describeLargeFile = LargeFileDescriber(sensor);
 
             if (!readUnavailable)
             {
@@ -310,7 +324,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                     cancellation.ThrowIfCancellationRequested();
 
                     foreach (var value in page)
-                        points.Add(SensorTreeDtoMapper.ToValueDto(sensor, value));
+                        points.Add(SensorTreeDtoMapper.ToValueDto(sensor, value, describeLargeFile));
                 }
             }
 
@@ -393,6 +407,19 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // The path sort runs through OrderBy — FullPath is a recursive, allocating
         // property, and a comparison-delegate Sort would re-walk the parent chain
         // on every comparison (#1387 review).
+        // The large file block of a value of this sensor, from the store, with the download link on this request's host
+        // (a relative link without a request). The caller has already checked that the token's owner sees the sensor.
+        private Func<LargeFileValue, LargeFileValueDto> LargeFileDescriber(BaseSensorModel sensor)
+        {
+            if (_largeFiles is null || sensor.Type != SensorType.File)
+                return null;
+
+            var request = _http?.HttpContext?.Request;
+            var baseUrl = request is null ? null : $"{request.Scheme}://{request.Host}";
+
+            return value => _largeFiles.DescribeValue(sensor.Id, value.FileId, baseUrl);
+        }
+
         private List<BaseSensorModel> FilterSensors(ProductModel subtree, Func<BaseSensorModel, bool> predicate,
             SensorType? typeFilter, ClaimsPrincipal user, CancellationToken cancellation,
             out bool searchAborted)

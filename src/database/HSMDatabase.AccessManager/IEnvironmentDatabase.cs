@@ -90,6 +90,16 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
+        #region Dump passwords
+
+        // The dump passwords of products (ADR-0022 point 13), one row per product. Unlike products, the writes THROW on
+        // failure so a change of a password fails visibly; nothing here logs the value.
+        List<ProductDumpPasswordsEntity> ReadAllDumpPasswords();
+        void PutDumpPasswords(ProductDumpPasswordsEntity entity);
+        void RemoveDumpPasswords(Guid productId);
+
+        #endregion
+
         #region Sensors
 
         void AddSensorIdToList(string sensorId);
@@ -103,6 +113,12 @@ namespace HSMDatabase.AccessManager
         void RemoveSensorIdFromList(string sensorId);
         void RemoveSensor(string sensorId);
         SensorEntity GetSensorEntity(string sensorId);
+
+        /// <summary>
+        /// Whether the key of a sensor's entity is in the database (#1883): true when it is (whatever its bytes: an entity that
+        /// cannot be deserialized exists), false when a read that succeeded did not find it, null when the read failed.
+        /// </summary>
+        bool? SensorEntityExists(string sensorId);
         List<string> GetAllSensorsIds();
 
         #endregion

@@ -62,8 +62,46 @@ namespace HSMDatabase.AccessManager.TableBatches
     public sealed record TableBatchRead(Guid SensorId, long HourTicks, int Ordinal, bool Moved, long FirstTime, long LastTime, int RowCount, byte[] Batch);
 
 
+    /// <summary>
+    /// A sensor's batches in a run of hours of one week database (#1850 part 4c), counted from their index records: the
+    /// records, the rows they give and the batches' stored lengths (from the index value, no batch fetched). What
+    /// <see cref="ITableBatchStore.CopySensorHours"/> wrote, <see cref="ITableBatchStore.DeleteSensorHours"/> deleted and
+    /// <see cref="ITableBatchStore.GetSensorHourBytes"/> found.
+    /// </summary>
+    public readonly record struct TableBatchSensorHours(long Batches, long Rows, long Bytes);
+
+
+    /// <summary>
+    /// The bytes of batches deleted from a week database since its last compaction (the database's deleted-bytes counter,
+    /// #1850 part 4c) and the size of its folder now.
+    /// </summary>
+    public readonly record struct TableBatchDeletedShare(long DeletedBytes, long FolderBytes)
+    {
+        /// <summary>The deleted bytes as a share of the folder: 0 for an empty or absent folder.</summary>
+        public double Share => FolderBytes <= 0 ? 0 : (double)DeletedBytes / FolderBytes;
+    }
+
+
+    /// <summary>
+    /// The step of the move between period classes a product has in flight (#1850 part 4c): the sensor's hours
+    /// <c>[FirstHour, EndHour)</c> of the week starting <see cref="WeekStartTicks"/> are being copied from class
+    /// <see cref="FromClass"/> into <see cref="ToClass"/>. It says only which other class may hold a copy: the sensor's
+    /// placement is the authority on where its rows are.
+    /// </summary>
+    public sealed record TableMoveInFlight(Guid SensorId, long WeekStartTicks, int FromClass, int ToClass, long FirstHour, long EndHour);
+
+
     /// <summary>A fault of the batch store (disk, LevelDB): a repeat can cure it. A write that throws it is not committed.</summary>
     public sealed class TableBatchStoreException(string message, Exception inner = null) : Exception(message, inner);
+
+
+    /// <summary>
+    /// A refusal of the batch store (#1850 part 4c): what is on disk does not allow the call, and a repeat does not change
+    /// that (a target database retention dropped, rows of the sensor in the target's hour region, a source damaged). Nothing
+    /// was written. Not a <see cref="TableBatchStoreException"/> and not counted as a write failure: a caller that repeats
+    /// store faults does not repeat it, and the diagnostics of the disk do not show it.
+    /// </summary>
+    public sealed class TableBatchRefusedException(string message, Exception inner = null) : Exception(message, inner);
 
 
     /// <summary>Counters since the process started, for self-monitoring. Written with <see cref="Interlocked"/>.</summary>
@@ -77,12 +115,14 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long WeeksFlushed;
         public long WeeksDropped;
         public long HoursRebuilt;
+        /// <summary>Products whose placements were rebuilt from the indexes of their week databases (#1850 part 4b): missing or damaged. Logged as a warning.</summary>
+        public long PlacementsRebuilt;
         public long ReadFailures;
         public long WriteFailures;
         /// <summary>
         /// Parts of a merged hour, left by a run that did not commit, that the repeat wrote again or deleted (their class is not
         /// in the record it commits). Counted after the write. Not posted to self-monitoring, like the other
-        /// recovery counters (<see cref="HoursRebuilt"/>, <see cref="WeeksDropped"/>): each case is logged as a warning.
+        /// recovery counter <see cref="HoursRebuilt"/>: each case is logged as a warning.
         /// </summary>
         public long PartsRewritten;
 
@@ -120,6 +160,24 @@ namespace HSMDatabase.AccessManager.TableBatches
         public long LastMergeMilliseconds;
         /// <summary>Gauge: arrival hours committed for every product whose blocks wait for their deletion delay.</summary>
         public long MergedHoursHoldingBlocks;
+
+        /// <summary>Faults of retention (#1850 part 4): a week database not dropped, expired blocks not deleted (tried again an hour later).</summary>
+        public long RetentionFaults;
+        /// <summary>Blocks never merged that retention deleted because the period of every table sensor with rows in them had passed.</summary>
+        public long ExpiredBlocksDeleted;
+        /// <summary>Rows of those blocks (from the block index, every table of a block).</summary>
+        public long ExpiredBlockRowsDeleted;
+        /// <summary>
+        /// Gauge (#1850 part 4b): week databases whose class has passed and that retention keeps because they hold rows of a
+        /// sensor whose period changed since and whose new period has not passed (owed to the move), at the last retention run.
+        /// </summary>
+        public long MoveWeeksPending;
+        /// <summary>
+        /// Products left out of a merge pass because their placements could not be brought up to their sensors' periods at
+        /// its start (#1850 part 4b): no merge, no retention and no expiry decision for them in that pass. Each also counts
+        /// in <see cref="Faults"/>.
+        /// </summary>
+        public long ProductsNotReconciled;
 
         public void Add(ref long counter, long value = 1) => Interlocked.Add(ref counter, value);
 
@@ -167,10 +225,64 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// </summary>
         void WriteHour(Guid productId, TableBatchHourCommit commit, IReadOnlyList<TableBatchHourPart> parts);
 
-        /// <summary>The merged hours of a product in hour order, from memory (an empty list when it has none). Opens the product's hours database once.</summary>
+        /// <summary>
+        /// The merged hours of a product that hold batches and whose week still has a database (of any class), in hour order,
+        /// from memory (an empty list when it has none). An hour keeps the classes its record names, dropped ones included: the
+        /// rows of a sensor may have been moved from a dropped class into another one, and their times are within the record's
+        /// ranges. Opens the product's hours database once.
+        /// </summary>
         IReadOnlyList<TableBatchHour> GetHours(Guid productId);
 
+        /// <summary>The committed hours of a product no database of whose week is left (#1850 part 4b): retention forgets them once their blocks are gone.</summary>
+        IReadOnlyList<long> GetHoursWithoutDatabases(Guid productId);
+
+        /// <summary>
+        /// Removes the records of committed hours no database of whose week is left (hours with a database are skipped), in
+        /// one synced write. Retention calls it once the block store holds no block of those hours: until then the record
+        /// keeps the hour merged, so the merge never takes it again. Throws <see cref="TableBatchStoreException"/> on a fault.
+        /// </summary>
+        void ForgetHours(Guid productId, IReadOnlyCollection<long> hours);
+
+        /// <summary>The placement of a sensor's batches, or null when the store has none for it (it has no batch). From memory.</summary>
+        TablePlacement GetPlacement(Guid productId, Guid sensorId);
+
+        /// <summary>Every placement of a product, from memory.</summary>
+        IReadOnlyDictionary<Guid, TablePlacement> GetPlacements(Guid productId);
+
+        /// <summary>
+        /// Stores the placement of a sensor durably (one synced write into the product's placements database) and then in
+        /// memory; null removes it. Creates the product's folder. Throws <see cref="TableBatchStoreException"/> on a fault, with
+        /// nothing changed.
+        /// </summary>
+        void SetPlacement(Guid productId, Guid sensorId, TablePlacement placement);
+
         bool IsHourMerged(Guid productId, long hourTicks);
+
+        /// <summary>
+        /// The product's generation: a number that changes, under the product's lock, with every change of what a read's
+        /// plan of any of its sensors can see in the store: every change <see cref="GetGeneration(Guid, Guid)"/> of any
+        /// sensor of the product makes. Read under the same lock; it never goes back. A product without a folder answers 0.
+        /// </summary>
+        long GetGeneration(Guid productId);
+
+        /// <summary>
+        /// The generation of one sensor's plan (#1850 part 4c): the product's term plus the sensor's own, read together under
+        /// the product's lock. Both only grow, so two equal readings mean nothing a plan of this sensor sees changed between
+        /// them (#1847, #1850 part 4b): it is the only test of a plan's staleness, so a new write that changes what a plan
+        /// sees must change it as well.
+        /// <para>
+        /// The product's term changes with every write any plan of the product can see: every commit of an hour (one
+        /// without any batch class included), a week database created by the write of an hour (also one that does not reach
+        /// its commit), every <see cref="DropWeek"/>, every <see cref="ForgetHours"/> that removes an hour, a rebuild of the
+        /// hours database or of the placements. The sensor's term changes with a write that only this sensor's plan sees:
+        /// <see cref="SetPlacement"/> of this sensor (a placement gives the class of each of its hours; a plan reads no other
+        /// sensor's placement), <see cref="CopySensorHours"/> and <see cref="DeleteSensorHours"/> of this sensor (every key
+        /// they write or delete carries the sensor's id or the ordinal of one of its own index records; a week database the
+        /// copy creates holds no row of another sensor). So a placement write or a move of one sensor never makes a plan of
+        /// another one stale. A product without a folder answers 0.
+        /// </para>
+        /// </summary>
+        long GetGeneration(Guid productId, Guid sensorId);
 
         /// <summary>
         /// The record of a committed hour of a product, or null when the hour is not committed. Unlike <see cref="GetHours"/>
@@ -192,6 +304,13 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableBatchWeek> GetWeeks(Guid productId);
 
         /// <summary>
+        /// Whether a week database was dropped by retention and its drop is still on the product's record: a write into it
+        /// is refused (<see cref="WriteHour"/>). The merge leaves out the rows of an hour that would go there: they went
+        /// with their week when the period they had then passed.
+        /// </summary>
+        bool IsWeekDropped(Guid productId, TableBatchWeek week);
+
+        /// <summary>
         /// The batches of one sensor in the given merge hours, from the database of each hour's week and of the period class
         /// given: the hour region, then the region of moved batches. In hour order, then by ordinal. A week without a
         /// database contributes nothing.
@@ -199,12 +318,121 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours);
 
         /// <summary>
+        /// <see cref="ReadSensor(Guid, Guid, int, IReadOnlyCollection{long})"/>, and in <paramref name="failed"/> the batches it could not
+        /// read: an index record that does not decode or whose batch is missing (each also counted in <c>ReadFailures</c> and logged).
+        /// A reader adds them to its answer's <c>BatchesFailed</c> (#1850 part 4b): their rows are missing.
+        /// </summary>
+        IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, out int failed);
+
+        /// <summary>
+        /// <see cref="ReadSensor(Guid, Guid, int, IReadOnlyCollection{long}, out int)"/> of the batches whose rows can meet
+        /// <c>[fromTicks, toTicks)</c> (#1850 part 4c): an index record whose range (first to last time) does not meet it is
+        /// skipped before its batch is fetched, so it is neither returned nor counted in <paramref name="failed"/>, even when
+        /// its batch is missing (it would add no row to the answer). A record that does not decode is counted: its range is
+        /// not known.
+        /// </summary>
+        IReadOnlyList<TableBatchRead> ReadSensor(Guid productId, Guid sensorId, int periodWeeks, IReadOnlyCollection<long> hours, long fromTicks, long toTicks, out int failed);
+
+        /// <summary>
         /// Drops a week database: closes it (waiting for the reads that hold it; reads that start meanwhile find nothing
         /// there), records the drop durably in the product's record of dropped databases and deletes its folder. Its hours
-        /// lose that class; an hour left with none is removed from the hours database. A write into a dropped week database
-        /// is refused. A delete that fails throws <see cref="TableBatchStoreException"/> with the week already dropped; the
+        /// keep their records (see <see cref="ForgetHours"/>). A write into a dropped week database is refused. A delete that fails throws <see cref="TableBatchStoreException"/> with the week already dropped; the
         /// folder left is deleted at the next open of the product.
         /// </summary>
         void DropWeek(Guid productId, TableBatchWeek week);
+
+
+        // === The move between period classes and the removal of a sensor (#1850 parts 4c and 4d): the store's primitives ===
+
+        /// <summary>
+        /// Copies a sensor's batches of the hours <c>[firstHour, endHour)</c> (inside the week of <paramref name="from"/>)
+        /// from the database <paramref name="from"/> into the region of moved batches of the database of the same week and
+        /// class <paramref name="toClass"/>, in one synced write into that database. Only the hours the source holds records of
+        /// the sensor in are touched: a copy never touches the target for an hour the source has nothing of (there the target's
+        /// moved rows may be the sensor's only copy). For each such hour, every moved key of the sensor there is deleted first
+        /// (a repeat leaves exactly one copy), then the sensor's index records and batches of both regions of the source are put,
+        /// in the order a read gives them (hour region before moved region, then by ordinal), numbered again 0..n-1, as bytes
+        /// (an index record whose batch is missing, or a batch that does not decode, is carried as it is), and the hour's mark,
+        /// the source's bytes, where the target has none. With no such hour nothing is written at all: no database created, no
+        /// generation changed. Creates the target database when there is something to write. The source is not changed. Changes
+        /// only the sensor's generation. Bytes deleted in the target count in its deleted-bytes counter
+        /// (<see cref="GetDeletedShare"/>). Answers what was written.
+        /// <para>
+        /// Refuses with <see cref="TableBatchRefusedException"/>, nothing written, no generation changed: a target database
+        /// retention dropped; a source hour with the sensor's records and no mark, a mark that does not decode, or an index key
+        /// of the sensor that does not parse; and a target that holds index records of the sensor of a copied hour in its hour
+        /// region (they may be the sensor's only rows of the hour, in the class that holds it, or a source a move left behind:
+        /// the store cannot tell, so it deletes nothing, and the caller, which knows from the placement that the target is not
+        /// the class of those hours, deletes them first with <see cref="DeleteSensorHours"/>; copied beside them, they would be
+        /// read twice). A fault of the disk or of LevelDB is a <see cref="TableBatchStoreException"/>.
+        /// </para>
+        /// </summary>
+        TableBatchSensorHours CopySensorHours(Guid productId, Guid sensorId, TableBatchWeek from, int toClass, long firstHour, long endHour);
+
+        /// <summary>
+        /// Deletes a sensor's keys of the hours <c>[firstHour, endHour)</c> (inside its week) from one week database, in one
+        /// synced write: in the hour region its index records and the batches they name (an hour-region batch key carries no
+        /// sensor id: only the ordinal of one of this sensor's own index records deletes one), in the region of moved batches
+        /// every key of the sensor; never an hour's mark, never a key of another sensor. The batches' stored bytes are added to
+        /// the database's deleted-bytes counter in the same write. Changes only the sensor's generation. A database that does
+        /// not exist (or is dropped) holds nothing: nothing is written. Answers what was deleted. The caller holds the write
+        /// side of the read gate (<c>TableHourGate</c>): a full read that planned this database reads it under the read side
+        /// without checking the generation again, and must end first.
+        /// </summary>
+        TableBatchSensorHours DeleteSensorHours(Guid productId, Guid sensorId, TableBatchWeek week, long firstHour, long endHour);
+
+        /// <summary>
+        /// A sensor's batches of the hours <c>[firstHour, endHour)</c> in one week database, both regions, from the index
+        /// records only (the stored length is in the index value; no batch is fetched). Nothing for a database that does not exist.
+        /// </summary>
+        TableBatchSensorHours GetSensorHourBytes(Guid productId, Guid sensorId, TableBatchWeek week, long firstHour, long endHour);
+
+        /// <summary>
+        /// The deleted-bytes counter of a week database (the batches' bytes <see cref="DeleteSensorHours"/> and
+        /// <see cref="CopySensorHours"/> deleted there since its last <see cref="CompactWeek"/>, durable in the database
+        /// itself) and the size of its folder. Zero for a database that does not exist.
+        /// </summary>
+        TableBatchDeletedShare GetDeletedShare(Guid productId, TableBatchWeek week);
+
+        /// <summary>
+        /// Compacts a whole week database (LevelDB's <c>CompactRange</c> over every key: deleted keys give their space back),
+        /// holding a lease on it and not the product's lock while it compacts (reads and writes of the product go on), then
+        /// lowers its deleted-bytes counter by the value it had before the compaction, in one synced write. A crash in between
+        /// leaves the counter as it was (the compaction is repeated). Nothing for a database that does not exist. Others wait
+        /// for it while they hold the product's lock: a <see cref="DropWeek"/> of the same database (for the lease), the flush
+        /// of the same database while it is the newest week's (LevelDB runs one manual compaction at a time), and a dispose
+        /// (for the lease, without a bound). So the caller never compacts the newest week's databases and compacts on its own
+        /// thread, never beside a drop of the same database. Throws <see cref="TableBatchStoreException"/> on a fault.
+        /// </summary>
+        void CompactWeek(Guid productId, TableBatchWeek week);
+
+        /// <summary>The week databases of a product due for a compaction (the durable list <c>&lt;product&gt;/Compact</c>), from memory.</summary>
+        IReadOnlyList<TableBatchWeek> GetCompactList(Guid productId);
+
+        /// <summary>
+        /// Adds a week database to the product's compaction list, durably (a small file written atomically, before the
+        /// compaction is made, so a crash does not forget it). Nothing for a product without a folder. Throws
+        /// <see cref="TableBatchStoreException"/> on a fault, with the list in memory unchanged; when the fault is the sync of
+        /// the folder after the rename (Linux), the file on disk already holds the new list, so memory and disk may differ
+        /// until the next open. Harmless: the list is a hint (a database's counter says again whether it is due).
+        /// </summary>
+        void AddToCompactList(Guid productId, TableBatchWeek week);
+
+        /// <summary>Removes a week database from the product's compaction list, durably. Throws <see cref="TableBatchStoreException"/> on a fault.</summary>
+        void RemoveFromCompactList(Guid productId, TableBatchWeek week);
+
+        /// <summary>The product's step of the move in flight (the durable record <c>&lt;product&gt;/Move</c>), or null; from memory.</summary>
+        TableMoveInFlight GetMoveInFlight(Guid productId);
+
+        /// <summary>
+        /// Writes the product's step of the move in flight durably (a small file written atomically and synced, strict), or
+        /// deletes it (null), then in memory. A record's hours lie inside its week and its classes differ
+        /// (<see cref="ArgumentException"/>). A record for a product without a folder is a fault. Throws
+        /// <see cref="TableBatchStoreException"/> on a fault, with the record in memory unchanged; when the fault is the sync
+        /// of the folder after the rename or the delete (Linux), the disk already holds the new state, so memory and disk may
+        /// differ until the next open. Harmless: the recovery of a step takes every decision from the placement, and the
+        /// record only names the other class that may hold a copy.
+        /// </summary>
+        void SetMoveInFlight(Guid productId, TableMoveInFlight record);
     }
 }

@@ -1,6 +1,6 @@
 name: hsm-wrapper-release
 
-# Packages the native HSMCppWrapper.dll drop-in bundle (Release + Debug x64, headers, libcurl/zlib
+# Packages the native HSMCppWrapper.dll drop-in bundle (Release + Debug x64, headers, libcurl/zlib/zstd
 # runtime, import libs, PDBs) for the tt-aggregator2 handoff.
 #
 #   * push a tag `wrapper-v<semver>`  -> builds the bundle, then publishes a GitHub Release with it
@@ -62,21 +62,44 @@ jobs:
           if ($v -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
               throw "Refusing to build: version '$v' is not a clean semver (tag must be wrapper-v<semver>)."
           }
+          # A tag must carry the wrapper's own version, project(HSMCppWrapper VERSION x.y.z) in
+          # src/wrapper/CMakeLists.txt (a pre-release suffix is allowed: wrapper-v2.0.0-rc1 for 2.0.0),
+          # so a bundle is never labelled with a version whose behaviour it does not have. As in
+          # agent-release.yml. A dispatch dry run keeps its free-form version.
+          $cmake = Get-Content src/wrapper/CMakeLists.txt -Raw
+          if ($cmake -notmatch 'project\(HSMCppWrapper VERSION ([0-9]+\.[0-9]+\.[0-9]+)') {
+              throw "Cannot read project(HSMCppWrapper VERSION x.y.z) from src/wrapper/CMakeLists.txt."
+          }
+          $cmakeVersion = $Matches[1]
+          $core = ($v -split '[-.]')[0..2] -join '.'
+          Write-Host "tag version: $v (core $core), CMakeLists.txt: $cmakeVersion"
+          if ($env:REF -like 'refs/tags/wrapper-v*' -and $core -ne $cmakeVersion) {
+              Write-Host "::error::tag wrapper-v$v does not match project(HSMCppWrapper VERSION $cmakeVersion) - bump src/wrapper/CMakeLists.txt or fix the tag"
+              exit 1
+          }
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Bundle version: $v"
 
-      - name: Install libcurl (vcpkg)
-        run: vcpkg install curl:x64-windows nlohmann-json:x64-windows
-        shell: cmd
+      # Dependencies come from vcpkg manifest mode (src/wrapper/vcpkg.json): curl with WebSocket (the
+      # collector session needs libcurl 8.14.0 or newer with it), zstd and zlib (table sensors).
+      # Pinned to the manifest's builtin-baseline, as in hsm_cpp_wrapper_build.yml and the
+      # native-collector lanes, so the runner's own vcpkg never decides which curl the bundle ships.
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Configure
         # No -G: use the runner's default multi-config VS generator (same as the native-collector lanes;
-        # pinning a VS version breaks when the image upgrades).
+        # pinning a VS version breaks when the image upgrades). The vcpkg manifest install runs here;
+        # VCPKG_BINARY_SOURCES=clear as in hsm_cpp_wrapper_build.yml (run-vcpkg's GHA cache backend
+        # needs tokens that are not reliably exported).
+        env:
+          VCPKG_BINARY_SOURCES: clear
         run: >
           cmake -S src/wrapper -B build/wrapper
-          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
           -DVCPKG_TARGET_TRIPLET=x64-windows
-        shell: cmd
 
       - name: Build (Release + Debug)
         run: |
@@ -85,9 +108,14 @@ jobs:
         shell: cmd
 
       - name: Smoke (drive the public ABI in-process, no server needed)
+        # vcpkg's app-local deployment put libcurl, zlib and zstd next to the DLL.
         run: |
-          set "PATH=%CD%\build\wrapper\Release;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%"
+          set "PATH=%CD%\build\wrapper\Release;%PATH%"
           build\wrapper\Release\WrapperConsole.exe
+        shell: cmd
+
+      - name: Transport tests (session by default, HTTP on request, tables over the session)
+        run: ctest --test-dir build/wrapper -C Release --output-on-failure
         shell: cmd
 
       - name: Assemble bundle
@@ -103,8 +131,8 @@ jobs:
       - name: Verify bundled runtime closure (post-pack smoke)
         # Run WrapperConsole against ONLY the assembled Release bundle: copy the exe into the shipped
         # dll/ dir (an exe's own directory is searched first for DLLs) and strip the vcpkg bin from PATH,
-        # so libcurl + zlib — and any transitive curl dependency — MUST resolve from the bundle, not from
-        # vcpkg. The rest of PATH is kept so the MSVC CRT still resolves (only vcpkg carries libcurl/zlib
+        # so libcurl + zlib + zstd — and any transitive curl dependency — MUST resolve from the bundle, not
+        # from vcpkg. The rest of PATH is kept so the MSVC CRT still resolves (only vcpkg carries them
         # on the runner; the aggregator's hosts carry the VC++ redist as well). libcurl is a load-time
         # import of HSMCppWrapper.dll, so if a runtime DLL is ever missing from the bundle the exe fails
         # to load HERE (red) instead of downstream in tt-aggregator2. (The pre-pack Smoke above exercises
@@ -168,7 +196,7 @@ jobs:
             exit 1
           fi
           zip="${zips[0]}"
-          notes='Native drop-in `HSMCppWrapper.dll` (no CLR) for tt-aggregator2 — relink only, same public ABI. Unzip the attached bundle and follow `MANIFEST.md` for the swap recipe. Behavioral residue vs the managed wrapper: `docs/native-collector-migration.md`.'
+          notes='Native drop-in `HSMCppWrapper.dll` (no CLR) for tt-aggregator2 — relink only, same public ABI (2.0.0 added one method, nothing removed). It talks to the server over the collector session (HSMServer 3.43.0 or later); for an older server call `DataCollectorProxy::UseHttpTransport()` before `Start`. Unzip the attached bundle and follow `MANIFEST.md` for the swap recipe. Behavioral residue vs the managed wrapper: `docs/native-collector-migration.md`.'
           # Idempotent: re-running a tag build re-uploads the asset instead of failing on an existing release.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$zip" --clobber

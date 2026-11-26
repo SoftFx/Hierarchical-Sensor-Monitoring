@@ -1,0 +1,889 @@
+@using HSMServer.Core.Cache
+@using HSMServer.Core.Model
+@using HSMServer.ServerConfiguration
+@using HSMTableBlocks
+
+@model HSMServer.Model.TreeViewModel.SensorNodeViewModel
+
+@inject ITreeValuesCache Cache
+@inject IServerConfig Config
+
+@* The rows of a table sensor (#1847): a chart of a range, reduced on the server (POST /TableSensors/Chart), and the
+   download of that range as CSV (GET /TableSensors/Download). Both routes are read by cookie; no access key is
+   involved. Times are UTC, as everywhere in the UI (the node Chart tab, the history). The contract of the routes is
+   aicontext/features/server/table-sensors-ui/feature.md. *@
+
+@{
+    var sensorId = Model.EncodedId;
+    var graphId = $"tableGraph_{sensorId}";
+    var maxDownloadRows = (Config.TableSensors ?? new TableSensorsConfig()).MaxDownloadRows;
+
+    // The sensor's feed node, .tables/<the sensor's path> in its product, when it exists (the feed sensors are
+    // maintained by the server, epic #1842); no link otherwise.
+    string feedNodeId = null;
+    var sensor = Cache.GetSensor(Model.Id);
+
+    if (sensor?.Root is ProductModel root)
+    {
+        ProductModel node = root;
+
+        foreach (var segment in new[] { ".tables" }.Concat(sensor.Path.Split('/')))
+        {
+            node = node?.SubProducts.Values.FirstOrDefault(p => p.DisplayName == segment);
+        }
+
+        if (node is not null)
+            feedNodeId = node.Id.ToString();
+    }
+}
+
+<div class="mt-3" id="tableChart_@sensorId"
+     data-sensor-id="@sensorId"
+     data-chart-url="@Url.Action("Chart", "TableSensors")"
+     data-download-url="@Url.Action("Download", "TableSensors")"
+     data-login-url="@Url.Action("Index", "Account", new { ReturnUrl = "/Home" })"
+     data-max-download-rows="@maxDownloadRows">
+
+    <h6>Rows</h6>
+
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <label class="m-0" for="tablePeriod_@sensorId">Range:</label>
+        <select class="form-select" style="width: auto;" id="tablePeriod_@sensorId" onchange="onTablePeriodChange('@sensorId')">
+            <option value="hour" selected>Last hour</option>
+            <option value="threeHours">Last 3 hours</option>
+            <option value="day">Last day</option>
+            <option value="week">Last week</option>
+            <option value="custom">Custom</option>
+        </select>
+
+        <div id="tableCustom_@sensorId" class="d-none align-items-center gap-2">
+            <label class="m-0" for="tableFrom_@sensorId">From:</label>
+            <input type="datetime-local" step="1" class="form-control" style="width: auto;" id="tableFrom_@sensorId">
+            <label class="m-0" for="tableTo_@sensorId">To:</label>
+            <input type="datetime-local" step="1" class="form-control" style="width: auto;" id="tableTo_@sensorId">
+            <button type="button" class="btn btn-secondary" title="Show this range" onclick="loadTableChart('@sensorId', true)">
+                <i class="fas fa-search"></i>
+            </button>
+            <span class="text-muted small">UTC</span>
+        </div>
+
+        <button type="button" id="tableResetZoom_@sensorId" class="btn btn-outline-secondary btn-sm d-none"
+                title="Return to the selected range" onclick="resetTableZoom('@sensorId')">
+            Reset zoom
+        </button>
+
+        <button type="button" id="tableDownload_@sensorId" class="btn btn-outline-secondary btn-sm ms-auto"
+                title="Download the rows of the shown range as CSV" onclick="downloadTableRows('@sensorId')">
+            <i class="fa-solid fa-download"></i> Download CSV
+        </button>
+    </div>
+
+    <div class="d-flex align-items-center gap-3 flex-wrap mt-2" id="tableColumns_@sensorId">
+        <span class="text-muted small">Columns:</span>
+        @for (var i = 1; i < Model.TableColumns.Count; i++)
+        {
+            var column = Model.TableColumns[i];
+
+            // Only value columns can be drawn: a further time column is not offered.
+            if (column.Type is not (TableColumnType.Double or TableColumnType.Int64))
+                continue;
+
+            @* Double columns are drawn by default; int64 columns (counters, sizes) are chosen by hand. *@
+            <div class="form-check form-check-inline m-0">
+                <input class="form-check-input" type="checkbox" id="tableCol_@(sensorId)_@i" value="@i"
+                       data-column-name="@column.Name" checked="@(column.Type == TableColumnType.Double)"
+                       onchange="loadTableChart('@sensorId', false)">
+                <label class="form-check-label small" for="tableCol_@(sensorId)_@i">@column.Name <span class="text-muted">(@column.Type)</span></label>
+            </div>
+        }
+    </div>
+
+    <div id="tableFacts_@sensorId" class="mt-2 small"></div>
+    <div id="tableStatus_@sensorId" class="mt-1 small text-muted d-none"></div>
+    <div id="tableWarning_@sensorId" class="mt-1 d-none" style="color: #b8860b; font-size: 0.85em;"></div>
+    <div id="tableNulls_@sensorId" class="mt-1 text-muted d-none" style="font-size: 0.85em;"></div>
+    <div id="tableDownloadNote_@sensorId" class="mt-1 small d-none"></div>
+
+    <div id="tableNoData_@sensorId" class="d-none justify-content-center align-items-center noData-label mt-2">
+        <label></label>
+    </div>
+
+    <div class="mt-2" id="@graphId" style="width: 100%; height: 450px;"></div>
+
+    @if (feedNodeId is not null)
+    {
+        <div class="mt-1 small">
+            <a href="javascript:void(0)" id="tableFeedLink_@sensorId" onclick="activateNode('@sensorId', '@feedNodeId')">
+                Feed of this table (rows, bytes, delivery lag)
+            </a>
+        </div>
+    }
+
+    <iframe id="tableDownloadFrame_@sensorId" class="d-none" title="download"></iframe>
+</div>
+
+<script>
+    (function () {
+        const palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#17becf', '#bcbd22', '#7f7f7f'];
+        const spans = { hour: 3600e3, threeHours: 3 * 3600e3, day: 24 * 3600e3, week: 7 * 24 * 3600e3 };
+        const debounceMs = 250;
+        const maxBusyRetries = 3;
+        const requestTimeoutMs = 120e3;
+        const markersUpTo = 300;
+        const plotMargin = { l: 60, r: 20, t: 20, b: 40 };
+
+        // The live visit of each sensor's panel, by sensor id. Every render of the panel is a new visit: the tree
+        // swaps the node panel without a page load, so the previous visit is torn down when its container leaves the
+        // document, and nothing of it (a fetch, a timer, an answer) can touch the new one.
+        const charts = window.tableCharts = window.tableCharts || {};
+
+        function show(element, visible) {
+            if (element)
+                element.classList.toggle('d-none', !visible);
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // A name as Plotly shows it: its pseudo-HTML escaped, so a column named "<b>x</b>" shows literally. Names are
+        // never put into a template's text; the hover takes them through %{fullData.name}, so "%{y}" stays literal.
+        function plotlyName(name) {
+            return escapeHtml(name);
+        }
+
+        // "2026-11-25 09:31:02" (with milliseconds when there are any), UTC.
+        function formatTime(date) {
+            const iso = date.toISOString();
+            const ms = iso.substring(19, 23);
+            return iso.substring(0, 10) + ' ' + iso.substring(11, 19) + (ms === '.000' ? '' : ms);
+        }
+
+        // An answer's ISO time as it is, to its last fraction digit: "2026-11-25 09:31:02.1234567".
+        function formatIso(iso) {
+            return String(iso).replace('T', ' ').replace(/Z$/, '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        }
+
+        // An answer's ISO time in milliseconds with the fraction below a millisecond kept (Date drops it).
+        function exactMs(iso) {
+            const text = String(iso);
+            const fraction = /\.(\d+)Z$/.exec(text);
+            const whole = Date.parse(text.replace(/\.\d+Z$/, 'Z'));
+            return whole + (fraction ? Number(`0.${fraction[1]}`) * 1000 : 0);
+        }
+
+        // Plotly's date axis has no time zone; the UI shows UTC, so ranges are given without one.
+        function plotlyTime(date) {
+            return date.toISOString().replace('T', ' ').replace('Z', '');
+        }
+
+        // A Plotly range bound ("2026-11-25 09:31:02.5", no zone) read as UTC.
+        function fromPlotlyTime(value) {
+            if (typeof value === 'number')
+                return new Date(value);
+
+            const text = String(value).trim().replace(' ', 'T');
+            const parsed = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`);
+            return isNaN(parsed.getTime()) ? null : parsed;
+        }
+
+        // A datetime-local value read as UTC, as the node Chart tab reads it.
+        function parseLocalAsUtc(value, fallback) {
+            if (!value)
+                return fallback;
+
+            const parsed = new Date(value.length <= 16 ? `${value}:00Z` : `${value}Z`);
+            return isNaN(parsed.getTime()) ? fallback : parsed;
+        }
+
+        function plural(n, one, many) {
+            return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+        }
+
+        function formatSpan(ms) {
+            if (ms < 1000)
+                return `${Math.round(ms)} ms`;
+            if (ms < 120e3)
+                return `${+(ms / 1000).toFixed(1)} s`;
+            if (ms < 7200e3)
+                return `${+(ms / 60e3).toFixed(1)} min`;
+            return `${+(ms / 3600e3).toFixed(1)} h`;
+        }
+
+        // A request from the panel: the onclick handlers name the sensor, the live visit answers.
+        function live(id) {
+            const visit = charts[id];
+            return visit && !visit.disposed && visit.container.isConnected ? visit : null;
+        }
+
+        window.onTablePeriodChange = function (id) {
+            const visit = live(id);
+            if (!visit)
+                return;
+
+            const custom = visit.el('tablePeriod').value === 'custom';
+            const box = visit.el('tableCustom');
+
+            box.classList.toggle('d-none', !custom);
+            box.classList.toggle('d-flex', custom);
+
+            if (custom) {
+                // Start the inputs from the range shown now.
+                const range = shownRange(visit);
+                visit.el('tableFrom').value = range.from.toISOString().substring(0, 19);
+                visit.el('tableTo').value = range.to.toISOString().substring(0, 19);
+                return;
+            }
+
+            load(visit, true);
+        };
+
+        // Ask for the selected range again (a new selection drops the zoom).
+        window.loadTableChart = function (id, newSelection) {
+            const visit = live(id);
+            if (visit)
+                load(visit, newSelection);
+        };
+
+        window.resetTableZoom = function (id) {
+            const visit = live(id);
+            if (visit)
+                resetZoom(visit);
+        };
+
+        window.downloadTableRows = function (id) {
+            const visit = live(id);
+            if (visit)
+                download(visit);
+        };
+
+        function load(visit, newSelection) {
+            if (newSelection || !visit.selected) {
+                visit.selected = selectedRange(visit);
+                visit.zoom = null;
+            }
+
+            request(visit);
+        }
+
+        function resetZoom(visit) {
+            visit.zoom = null;
+            visit.selected = selectedRange(visit);
+            request(visit);
+        }
+
+        // The selected range: a preset ending now, or the custom inputs.
+        function selectedRange(visit) {
+            const period = visit.el('tablePeriod').value;
+            const now = new Date();
+
+            if (period === 'custom') {
+                const from = parseLocalAsUtc(visit.el('tableFrom').value, new Date(now.getTime() - spans.hour));
+                const to = parseLocalAsUtc(visit.el('tableTo').value, now);
+                return { from: from, to: to };
+            }
+
+            return { from: new Date(now.getTime() - spans[period]), to: now };
+        }
+
+        function shownRange(visit) {
+            return visit.zoom || visit.selected || selectedRange(visit);
+        }
+
+        function chosenColumns(visit) {
+            return Array.from(visit.container.querySelectorAll(`#tableColumns_${visit.id} input[type=checkbox]:checked`)).map(c => Number(c.value));
+        }
+
+        function bucketsFor(visit) {
+            const graph = visit.el('tableGraph');
+            const width = graph ? graph.clientWidth - plotMargin.l - plotMargin.r : 0;
+            return Math.max(1, Math.round(width));
+        }
+
+        // The current request is dropped as soon as a newer one is asked for (not when the newer one is sent after
+        // the debounce): its fetch is aborted, its 503 retries stop, and none of its answers is used.
+        function dropRequest(visit) {
+            const current = visit.current;
+            visit.current = null;
+
+            if (current) {
+                current.dropped = true;
+                current.controller.abort('superseded');
+                clearTimeout(current.retryTimer);
+                clearTimeout(current.timeout);
+            }
+        }
+
+        // Debounced: a burst of changes (a zoom drag, several checkboxes) sends one request.
+        function request(visit) {
+            dropRequest(visit);
+            clearTimeout(visit.timer);
+
+            visit.timer = setTimeout(() => {
+                if (visit.disposed)
+                    return;
+
+                const req = { controller: new AbortController(), retries: 0, retryTimer: null, timeout: null, dropped: false, range: shownRange(visit) };
+                visit.current = req;
+                send(visit, req);
+            }, debounceMs);
+
+            show(visit.el('tableResetZoom'), !!visit.zoom);
+        }
+
+        // An answer is used only while its request is the current one of a live visit.
+        function isCurrent(visit, req) {
+            return !visit.disposed && !req.dropped && visit.current === req && visit.container.isConnected;
+        }
+
+        function setStatus(visit, html) {
+            const status = visit.el('tableStatus');
+            status.innerHTML = html || '';
+            show(status, !!html);
+        }
+
+        // A redirect (to the sign-in page), a 401, or a 200 that is not what was asked for: the session has ended.
+        function signedOut(response, expectedType) {
+            if (response.type === 'opaqueredirect' || response.redirected || response.status === 401)
+                return true;
+
+            if (response.ok) {
+                const type = (response.headers.get('Content-Type') || '').toLowerCase();
+                return !type.startsWith(expectedType);
+            }
+
+            return false;
+        }
+
+        async function send(visit, req) {
+            const range = req.range;
+            const body = {
+                id: visit.container.dataset.sensorId,
+                from: range.from.toISOString(),
+                to: range.to.toISOString(),
+                columns: chosenColumns(visit),
+                buckets: bucketsFor(visit)
+            };
+
+            // A retry after a 503 is a new fetch of the same request.
+            const attempt = new AbortController();
+            req.controller.signal.addEventListener('abort', () => attempt.abort(req.controller.signal.reason), { once: true });
+            clearTimeout(req.timeout);
+            req.timeout = setTimeout(() => attempt.abort('timeout'), requestTimeoutMs);
+
+            setStatus(visit, '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading…');
+
+            let response, payload;
+
+            try {
+                response = await fetch(visit.container.dataset.chartUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    redirect: 'manual',
+                    body: JSON.stringify(body),
+                    signal: attempt.signal
+                });
+
+                if (!isCurrent(visit, req))
+                    return;
+
+                if (signedOut(response, 'application/json')) {
+                    failed(visit, null, true);
+                    return;
+                }
+
+                payload = response.ok ? await response.json() : await response.text();
+            } catch (e) {
+                if (!isCurrent(visit, req))
+                    return;
+
+                failed(visit, attempt.signal.reason === 'timeout'
+                    ? 'The server did not answer in time.'
+                    : 'The chart could not be loaded (no connection to the server).');
+                return;
+            } finally {
+                clearTimeout(req.timeout);
+            }
+
+            // An answer of a request that is no longer the current one (a newer selection, another visit) is dropped.
+            if (!isCurrent(visit, req))
+                return;
+
+            if (response.ok) {
+                setStatus(visit, '');
+                render(visit, req, payload);
+                return;
+            }
+
+            if (response.status === 404) {
+                clearChart(visit);
+                setStatus(visit, '');
+                showMessage(visit, 'This table sensor no longer exists or is not visible to you.');
+                return;
+            }
+
+            if (response.status === 400) {
+                clearChart(visit);
+                setStatus(visit, '');
+                showMessage(visit, payload || 'The server refused the request.');
+                return;
+            }
+
+            if (response.status === 503 && req.retries < maxBusyRetries) {
+                const after = Math.min(Math.max(Number(response.headers.get('Retry-After')) || 5, 1), 120);
+                req.retries++;
+                setStatus(visit, `The server is busy, trying again in ${after} s (attempt ${req.retries} of ${maxBusyRetries})…`);
+                req.retryTimer = setTimeout(() => { if (isCurrent(visit, req)) send(visit, req); }, after * 1000);
+                return;
+            }
+
+            failed(visit, response.status === 503
+                ? `The server is still busy: ${payload || 'try again later'}`
+                : `The chart could not be loaded (${response.status}): ${payload || response.statusText}`);
+        }
+
+        // An error with a link that asks again (or, for an ended session, signs in); never a spinner left behind.
+        function failed(visit, text, isSignedOut) {
+            clearChart(visit);
+            setStatus(visit, '');
+
+            if (isSignedOut)
+                showSignIn(visit.el('tableNoData'), visit, 'Your session has ended.', true);
+            else
+                showMessage(visit, text, true);
+        }
+
+        function showMessage(visit, text, retry) {
+            const box = visit.el('tableNoData');
+            const label = box.querySelector('label');
+
+            label.textContent = text;
+
+            if (retry) {
+                const link = document.createElement('a');
+                link.href = 'javascript:void(0)';
+                link.className = 'ms-2';
+                link.textContent = 'Retry';
+                link.onclick = () => request(visit);
+                label.appendChild(link);
+            }
+
+            box.classList.remove('d-none');
+            box.classList.add('d-flex');
+        }
+
+        // "Your session has ended. Sign in" in a message box or a note.
+        function showSignIn(box, visit, text, centered) {
+            const target = centered ? box.querySelector('label') : box;
+            const link = document.createElement('a');
+
+            target.textContent = `${text} `;
+            link.href = visit.container.dataset.loginUrl;
+            link.textContent = 'Sign in';
+            target.appendChild(link);
+
+            box.classList.remove('d-none');
+            if (centered)
+                box.classList.add('d-flex');
+        }
+
+        function hideMessage(visit) {
+            const box = visit.el('tableNoData');
+            box.classList.add('d-none');
+            box.classList.remove('d-flex');
+        }
+
+        function purge(graph) {
+            if (graph && window.Plotly)
+                window.Plotly.purge(graph);
+            if (graph)
+                graph.tableRelayoutBound = false;
+        }
+
+        function clearChart(visit) {
+            purge(visit.el('tableGraph'));
+            visit.el('tableFacts').textContent = '';
+            show(visit.el('tableWarning'), false);
+            show(visit.el('tableNulls'), false);
+            visit.answer = null;
+            updateDownload(visit);
+        }
+
+        // The first and the last row time. The server sends them exactly (firstTime, lastTime); an answer without
+        // them falls back to the times of the rows (rows mode) or of the buckets (buckets mode), where the bounds
+        // are rounded outwards so that they always hold the rows.
+        function facts(answer) {
+            if (answer.rowCount === 0)
+                return 'No rows in the range.';
+
+            const count = plural(answer.rowCount, 'row', 'rows');
+
+            if (answer.firstTime && answer.lastTime)
+                return `${count}, the first at ${formatIso(answer.firstTime)}, the last at ${formatIso(answer.lastTime)} UTC.`;
+
+            if (answer.mode === 'rows')
+                return `${count}, the first at ${formatIso(answer.times[0])}, the last at ${formatIso(answer.times[answer.times.length - 1])} UTC.`;
+
+            const rows = answer.bucketRows || [];
+            const first = rows.findIndex(n => n > 0);
+            let last = rows.length - 1;
+            while (last >= 0 && !(rows[last] > 0))
+                last--;
+
+            if (first < 0)
+                return `${count}.`;
+
+            const bucketMs = answer.bucketTicks / 1e4;
+            const after = new Date(Math.floor(exactMs(answer.times[first])));
+            const before = new Date(Math.ceil(Math.min(exactMs(answer.times[last]) + bucketMs, exactMs(answer.to))));
+            return `${count}, the first after ${formatTime(after)}, the last before ${formatTime(before)} UTC (to a bucket of ${formatSpan(bucketMs)}).`;
+        }
+
+        function warnings(answer) {
+            const notes = [];
+
+            if (answer.blocksFailed > 0 || answer.batchesFailed > 0) {
+                const parts = [];
+                if (answer.blocksFailed > 0)
+                    parts.push(plural(answer.blocksFailed, 'damaged block', 'damaged blocks'));
+                if (answer.batchesFailed > 0)
+                    parts.push(plural(answer.batchesFailed, 'damaged batch', 'damaged batches'));
+                notes.push(`The rows of ${parts.join(' and ')} are missing.`);
+            }
+
+            if (answer.completeTo)
+                notes.push(`Drawn only up to ${formatIso(answer.completeTo)} UTC: the range holds more rows than one chart reads; narrow the range.`);
+
+            for (const column of answer.columns) {
+                if (column.nonFinite > 0)
+                    notes.push(`${plural(column.nonFinite, 'value', 'values')} of ${column.name} ${column.nonFinite === 1 ? 'was' : 'were'} not finite (NaN or infinity) and ${column.nonFinite === 1 ? 'is' : 'are'} not drawn.`);
+                if (column.approximate)
+                    notes.push(`The axis of ${column.name} is approximate: some of its values are beyond 2^53 and are drawn rounded.`);
+            }
+
+            return notes;
+        }
+
+        function nullNotes(answer) {
+            return answer.columns
+                .filter(c => c.nullCount > 0)
+                .map(c => `${plural(c.nullCount, 'row', 'rows')} had no value in ${c.name}.`);
+        }
+
+        function setNote(element, notes) {
+            element.textContent = notes.join(' ');
+            show(element, notes.length > 0);
+        }
+
+        function toNumber(v) {
+            return v === null || v === undefined ? null : (typeof v === 'string' ? Number(v) : v);
+        }
+
+        function withAlpha(hex, alpha) {
+            const n = parseInt(hex.substring(1), 16);
+            return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+        }
+
+        function traces(answer) {
+            const result = [];
+
+            if (answer.mode === 'rows') {
+                const xs = answer.times;
+                const markers = xs.length <= markersUpTo;
+
+                answer.columns.forEach((column, i) => {
+                    result.push({
+                        type: 'scatter',
+                        mode: markers ? 'lines+markers' : 'lines',
+                        name: plotlyName(column.name),
+                        x: xs,
+                        y: column.values.map(toNumber),
+                        connectgaps: false,
+                        line: { color: palette[i % palette.length], width: 1.5 },
+                        marker: { size: 4 },
+                        hovertemplate: '%{fullData.name}: %{y}<br>%{x|%Y-%m-%d %H:%M:%S.%L} UTC<extra></extra>'
+                    });
+                });
+
+                return result;
+            }
+
+            // Buckets: a band from the minimum to the maximum of each bucket, at the middle of the bucket.
+            const half = answer.bucketTicks / 2e4;
+            const xs = answer.times.map(t => new Date(exactMs(t) + half).toISOString());
+
+            answer.columns.forEach((column, i) => {
+                const name = plotlyName(column.name);
+                const color = palette[i % palette.length];
+                const min = column.min.map(toNumber);
+                const max = column.max.map(toNumber);
+                const markers = min.filter(v => v !== null).length <= markersUpTo;
+
+                result.push({
+                    type: 'scatter',
+                    mode: markers ? 'lines+markers' : 'lines',
+                    name: name,
+                    legendgroup: `column${column.ordinal}`,
+                    showlegend: false,
+                    x: xs,
+                    y: min,
+                    connectgaps: false,
+                    line: { color: color, width: 1 },
+                    marker: { size: 3 },
+                    hovertemplate: '%{fullData.name} min: %{y}<br>%{x|%Y-%m-%d %H:%M:%S} UTC<extra></extra>'
+                });
+                result.push({
+                    type: 'scatter',
+                    mode: markers ? 'lines+markers' : 'lines',
+                    name: name,
+                    legendgroup: `column${column.ordinal}`,
+                    x: xs,
+                    y: max,
+                    connectgaps: false,
+                    fill: 'tonexty',
+                    fillcolor: withAlpha(color, 0.3),
+                    line: { color: color, width: 1 },
+                    marker: { size: 3 },
+                    hovertemplate: '%{fullData.name} max: %{y}<br>%{x|%Y-%m-%d %H:%M:%S} UTC<extra></extra>'
+                });
+            });
+
+            return result;
+        }
+
+        function render(visit, req, answer) {
+            const graph = visit.el('tableGraph');
+
+            visit.answer = answer;
+            visit.el('tableFacts').textContent = facts(answer);
+            setNote(visit.el('tableWarning'), warnings(answer));
+            setNote(visit.el('tableNulls'), nullNotes(answer));
+            updateDownload(visit);
+
+            if (answer.rowCount === 0) {
+                purge(graph);
+                showMessage(visit, 'No rows in the range');
+                return;
+            }
+
+            if (answer.columns.length === 0) {
+                purge(graph);
+                showMessage(visit, 'Choose a column to draw.');
+                return;
+            }
+
+            if (!window.Plotly) {
+                showMessage(visit, 'Chart library failed to load');
+                return;
+            }
+
+            hideMessage(visit);
+
+            const layout = {
+                autosize: true,
+                margin: plotMargin,
+                hovermode: 'closest',
+                showlegend: true,
+                legend: { orientation: 'h', x: 0, y: 1.08, yanchor: 'bottom' },
+                xaxis: { type: 'date', autorange: false, range: [plotlyTime(req.range.from), plotlyTime(req.range.to)] },
+                yaxis: { autorange: true }
+            };
+
+            const config = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'] };
+
+            visit.drawn = req;
+            visit.drawing = true;
+            window.Plotly.react(graph, traces(answer), layout, config).then(() => {
+                visit.drawing = false;
+
+                if (visit.disposed) {
+                    purge(graph);
+                    return;
+                }
+
+                if (!graph.tableRelayoutBound) {
+                    graph.on('plotly_relayout', e => onRelayout(visit, e));
+                    graph.tableRelayoutBound = true;
+                }
+            });
+        }
+
+        // A zoom on the plot asks the server for the zoomed range; a double click (autorange) returns to the selection.
+        function onRelayout(visit, e) {
+            if (visit.disposed || visit.drawing || !e)
+                return;
+
+            if (e['xaxis.autorange']) {
+                resetZoom(visit);
+                return;
+            }
+
+            const r0 = e['xaxis.range[0]'] ?? (e['xaxis.range'] || [])[0];
+            const r1 = e['xaxis.range[1]'] ?? (e['xaxis.range'] || [])[1];
+
+            if (r0 === undefined || r1 === undefined)
+                return;
+
+            const from = fromPlotlyTime(r0);
+            const to = fromPlotlyTime(r1);
+
+            if (!from || !to || from >= to)
+                return;
+
+            const current = (visit.drawn && visit.drawn.range) || shownRange(visit);
+            if (Math.abs(current.from - from) < 1 && Math.abs(current.to - to) < 1)
+                return;
+
+            visit.zoom = { from: from, to: to };
+            request(visit);
+        }
+
+        // The button is disabled when the chart already says the range holds more rows than one download writes.
+        function updateDownload(visit) {
+            const button = visit.el('tableDownload');
+            const limit = Number(visit.container.dataset.maxDownloadRows);
+            const tooMany = visit.answer && limit > 0 && visit.answer.rowCount > limit;
+
+            button.disabled = !!tooMany;
+            button.title = tooMany
+                ? `The range holds more than ${limit.toLocaleString('en-US')} rows, the most one download writes (TableSensors.MaxDownloadRows); narrow the range.`
+                : 'Download the rows of the shown range as CSV';
+        }
+
+        function setDownloadNote(visit, text, isError) {
+            const note = visit.el('tableDownloadNote');
+            note.textContent = text || '';
+            note.classList.toggle('text-danger', !!isError);
+            note.classList.toggle('text-muted', !isError);
+            show(note, !!text);
+        }
+
+        // The server refuses a download it cannot write whole before its first byte, with a text. The page asks
+        // first and shows that text; on a 200 that is the CSV it drops that answer at once (nothing is held in the
+        // browser's memory) and lets the browser fetch the file itself in a hidden frame, so a file of any size goes
+        // straight to disk. A redirect to the sign-in page is an ended session, not a file.
+        async function download(visit) {
+            const range = shownRange(visit);
+            const url = `${visit.container.dataset.downloadUrl}?id=${encodeURIComponent(visit.container.dataset.sensorId)}` +
+                `&from=${encodeURIComponent(range.from.toISOString())}&to=${encodeURIComponent(range.to.toISOString())}`;
+            const check = new AbortController();
+
+            visit.downloads.add(check);
+            setDownloadNote(visit, 'Preparing the download…', false);
+
+            let response;
+
+            try {
+                response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', redirect: 'manual', signal: check.signal });
+            } catch (e) {
+                if (!visit.disposed)
+                    setDownloadNote(visit, 'The download could not start (no connection to the server).', true);
+                return;
+            } finally {
+                visit.downloads.delete(check);
+            }
+
+            if (visit.disposed) {
+                check.abort();
+                return;
+            }
+
+            if (signedOut(response, 'text/csv')) {
+                check.abort();
+                const note = visit.el('tableDownloadNote');
+                note.classList.add('text-danger');
+                note.classList.remove('text-muted');
+                showSignIn(note, visit, 'The download did not start: your session has ended.', false);
+                return;
+            }
+
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                const reason = response.status === 503
+                    ? `The server is busy; try again in ${response.headers.get('Retry-After') || 'a few'} s.`
+                    : (text || response.statusText);
+                setDownloadNote(visit, `The download was refused (${response.status}): ${reason}`, true);
+                return;
+            }
+
+            check.abort();
+
+            const frame = visit.el('tableDownloadFrame');
+
+            // A download leaves the frame empty; a page that lands in it is the server's refusal of the second request.
+            frame.onload = function () {
+                if (visit.disposed)
+                    return;
+
+                try {
+                    const text = frame.contentDocument && frame.contentDocument.body ? frame.contentDocument.body.innerText.trim() : '';
+                    if (text)
+                        setDownloadNote(visit, `The download was refused: ${text}`, true);
+                } catch (e) {
+                    // Not readable: nothing to show.
+                }
+            };
+
+            frame.src = url;
+            setDownloadNote(visit, 'The download has started: the browser saves the file.', false);
+        }
+
+        // Leaving the panel: abort every fetch, stop every timer, drop the plot's listeners. Called once, when the
+        // container is no longer in the document (the tree replaced the node panel) or a new visit replaces it.
+        function teardown(visit) {
+            if (visit.disposed)
+                return;
+
+            visit.disposed = true;
+            dropRequest(visit);
+            clearTimeout(visit.timer);
+            visit.downloads.forEach(c => c.abort('left'));
+            visit.downloads.clear();
+            visit.observer.disconnect();
+
+            const frame = visit.el('tableDownloadFrame');
+            if (frame)
+                frame.onload = null;
+
+            purge(visit.el('tableGraph'));
+
+            if (charts[visit.id] === visit)
+                delete charts[visit.id];
+        }
+
+        // A visit of the panel just rendered.
+        const sensorId = '@Model.EncodedId';
+        const container = document.getElementById(`tableChart_${sensorId}`);
+
+        if (charts[sensorId])
+            teardown(charts[sensorId]);
+
+        const visit = {
+            id: sensorId,
+            container: container,
+            current: null,
+            drawn: null,
+            timer: null,
+            downloads: new Set(),
+            zoom: null,
+            selected: null,
+            answer: null,
+            drawing: false,
+            disposed: false,
+            el: name => container.querySelector(`#${name}_${sensorId}`)
+        };
+
+        // The tree swaps the node panel with jQuery's html() and has no hook for a partial's removal, so the visit
+        // watches the document for its container leaving it.
+        visit.observer = new MutationObserver(() => {
+            if (!container.isConnected)
+                teardown(visit);
+        });
+        visit.observer.observe(document.body, { childList: true, subtree: true });
+
+        charts[sensorId] = visit;
+        load(visit, true);
+    })();
+</script>

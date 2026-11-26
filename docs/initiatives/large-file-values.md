@@ -15,7 +15,7 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 - A file of up to 64 GB placed in a folder the application named reaches the server without a person, also after the application crashed and restarted.
 - An upload that is cut continues from where it stopped.
 - The file is a value of a File sensor: it has a place in the tree, a retention period, an alert when it arrives.
-- A user and an API client download it; nobody gets its contents without the product's password.
+- A user and an API client download it; nobody gets the contents of a secure file without the product's password.
 - The upload does not disturb the application it runs in, nor the values and table blocks of the same collector.
 - The mechanism is general: any large file of a File sensor. A dump is one use of it.
 
@@ -57,7 +57,7 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 | 6 | Retention | By age only: the sensor's "Keep sensor history". |
 | 7 | Disk short | The server refuses a new file before its upload starts; nothing is deleted early; the refusal is visible. |
 | 8 | The source file | The collector deletes it after the server confirmed the whole file. |
-| 9, 15 | Who downloads | Everyone who sees the product. The only form a file leaves the server in is a zip with the product's password. |
+| 9, 15 | Who downloads | Everyone who sees the product. The only form a file leaves the server in is a zip with the product's password. (Amended by 23 and 26: the zip of a secure file is under the password; a file that is not secure is a zip without one.) |
 | 10 | API | A token downloads what its owner may download; no new token flag. An access key never downloads. |
 | 11 | Connection | A WebSocket of its own on the session, open only while a file is uploaded. Not the table connection. |
 | 12 | A half-uploaded file | Kept 7 days from its last piece, then deleted and reported. |
@@ -71,6 +71,10 @@ A File sensor cannot carry such a file today, at any stage of its path (see Curr
 | 21 | Branch | An epic and an integration branch of its own, cut from `feature/1842-table-sensors`. |
 | — | The store | Files on the server's disk, given out by Caddy ("сначала я планировал хранить это на диске и отдавать его напрямую через Caddy"). |
 | 22 | Access when Caddy serves | HSM checks every download and records it; Caddy moves the bytes. |
+| 23 | A file of `SendFile` that does not fit a session frame | It travels by the new path, as a large file value, instead of being dropped, and without a password: secure files and the others are kept apart ("Да, везти новым путём … НО пароль не надо в данном случае, надо разделять просто секьюрный файлы и нет"). |
+| 24 | How such a file is stored | As a file on the disk, one approach for every large file, only as an archive ("файлы храним как файл на диске! давай один подход", "в архиве только"). |
+| 25 | Which files of `SendFile` take the new path | Only those above a certain size ("больше определённого размера только"): a quarter of the session frame limit. |
+| 26 | Who decides whether a file is secure | The application, at the send ("Приложение, при отправке"). |
 
 How often dumps appear, the owner's estimate: about once a month. The consumers he named: the Aggregator and TTS, which crashes and leaves dumps the same way.
 
@@ -84,11 +88,13 @@ The rules below that are not in this table are the design's, not the owner's: th
 - **Dump**: a file with a snapshot of a process, delivered as a large file value. To HSM it is bytes.
 - **Piece**: a fixed-size part of the source file (the last one may be shorter), compressed by itself. A piece number names a place in the file.
 - **File connection**: the WebSocket of a collector session that carries pieces.
-- **Dump password**: the password of a product under which its large file values are given out.
+- **Dump password**: the password of a product under which its secure large file values are given out.
+- **Secure file**: a large file value whose zip is encrypted under the product's dump password. A file that is not secure is packed into the same zip without encryption and without a password. The application decides at the send, per file; a file is secure unless it says otherwise, and a file of an ordinary send above the threshold is never secure.
 
 ### The collector
 
-- The application names a folder, a name mask and a sensor path (`WatchLargeFiles(folder, mask, sensorPath, options)`), or hands over one file (`SendLargeFile(sensorPath, filePath)`). Both are additions to the public API; `SendFile` and its limits do not change.
+- The application names a folder, a name mask and a sensor path (`WatchLargeFiles(folder, mask, sensorPath, options)`), or hands over one file (`SendLargeFile(sensorPath, filePath)`). Both are additions to the public API. A file handed over or taken from a watched folder is secure unless the application says it is not (managed: `LargeFileOptions.Secure`, true by default; native: an options field whose zero value means secure).
+- **An ordinary send above the threshold** (`SendFile`, `SendFileAsync`, a string content on the managed collector; `hsm_sensor_add_file`, `hsm_sensor_add_file_from_path`, `FileSensor::SendFile` on the native one; the legacy wrapper's `SendFileAsync` through the native collector) travels on a session as a large file value, in pieces on the file connection, instead of an element of a `list` frame that the collector drops when it does not fit. The threshold is a quarter of the frame limit the server announces for the session (`maxFrameBytes` / 4: 1 MiB at the default of 4 MiB), the size that fits a frame whatever the bytes are; it has no setting. At or below it nothing changes: a `list` frame, an ordinary file value, its preview. The limits of an ordinary send stay (`FileSensorOptions.MaxFileSizeBytes`, 10 MiB by default and 128 MiB at most; the native 10 MiB): the content is held in memory until the upload ends. Nothing is read from a watched folder, nothing is deleted from a disk, nothing is kept across a restart (as with the value queue), and a final refusal is counted as a dropped value. Such a file is never secure. With the HTTP transport nothing changes (`POST /file`); against a server without file connections the value is dropped, said and counted, as today.
 - A file in a watched folder is taken when its size and modification time have not changed for N seconds and, on Windows, it opens for reading with no writer. Linux has no such check: there only the settle time decides. Files found at start are taken by the same rule, oldest first.
 - For the whole upload the collector keeps the file open and, where the system allows it, denies writing and deleting. Before `end`, and again before it deletes the file, it compares the size, the modification time and the identity of the file (file id or inode) with what it began with. A file that changed is not finished: the upload is discarded on the server and begun again when the file has settled.
 - One upload at a time, on one background thread of lowered priority: read a piece, compress it with zstd level 3, send it, wait for the acknowledgement. The collector holds one piece in memory.
@@ -104,7 +110,7 @@ A further WebSocket on `GET {base}session` with its own subprotocol (working nam
 
 Memory: file frames have a budget of their own, so a piece never takes the reservation of a table block. The rule of the table connection, one large-frame reservation per access key, is **not** carried over: collectors that share a key would queue behind each other's files. What bounds the memory instead is the number of uploads in progress on the whole server, a setting; an upload beyond it is refused at `begin`, to be tried again later.
 
-- **Begin** (text request): the sensor path, the file's name, size and modification time, the piece size. The server answers with the number of the next piece it wants (0 for a new file, N for one it holds a part of), or refuses before a byte of the file is sent: no room (below), a file over the limit, too many uploads in progress, a sensor that cannot take it. The piece size is fixed here and kept in the upload's record; a `begin` that names the same file with another piece size starts the upload again from piece 0. A part has one live upload: a second `begin` for it while the first connection is alive is refused as busy.
+- **Begin** (text request): the sensor path, the file's name, size and modification time, the piece size, and whether the file is secure (`"secure"`; a `begin` without it means secure, so an older collector or a mistake fails closed). The mark is stored in the upload's record and never changed afterwards. A file of an ordinary send above the threshold uses the same protocol. The server answers with the number of the next piece it wants (0 for a new file, N for one it holds a part of), or refuses before a byte of the file is sent: no room (below), a file over the limit, too many uploads in progress, a sensor that cannot take it. The piece size is fixed here and kept in the upload's record; a `begin` that names the same file with another piece size starts the upload again from piece 0. A part has one live upload: a second `begin` for it while the first connection is alive is refused as busy.
 - **Room.** At `begin` the server reserves the announced size in the store's own accounting and keeps the reservation until the upload is packed or abandoned; the free-space check counts every reservation, so uploads that begin together cannot pass on the same free bytes.
 - **Piece** (binary frame): a header (request id, upload id, piece number, the length of the piece before and after compression, a checksum of the compressed bytes) and the zstd frame of that piece. One in flight; the acknowledgement names the next piece. The piece size announced in the hello is the frame limit less the header and less the most zstd can add to bytes that do not compress, so a piece always fits a frame.
 - **What a piece may be.** The number of pieces is the size divided by the piece size, rounded up, and no more. Every piece must decompress to exactly the piece size, the last one to the remainder. The server decompresses into a buffer of that size with a bounded window, so a small frame cannot unfold into gigabytes and the bytes sent cannot exceed the size that was checked against the limit and the free space. A piece that breaks this is answered `400` and the upload is discarded.
@@ -137,11 +143,12 @@ The layout:
   - **verified**: the hash matched and the collector was told `stored`. From here the server owns the only copy and never removes it for age. The value exists.
   - **packed**: the archive is built and checked, and the part is removed.
 - The archive is written under a temporary name and renamed into place when it is complete and its content was read back. A build that fails (a full disk, a fault of the library) removes the temporary file, keeps the part, is tried again and raises an alert. Before a build the server checks that the part and the archive fit together.
-- A file of a product without a password stays **verified** until a password is set, then it is packed.
+- A secure file of a product without a password stays **verified** until a password is set, then it is packed. A file that is not secure is packed at once, whether or not the product has a password.
+- Every large file is stored as one zip with Zip64, built once after the check, whatever its kind: encrypted under the dump password for a secure file, without encryption for a file that is not secure.
 - The value in the sensor's history points at the file by its id.
 - At start: a part longer than its record says is cut back to the record; an **uploading** part waits for its collector its 7 days; a **verified** part goes on to its build; an archive without a value, or a value without its file, is reported and not silently fixed.
 - **Removal is the store's own pass.** The cleanup of sensor history deletes a range of keys and never looks at the values, so the store compares its files with the values that exist and removes the files of values that are gone: by retention, by clear-history, with a removed sensor or product. Each removal is logged and counted.
-- A File sensor that holds large values cannot be moved to another product in the first version: its archives lie under the first product's password. A move inside the product changes nothing, the sensor keeps its id.
+- A File sensor that holds large values cannot be moved to another product in the first version: its secure archives lie under the first product's password. With ordinary sends above the threshold this reaches File sensors that are not set up for large files. A move inside the product changes nothing, the sensor keeps its id.
 
 What the second store costs: two things to keep consistent (the value and the file), a folder that is not in the databases' folder, and a store that needs its own free-space check and its own retention pass.
 
@@ -176,42 +183,42 @@ What the numbers say: LevelDB can hold the pieces and loses none in a crash, at 
 
 ### Giving a file out
 
-- The only outward form is a zip with AES-256 encryption (the WinZip AES format, AE-2) and Zip64, under the product's password, holding the original file, decompressed from its pieces and compressed again by the zip, under its original name. The classic zip password is not used: it can be broken when part of the content is known, and the header of a dump is known. Such a zip opens in 7-Zip and WinRAR, as a rule not in the archiver built into Windows.
+- The only outward form is a zip with Zip64, holding the original file, decompressed from its pieces and compressed again by the zip, under its original name. A secure file's zip is encrypted with AES-256 (the WinZip AES format, AE-2) under the product's password; the zip of a file that is not secure has no encryption and no password. The classic zip password is not used: it can be broken when part of the content is known, and the header of a dump is known. An encrypted zip opens in 7-Zip and WinRAR, as a rule not in the archiver built into Windows.
 - **What the password does not hide:** the name of the file inside, its sizes and its time are readable without it. A name of a dump often carries the host, the application and a process id.
 - **The password has to be strong.** The format derives its key with 1,000 rounds of PBKDF2, so a short password a person made up is found by trying, offline, by anyone who has the archive. HSM therefore offers a generated password of 20 random characters or more; a password typed by a person has to pass a minimum length.
-- **Where the password is.** Set and seen by a Manager of the product and by an admin, on a page of the web UI, signed in. It is stored in the server's configuration database as it is, because the server needs it to make an archive, and so it is in that database's backups. It is never part of an answer of `/api/v1` or of an MCP tool, whatever the token. A change is recorded in the journal as "dump password changed" without the old and the new value: the journal is readable by everyone who sees the product.
-- While a product has no password, its large files are accepted and kept and cannot be downloaded.
+- **Where the password is.** Set and seen by a Manager of the product and by an admin, on a page of the web UI, signed in. It is stored in the server's configuration database as it is, because the server needs it to make a secure archive, and so it is in that database's backups. It is never part of an answer of `/api/v1` or of an MCP tool, whatever the token. A change is recorded in the journal as "dump password changed" without the old and the new value: the journal is readable by everyone who sees the product.
+- While a product has no password, its secure large files are accepted and kept and cannot be downloaded. Its files that are not secure are downloaded as usual.
 - **The zip is built once**, after the upload, and kept as the stored file. A download is then a plain file with byte ranges: a cut download continues, and no CPU of the server is spent on it.
-- **A change of the password** re-encrypts the kept archives in the background. Every archive records the version of the password it was made under, and the job goes by that version, so an archive that was being built during the change is not missed. A replaced password is kept until its last archive is rewritten. A rewritten archive is a new file with a new id: a download of the old one that is continued later gets `404`, never bytes of two archives joined. Until an archive is rewritten it is given out under the password it has, and the page says which.
+- **A change of the password** re-encrypts the kept secure archives in the background; an archive that is not secure has no password version and is not rewritten. Every secure archive records the version of the password it was made under, and the job goes by that version, so an archive that was being built during the change is not missed. A replaced password is kept until its last archive is rewritten. A rewritten archive is a new file with a new id: a download of the old one that is continued later gets `404`, never bytes of two archives joined. Until an archive is rewritten it is given out under the password it has, and the page says which.
 - **HSM decides, Caddy gives out** (owner, 2026-11-25). The download request comes to HSM: it checks the sign-in or the API token and that the caller may see the product, records the download, and answers with an instruction to Caddy to serve the file. The bytes go from Caddy, not through HSM. Only the subtree of finished archives is mounted into the Caddy container, read-only; parts and checked files are never there. No public route of Caddy reaches that folder: a file is served only as the answer to HSM's instruction. The path is built by HSM from the id of the file, parsed as a GUID, under a fixed root. Without Caddy (`docker-compose.direct.yml`) HSM serves the same file itself, with ranges.
 - A link to a download works only with the sign-in or the token of the caller. There are no signed links: a link that carried its own permission would be a credential in a chat or in the transcript of an AI agent.
 - A download that is cut must fail visibly for the client, never look like a whole file: the size is announced, the answer carries an `ETag`, and the hash of the archive is in a header and on the page.
-- **Every download is recorded in a download log**: who (the user, or the token and its owner), when, which file. It is a record of its own and not the journal, which holds changes of configuration and never refuses an action when its write fails. A download that cannot be recorded is refused. One record covers the requests of one caller for one file within a short time, so a download manager that asks in ranges does not write hundreds. Whether the bytes all arrived is in Caddy's access log.
+- **Every download is recorded in a download log**: who (the user, or the token and its owner), when, which file. It is a record of its own and not the journal, which holds changes of configuration and never refuses an action when its write fails. A download that cannot be recorded is refused. One record covers the requests of one caller for one file within a short time, so a download manager that asks in ranges does not write hundreds. The bundled Caddy keeps no access log: the download log records that a download was allowed, and nothing records that it completed.
 
 ### Access
 
-- Web UI: everyone who may see the product downloads the zip. An unknown file and a file of a product the user may not see get the same `404`.
+- Web UI: everyone who may see the product downloads the zip, of either kind; a file that is not secure also when the product has no password. An unknown file and a file of a product the user may not see get the same `404`.
 - The download step relies on the web UI access-check work.
-- API token: `GET /api/v1/...` streams the same zip to a token whose owner may see the product, with the size and the hash in headers. The MCP tool returns the description of a file and the link; the bytes never go through MCP. An AI agent gets the password from its operator, not from HSM.
+- API token: `GET /api/v1/...` streams the same zip to a token whose owner may see the product, with the size and the hash in headers. The MCP tool returns the description of a file and the link; the bytes never go through MCP. An AI agent gets the password of a secure file from its operator, not from HSM. The description of a file says whether it is secure.
 - An access key (`Key` header) sends and never downloads a large file. `POST /api/sensors/history` returns the description of a large value, not its content.
 
 ### The sensor, retention, notification, UI
 
-- A large value belongs to an ordinary File sensor. **Its time is the time the server accepted it**, made unique within the sensor. The modification time of the source file is a field of the description. (A value's key is the sensor and the time: two files with one modification time would overwrite each other, a file older than the last value would take the path of late values, and a file older than the history period would be removed right after its upload.)
+- A large value belongs to an ordinary File sensor, which may hold ordinary values and large values side by side. **Its time is the time the server accepted it**, made unique within the sensor. The modification time of the source file is a field of the description. (A value's key is the sensor and the time: two files with one modification time would overwrite each other, a file older than the last value would take the path of late values, and a file older than the history period would be removed right after its upload.)
 - Retention is the sensor's "Keep sensor history", counted from that time: a value past its period is removed, and the store's pass removes its file. A half-uploaded file is removed 7 days after its last piece. A file that is being downloaded when it is removed is read to its end by the download in progress; a download continued later gets `404`.
 - Before an upload the server compares the free space with a configured minimum, the reservations of the uploads in progress and the size announced; below it the upload is refused and the refusal is counted in a self-monitoring sensor with an alert.
-- A sensor registered for dumps gets the alert "new data has been received" by default. New template variables carry the file name, the size and a link to the sensor page. The message is sent once, when the file is verified.
-- The sensor page lists the large values: name, size, time, application and host, the download button, and the state: uploading with a percentage, being checked, being packed, waiting for the product's password, packing failed, ready, removed by retention. No preview.
+- A sensor registered for dumps gets the alert "new data has been received" by default. New template variables carry the file name, the size and a link to the sensor page. The message is sent once, when the file is verified. A file of an ordinary send above the threshold adds no default alert to its sensor; the sensor's own alerts see it as a new value when it is verified.
+- The sensor page lists the large values: name, size, time, application and host, the download button, whether the file is secure, and the state: uploading with a percentage, being checked, being packed, waiting for the product's password (secure files only), packing failed, ready, removed by retention. No preview, for either kind.
 - Self-monitoring: uploads in progress, bytes stored, refusals, files removed, builds that failed, files waiting for a password.
 
 ## Open questions
 
-- How exactly HSM hands a file to Caddy (an internal redirect answered by `reverse_proxy` with `handle_response`, or `forward_auth` in front of a `file_server`): to be tried against the bundled Caddy 2.11 and `caddy/test.sh` in the step.
-- The zip library for AES-256 and Zip64 on the server (the zip built into .NET has no encryption), and what a build and a re-encryption of a large file cost: not measured.
+- ~~How exactly HSM hands a file to Caddy~~ — settled by #1885: `reverse_proxy` with `handle_response` on HSM's `X-Hsm-Archive` answer (`aicontext/architecture/docker.md`).
+- ~~The zip library for AES-256 and Zip64 on the server, and what a build and a re-encryption cost~~ — settled by #1885: SharpZipLib 1.4.2; the measured costs are in `aicontext/features/server/large-file-download/feature.md`.
 - The compression ratio and speed on a real dump: needs a sample from the owner, measured on his machine, numbers only.
 - The link speed between the application hosts and the server: it decides the default speed limit. (Dumps appear about once a month: at that rate and a history period of a few months the store holds a handful of files, and a crash loop is the exception the free-space refusal is for.)
 - The retention period a dump sensor gets by default.
-- Whether a product without a password should rather refuse uploads than keep files nobody can download.
+- Whether a product without a password should rather refuse uploads of secure files than keep files nobody can download.
 
 ## Work Breakdown
 
@@ -230,8 +237,8 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 
 ## Risks
 
-- A dump holds the memory of a process: keys, passwords, client data. With download open to everyone who sees the product, the password is the only protection of the content. A shared password cannot be taken back from one person, and the download log shows who downloaded, not who opened. An archive that left the server can be attacked offline for as long as it exists; its strength is the strength of the password.
-- The server knows the password and holds a file without it while the file is uploaded and checked. The password protects a downloaded copy, not the server.
+- A dump holds the memory of a process: keys, passwords, client data. With download open to everyone who sees the product, the password is the only protection of a secure file's content. An application that marks a dump not secure makes it readable by everyone who sees the product. A shared password cannot be taken back from one person, and the download log shows who downloaded, not who opened. An archive that left the server can be attacked offline for as long as it exists; its strength is the strength of the password.
+- The server knows the password and holds a secure file without it while the file is uploaded and checked. The password protects a downloaded copy, not the server.
 - A second kind of store beside LevelDB: the value and its file can disagree after a crash or a manual change of the folder; the check at start reports it.
 - The bundled Caddy gains access to the folder of large files and a rule of its own; an installation with its own reverse proxy has to repeat that rule or let HSM serve the files.
 - A collector that deletes the source file makes the server's copy the only one. Sensor history is not part of the server's backups.
@@ -242,9 +249,11 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 
 ## Verification
 
-- Server tests over a real WebSocket: begin, pieces, end; a cut and a resume at every point; a wrong hash; a refusal for space; the limits; access lost in the middle.
+- Server tests over a real WebSocket: begin, pieces, end; a cut and a resume at every point; a wrong hash; a refusal for space; the limits; access lost in the middle; `begin` with `secure` false, true and absent.
+- The archive of a secure file opens with the password in 7-Zip and not without it; the archive of a file that is not secure opens in 7-Zip without a password; both hold the bytes that were sent.
+- An ordinary send of a few megabytes on a session arrives as a large value that is not secure; one at or below the threshold arrives as an ordinary value; against a server without file connections the larger one is dropped and counted.
 - A download test with ranges and with a cut connection; the access matrix (role, token, key, unknown id).
-- Conformance scenarios in both drivers.
+- Conformance scenarios in both drivers, the changed meaning of `file_larger_than_a_frame_is_dropped` included.
 - One real dump of the owner's application, end to end, with the measured compression ratio, times and the disk written.
 - The download through the bundled Caddy and without it (`caddy/test.sh`, which runs only in WSL on the development machine).
 - `aicontext/` updated with each step.
