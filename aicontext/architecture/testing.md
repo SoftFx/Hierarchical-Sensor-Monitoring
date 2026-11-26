@@ -77,7 +77,7 @@ ones:
 
 | Collection | Classes | Why |
 |---|---|---|
-| `NLog isolated` | `AlertScheduleProviderMissingIdLoggingTests`, `LoggingExceptionMiddlewareTests`, `ChannelTestSendResultTests`, `TelegramBotStartFailureLoggingTests`, `TableFeedSensorsServiceTests`, `DumpPasswordServiceLoggingTests` | They swap the process-global NLog configuration. |
+| `NLog isolated` | `AlertScheduleProviderMissingIdLoggingTests`, `LoggingExceptionMiddlewareTests`, `ChannelTestSendResultTests`, `TelegramBotStartFailureLoggingTests`, `TelegramBotCredentialLoggingTests`, `TelegramBotProbeTests`, `TableFeedSensorsServiceTests`, `DumpPasswordServiceLoggingTests` | They swap the process-global NLog configuration. |
 | `Process-wide measurement` | `CollectorSessionTests` | `IdleSession_CostsTensOfKilobytes` reads the process-wide managed heap, and a shutdown test bounds a wall-clock time. |
 | `Large file store kill (alone)` (`HSMDatabase.LevelDB.Tests`) | `LargeFileStoreKillTests` | It starts and kills a child process with redirected output, which inherits every open (inheritable) LevelDB file handle of the test host. |
 

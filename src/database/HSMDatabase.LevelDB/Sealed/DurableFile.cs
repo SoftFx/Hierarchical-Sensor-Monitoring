@@ -19,9 +19,30 @@ namespace HSMDatabase.LevelDB.Sealed
     /// <paramref name="strict"/> makes a failed sync throw: used where the caller must not go on unless the file is
     /// durable (<c>hsm-sealed</c>, <c>hsm-sealing</c>). Otherwise a failure is logged as an error once per process and
     /// counted in <see cref="SealedHistoryDiagnostics.DirectorySyncFailures"/>.
+    /// <para>
+    /// On Windows the rename fails with error 5 (access denied) while another process has the target open, even one that
+    /// shares read, write and delete (a virus scanner or the search indexer reading a file just written), and with error 32
+    /// (sharing violation) while one holds the source. Such a hold lasts milliseconds, so those two errors are retried after
+    /// the pauses of <see cref="RenameRetryPauses"/> (#1883); any other error is thrown at once, and past the retries the
+    /// error of the last attempt is thrown as without them. On Linux and macOS <c>rename(2)</c> replaces a file that is open,
+    /// and nothing is retried.
+    /// </para>
     /// </summary>
     internal static class DurableFile
     {
+        /// <summary>
+        /// The pauses before the retries of a rename another process blocks (Windows errors 5 and 32): six retries, 940 ms
+        /// at most. The first four are those of <see cref="LevelDbOpen.RetryPauses"/> (the same kind of hold on CURRENT).
+        /// </summary>
+        internal static readonly TimeSpan[] RenameRetryPauses =
+        [
+            TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(60),
+            TimeSpan.FromMilliseconds(120), TimeSpan.FromMilliseconds(240), TimeSpan.FromMilliseconds(480),
+        ];
+
+        private const int ErrorAccessDenied = 5;
+        private const int ErrorSharingViolation = 32;
+
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static int _failureLogged;
 
@@ -45,8 +66,17 @@ namespace HSMDatabase.LevelDB.Sealed
             SyncDirectory(Path.GetDirectoryName(Path.GetFullPath(path)), strict);
         }
 
-        /// <summary>Renames a file; on Windows with write-through, so the rename is on the disk when it returns.</summary>
-        public static void Rename(string from, string to, bool overwrite)
+        /// <summary>
+        /// Renames a file; on Windows with write-through, so the rename is on the disk when it returns, and retrying a rename
+        /// another process blocks for a moment (<see cref="RenameRetryPauses"/>).
+        /// </summary>
+        public static void Rename(string from, string to, bool overwrite) => Rename(from, to, overwrite, pause: null, attempting: null);
+
+        /// <summary>
+        /// <see cref="Rename(string, string, bool)"/> with test seams: <paramref name="pause"/> replaces the sleep between
+        /// attempts, <paramref name="attempting"/> is called before every attempt on Windows with its number (0 for the first).
+        /// </summary>
+        internal static void Rename(string from, string to, bool overwrite, Action<TimeSpan> pause, Action<int> attempting)
         {
             if (!OperatingSystem.IsWindows())
             {
@@ -56,8 +86,38 @@ namespace HSMDatabase.LevelDB.Sealed
 
             const uint ReplaceExisting = 0x1, WriteThrough = 0x8;
 
-            if (!Windows.MoveFileExW(Path.GetFullPath(from), Path.GetFullPath(to), WriteThrough | (overwrite ? ReplaceExisting : 0)))
-                throw new IOException($"Could not rename {from} to {to} (error {Marshal.GetLastPInvokeError()})");
+            var source = Path.GetFullPath(from);
+            var target = Path.GetFullPath(to);
+            var flags = WriteThrough | (overwrite ? ReplaceExisting : 0);
+            var firstError = 0;
+
+            for (var attempt = 0; ; attempt++)
+            {
+                attempting?.Invoke(attempt);
+
+                if (Windows.MoveFileExW(source, target, flags))
+                {
+                    if (attempt > 0)
+                        _logger.Warn($"The rename of {from} to {to} succeeded after {attempt} retries: another process held a file (error {firstError})");
+
+                    return;
+                }
+
+                var error = Marshal.GetLastPInvokeError();
+
+                if (attempt >= RenameRetryPauses.Length || error is not (ErrorAccessDenied or ErrorSharingViolation))
+                {
+                    if (attempt > 0)
+                        _logger.Warn($"The rename of {from} to {to} failed after {attempt} retries: another process held a file (error {firstError}, last {error})");
+
+                    throw new IOException($"Could not rename {from} to {to} (error {error})");
+                }
+
+                if (attempt == 0)
+                    firstError = error;
+
+                (pause ?? Thread.Sleep)(RenameRetryPauses[attempt]);
+            }
         }
 
         /// <summary>Deletes a file and syncs its directory (Linux, macOS), so the deletion is not undone by a power loss.</summary>
