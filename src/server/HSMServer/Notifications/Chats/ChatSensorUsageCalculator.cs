@@ -10,7 +10,15 @@ using System.Linq;
 
 namespace HSMServer.Notifications.Chats
 {
-    public sealed class ChatSensorUsageCalculator
+    // The seam the chat delete preview (#1829) reads the usage count through. The counter
+    // walks the live sensor cache, so the write surface's tests answer it from a stub — the
+    // same shape as the delivery seam of the verification surface (#1826).
+    public interface IChatSensorUsageCalculator
+    {
+        (Dictionary<Guid, int> counts, int skipped) Compute();
+    }
+
+    public sealed class ChatSensorUsageCalculator : IChatSensorUsageCalculator
     {
         private static readonly Logger _log = LogManager.GetLogger(nameof(ChatSensorUsageCalculator));
 

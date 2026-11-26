@@ -9,6 +9,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
+using HSMServer.Folders;
 using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Chats;
@@ -79,11 +80,18 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IChatDelivery> _delivery = new();
         private readonly Mock<IUserManager> _users = new();
 
+        // The write half of the controller (#1829) has its own suite
+        // (ChatsApiControllerWriteTests); this read suite only needs a writer to build it.
+        private readonly Mock<IFolderManager> _folders = new();
+        private readonly Mock<IChatSensorUsageCalculator> _usage = new();
+
         private ChatsApiController CreateController() => CreateControllerWith(BuildPrincipal());
 
         private ChatsApiController CreateControllerWith(ClaimsPrincipal principal) =>
             new(new ChatsReadService(_chats.Object, _authorization.Object),
-                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object))
+                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object),
+                new ChatWriteService(_chats.Object, new ChatAdministrationService(_chats.Object, _folders.Object),
+                    _authorization.Object, _folders.Object, _users.Object, _usage.Object))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -569,10 +577,17 @@ namespace HSMServer.Core.Tests.Controllers
             services.Replace(ServiceDescriptor.Singleton(_authorization.Object));
             services.Replace(ServiceDescriptor.Singleton(_users.Object));
             services.Replace(ServiceDescriptor.Singleton(_delivery.Object));
+            // The write surface (#1829) scopes the folder bindings through the folder
+            // manager and reads the usage count through the calculator's seam: both are
+            // replaced too — the real folder manager would build the live cache, which
+            // only disposes asynchronously.
+            services.Replace(ServiceDescriptor.Singleton(new Mock<IFolderManager>().Object));
+            services.Replace(ServiceDescriptor.Singleton(new Mock<IChatSensorUsageCalculator>().Object));
 
             using var provider = services.BuildServiceProvider();
 
             Assert.NotNull(provider.GetRequiredService<ChatVerificationService>());
+            Assert.NotNull(provider.GetRequiredService<ChatWriteService>());
 
             // MVC builds controllers through the type activator over the
             // request provider, and the MCP SDK constructs tool instances the

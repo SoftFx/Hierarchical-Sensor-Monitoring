@@ -7,6 +7,7 @@ using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi.Chats;
@@ -53,9 +54,16 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<IChatDelivery> _delivery = new();
         private readonly Mock<IUserManager> _users = new();
 
+        // The write trio of #1829 has its own suite (ChatsMcpWriteToolsTests); this read
+        // and verification suite only needs a writer to construct the tools.
+        private readonly Mock<IFolderManager> _folders = new();
+        private readonly Mock<IChatSensorUsageCalculator> _usage = new();
+
         private ChatsMcpTools CreateTools() =>
             new(new ChatsReadService(_chats.Object, _authorization.Object),
                 new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object),
+                new ChatWriteService(_chats.Object, new ChatAdministrationService(_chats.Object, _folders.Object),
+                    _authorization.Object, _folders.Object, _users.Object, _usage.Object),
                 AccessorOf());
 
         private static IHttpContextAccessor AccessorOf() =>

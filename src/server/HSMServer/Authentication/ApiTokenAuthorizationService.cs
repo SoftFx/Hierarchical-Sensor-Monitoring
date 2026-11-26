@@ -76,6 +76,28 @@ namespace HSMServer.Authentication
         // answers 403 and discloses nothing about any concrete target, so it
         // must not feed the enumeration-probe signal of per-target 404s.
         ApiTokenAuthorization AuthorizeProductCreate(ClaimsPrincipal principal);
+
+        // Decision for creating a chat — the admin-only write that has no boundary to
+        // authorize against (the chat does not exist yet). The web UI's AddChat is
+        // admin-only — a chat created with an attacker-supplied webhook URL would
+        // exfiltrate every alert sent to it — and the mirror keeps that rule: an admin
+        // owner with a read-write token is allowed. Unlike the Global-boundary writes it
+        // answers Forbidden, never NotFound: a creation has no target whose existence a
+        // 403 could disclose. A denial is recorded ONCE, as AuthorizationDenied.
+        ApiTokenAuthorization AuthorizeChatCreate(ClaimsPrincipal principal);
+
+        // Decision for CHANGING an existing chat (#1829) — the token-side twin of the web
+        // editor's gate (TelegramRoleFilterById, ProductManager). A chat is no boundary
+        // of its own: its sight is the read surface's composition (GLOBAL, or bound to at
+        // least one folder the owner can see) and its write gate the detail rule (an
+        // admin, or the manager of a folder the chat is bound to — so a global chat is
+        // admin-only). Unknown ids never reach this: the caller answers them the same 404
+        // without an event. NotFound when the chat is outside the owner's sight;
+        // Forbidden when it is in sight and the token is read-only or the owner may not
+        // change it. Denials are recorded like those of every other write — a refused
+        // attempt to re-point a webhook belongs in the audit trail.
+        ApiTokenAuthorization AuthorizeChatWrite(ClaimsPrincipal principal, Guid chatId,
+            System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds);
     }
 
 
@@ -140,6 +162,59 @@ namespace HSMServer.Authentication
 
             Record(principal, write: true, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
             return ApiTokenAuthorization.Forbidden;
+        }
+
+        public ApiTokenAuthorization AuthorizeChatCreate(ClaimsPrincipal principal)
+        {
+            if (TryResolveCaller(principal, out var owner, out var readOnly) && owner.IsAdmin && !readOnly)
+                return ApiTokenAuthorization.Allowed;
+
+            Record(principal, write: true, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
+            return ApiTokenAuthorization.Forbidden;
+        }
+
+        public ApiTokenAuthorization AuthorizeChatWrite(ClaimsPrincipal principal, Guid chatId,
+            System.Collections.Generic.IReadOnlyCollection<Guid> chatFolderIds)
+        {
+            var resource = ApiTokenResource.Chat(chatId);
+
+            if (!TryResolveCaller(principal, out var owner, out var readOnly))
+            {
+                Record(principal, write: true, resource, ApiTokenAuthorization.NotFound);
+                return ApiTokenAuthorization.NotFound;
+            }
+
+            var folders = chatFolderIds ?? [];
+
+            // The read surface's caller-wide gate, in the write's terms. An owner who sees
+            // no boundary sees no chat at all, a global one included, and can never pass the
+            // change gate below. Forbidden for a global chat would tell it apart from an
+            // unknown id, which the write answers 404 before asking here: for such an owner
+            // every chat is the same NotFound.
+            if (!OwnerSeesAnyBoundary(owner))
+            {
+                Record(principal, write: true, resource, ApiTokenAuthorization.NotFound);
+                return ApiTokenAuthorization.NotFound;
+            }
+
+            // The chat sight rule (ChatsReadService): global, or bound to at least one
+            // folder the owner can see. IsVisible is the silent sight half — only the
+            // decision below is recorded.
+            if (folders.Count > 0 && !folders.Any(folderId => IsVisible(principal, ApiTokenResource.Folder(folderId))))
+            {
+                Record(principal, write: true, resource, ApiTokenAuthorization.NotFound);
+                return ApiTokenAuthorization.NotFound;
+            }
+
+            // 403: in sight, but a read-only token or an owner who is neither an admin
+            // nor the manager of a bound folder.
+            if (readOnly || !(owner.IsAdmin || folders.Any(owner.IsFolderManager)))
+            {
+                Record(principal, write: true, resource, ApiTokenAuthorization.Forbidden);
+                return ApiTokenAuthorization.Forbidden;
+            }
+
+            return ApiTokenAuthorization.Allowed;
         }
 
         private ApiTokenAuthorization Authorize(ClaimsPrincipal principal, bool write, ApiTokenResource resource)
