@@ -53,6 +53,16 @@ namespace HSMServer.Core.Model
 
         public long Ticks { get; }
 
+        /// <summary>
+        /// The calendar preset (a month, three months, six months, a year) a <see cref="TimeInterval.FromFolder"/> model
+        /// inherits from its folder (#1864); null for every other model. A calendar preset has no length in ticks, so
+        /// without it the inherited model carried 0 ticks and never expired.
+        /// </summary>
+        public TimeInterval? FolderPreset { get; }
+
+        /// <summary>The interval the model is evaluated by: the folder's calendar preset when it inherits one, otherwise <see cref="Interval"/>.</summary>
+        public TimeInterval AppliedInterval => FolderPreset ?? Interval;
+
 
         public bool IsNone => Interval is TimeInterval.None;
 
@@ -60,7 +70,7 @@ namespace HSMServer.Core.Model
 
         public bool IsFromParent => Interval is TimeInterval.FromParent;
 
-        public bool UseTicks => Interval is TimeInterval.Ticks or TimeInterval.FromFolder;
+        public bool UseTicks => AppliedInterval is TimeInterval.Ticks or TimeInterval.FromFolder;
 
 
         public TimeIntervalModel() : this(TimeInterval.FromParent) { }
@@ -69,20 +79,29 @@ namespace HSMServer.Core.Model
 
         public TimeIntervalModel(TimeInterval interval) : this(interval, 0L) { }
 
-        public TimeIntervalModel(TimeIntervalEntity entity) : this((TimeInterval)entity.Interval, entity.Ticks) { }
+        public TimeIntervalModel(TimeIntervalEntity entity) : this((TimeInterval)entity.Interval, entity.Ticks, (TimeInterval?)entity.FolderPreset) { }
 
-        public TimeIntervalModel(TimeInterval interval, long ticks)
+        public TimeIntervalModel(TimeInterval interval, long ticks) : this(interval, ticks, null) { }
+
+        private TimeIntervalModel(TimeInterval interval, long ticks, TimeInterval? folderPreset)
         {
             Interval = interval;
             Ticks = Interval is TimeInterval.None ? long.MaxValue : ticks;
+
+            // Only an inherited model carries a preset, and only a calendar one: anything else read from storage is ignored.
+            FolderPreset = Interval is TimeInterval.FromFolder && folderPreset is { } preset && IsCalendarPreset(preset) ? preset : null;
         }
+
+
+        public static bool IsCalendarPreset(TimeInterval interval) =>
+            interval is TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year;
 
 
         internal bool TimeIsUp(DateTime time) =>
             UseTicks ? Ticks > 0 && (DateTime.UtcNow - time).Ticks > Ticks
                      : DateTime.UtcNow > GetShiftedTime(time);
 
-        public DateTime GetShiftedTime(DateTime time, int coef = 1) => Interval switch
+        public DateTime GetShiftedTime(DateTime time, int coef = 1) => AppliedInterval switch
         {
             TimeInterval.Month => time.AddMonths(coef),
             TimeInterval.ThreeMonths => time.AddMonths(3 * coef),
@@ -97,13 +116,18 @@ namespace HSMServer.Core.Model
         };
 
 
-        public TimeIntervalModel ToFromFolderModel() => new(TimeInterval.FromFolder, Ticks);
+        // A calendar preset is inherited as itself, so the inheriting model is evaluated by the same calendar arithmetic
+        // as the preset set on the node (#1864); a period of ticks is inherited as its ticks.
+        public TimeIntervalModel ToFromFolderModel() =>
+            IsCalendarPreset(AppliedInterval) ? new(TimeInterval.FromFolder, 0L, AppliedInterval) : new(TimeInterval.FromFolder, Ticks);
 
-        public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
+        public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks) { FolderPreset = (long?)FolderPreset };
 
         public TimeSpan ToTimeSpan() => new(Ticks);
 
 
-        public override string ToString() => UseTicks ? $"{Interval}({ToTimeSpan()})" : $"{Interval.ToDisplay()}";
+        public override string ToString() => FolderPreset is { } preset
+            ? $"{Interval}({preset.ToDisplay()})"
+            : UseTicks ? $"{Interval}({ToTimeSpan()})" : $"{Interval.ToDisplay()}";
     }
 }

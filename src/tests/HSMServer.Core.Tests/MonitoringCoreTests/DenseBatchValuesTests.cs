@@ -812,7 +812,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public async Task OutOfOrderValue_InheritedMonthKeepHistory_IsStored_NotRefused()
         {
             // Round-6 P1, second shape: the folder month presets (Month,
-            // Three/Six Months, Year) inherit as FromFolder with Ticks = 0.
+            // Three/Six Months, Year) inherited as FromFolder with Ticks = 0
+            // before #1864, and a product stored then holds that until the start
+            // resolves it from its folder (FolderManager).
             // TimeIsUp treats Ticks <= 0 as "never expires" — the retention
             // pass never purges these sensors — but the floor shifted 0 ticks
             // and landed at UtcNow, refusing EVERY out-of-order value as

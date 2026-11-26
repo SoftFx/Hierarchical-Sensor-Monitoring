@@ -83,6 +83,11 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensorsById = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
+
+        // #1864: the products whose history (or idle sensors) a calendar preset inherited from a folder has already
+        // cleared in this process; the first such pass of a product says so in one line (see InheritedPresetCleared).
+        private readonly ConcurrentDictionary<Guid, byte> _inheritedPresetHistoryCleared = new();
+        private readonly ConcurrentDictionary<Guid, byte> _inheritedPresetSensorsRemoved = new();
         private readonly ConcurrentDictionary<Guid, AlertTemplateModel> _alertTemplates = new();
         private readonly ConcurrentDictionary<string, ProductModel> _productsByName = new(StringComparer.Ordinal);
         private readonly object _productsByNameLock = new();
@@ -770,6 +775,9 @@ namespace HSMServer.Core.Cache
             // cancellation or an unexpected throw.
             var purgedSensorIds = new List<Guid>();
 
+            // #1864: the removals due to a calendar preset inherited from a folder, per root product.
+            var removedByInheritedPreset = new Dictionary<Guid, (ProductModel Product, int Count, TimeIntervalModel Preset)>();
+
             try
             {
                 foreach (var sensor in sensors)
@@ -816,6 +824,10 @@ namespace HSMServer.Core.Cache
 
                         if (sensor.ShouldDestroy())
                         {
+                            // Read before the removal detaches the sensor from its product.
+                            var selfDestroy = sensor.Settings.SelfDestroy.Value;
+                            var root = sensor.Root;
+
                             await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), parentId: null,
                             token: token, purgeIds: purgedSensorIds);
 
@@ -828,7 +840,15 @@ namespace HSMServer.Core.Cache
                             if (TryGetSensorById(sensor.Id, out _))
                                 notRemoved++;
                             else
+                            {
                                 removed++;
+
+                                if (selfDestroy.FolderPreset is not null && root is not null)
+                                {
+                                    var count = removedByInheritedPreset.TryGetValue(root.Id, out var counted) ? counted.Count : 0;
+                                    removedByInheritedPreset[root.Id] = (root, count + 1, counted.Preset ?? selfDestroy);
+                                }
+                            }
                         }
                         // Count only sensors the sweep could act on: SelfDestroy is None (the default)
                         // for most of the tree, and for those a failed load changes nothing.
@@ -863,6 +883,9 @@ namespace HSMServer.Core.Cache
                 if (purgedSensorIds.Count > 0)
                     PurgeChangeSets(purgedSensorIds);
             }
+
+            foreach (var (_, (product, count, preset)) in removedByInheritedPreset)
+                InheritedPresetCleared(_inheritedPresetSensorsRemoved, product, $"{count} idle sensor(s) removed by 'Remove sensor after inactivity' {preset}");
 
             _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} self-destroy-enabled (history not loaded), not removed {notRemoved}, failed {failedSweep}");
 
@@ -1713,6 +1736,8 @@ namespace HSMServer.Core.Cache
 
             int cleared = 0;
             int failed = 0;
+            int clearedByInheritedPreset = 0;
+            TimeIntervalModel inheritedPreset = null;
             foreach (var sensor in value.Sensors.Values)
             {
                 // One throwing sensor must not freeze maintenance for the whole product: without
@@ -1738,6 +1763,12 @@ namespace HSMServer.Core.Cache
                         _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
                         ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
                         cleared++;
+
+                        if (policy.FolderPreset is not null)
+                        {
+                            clearedByInheritedPreset++;
+                            inheritedPreset ??= policy;
+                        }
                     }
                     else
                     {
@@ -1752,6 +1783,18 @@ namespace HSMServer.Core.Cache
             }
 
             _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}, failed {failed}");
+
+            if (clearedByInheritedPreset > 0)
+                InheritedPresetCleared(_inheritedPresetHistoryCleared, value.Product, $"history of {clearedByInheritedPreset} sensor(s) cleared by 'Keep sensor history' {inheritedPreset}");
+        }
+
+        // #1864: a calendar preset a product inherits from its folder used to be kept for ever, so once applied it deletes
+        // history and sensors operators have had for longer than the folder says. The first pass that does so for a
+        // product in this process says so in one Info line per product, not one per sensor.
+        private void InheritedPresetCleared(ConcurrentDictionary<Guid, byte> logged, ProductModel product, string what)
+        {
+            if (logged.TryAdd(product.Id, 0))
+                _logger.Info($"Product [{product.Id}] {product.DisplayName}: {what}, a period inherited from its folder and applied since #1864 (the first such pass for the product since the start)");
         }
 
         public async Task<TaskResult> ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
@@ -3854,7 +3897,11 @@ namespace HSMServer.Core.Cache
                 //
                 // Round-6: KeepHistory inherited from a folder reaches here as a
                 // FromFolder policy carrying the FOLDER model's ticks — Forever
-                // as long.MaxValue, the month presets as 0. The retention pass
+                // as long.MaxValue — or, for a calendar preset, the preset itself
+                // (FolderPreset, #1864: UseTicks is false, and the floor shifts by
+                // the calendar as for the preset set on the node). A calendar
+                // preset stored before #1864 and not yet resolved at start is
+                // FromFolder with 0 ticks. The retention pass
                 // (TimeIsUp) treats both as "never expires", and the floor must
                 // agree: shifting long.MaxValue throws and would abort the whole
                 // batch loop, and shifting 0 floors at UtcNow and would refuse
