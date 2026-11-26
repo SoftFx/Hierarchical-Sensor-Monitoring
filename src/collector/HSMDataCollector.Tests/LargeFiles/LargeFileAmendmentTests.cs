@@ -695,6 +695,47 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
+        public void Routed_values_do_not_sweep_the_records_only_a_watch_or_a_hand_over_does()
+        {
+            using (var h = new LargeFileHarness(Piece))
+            {
+                var gone = h.WriteFile("gone.dmp", Piece * 3);
+                var hold = new ManualResetEventSlim(false);
+
+                h.Start();
+
+                var task = h.Service.Send("dumps", gone, null, CancellationToken.None);
+
+                h.Transport.FakeChannel.BeforePieceAnswer = n => { if (n == 1) h.Transport.FakeChannel.HoldPieces = hold; };
+                Assert.True(LargeFileHarness.Until(() => h.Store.PieceNumbersSnapshot().Count >= 2));
+                h.Service.Dispose();
+                hold.Set();
+                h.Transport.FakeChannel.BeforePieceAnswer = null;
+                h.Transport.FakeChannel.HoldPieces = null;
+
+                File.Delete(gone);
+
+                // The next run only routes: the data folder is not used (as in the native collector), the record stays.
+                var requeued = new List<FileSensorValue>();
+
+                h.StartWith((s, t) => new LargeFileService(t, null, s, LargeFileHarness.Registration, h.Errors.Enqueue, n => true, null, h.Timings,
+                                                           n => { }, v => { lock (requeued) requeued.Add(v); }));
+
+                Assert.True(h.Service.Route(FileValue(Piece + 1)));
+                Assert.True(h.AdvanceUntil(() => h.Store.StoredCount("report.txt") == 1));
+                Assert.Equal(0, h.Store.Discards);
+                Assert.Single(Directory.GetFiles(h.DataFolder, "upload-*.json"));
+
+                // The first hand-over of the run sweeps it.
+                Assert.True(h.Service.Send("dumps", h.WriteFile("next.dmp", 10), null, CancellationToken.None).Wait(Wait));
+
+                Assert.Equal(1, h.Store.Discards);
+                Assert.Empty(Directory.GetFiles(h.DataFolder, "upload-*.json"));
+                Assert.Empty(requeued);
+            }
+        }
+
+        [Fact]
         public void The_state_of_handed_over_files_does_not_keep_deleted_files()
         {
             using (var h = new LargeFileHarness(Piece))

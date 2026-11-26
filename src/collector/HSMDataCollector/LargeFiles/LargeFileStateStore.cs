@@ -166,7 +166,7 @@ namespace HSMDataCollector.LargeFiles
             }
             catch (Exception ex)
             {
-                note = $"The data folder of large files cannot be found from CollectorOptions.DataFolder '{options.DataFolder}' ({ex.Message}): watched folders and handed-over large files are unavailable, and file values above a quarter of the session frame go the ordinary way.";
+                note = $"The data folder of large files cannot be found from CollectorOptions.DataFolder '{options.DataFolder}' ({ex.Message}): watched folders and handed-over large files are unavailable (file values above a quarter of the session frame do not use it and still go on the file connection).";
                 return null;
             }
         }

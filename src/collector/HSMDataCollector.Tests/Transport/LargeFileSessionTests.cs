@@ -171,6 +171,14 @@ namespace HSMDataCollector.Tests.Transport
         private static int ListFramesWithTheValue(ScriptedSessionServer server) =>
             server.Accepted.Count(r => r.Op == "list" && r.Body.Contains("\"Value\":[97,97,97,97,97,97,97,97"));
 
+        // A second, small value of the same sensor sent after the first reached a list frame: a value given back to the file
+        // queue goes to its back, so a duplicate of the first would reach a list frame before this one does.
+        private static void SendBarrierAndWait(ScriptedSessionServer server, IFileSensor file)
+        {
+            file.AddValue("b");
+            Assert.True(SpinWait.SpinUntil(() => server.Accepted.Any(r => r.Op == "list" && r.Body.Contains("\"Value\":[98]")), Patience));
+        }
+
         [Fact]
         public void A_routed_value_whose_registration_came_back_with_an_error_is_sent_in_a_list_frame_once()
         {
@@ -189,6 +197,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 // The value reaching a list frame is the proof: a value handed back to the route again would never get there.
                 Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) >= 1, Patience));
+                SendBarrierAndWait(server, file);
 
                 Assert.Equal(1, ListFramesWithTheValue(server));
                 Assert.Equal(1, collector.LargeFileService.RoutesTaken);
@@ -232,6 +241,7 @@ namespace HSMDataCollector.Tests.Transport
                         timings.Step(collector.LargeFileService.Wake);
 
                     Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) >= 1, Patience));
+                    SendBarrierAndWait(server, file);
 
                     Assert.Equal(1, ListFramesWithTheValue(server));
                     Assert.Equal(1, collector.LargeFileService.RoutesTaken);
