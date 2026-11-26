@@ -67,8 +67,11 @@ namespace HSMServer.Core.TableSensors
             }
         }
 
-        // Never throws: a fault is counted (Move faults), logged once per product and hour of the pass's clock, and stops that
-        // product's removals and steps for this pass; its mark stays for the next pass.
+        // Never throws: a fault is counted (Move faults), logged once per product and hour of the pass's clock, puts the
+        // product in `faulted` (no move steps of it in this pass) and leaves its mark for the next pass. Removals do not skip a
+        // product that faulted earlier in the pass (its recovery, its placements): deleting a gone sensor's keys depends on
+        // neither, and a recovery that faulted leaves its record for the removal to clear. A product whose store keeps failing
+        // is therefore tried once per mark that names it.
         private void RunRemovals(IReadOnlyList<TableRemoval> removals, IReadOnlyList<Guid> products, MoveRun run, HashSet<Guid> faulted, DateTime utcNow, CancellationToken token)
         {
             if (removals.Count == 0)
