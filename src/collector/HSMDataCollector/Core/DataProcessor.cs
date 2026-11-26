@@ -281,8 +281,8 @@ namespace HSMDataCollector.Core
                 Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
 
                 // The large files' stop gives the routed values no begin was answered for back to the file queue (as in the
-                // native collector, whose stop does it before its drain): its drain waits for that (the uploader's bounded
-                // join), not for the close of the file connection. It ran beside the drains above; its failures are collected
+                // native collector, whose stop does it before its drain): its drain waits for that (the end of the upload
+                // in progress, cut, at most 1 s), not for the close of the file connection. It ran beside the drains above; its failures are collected
                 // where StopAsync awaits it.
                 await routedReleased.ConfigureAwait(false);
 
@@ -358,6 +358,20 @@ namespace HSMDataCollector.Core
         public void Dispose()
         {
             LargeFiles?.Dispose();
+
+            // What is still in the file queue is lost with it: a value given back to it by a stop that had no drain (a
+            // Dispose after a failed Start) or by the large files' Dispose. Said and counted once.
+            var lost = 0;
+
+            try { lost = _fileQueue?.ClearQueue() ?? 0; }
+            catch (Exception) { }
+
+            if (lost > 0)
+            {
+                _logger.Error($"{lost} file value(s) were dropped: the collector was disposed before they were sent.");
+                EmitOverflowDrops(_fileQueue.QueueName, lost);
+            }
+
             Tables?.Dispose();
             _messageDeduplicator?.Dispose();
             SensorStorage?.Dispose();

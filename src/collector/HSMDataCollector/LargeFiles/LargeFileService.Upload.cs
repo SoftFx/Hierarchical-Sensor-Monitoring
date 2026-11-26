@@ -130,8 +130,13 @@ namespace HSMDataCollector.LargeFiles
             {
                 lock (_gate)
                 {
+                    // A stop or dispose came after the pick: nothing begins (the work stays where it is).
+                    if (_disposed || !_running || generation != Interlocked.Read(ref _generation))
+                        return;
+
                     _currentCut = cut;
                     _currentOwner = (object)work.Routed ?? (object)work.Handed ?? work.Watch;
+                    _noUpload.Reset();
                 }
 
                 var job = new Job { Work = work, Path = work.Path, Key = work.Routed?.Key ?? LargeFileStateStore.PathKey(work.Path), Generation = generation, Token = cut.Token };
@@ -168,6 +173,7 @@ namespace HSMDataCollector.LargeFiles
                     {
                         _currentCut = null;
                         _currentOwner = null;
+                        _noUpload.Set();
                     }
 
                     job.File?.Dispose();

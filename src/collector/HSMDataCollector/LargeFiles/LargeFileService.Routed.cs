@@ -242,8 +242,9 @@ namespace HSMDataCollector.LargeFiles
                 CountDroppedFile(job.Routed, reason);
         }
 
-        // A stop or dispose, once the thread is over (so no begin is answered after this). Routed sends are values: one no
-        // begin was answered for goes back to the file queue, whose stop drain sends it the ordinary way (a list frame where
+        // A stop or dispose, once the upload in progress was cut and is over (or its bound passed). No begin is answered after
+        // the cut: the run's token cancels the upload's own, and no new upload starts after the generation changed (RunOne
+        // checks it under _gate). Routed sends are values: one no begin was answered for goes back to the file queue, whose stop drain sends it the ordinary way (a list frame where
         // it fits, else dropped and counted), so a server without file connections loses nothing it got before large files.
         // One whose upload had begun is dropped, said and counted, as a value queue drops what it could not send at a stop.
         // The same in the native collector.

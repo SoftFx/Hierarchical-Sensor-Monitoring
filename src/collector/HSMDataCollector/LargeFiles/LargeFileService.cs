@@ -52,6 +52,10 @@ namespace HSMDataCollector.LargeFiles
         private CancellationTokenSource _currentCut;
         private object _currentOwner;
 
+        // Set while no upload runs (RunOne). A stop waits for it, not for the thread's end: the thread stays while it has
+        // watches, files or routed values, waiting for the next Start.
+        private readonly ManualResetEventSlim _noUpload = new ManualResetEventSlim(true);
+
         private long _generation;
         private long _runNumber;
         private bool _resetRunState;
@@ -376,8 +380,6 @@ namespace HSMDataCollector.LargeFiles
         /// </summary>
         internal void Stop(Action released)
         {
-            Thread thread;
-
             lock (_gate)
             {
                 if (!_running)
@@ -392,12 +394,11 @@ namespace HSMDataCollector.LargeFiles
                 try { _run.Cancel(); } catch (Exception) { }
 
                 CutCurrent();
-                thread = _thread;
                 _wake.Set();
             }
 
             // A routed upload that was cut discards its part on this connection first (its thread, within the wait below).
-            WaitForThread(thread);
+            WaitForUpload();
 
             ReleaseAllRouted("the collector stopped");
             Released(released);
@@ -469,7 +470,15 @@ namespace HSMDataCollector.LargeFiles
             {
                 try { _wake.Dispose(); } catch (Exception) { }
                 try { _run.Dispose(); } catch (Exception) { }
+                try { _noUpload.Dispose(); } catch (Exception) { }
             }
+        }
+
+        // The upload in progress, cut, at most the bound of a stop. No new one begins after the cut (RunOne checks under _gate).
+        private void WaitForUpload()
+        {
+            try { _noUpload.Wait(_timings.StopWait); }
+            catch (Exception) { }
         }
 
         private void WaitForThread(Thread thread)
