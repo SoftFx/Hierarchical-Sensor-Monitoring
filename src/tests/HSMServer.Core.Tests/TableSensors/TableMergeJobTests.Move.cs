@@ -9,6 +9,7 @@ using HSMDatabase.LevelDB.TableBatches;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableSensors;
+using HSMTableBlocks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.TableSensors
@@ -66,6 +67,78 @@ namespace HSMServer.Core.Tests.TableSensors
 
             // A second pass has nothing to do.
             Assert.Equal(0, Pass(MoveAt.AddMinutes(1)).MoveSteps);
+        }
+
+        [Fact]
+        public async Task A_week_larger_than_a_step_is_moved_in_several_steps_each_one_copy_of_at_most_the_bound()
+        {
+            var (s, r) = await CopySetupAsync();
+            var before = All(s, r);
+            var recorded = new List<TableMoveInFlight>();
+
+            // A bound below one hour's batches: every hour is a step of its own (at least one hour a step).
+            _server.Job.StepBytesLimit = 1;
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "move-recorded")
+                    recorded.Add(_server.Batches.GetMoveInFlight(_product));
+            };
+
+            var report = Pass(MoveAt);
+            _server.Job.Checkpoint = null;
+
+            Assert.Null(report.Fault);
+            Assert.Equal(3, report.MoveSteps);
+            Assert.Equal([0, 1, 2], recorded.Select(m => (int)((m.FirstHour - Hour0.Ticks) / TimeSpan.TicksPerHour)));
+            Assert.All(recorded, m => Assert.Equal(TimeSpan.TicksPerHour, m.EndHour - m.FirstHour));
+            Assert.Equal((3, 0), (Bytes(s, 5), Bytes(s, 52)));
+            Assert.Equal(before, All(s, r));
+        }
+
+        [Fact]
+        public async Task A_move_returns_the_same_rows_in_the_same_order_when_batches_of_an_hour_are_not_in_time_order_by_ordinal_and_tie_across_batches()
+        {
+            var s = await RegisterAsync("s", keep: KeepP52);
+            var r = await RegisterAsync("r", keep: KeepP52);
+            PutHours(1, "s", "r");
+
+            // Hour 1, written as a merged hour: s's two batches out of time order by ordinal (the first one's rows are later),
+            // with a time in both, so equal times are ordered by the batches' ranks.
+            long h1 = Hour0.AddHours(1).Ticks;
+            TableBatchToWrite Batch(BaseSensorModel sensor, params (long Time, double Bid, long Size)[] rows) =>
+                new(sensor.Id, rows.Min(x => x.Time), rows.Max(x => x.Time), rows.Length, HSMDatabase.SealedHistory.TableBatchCodec.Encode(new HSMDatabase.SealedHistory.TableBatch(Quotes.Id, [
+                    HSMDatabase.SealedHistory.TableBatchColumn.Time(rows.Select(x => x.Time).ToArray()),
+                    new HSMDatabase.SealedHistory.TableBatchColumn(TableColumnType.Double, null, rows.Select(x => x.Bid).ToArray(), null),
+                    new HSMDatabase.SealedHistory.TableBatchColumn(TableColumnType.Int64, rows.Select(x => x.Size).ToArray(), null, null)])));
+
+            _now = Hour0.AddHours(2).AddMinutes(3);
+            _server.Batches.WriteHour(_product, new TableBatchHourCommit
+            {
+                HourTicks = h1,
+                FirstBlockSequence = 1000,
+                LastBlockSequence = 1000,
+                BlocksMerged = 1,
+                Watermarks = new Dictionary<Guid, long>(_server.Batches.GetWatermarks(_product)),
+            }, [new TableBatchHourPart(52, [
+                Batch(s, (h1 + 30 * TimeSpan.TicksPerMinute, 1.0, 1), (h1 + 31 * TimeSpan.TicksPerMinute, 2.0, 2)),
+                Batch(s, (h1 + 10 * TimeSpan.TicksPerMinute, 3.0, 3), (h1 + 30 * TimeSpan.TicksPerMinute, 4.0, 4)),
+                Batch(r, (h1 + 5 * TimeSpan.TicksPerMinute, 5.0, 5)),
+            ])]);
+
+            // Hour 2 through the merge: 5,000 rows of s in two batches, many equal times across the cut, out of order in the blocks.
+            _now = Hour0.AddHours(2).AddMinutes(10);
+            var rows = Enumerable.Range(0, 5000).Select(i => (Hour0.AddHours(2).AddSeconds((4999 - i) / 50), (double?)i, (long?)i)).ToArray();
+            AssertStored(Put(Block(("s", rows), ("r", [(Hour0.AddHours(2).AddMinutes(1), 9.0, 9)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(3).AddMinutes(3)).HoursMerged);
+
+            var before = All(s, r);
+            Assert.Equal(2, _server.Batches.ReadSensor(_product, s.Id, 52, [Hour0.AddHours(2).Ticks]).Count);
+
+            await KeepAsync(s, KeepP5);
+            Assert.Equal(1, Pass(Hour0.AddHours(3).AddMinutes(10)).MoveSteps);
+
+            Assert.Equal((5, 0), (Bytes(s, 5), Bytes(s, 52)));
+            Assert.Equal(before, All(s, r));
         }
 
         [Fact]

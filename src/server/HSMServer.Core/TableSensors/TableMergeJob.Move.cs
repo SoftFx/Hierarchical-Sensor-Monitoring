@@ -47,6 +47,9 @@ namespace HSMServer.Core.TableSensors
         /// </summary>
         internal int? MoveStepsPerPass { get; set; }
 
+        /// <summary>The most bytes of a copy step: <see cref="MoveStepBytes"/>. Test seam (a step cut into hours without 64 MB of rows).</summary>
+        internal long StepBytesLimit { get; set; } = MoveStepBytes;
+
         // The hour of the pass's clock in which a product's move fault, and its refused step, were last logged.
         private readonly Dictionary<Guid, long> _moveFaultHour = [];
         private readonly Dictionary<Guid, long> _moveRefusedHour = [];
@@ -321,14 +324,14 @@ namespace HSMServer.Core.TableSensors
         // as many whole hours as fit (at least one).
         private long CutAt(MoveStep step, long first)
         {
-            if (Batches.GetSensorHourBytes(step.Product, step.Sensor.Id, step.From, first, step.EndHour).Bytes <= MoveStepBytes)
+            if (Batches.GetSensorHourBytes(step.Product, step.Sensor.Id, step.From, first, step.EndHour).Bytes <= StepBytesLimit)
                 return step.EndHour;
 
             long bytes = 0, end = first;
             while (end < step.EndHour)
             {
                 bytes += Batches.GetSensorHourBytes(step.Product, step.Sensor.Id, step.From, end, end + TimeSpan.TicksPerHour).Bytes;
-                if (bytes > MoveStepBytes && end > first)
+                if (bytes > StepBytesLimit && end > first)
                     break;
 
                 end += TimeSpan.TicksPerHour;
@@ -398,8 +401,10 @@ namespace HSMServer.Core.TableSensors
                 {
                     copied = Batches.CopySensorHours(product, id, step.From, step.ToClass, first, end);
                 }
-                catch (TableBatchStoreException ex) when (IsCopyRefusal(ex))
+                catch (TableBatchRefusedException ex)
                 {
+                    // A decision about this step, not a fault: the record stays (the next recovery deletes nothing the
+                    // placement names), the placement stays, and the step is tried again by a later pass.
                     run.Steps--;
                     return Refused(step, utcNow, ex.Message);
                 }
@@ -454,12 +459,6 @@ namespace HSMServer.Core.TableSensors
 
             return StepOutcome.Done;
         }
-
-        // Whether the store refused a copy for a reason a repeat cannot cure (the target's hour region holds rows of the
-        // sensor, a dropped target), as opposed to a fault. One place, so a type of its own for refusals changes one line.
-        private static bool IsCopyRefusal(TableBatchStoreException ex) =>
-            ex.Message.Contains("in its hour region", StringComparison.Ordinal) || ex.Message.Contains("dropped", StringComparison.Ordinal);
-
 
         // === An expired step ===
 
