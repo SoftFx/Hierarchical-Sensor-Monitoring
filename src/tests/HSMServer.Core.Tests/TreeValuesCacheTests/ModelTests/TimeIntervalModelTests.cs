@@ -15,7 +15,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             { "forever", TimeIntervalModel.None, null },
             { "forever inherited", TimeIntervalModel.None.ToFromFolderModel(), null },
             { "preset inherited before #1864", new TimeIntervalModel(TimeInterval.FromFolder, 0L), null },
-            { "ticks longer than time", new TimeIntervalModel(TimeInterval.Ticks, Now.Ticks), null },
+            { "ticks longer than time", new TimeIntervalModel(TimeInterval.Ticks, DateTime.MaxValue.Ticks), null },
             { "own day", new TimeIntervalModel(TimeSpan.FromDays(1).Ticks), new DateTime(2028, 2, 29, 0, 0, 0, DateTimeKind.Utc) },
             { "day inherited", new TimeIntervalModel(TimeSpan.FromDays(1).Ticks).ToFromFolderModel(), new DateTime(2028, 2, 29, 0, 0, 0, DateTimeKind.Utc) },
             { "own month", new TimeIntervalModel(TimeInterval.Month), new DateTime(2028, 2, 1, 0, 0, 0, DateTimeKind.Utc) },

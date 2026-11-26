@@ -590,8 +590,8 @@ namespace HSMServer.Core.Tests.LargeFiles
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunPassAsync(DateTime.UtcNow, atStart: true, cts.Token));
             Assert.Equal(1, Store.Statistics.StartDisagreements);
 
-            // The scan did not complete, so the next pass does it.
-            Assert.Equal(20, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
+            // The scan did not complete, so the next pass of the same service does it.
+            Assert.Equal(20, (await service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
         }
 
         // The history weeks closed under a scan the stop had cancelled (#1958: a read that starts on a closed week gets

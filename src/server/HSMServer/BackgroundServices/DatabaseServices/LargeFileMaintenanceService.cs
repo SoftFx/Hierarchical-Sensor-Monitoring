@@ -48,12 +48,13 @@ namespace HSMServer.BackgroundServices.DatabaseServices
 
                 _uploads.RunPassAsync(DateTime.UtcNow, atStart, token).GetAwaiter().GetResult();
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception ex) when (token.IsCancellationRequested)
             {
                 // Stopped by the server's stop: the cache and the history may be closing under the pass (an
-                // ObjectDisposedException, #1958). Not a fault; the next start runs the pass again.
-                _logger.Info($"The pass of the large file store stopped with the server{(atStart ? " at start" : string.Empty)}: {ex.Message}");
+                // ObjectDisposedException, #1958). Not a fault, and the next start runs the pass again; what ended it is
+                // kept with its stack (a plain cancellation says nothing).
+                if (ex is not OperationCanceledException || ex.InnerException is not null)
+                    _logger.Info(ex, $"The pass of the large file store stopped with the server{(atStart ? " at start" : string.Empty)}");
             }
             catch (Exception ex)
             {
