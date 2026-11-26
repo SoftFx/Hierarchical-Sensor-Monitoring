@@ -1,7 +1,6 @@
 using System;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi.LargeFiles;
-using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Controllers
@@ -17,13 +16,11 @@ namespace HSMServer.Controllers
     public sealed class LargeFilesController : BaseController
     {
         private readonly LargeFileDownloadService _downloads;
-        private readonly IServerConfig _config;
 
 
-        public LargeFilesController(IUserManager userManager, LargeFileDownloadService downloads, IServerConfig config) : base(userManager)
+        public LargeFilesController(IUserManager userManager, LargeFileDownloadService downloads) : base(userManager)
         {
             _downloads = downloads;
-            _config = config;
         }
 
 
@@ -34,7 +31,7 @@ namespace HSMServer.Controllers
             var decision = _downloads.Decide(fileId, archiveId, caller, record: true);
 
             return new LargeFileDownloadResult(decision, LargeFileSurface.Web,
-                LargeFileDownloadResult.CameThroughTrustedProxy(Request, _config), _downloads.TryOpenArchive);
+                LargeFileDownloadResult.CameThroughTrustedProxy(HttpContext), _downloads.TryOpenArchive);
         }
     }
 }

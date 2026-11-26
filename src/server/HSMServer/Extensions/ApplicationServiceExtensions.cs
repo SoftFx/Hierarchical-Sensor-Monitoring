@@ -93,13 +93,16 @@ namespace HSMServer.ServiceExtensions
             services.AddLargeFileArchives(config);
             // The uploads of large files (#1883), for the file connection of step 2 (#1884), and the store's pass
             // (LargeFileMaintenanceService). The constructor opens and creates nothing.
+            var largeFileOptions = LargeFileOptionsFor(config);
+
             services.AddSingleton(provider => new HSMServer.Core.LargeFiles.LargeFileUploadService(
-                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), (config.LargeFiles ?? new LargeFilesConfig()).ToOptions()));
+                provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), largeFileOptions));
             services.AddSingleton<HSMServer.Core.LargeFiles.ILargeFileUploads>(provider => provider.GetRequiredService<HSMServer.Core.LargeFiles.LargeFileUploadService>());
 
             // The store the file connection (#1884) uploads into; without it file connections answer 404.
             services.AddSingleton<SensorApi.Sessions.Files.IFileUploadStore>(provider => new SensorApi.Sessions.Files.LargeFileUploadStore(
-                provider.GetRequiredService<HSMServer.Core.LargeFiles.ILargeFileUploads>(), (config.LargeFiles ?? new LargeFilesConfig()).ToOptions().MaxFileSizeBytes));
+                provider.GetRequiredService<HSMServer.Core.LargeFiles.ILargeFileUploads>(), largeFileOptions.MaxFileSizeBytes,
+                TimeSpan.FromSeconds(largeFileOptions.LeaseTimeoutSeconds)));
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.
@@ -422,8 +425,13 @@ namespace HSMServer.ServiceExtensions
         {
             // Behind the bundled Caddy (#1427): restore the client address first, so token
             // audit, the invalid-attempt limiter and key telemetry see the client, not the proxy.
+            // ConnectionPeerMiddleware first: it records the connection's own peer, which UseForwardedHeaders replaces,
+            // and whether it is a trusted proxy of the same options (the large file hand-over reads it).
             if (forwardedHeaders is not null)
+            {
+                applicationBuilder.UseMiddleware<ConnectionPeerMiddleware>(forwardedHeaders);
                 applicationBuilder.UseForwardedHeaders(forwardedHeaders);
+            }
 
             if (isDevelopment)
                 applicationBuilder.UseDeveloperExceptionPage();
@@ -518,6 +526,24 @@ namespace HSMServer.ServiceExtensions
             _asyncStorageTypes.Add(typeof(TService));
 
             return services.AddSingleton<TService, TImplementation>();
+        }
+    
+        // The options of the large file store, with a lease at least as long as the collector sessions' silence limit
+        // (#1884): a frame of a file connection may take that long to arrive, and a lease shorter than it would let a
+        // frame that began under a live lease outlast it, past the memory bound of file frames. A shorter setting is
+        // raised, and the log says so.
+        internal static HSMServer.Core.LargeFiles.LargeFileOptions LargeFileOptionsFor(IServerConfig config)
+        {
+            var options = (config.LargeFiles ?? new LargeFilesConfig()).ToOptions();
+            var silenceSeconds = (int)Math.Ceiling((config.CollectorSessions ?? new CollectorSessionsConfig()).SilenceLimit.TotalSeconds);
+
+            if (options.LeaseTimeoutSeconds >= silenceSeconds)
+                return options;
+
+            NLog.LogManager.GetLogger("LargeFiles").Warn($"LargeFiles.LeaseTimeoutSeconds = {options.LeaseTimeoutSeconds} is shorter than the collector sessions' silence limit " +
+                                                        $"({silenceSeconds} s, three heartbeats): the lease is raised to {silenceSeconds} s, so a piece that began under a live lease cannot outlast it.");
+
+            return options with { LeaseTimeoutSeconds = silenceSeconds };
         }
     }
 }

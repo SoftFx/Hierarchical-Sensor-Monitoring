@@ -21,6 +21,8 @@ namespace HSMServer.Core.Tests.SensorApi
 
         public long MaxFileBytes { get; set; } = 64L * 1024 * 1024 * 1024;
 
+        public TimeSpan LeaseTimeout { get; set; } = TimeSpan.FromSeconds(180);
+
         public int MaxUploadsInProgress { get; set; } = 4;
 
         public HashSet<string> RefusedPaths { get; } = new();
@@ -59,6 +61,15 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
         public int Appends;
+
+        public int Releases;
+
+        // Another connection takes the lease of this file: the lease this connection holds is stale.
+        public void TakeLease(string name)
+        {
+            lock (_lock)
+                Find(name).LeaseId = Guid.NewGuid();
+        }
 
 
         public Entry Find(string name)
@@ -192,7 +203,7 @@ namespace HSMServer.Core.Tests.SensorApi
             }
         }
 
-        public Task DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct)
+        public Task<bool> DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct)
         {
             if (DiscardThrows)
                 throw new OperationCanceledException("A discard cut short, made by the test.");
@@ -206,14 +217,17 @@ namespace HSMServer.Core.Tests.SensorApi
                 {
                     _entries.Remove(entry.Key);
                     entry.DiscardReason = reason;
+                    return Task.FromResult(true);
                 }
             }
 
-            return Task.CompletedTask;
+            return Task.FromResult(false);
         }
 
         public void Release(FileUploadLease lease)
         {
+            Interlocked.Increment(ref Releases);
+
             lock (_lock)
             {
                 if (ById(lease.FileId) is not { } entry || entry.LeaseId != lease.LeaseId || entry.State == State.Checking)

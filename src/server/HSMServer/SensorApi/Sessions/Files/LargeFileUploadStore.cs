@@ -12,12 +12,14 @@ namespace HSMServer.SensorApi.Sessions.Files
     // The file connection's store (#1884) over the uploads of the large file store (#1883): the one implementation
     // in production. It maps one to one, keeps the store's faults as FileUploadStoreException, and hands the store
     // the connection's end check.
-    public sealed class LargeFileUploadStore(ILargeFileUploads uploads, long maxFileBytes) : IFileUploadStore
+    public sealed class LargeFileUploadStore(ILargeFileUploads uploads, long maxFileBytes, TimeSpan? leaseTimeout = null) : IFileUploadStore
     {
         private static readonly NLog.Logger _logger = NLog.LogManager.GetLogger("LargeFiles");
 
 
         public long MaxFileBytes { get; } = maxFileBytes;
+
+        public TimeSpan LeaseTimeout { get; } = leaseTimeout ?? TimeSpan.FromSeconds(LargeFileStoreLimits.DefaultLeaseTimeoutSeconds);
 
 
         public async Task<FileBeginResult> BeginAsync(FileBeginRequest request, CancellationToken ct)
@@ -48,7 +50,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             return new FileAppendResult(outcome, result.NextPiece);
         }
 
-        public Task DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct) => Faults(() => uploads.DiscardAsync(Lease(lease), reason, ct));
+        public Task<bool> DiscardAsync(FileUploadLease lease, string reason, CancellationToken ct) => Faults(() => uploads.DiscardAsync(Lease(lease), reason, ct));
 
         // Release does not fault for its caller: it gives an empty part back by removing it, and a removal that fails
         // (a file held by another process) leaves the part to the store's own pass, which removes it later.
@@ -147,21 +149,32 @@ namespace HSMServer.SensorApi.Sessions.Files
 
             public int PieceSize => part.Record.PieceSize;
 
+            // A piece the store cannot read back is a defect for the check; any other fault stays a fault (the finish
+            // turns it into FileUploadStoreException).
             public async IAsyncEnumerable<FileStoredPiece> ReadPiecesAsync([EnumeratorCancellation] CancellationToken ct)
             {
-                IAsyncEnumerable<StoredPiece> pieces;
+                await using var pieces = part.ReadPiecesAsync(ct).GetAsyncEnumerator(ct);
 
-                try
+                while (true)
                 {
-                    pieces = part.ReadPiecesAsync(ct);
-                }
-                catch (LargeFileStoreException ex)
-                {
-                    throw new FileUploadStoreException(ex.Message, ex);
-                }
+                    bool more;
 
-                await foreach (var piece in pieces.WithCancellation(ct))
+                    try
+                    {
+                        more = await pieces.MoveNextAsync();
+                    }
+                    catch (LargeFilePartDefectException ex)
+                    {
+                        throw new FilePieceDefectException(ex.Piece, ex.Message, ex);
+                    }
+
+                    if (!more)
+                        yield break;
+
+                    var piece = pieces.Current;
+
                     yield return new FileStoredPiece(piece.Number, piece.Bytes, piece.Digest);
+                }
             }
         }
     }

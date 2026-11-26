@@ -22,6 +22,9 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
         public int RemoveExpiredCalls { get; private set; }
 
+        /// <summary>The (product, version) pairs the packed archives carried, as the last RemoveExpired was given them.</summary>
+        public IReadOnlySet<(Guid ProductId, int Version)> LastCarried { get; private set; }
+
 
         public event Action<Guid, int> PasswordChanged;
 
@@ -77,6 +80,10 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
         public bool HasPassword(Guid productId) => GetCurrent(productId) is not null;
 
+        public HashSet<Guid> Unreadable { get; } = [];
+
+        public bool IsUnreadable(Guid productId) => Unreadable.Contains(productId);
+
         public DumpPasswordSetResult SetPassword(Guid productId, string password, bool generated, InitiatorInfo initiator)
         {
             int version;
@@ -107,13 +114,15 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             }
         }
 
-        public int RemoveExpired(DateTime nowUtc)
+        public int RemoveExpired(DateTime nowUtc, IReadOnlySet<(Guid ProductId, int Version)> carried)
         {
             lock (_lock)
             {
                 RemoveExpiredCalls++;
+                LastCarried = carried;
 
-                return _versions.Values.Sum(list => list.RemoveAll(v => v.RetiredUtc is { } retired && nowUtc - retired > Retention));
+                return _versions.Sum(pair => pair.Value.RemoveAll(v =>
+                    v.RetiredUtc is { } retired && nowUtc - retired > Retention && !carried.Contains((pair.Key, v.Version))));
             }
         }
 

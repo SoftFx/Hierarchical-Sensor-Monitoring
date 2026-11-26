@@ -292,6 +292,49 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             Assert.Equal(LargeFileBeginOutcome.Continue, Begin(store, key).Outcome);
         }
 
+        // A part that cannot give back what was appended (#1884 review) is a defect of the content at that piece, not a
+        // fault: reading it again finds the same, so the end check discards the upload instead of retrying for days.
+        [Theory]
+        [InlineData("short part")]
+        [InlineData("index mismatch")]
+        [InlineData("length past any piece")]
+        public void A_part_that_cannot_give_back_a_piece_is_a_defect_at_that_piece(string damage)
+        {
+            var store = Open();
+            var begin = Begin(store, Key("a", 3 * Piece));
+
+            for (var i = 0; i < 3; i++)
+                Append(store, begin.Lease, i, Content(Piece));
+
+            if (damage == "short part")
+            {
+                using var part = new FileStream(PathOf(begin.FileId, ".part"), FileMode.Open);
+                part.SetLength(part.Length - 1);
+            }
+            else if (damage == "index mismatch")
+            {
+                // The offset of piece 1 in the index no longer follows piece 0.
+                using var index = new FileStream(PathOf(begin.FileId, ".idx"), FileMode.Open);
+                index.Position = 44 + 4;
+                index.WriteByte(0x7F);
+            }
+            else
+            {
+                // Piece 0 claims a length within the part but larger than any piece of this record can be.
+                using var index = new FileStream(PathOf(begin.FileId, ".idx"), FileMode.Open);
+                var length = BitConverter.GetBytes((uint)(LargeFileStore.MaxStoredPieceBytes(Piece) + 1));
+                index.Write(length);
+            }
+
+            var ticket = store.StartFinish(begin.Lease);
+            var defect = Assert.Throws<LargeFilePartDefectException>(() => ReadPieces(ticket.Reader));
+
+            Assert.Equal(damage switch { "short part" => 2, "index mismatch" => 1, _ => 0 }, defect.Piece);
+            Assert.IsAssignableFrom<LargeFileStoreException>(defect);
+
+            store.EndFinish(begin.Lease);
+        }
+
         [Fact]
         public void A_discarded_upload_is_gone_with_its_reservation_and_its_appends_are_answered_discarded()
         {
@@ -299,8 +342,8 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             var begin = Begin(store, Key("a", 2 * Piece));
             Append(store, begin.Lease, 0, Content(Piece));
 
-            store.Discard(begin.Lease, "a bad piece");
-            store.Discard(begin.Lease, "again");
+            Assert.True(store.Discard(begin.Lease, "a bad piece"));
+            Assert.False(store.Discard(begin.Lease, "again"));
 
             Assert.Null(store.TryGetFile(begin.FileId));
             Assert.Equal(LargeFileAppendOutcome.Discarded, Append(store, begin.Lease, 1, Content(Piece)).Outcome);
@@ -702,6 +745,30 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
 
             Begin(store, Key("a", Piece));
             Assert.True(store.HasContent);
+        }
+
+        [Fact]
+        public void An_archives_folder_that_cannot_be_listed_counts_as_content()
+        {
+            var archives = Path.Combine(_root, LargeFileStore.ArchivesFolderName);
+            Directory.CreateDirectory(archives);
+
+            // "Cannot tell" is content: the start checks and the counters must not take an unreadable store for an empty one.
+            Assert.True(LargeFileStore.HasEntries(archives, _ => throw new IOException("the volume is gone")));
+            Assert.True(LargeFileStore.HasEntries(archives, _ => throw new UnauthorizedAccessException("denied")));
+            Assert.True(LargeFileStore.HasEntries(archives, ThrowingWhileListed));
+
+            Assert.False(LargeFileStore.HasEntries(archives, Directory.EnumerateFileSystemEntries));
+            Assert.False(LargeFileStore.HasEntries(Path.Combine(_root, "absent"), _ => throw new IOException("never listed")));
+
+            // Lazy, as the real listing is: it throws on the first MoveNext, not when called.
+            static IEnumerable<string> ThrowingWhileListed(string folder)
+            {
+                if (folder is not null)
+                    throw new IOException("the listing broke");
+
+                yield break;
+            }
         }
 
         [Fact]

@@ -3,6 +3,7 @@ using HSMServer.Authentication;
 using HSMServer.Controllers;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Model.Agent;
 using HSMServer.Model.Authentication;
 using HSMServer.ServerConfiguration;
@@ -118,13 +119,13 @@ namespace HSMServer.Core.Tests
         [Theory]
         // The reference deployment (#1427): Caddy terminates the client's TLS with a public certificate
         // and re-encrypts to Kestrel, so the Kestrel handshake is not the one the probe will verify.
-        [InlineData(true, true, true, false)]
-        [InlineData(true, true, false, true)]    // trusted proxies configured, but this request came directly
-        [InlineData(true, false, true, true)]    // no trusted proxy configured: an invented header changes nothing
-        [InlineData(false, false, false, false)] // plaintext hop: nothing of ours terminated it
-        public void ServerTerminatesClientTls_IsFalse_OnlyForATrustedProxyHop(bool kestrelHandshake, bool trustedProxyConfigured, bool forwarded, bool expected)
+        [InlineData(true, true, false)]
+        [InlineData(true, false, true)]   // the request came to the server directly
+        [InlineData(false, false, false)] // plaintext hop: nothing of ours terminated it
+        [InlineData(false, true, false)]
+        public void ServerTerminatesClientTls_IsFalse_OnlyForATrustedProxyHop(bool kestrelHandshake, bool cameThroughTrustedProxy, bool expected)
         {
-            Assert.Equal(expected, LinuxProbeServerCa.ServerTerminatesClientTls(kestrelHandshake, trustedProxyConfigured, forwarded));
+            Assert.Equal(expected, LinuxProbeServerCa.ServerTerminatesClientTls(kestrelHandshake, cameThroughTrustedProxy));
         }
 
         [Fact]
@@ -138,7 +139,7 @@ namespace HSMServer.Core.Tests
                 Directory.CreateDirectory(Path.Combine(webRoot, "probe"));
                 File.WriteAllBytes(Path.Combine(webRoot, "probe", "hsm-linux-probe_0.1.0_amd64.deb"), new byte[] { 1 });
 
-                var controller = CreateController(webRoot, out var productId, certificate: new ServerCertificateConfig(), tls: true, behindTrustedProxy: true);
+                var controller = CreateController(webRoot, out var productId, certificate: new ServerCertificateConfig(), tls: true, peer: ConnectionPeers.TrustedProxy);
 
                 var result = Assert.IsType<FileContentResult>(controller.LinuxInstaller(productId));
 
@@ -150,6 +151,30 @@ namespace HSMServer.Core.Tests
 
                 Assert.DoesNotContain(names, n => n.EndsWith("/server-ca.pem"));
                 Assert.Contains(names, n => n.EndsWith("/config.json"));
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void LinuxInstaller_RefusesTheBundledDefault_ForADirectClient_WithAnOriginalForHeader()
+        {
+            // Trusted proxies are configured, but this connection comes from the client itself: Kestrel's handshake
+            // is the one the probe would verify, whatever headers the request carries.
+            var webRoot = Directory.CreateTempSubdirectory("hsm-probe-test-").FullName;
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(webRoot, "probe"));
+                File.WriteAllBytes(Path.Combine(webRoot, "probe", "hsm-linux-probe_0.1.0_amd64.deb"), new byte[] { 1 });
+
+                var controller = CreateController(webRoot, out var productId, certificate: new ServerCertificateConfig(), tls: true,
+                                                  peer: ConnectionPeers.DirectClient, originalForHeader: true);
+
+                var result = Assert.IsType<BadRequestObjectResult>(controller.LinuxInstaller(productId));
+
+                Assert.Equal(LinuxProbeServerCa.BundledDefaultMessage, result.Value);
             }
             finally
             {
@@ -383,7 +408,8 @@ namespace HSMServer.Core.Tests
 
 
         private static AgentController CreateController(string webRoot, out Guid productId, string externalUrl = "https://hsm.example.com",
-                                                        ServerCertificateConfig certificate = null, bool tls = false, bool behindTrustedProxy = false)
+                                                        ServerCertificateConfig certificate = null, bool tls = false, string peer = null,
+                                                        bool originalForHeader = false)
         {
             var product = new ProductModel("Demo server");
             var key = AccessKeyModel.BuildDefault(product);
@@ -397,7 +423,7 @@ namespace HSMServer.Core.Tests
             config.Setup(c => c.Agent).Returns(new AgentConfig { ExternalConnectionUrl = externalUrl });
             config.Setup(c => c.Kestrel).Returns(new KestrelConfig
             {
-                TrustedProxies = behindTrustedProxy ? ["attached-networks"] : [],
+                TrustedProxies = peer is null ? [] : ConnectionPeers.TrustedProxies,
             });
             config.Setup(c => c.ServerCertificate).Returns(certificate ?? new ServerCertificateConfig());
 
@@ -410,8 +436,11 @@ namespace HSMServer.Core.Tests
             if (tls)
                 context.Features.Set(new Mock<ITlsHandshakeFeature>().Object);
 
-            // What the forwarded-headers middleware leaves behind after it consumed a trusted proxy's header.
-            if (behindTrustedProxy)
+            // With trusted proxies configured the app records the connection's peer before anything else reads it.
+            if (peer is not null)
+                ConnectionPeers.Record(context, peer);
+
+            if (originalForHeader)
                 context.Request.Headers[ForwardedHeadersDefaults.XOriginalForHeaderName] = "203.0.113.7:51000";
 
             return new AgentController(new Mock<IUserManager>().Object, cache.Object, config.Object, environment.Object)

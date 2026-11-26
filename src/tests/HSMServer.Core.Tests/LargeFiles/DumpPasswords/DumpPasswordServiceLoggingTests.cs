@@ -68,10 +68,11 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             service.MarkRetired(id, 1, _context.Now);
 
             _context.Database.ShouldFailDumpPasswordOp = _ => true;
-            Capture(exceptions, () => service.RemoveExpired(_context.Now.AddDays(1)));
+            Capture(exceptions, () => service.RemoveExpired(_context.Now.AddDays(1), new HashSet<(Guid, int)>()));
 
             _context.Database.ShouldFailDumpPasswordOp = null;
-            service.RemoveExpired(_context.Now.AddDays(1));
+            service.RemoveExpired(_context.Now.AddDays(1), new HashSet<(Guid, int)> { (id, 1) }); // kept: an archive carries it
+            service.RemoveExpired(_context.Now.AddDays(1), new HashSet<(Guid, int)>());
             service.RemoveProduct(id);
 
 
@@ -85,6 +86,7 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             Assert.Contains(logs, l => l.Contains("could not be removed"));
             Assert.Contains(logs, l => l.Contains("journal record"));
             Assert.Contains(logs, l => l.Contains("handler"));
+            Assert.Contains(logs, l => l.Contains("version 1") && l.Contains("an archive still carries it"));
 
             foreach (var password in passwords)
             {

@@ -228,6 +228,86 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
         }
 
+        // What .NET reports for a full volume: ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL as HRESULTs on Windows, the raw
+        // errno ENOSPC (28) on Linux (observed with .NET 8 writing to a full tmpfs).
+        [Theory]
+        [InlineData(unchecked((int)0x80070070))]
+        [InlineData(unchecked((int)0x80070027))]
+        [InlineData(28)]
+        public async Task AFullVolumeWhileWritingTheTemporaryArchive_WaitsForRoom_AbandonsIt_AndIsNotAFailure(int hresult)
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var content = TestContent.Compressible(250_000);
+            var file = _h.Store.AddVerified(_h.Product, content);
+            _h.Writer.FailWrite = _ => new IOException("There is not enough space on the disk.", hresult);
+
+            await _h.Run();
+
+            var status = _h.Builder.GetStatus(file.FileId);
+            Assert.Equal(ArchiveBuildState.WaitingForRoom, status.State);
+            Assert.Equal(_h.Now + TimeSpan.FromMinutes(1), status.NextAttemptUtc);
+            Assert.Equal(1, _h.Builder.Statistics.WaitedForRoom);
+            Assert.Equal(0, _h.Builder.Statistics.Failed);
+            Assert.Contains("no room", _h.Finished.Single().Error);
+            Assert.Single(_h.Store.Abandoned);
+            Assert.Empty(_h.Store.TempFiles());
+            Assert.Equal(LargeArchiveFileState.Verified, _h.Store.TryGetFile(file.FileId).State);
+
+            _h.Writer.FailWrite = null;
+            _h.Advance(TimeSpan.FromMinutes(1));
+            await _h.Run();
+
+            Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(file.FileId).State);
+            Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
+        }
+
+        // The same full volume, reported by the temporary archive's own stream rather than by the writer: on a write
+        // or on the flush that follows the last entry.
+        [Theory]
+        [InlineData(unchecked((int)0x80070070), false)]
+        [InlineData(28, false)]
+        [InlineData(unchecked((int)0x80070070), true)]
+        [InlineData(28, true)]
+        public async Task AFullVolumeReportedByTheTemporaryArchiveStream_WaitsForRoom_AndAbandonsIt(int hresult, bool onFlush)
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var content = TestContent.Compressible(250_000);
+            var file = _h.Store.AddVerified(_h.Product, content);
+            _h.Builder.WrapTemporaryOutput = output => new FullVolumeStream(output, hresult, onFlush);
+
+            await _h.Run();
+
+            var status = _h.Builder.GetStatus(file.FileId);
+            Assert.Equal(ArchiveBuildState.WaitingForRoom, status.State);
+            Assert.Equal(1, _h.Builder.Statistics.WaitedForRoom);
+            Assert.Equal(0, _h.Builder.Statistics.Failed);
+            Assert.Single(_h.Store.Abandoned);
+            Assert.Empty(_h.Store.TempFiles());
+            Assert.Equal(LargeArchiveFileState.Verified, _h.Store.TryGetFile(file.FileId).State);
+
+            _h.Builder.WrapTemporaryOutput = null;
+            _h.Advance(TimeSpan.FromMinutes(1));
+            await _h.Run();
+
+            Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(file.FileId).State);
+            Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
+        }
+
+        [Fact]
+        public async Task AnotherIOFaultWhileWriting_IsAFailure()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(250_000));
+            _h.Writer.FailWrite = _ => new IOException("The device is not ready.", unchecked((int)0x80070015));
+
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.Failed, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Equal(0, _h.Builder.Statistics.WaitedForRoom);
+            Assert.Equal(1, _h.Builder.Statistics.Failed);
+            Assert.Single(_h.Store.Abandoned);
+        }
+
         [Fact]
         public async Task CommitFault_DuringAReencryption_AbandonsTheBuild_KeepsTheOldArchive_AndIsRetried()
         {
@@ -439,6 +519,26 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
         [Fact]
+        public async Task PackedArchiveOfAProductWhosePasswordsCannotBeRead_IsLeftAlone_WithoutAReport()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(50_000));
+            await _h.Run();
+            var packed = _h.Store.TryGetFile(file.FileId);
+            _h.Finished.Clear();
+
+            // The stored row of the product cannot be read: the service keeps no version of it.
+            _h.Passwords.Lose(_h.Product, 1);
+            _h.Passwords.Unreadable.Add(_h.Product);
+            await _h.Run();
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.None, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Empty(_h.Finished);
+            Assert.Equal(packed, _h.Store.TryGetFile(file.FileId));
+        }
+
+        [Fact]
         public async Task PackedArchiveWhoseVersionIsNotKept_FailsVisiblyOnce_AndIsNeverRetriedByItself()
         {
             _h.Passwords.Set(_h.Product, Password1);
@@ -577,6 +677,28 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             Assert.Null(_h.Passwords.GetVersion(_h.Product, 1));
             Assert.NotNull(_h.Passwords.GetVersion(_h.Product, 2));
             Assert.Equal(a.ProductId, b.ProductId);
+        }
+
+        [Fact]
+        public async Task TheRemovalOfExpiredVersions_IsGivenTheVersionsThePackedArchivesCarry()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(100_000));
+            await _h.Run();
+
+            // A version retired although its archive was never rewritten (the re-encryption keeps failing): the removal
+            // after the retention still sees that an archive carries it, and keeps it.
+            _h.Passwords.Set(_h.Product, Password2);
+            _h.Writer.FailWrite = _ => new InvalidOperationException("the writer is broken");
+            _h.Passwords.MarkRetired(_h.Product, 1, _h.Now);
+            _h.Advance(TimeSpan.FromDays(31));
+
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.Failed, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Contains((_h.Product, 1), _h.Passwords.LastCarried);
+            Assert.NotNull(_h.Passwords.GetVersion(_h.Product, 1));
+            Assert.Equal(TestContent.Compressible(100_000), _h.ReadArchive(file.FileId, Password1));
         }
 
         [Fact]

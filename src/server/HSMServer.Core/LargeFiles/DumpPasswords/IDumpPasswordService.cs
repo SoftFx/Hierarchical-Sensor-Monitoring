@@ -34,6 +34,12 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
 
         /// <summary>The product is not a root product: the password belongs to the root, whose archives it protects.</summary>
         NotRootProduct,
+
+        /// <summary>
+        /// The stored row of the product's passwords cannot be read: a new password would overwrite the versions it holds,
+        /// so nothing is stored until an administrator has looked at the configuration database.
+        /// </summary>
+        StoredRowUnreadable,
     }
 
 
@@ -76,7 +82,14 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         /// <summary>Every kept version, newest first: what the settings page shows to a Manager or an admin.</summary>
         IReadOnlyList<DumpPasswordVersion> GetVersions(Guid productId);
 
+        /// <summary>True when the product has a current version; false also when its passwords cannot be read.</summary>
         bool HasPassword(Guid productId);
+
+        /// <summary>
+        /// True when the stored row of the product's passwords could not be read at load: its passwords are unavailable
+        /// (not unset), and <see cref="SetPassword"/> refuses to overwrite the row.
+        /// </summary>
+        bool IsUnreadable(Guid productId);
 
         /// <summary>The products that have a dump password: the builder retires their replaced versions after a restart.</summary>
         IReadOnlyCollection<Guid> GetProductIds();
@@ -94,8 +107,11 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         /// <summary>Marks a replaced version as no longer carried by any archive; kept readable until the retention ends.</summary>
         void MarkRetired(Guid productId, int version, DateTime utc);
 
-        /// <summary>Removes replaced versions retired for longer than the retention; returns how many were removed.</summary>
-        int RemoveExpired(DateTime nowUtc);
+        /// <summary>
+        /// Removes replaced versions retired for longer than the retention; returns how many were removed. A version in
+        /// <paramref name="carried"/> (the (product, version) pairs the packed archives carry, from one listing) is kept.
+        /// </summary>
+        int RemoveExpired(DateTime nowUtc, IReadOnlySet<(Guid ProductId, int Version)> carried);
 
         /// <summary>Removes every version of a product (with the product).</summary>
         void RemoveProduct(Guid productId);

@@ -1,3 +1,4 @@
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.IO;
 using System.Security.Claims;
@@ -362,7 +363,7 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
                 return false;
 
             return caller.WebUser is { } user
-                ? user.IsProductAvailable(file.ProductId)
+                ? UserTreeAccess.IsRootProductVisibleTo(user, file.ProductId)
                 : _authorization.AuthorizeRead(caller.Principal, ApiTokenResource.Sensor(file.SensorId)) == ApiTokenAuthorization.Allowed;
         }
 

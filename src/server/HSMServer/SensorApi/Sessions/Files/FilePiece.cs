@@ -99,24 +99,16 @@ namespace HSMServer.SensorApi.Sessions.Files
 
         public static long PieceCount(long size, int pieceSize) => (size + pieceSize - 1) / pieceSize;
 
-        public static string FormatUploadId(Guid id) => Convert.ToHexString(id.ToByteArray()).ToLowerInvariant();
+        // The upload id on the wire is the file id as 32 hex digits ("N"), the form every log line of the server and the
+        // store uses for it; the header carries the same 16 bytes in that order (the Guid big-endian), so the hex of the
+        // header's bytes is the text of `upload`.
+        public static string FormatUploadId(Guid id) => id.ToString("N");
 
         public static bool TryParseUploadId(string text, out Guid id)
         {
             id = Guid.Empty;
 
-            if (text is null || text.Length != 32)
-                return false;
-
-            try
-            {
-                id = new Guid(Convert.FromHexString(text));
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
+            return text is not null && text.Length == 32 && Guid.TryParseExact(text, "N", out id);
         }
 
         public static uint ComputeChecksum(ReadOnlySpan<byte> compressed) => Crc32.HashToUInt32(compressed);
@@ -166,7 +158,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             {
                 Kind = kind,
                 Id = BinaryPrimitives.ReadInt64LittleEndian(frame[8..]),
-                UploadId = new Guid(frame.Slice(16, 16)),
+                UploadId = new Guid(frame.Slice(16, 16), bigEndian: true),
                 Number = BinaryPrimitives.ReadInt64LittleEndian(frame[32..]),
                 DecompressedLength = BinaryPrimitives.ReadUInt32LittleEndian(frame[40..]),
                 CompressedLength = BinaryPrimitives.ReadUInt32LittleEndian(frame[44..]),
