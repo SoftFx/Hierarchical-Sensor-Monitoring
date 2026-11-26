@@ -300,6 +300,16 @@ namespace HSMServer.Core.Tests.Controllers
         private static ProductModel BuildProduct(string name, Guid? folderId) =>
             new(EntitiesFactory.BuildProductEntity(name: name) with { Id = Guid.NewGuid().ToString(), FolderId = folderId?.ToString() });
 
+        // A sensor of the own product holding the history given (the export tests, #1886).
+        public BaseSensorModel AddOwnSensor(string name, SensorType type, List<BaseValue> history)
+        {
+            var sensor = AddSensor(Own, name, type);
+            _history[sensor.Id] = history;
+            Cache.Raise(c => c.ChangeSensorEvent += null, sensor, ActionType.Add);
+
+            return sensor;
+        }
+
         private BaseSensorModel AddSensor(ProductModel product, string name, SensorType type)
         {
             var sensor = Infrastructure.SensorModelFactory.Build(

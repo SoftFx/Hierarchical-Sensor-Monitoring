@@ -489,8 +489,9 @@ namespace HSMServer.Controllers
             Response.Headers["Content-Disposition"] = $"attachment;filename={fileName}";
 
             var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
-            // A large file value's row names its file, its size, its kind and its state (#1886), read from the store.
-            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions, _largeFiles));
+            // A large file value's row names its file, its size, its kind and its state (#1886), read from the store. A person
+            // opens this download in a spreadsheet.
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(CsvReader.Spreadsheet, exportOptions, _largeFiles));
 
             return File(content, fileName.GetContentType(), fileName);
         }

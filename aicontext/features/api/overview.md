@@ -59,6 +59,7 @@ A File sensor may hold large file values (a file whose content the server keeps 
 
 - `history`: the value keeps the members of a file value (`Comment`, `Time`, `Status`, `Value`, `FileName`, `Extension`) with an empty `Value`, and gets an additive member `LargeFile { FileId, Name, Extension, Size, Secure, State }`. `Secure` and `State` come from the store's record: `State` is `verified`, `packed`, `removed` (the store no longer holds the file; `Secure` is null) or `unavailable` (the store could not be read; the rest of the history is still answered). An ordinary file value has no `LargeFile` member: its JSON is what it was.
 - `historyFile`: the content cell of a large value is empty, and a last column `Large file` holds `Large file <fileId>; <size> bytes; secure|not secure; <state>`. The column is present only when the values hold a large one, so the columns of a File sensor without one are what they were.
+- `historyFile` writes every value as it is stored, each cell quoted, a quote in it doubled: a String value, a comment, a file's name and extension and its base64 content are not changed for a spreadsheet (no apostrophe before `=`, `+`, `-`, `@`; bidirectional control characters kept). Only the web UI's download of the History tab writes a collector's free text as spreadsheet text (`../server/file-sensor-page/feature.md`, History export).
 
 ### Statuses of the two registration routes (#1749)
 
