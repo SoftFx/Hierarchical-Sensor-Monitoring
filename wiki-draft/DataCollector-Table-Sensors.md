@@ -126,7 +126,7 @@ var collectorOptions = new CollectorOptions
 | `Unavailable` | `table sensors need the collector session transport, and this collector sends over HTTP (CollectorOptions.Transport)` |
 | `Refused` | `Table sensor 'quotes/EURUSD' is registered with the schema (time Time, bid Double, ask Double); a registration with (time Time, bid Double) is refused: a different shape is a different sensor.` |
 
-A sensor is `Unavailable` when the collector uses the HTTP transport (also the automatic HTTP of .NET Framework with `AllowUntrustedServerCertificate`), a custom `CollectorOptions.DataSender`, the session of another collector created first from the same options, runs on a host where no session can exist, or is stopping or disposed. This is decided when the collector is constructed and stays for its life: **create the collector again** with a session of its own.
+A sensor is `Unavailable` when the collector uses the HTTP transport (also the automatic HTTP of .NET Framework with `AllowUntrustedServerCertificate`), a custom `CollectorOptions.DataSender`, the session of another collector created first from the same options, or runs on a host where no session can exist. This is decided when the collector is constructed and stays for its life: **create the collector again** with a session of its own. A sensor created while the collector is stopping or after it was disposed is `Unavailable` too.
 
 A sensor is `Refused` when the server refuses its registration, for example another schema or another kind of sensor on that path. Choose another path, or remove the sensor on the server and start the collector again.
 
@@ -175,7 +175,7 @@ A message the server did not answer is sent again with the same identity; if the
 | `MaxTableBufferBytes` | 64 MiB | rows waiting for the tick: new rows are refused ("buffer full") |
 | `MaxTableBacklogBytes` | 64 MiB, about 16 million rows of time, bid, ask | packed messages waiting for the server (an outage): the oldest are dropped |
 
-A quiet sensor keeps two buffers of 256 rows (4 KiB per column). A busy sensor's buffers follow its rows.
+A quiet sensor keeps at most two buffers of 256 rows (4 KiB per column). A busy sensor's buffers follow its rows.
 
 ### .NET Framework
 
@@ -308,7 +308,7 @@ Accepted 600, dropped 0
 
 ### Building with tables
 
-Table sensors are in the native collector since 0.15.0 and are delivered since 0.15.1. The functions exist in every build, but a build without table support makes every table sensor `Unavailable` with the reason "built with HSM_COLLECTOR_TABLES=OFF". Build from `src/native/collector` with both options:
+Table sensors are in the native collector since 0.15.0 and are delivered since 0.15.1. The functions exist in every build, but a build without table support makes every table sensor `Unavailable` with the reason "this build of the native collector has no table support (it was built with HSM_COLLECTOR_TABLES=OFF)". Build from `src/native/collector` with both options:
 
 ```bash
 cmake -S src/native/collector -B build -DHSM_COLLECTOR_HTTP=ON -DHSM_COLLECTOR_TABLES=ON \

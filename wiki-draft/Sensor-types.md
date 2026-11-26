@@ -14,7 +14,7 @@ Every sensor in HSM has a **kind** (its type). The kind decides what one value i
 | Integer | 1 | a 32-bit integer | Graph (line), Table, Journal | `CreateIntSensor` | + Value, EMA (Value) |
 | Double | 2 | a double | Graph (line), Table, Journal | `CreateDoubleSensor` | + Value, EMA (Value) |
 | String | 3 | a text | Table, Journal (no Graph) | `CreateStringSensor` | + Value (text), Value length |
-| IntegerBar | 4 | min, max, mean, count, first and last of integers over a period | Graph (candlesticks or mean ± sigma), Table, Journal | `CreateIntBarSensor`, `Create1MinIntBarSensor`, ... | + Min, Max, Mean, Count, First, Last and their EMAs |
+| IntegerBar | 4 | min, max, mean, count, first and last of integers over a period | Graph (candlesticks or mean ± sigma), Table, Journal | `CreateIntBarSensor`, `Create1MinIntBarSensor`, ... | + Min, Max, Mean, Count, First value, Last value, EMA of Min, Max, Mean and Count |
 | DoubleBar | 5 | the same of doubles | the same | `CreateDoubleBarSensor`, `Create5MinDoubleBarSensor`, ... | the same |
 | File | 6 | a file: bytes, a name and an extension | Files (Download, Preview), Journal | `CreateFileSensor`, `SendFileAsync` | + Size |
 | TimeSpan | 7 | a duration | Graph (line), Table, Journal | `CreateTimeSensor` | + Value |
@@ -25,7 +25,7 @@ Every sensor in HSM has a **kind** (its type). The kind decides what one value i
 
 "Number" is the value of the kind in the API (`SensorType` in a registration). "+" means: in addition to the four alert properties every kind but Table has.
 
-Where the code is: the kinds are the enum `SensorType` in [HSMSensorDataObjects](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/api/HSMSensorDataObjects/SensorType.cs); the managed collector's methods are on [`IDataCollector`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/collector/HSMDataCollector/Core/IDataCollector.cs); the native C++ collector's are on `hsm::collector::Collector` in [`collector.hpp`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/native/collector/include/hsm_collector/collector.hpp) and in the C header [`hsm_collector.h`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/native/collector/include/hsm_collector/hsm_collector.h).
+Where the code is: the kinds are the enum `SensorType` in [HSMSensorDataObjects](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/api/HSMSensorDataObjects/SensorType.cs); the managed collector's methods are on [`IDataCollector`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/collector/HSMDataCollector/Core/IDataCollector.cs) (`CreateTableSensor` is an extension method on it, see [DataCollector Table Sensors](DataCollector-Table-Sensors)); the native C++ collector's are on `hsm::collector::Collector` in [`collector.hpp`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/native/collector/include/hsm_collector/collector.hpp) and in the C header [`hsm_collector.h`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/native/collector/include/hsm_collector/hsm_collector.h).
 
 ---
 
@@ -53,9 +53,9 @@ The sensor page of these kinds has the tabs **Graph** (not for String or File), 
 | New data | received a new value |
 | Inactivity Period | no value for longer than the period (the TTL) |
 
-The properties of each kind are added in the sections below. Numeric properties take `<`, `<=`, `>`, `>=`, `==`, `!=`; text properties take equals, not equals, contains, starts with, ends with. An alert has at most 10 conditions. **EMA** properties exist where the sensor has EMA statistics switched on (Integer, Double, Rate, Enum and both bars); the EMA keeps 0.9 of the old value and adds 0.1 of the new one. See [Alerts Overview](Alerts-Overview) and the [Conditions Reference](Alert-Conditions-Reference).
+The properties of each kind are added in the sections below. Numeric properties take `<`, `<=`, `>`, `>=`, `==`, `!=`; text properties take equals, not equals, contains, starts with, ends with. An alert has at most 10 conditions. **EMA** properties are offered for Integer, Double, Rate, Enum and both bars; they have values only while the sensor's EMA statistics are switched on. The EMA keeps 0.9 of the old value and adds 0.1 of the new one. See [Alerts Overview](Alerts-Overview) and the [Conditions Reference](Alert-Conditions-Reference).
 
-**Paths.** A sensor path has at most 10 parts (`a/b/c` has 3). A part may not be empty, and a path may not contain `\` or a tab. Spaces around a part and a leading `/` are dropped.
+**Paths.** A sensor path has at most 10 parts (`a/b/c` has 3). Empty parts, spaces around a part and a leading `/` are dropped (`/a// b` is stored as `a/b`); a path may not contain `\` or a tab.
 
 **Sending without a collector.** Each kind 0 to 10 has its own route in the Sensor API: `POST api/sensors/bool`, `int`, `double`, `string`, `timespan`, `version`, `rate`, `enum`, `intBar`, `doubleBar`, `file`, and `list` for several values at once. See [REST API](REST-API). Table rows have no such route: they are sent by a collector (see [Table](#table)).
 

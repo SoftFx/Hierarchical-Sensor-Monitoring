@@ -195,7 +195,7 @@ A table sensor has no alerts. To watch a feed, the server keeps ordinary sensors
 |---|---|---|---|
 | `.tables/Rows` | Integer, count | every minute with stored rows | Rows of all table sensors of the product stored in that minute. |
 | `.tables/Stored` | Double, MB | every minute with stored rows | Bytes stored in that minute (3 decimals). |
-| `.tables/Delivery lag` | Double, seconds | every minute with stored rows | The largest, in that minute, of "time the server stored a message" minus "time of its last row". It includes the difference between the clocks of the sender and of the server, and can be negative. |
+| `.tables/Delivery lag` | Double, seconds | every minute with stored rows | The largest, in that minute, of "time the server received a message (before writing it)" minus "time of its last row". It includes the difference between the clocks of the sender and of the server, and can be negative. |
 | `.tables/Tables refused` | Integer, count | in a minute with refusals, then `0` once | Tables of incoming messages the server refused (no table sensor at the path, another schema, a blocked sensor, ...). Their rows are not stored. |
 | `.tables/Blocks the merge could not read` | Integer, count | in a minute with such blocks, then `0` once | Stored data the hourly merge found damaged. |
 | `.tables/<the table sensor's path>/Rows` | Integer, count | every 5 minutes with rows of that sensor | Rows of that one table sensor. |
@@ -216,7 +216,7 @@ The feed never changes a sensor that exists: your description, unit, alerts and 
 
 ## The server's own sensors
 
-The server reports its table store in its own product, **HSM Server Monitoring**, under **`Database/Tables`**, every 5 minutes. These sensors appear only after the first table rows reached the server. They are counters since the server started.
+The server reports its table store in its own product, **HSM Server Monitoring**, under **`Database/Tables`**, every 5 minutes. They appear at the next 5-minute sample after the table store is first opened in the server's run (the first registration of a table sensor, or the first rows); the merge and retention sensors (from `Batch databases open` down) appear after the first hourly merge. Most are counters since the server started; `Blocks in store`, `Batch databases open`, `Batch week databases`, `Merge lag`, `Merged hours holding blocks` and `Move weeks pending` show the current state.
 
 | Sensor | Means trouble when |
 |---|---|
