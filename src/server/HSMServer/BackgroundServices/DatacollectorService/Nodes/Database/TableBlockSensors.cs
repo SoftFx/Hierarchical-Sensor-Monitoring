@@ -170,6 +170,12 @@ namespace HSMServer.BackgroundServices
             Add("Batch databases compacted", () => Interlocked.Read(ref merge.DatabasesCompacted), false,
                 "Week databases compacted since the server started because a tenth of them had been deleted by the move.", _batchCounters);
 
+            // The removal of table sensors and products (#1850 part 4d).
+            Add("Removals done", () => Interlocked.Read(ref merge.RemovalsDone), false,
+                "Removals of table sensors and products completed since the server started: every stored row of the sensor deleted (or the product's batches and never-merged blocks), the record of the removal cleared. A fault is counted in Move faults.", _batchCounters);
+            Add("Orphan table placements", () => Interlocked.Read(ref merge.OrphanPlacements), false,
+                "Placements of table sensors that are not in the tree and have no record of their removal at the end of the last merge pass (a record that could not be written or read, a sensor whose entity does not load). Their rows are kept and nothing deletes them; the log names them once a day.", _batchCounters);
+
             _batchesCreated = true;
         }
 

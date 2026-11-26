@@ -78,6 +78,10 @@ namespace HSMServer.Core.TableSensors
             public long MovedBytes;
             public long ExpiredRows;
             public int Compactions;
+            public int Removals;
+            // Of Steps, the writes of removals (a week database a removed sensor's keys were deleted from, an hour of a removed
+            // product's blocks): they take the same budget and are not steps of the move in the report.
+            public int RemovalSteps;
 
             // At least one step a pass when there is work; then while the budget lasts. A step limit of 0 (tests) holds the
             // steps off.
@@ -91,7 +95,7 @@ namespace HSMServer.Core.TableSensors
         // lag, store-wide, oldest week first, then product, then sensor. Never throws: a fault of a product is counted, logged
         // once per product and hour of the pass's clock, and stops that product's steps for this pass; its record stays. A
         // fault of the move does not set the pass's fault (the pass did not stop): it is in Move faults and the log.
-        private MoveRun RunMoves(DateTime utcNow, Unreconciled unreconciled, HashSet<Guid> lagging, CancellationToken token)
+        private MoveRun RunMoves(DateTime utcNow, Unreconciled unreconciled, HashSet<Guid> lagging, IReadOnlyList<TableRemoval> removals, CancellationToken token)
         {
             var run = new MoveRun(MoveStepsPerPass, _options.MoveSecondsPerPass * 1000L, _options.MoveMegabytesPerPass * 1024L * 1024);
             // Products whose steps cannot run in this pass: not reconciled, or faulted (below). A product whose merge lags runs
@@ -131,8 +135,11 @@ namespace HSMServer.Core.TableSensors
                     }
                 }
 
-                // 2. The removal of table sensors and products (#1850 part 4d, the next pull request) goes here: after the
-                //    recovery of the moves in flight, before the steps.
+                // 2. The removal of table sensors and root products (#1850 part 4d): after the recovery of the moves in
+                //    flight (a removed sensor's step in flight is recovered like any other first), before the steps, within
+                //    the same budget. Whatever the lag: it frees disk.
+                if (removals is not null)
+                    RunRemovals(removals, products, run, faulted, utcNow, token);
 
                 // 3. The steps. A step the store refused, or whose target retention dropped, is not tried again in this
                 //    process while it stays the same step: a change of the placement or of the period makes another step.
@@ -177,7 +184,7 @@ namespace HSMServer.Core.TableSensors
             {
                 var blocked = new HashSet<Guid>(faulted);
                 blocked.UnionWith(lagging);
-                CountPending(unreconciled.All ? null : blocked);
+                CountPending(unreconciled.All ? null : blocked, removals, utcNow);
             }
         }
 
@@ -195,9 +202,16 @@ namespace HSMServer.Core.TableSensors
         // products whose steps could not run in the pass (placements not reconciled, a fault, a merge that lags, which holds
         // the copy steps; every product when the products could not be reconciled at all). Move steps refused now: the steps
         // not tried again (_refusedSteps).
-        private void CountPending(HashSet<Guid> blocked)
+        //
+        // And the orphan placements (#1850 part 4d): a placement whose sensor is not in the tree and has no record of its
+        // removal (none of the sensor, none of its product; every one when the record could not be read). Kept, never
+        // deleted by the job: counted, and logged as a warning once a day of the pass's clock with the ids.
+        private void CountPending(HashSet<Guid> blocked, IReadOnlyList<TableRemoval> removals, DateTime utcNow)
         {
             long pending = 0, stuck = 0;
+            var orphans = new List<(Guid Product, Guid Sensor)>();
+            var markedSensors = removals?.Where(m => m.SensorId is not null).Select(m => m.SensorId.Value).ToHashSet() ?? [];
+            var markedProducts = removals?.Where(m => m.SensorId is null).Select(m => m.ProductId).ToHashSet() ?? [];
 
             try
             {
@@ -210,6 +224,8 @@ namespace HSMServer.Core.TableSensors
                         if (inTree.Contains(sensor))
                             foreach (var segment in placement.Segments)
                                 weeks += WeeksOf(segment.FirstHour, segment.EndHour).Count();
+                        else if (!markedSensors.Contains(sensor) && !markedProducts.Contains(product) && _cache.GetSensor(sensor) is null)
+                            orphans.Add((product, sensor));
 
                     pending += weeks;
                     if (blocked is null || blocked.Contains(product))
@@ -225,6 +241,17 @@ namespace HSMServer.Core.TableSensors
             Stats.Set(ref Stats.MoveStepsPending, pending);
             Stats.Set(ref Stats.MoveStepsBlocked, stuck);
             Stats.Set(ref Stats.MoveStepsRefusedNow, _refusedSteps.Count);
+            Stats.Set(ref Stats.OrphanPlacements, orphans.Count);
+
+            long day = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerDay;
+            if (orphans.Count > 0 && day != _orphansLoggedDay)
+            {
+                _orphansLoggedDay = day;
+                _logger.Warn($"Table removal: {orphans.Count} placements of table sensors that are not in the tree and have no record of their removal " +
+                             $"(a record that could not be written or read, a sensor whose entity does not load); their rows are kept and nothing deletes them " +
+                             $"(logged once a day): {string.Join(", ", orphans.Take(MaxOrphansLogged).Select(o => $"sensor {o.Sensor} of product {o.Product}"))}" +
+                             (orphans.Count > MaxOrphansLogged ? $" and {orphans.Count - MaxOrphansLogged} more" : string.Empty));
+            }
         }
 
         // The sensor-weeks to move: per eligible sensor (in the tree, its product reconciled in this pass, its setting's class

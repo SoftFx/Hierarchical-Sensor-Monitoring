@@ -413,6 +413,46 @@ namespace HSMServer.Core.Cache
             return null;
         }
 
+        // Every table sensor in the subtree of a node.
+        private static List<TableSensorModel> TableSensorsIn(ProductModel node)
+        {
+            var tables = new List<TableSensorModel>();
+
+            void Visit(ProductModel n)
+            {
+                foreach (var (_, sensor) in n.Sensors)
+                    if (sensor is TableSensorModel table)
+                        tables.Add(table);
+
+                foreach (var (_, child) in n.SubProducts)
+                    Visit(child);
+            }
+
+            Visit(node);
+            return tables;
+        }
+
+        // Records in the batch store (#1850 part 4d) that the stored rows of table sensors (with their root products,
+        // Guid.Empty when not known) and of root products are to be deleted, before the tree removes them. A record that
+        // cannot be written is logged and the removal goes on (it must not make anything come back): the rows are then
+        // kept, and the merge job reports them as orphan placements.
+        private void MarkTableRemoval(IReadOnlyCollection<(Guid Product, Guid Sensor)> sensors, IReadOnlyCollection<Guid> products)
+        {
+            if ((sensors.Count == 0 && products.Count == 0) || _database.TableBatches is not { } batches)
+                return;
+
+            try
+            {
+                batches.MarkRemoved(sensors, products);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"The removal of the stored rows of table sensors [{string.Join(", ", sensors.Select(s => s.Sensor))}] and products " +
+                                  $"[{string.Join(", ", products)}] could not be recorded; the removal goes on, their rows are kept and reported as orphan " +
+                                  $"table placements: {ex.Message}");
+            }
+        }
+
         public async Task RemoveProductAsync(Guid productId, InitiatorInfo initiator = null, CancellationToken token = default)
         {
             var product = GetProduct(productId);
@@ -442,7 +482,7 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(subProductId, initiator);
 
                 foreach (var (sensorId, _) in product.Sensors)
-                    RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds);
+                    RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds, tableMarked: true);
 
                 RemoveBaseNodeSubscription(product);
 
@@ -469,6 +509,13 @@ namespace HSMServer.Core.Cache
                         lock (_productsByNameLock)
                             _productsByName.TryRemove(product.DisplayName, out _);
                     }
+
+                    // The stored table rows of the subtree (#1850 part 4d), recorded in one write before anything leaves the
+                    // tree: a root product goes whole (its folder of batches and its blocks), a node's table sensors one by one.
+                    if (product.IsRoot)
+                        MarkTableRemoval([], [product.Id]);
+                    else
+                        MarkTableRemoval(TableSensorsIn(product).Select(t => (product.Root?.Id ?? Guid.Empty, t.Id)).ToList(), []);
 
                     RemoveProduct(request.Id, request.InitiatorInfo);
 
@@ -1347,8 +1394,11 @@ namespace HSMServer.Core.Cache
         // Returns false when the sensor's entity may still be in the database
         // (the removal threw before or inside the database step): a merge must
         // report that, the occupant would come back on restart (#1720 review).
+        //
+        // tableMarked: the caller recorded the removal of the sensor's stored table rows already (a product's removal
+        // records its whole subtree in one write).
         private bool RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null,
-            List<Guid> purgeIds = null)
+            List<Guid> purgeIds = null, bool tableMarked = false)
         {
             var removedFromDatabase = false;
 
@@ -1356,6 +1406,12 @@ namespace HSMServer.Core.Cache
             {
                 if (!TryGetSensorById(sensorId, out var sensor))
                     return true;
+
+                // Before the sensor leaves the tree (#1850 part 4d): the merge job deletes a table sensor's stored rows once
+                // it is gone, by this record. Written first, so a crash before the entity goes leaves a record of a sensor
+                // still in the tree, which the job clears without deleting anything.
+                if (sensor is TableSensorModel && !tableMarked)
+                    MarkTableRemoval([(sensor.Root?.Id ?? Guid.Empty, sensor.Id)], []);
 
                 RemoveSensorFromCache(sensor);
                 UnindexAliases(sensor);
@@ -4081,6 +4137,11 @@ namespace HSMServer.Core.Cache
                                      $" Name = {sensor.DisplayName}," +
                                      $" parentExists={_tree.ContainsKey(productId)}," +
                                      $" REMOVE WILL BE APPLIED");
+
+                        // Its stored table rows (#1850 part 4d): its root product is not known, the merge job finds the
+                        // product that holds a placement of it.
+                        if (sensor is TableSensorModel)
+                            MarkTableRemoval([(Guid.Empty, sensor.Id)], []);
 
                         _database.RemoveSensorWithMetadata(Guid.Parse(entity.Id));
 
