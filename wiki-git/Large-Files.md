@@ -1,6 +1,6 @@
 # Large Files
 
-> Large file values need an HSMServer release with large file values (the release after 3.45.0); earlier servers have none.
+> Large file values need HSMServer 3.46.0 or later; earlier servers have none.
 
 This page is for a user of the HSM site: what a large file value is, what the sensor page shows of it, how to download it and open it, the dump password of a product, the alert, how long files are kept, and the REST API and MCP. How an application sends large files is on [DataCollector Large Files](DataCollector-Large-Files); the server's settings are on [Server Configuration](Server-Configuration#large-files). All kinds of sensors are compared on [Sensor Types](Sensor-types).
 
@@ -238,7 +238,7 @@ The product **HSM Server Monitoring** has the node **Large files** once the serv
 
 ## Try it
 
-From an empty server to a dump on the sensor page, its alert, the dump password, the download and the opened zip. You need Docker Desktop, the .NET 8 SDK, `curl`, 7-Zip and a clone of the repository, on a branch with large file values.
+From an empty server to a dump on the sensor page, its alert, the dump password, the download and the opened zip. You need Docker Desktop, the .NET 8 SDK, `curl`, 7-Zip and a clone of the repository (branch `master`, 3.46.0 or later).
 
 **1. Run a server and a sender.** Follow steps 1 to 3 of [DataCollector Large Files: Try it](DataCollector-Large-Files#try-it): a server behind the bundled Caddy at `https://localhost:18443`, a product `LargeFileDocs` and its key, and the C# program that watches the folder `dumps` and sends a 2.7 MB report with `SendFile`. Expect its line `The file value of reports/daily (2718735 bytes) is stored on the server as a large file value.`
 

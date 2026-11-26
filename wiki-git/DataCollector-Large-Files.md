@@ -1,6 +1,6 @@
 # DataCollector Large Files
 
-> Large files need an HSMServer release with large file values (the HSMServer release after 3.45.0) and one of: the managed collector HSMDataCollector `4.2.0-preview` (NuGet prerelease), the native collector 0.16.0 or the C++ wrapper 2.1.0 (both built from the repository). Earlier servers and collectors have no large files.
+> Large files need HSMServer 3.46.0 or later and one of: the managed collector HSMDataCollector `4.2.0-preview` (NuGet prerelease), the native collector 0.16.0 or the C++ wrapper 2.1.0. Earlier servers and collectors have no large files.
 
 This page is for a developer whose application sends big files to HSM: crash dumps above all, but any file up to the server's limit (64 GiB by default). What the site shows, the dump password of a product and the download are on [Large Files](Large-Files). All kinds of sensors are compared on [Sensor Types](Sensor-types).
 
@@ -12,9 +12,9 @@ In short: you give the collector a folder to watch, or hand it one file. The col
 
 | Part | Version |
 |---|---|
-| Server | an HSMServer release with large file values, with collector sessions and file connections on (both are on by default) |
+| Server | 3.46.0 or later, with collector sessions and file connections on (both are on by default) |
 | Managed collector (C#) | HSMDataCollector `4.2.0-preview` (NuGet prerelease), .NET 6+ or .NET Framework 4.7.2+ |
-| Native collector (C, C++) | 0.16.0 (built from the repository), built with `HSM_COLLECTOR_HTTP=ON` and `HSM_COLLECTOR_TABLES=ON`, and libcurl 8.14.0 or later with WebSocket support |
+| Native collector (C, C++) | 0.16.0 (the vcpkg port `hsm-collector` 0.16.0 with the feature `tables`), built with `HSM_COLLECTOR_HTTP=ON` and `HSM_COLLECTOR_TABLES=ON`, and libcurl 8.14.0 or later with WebSocket support |
 | Legacy C++ wrapper | HSMCppWrapper 2.1.0 (it carries native collector 0.16.0) |
 | Transport | **the collector session** (the default of the managed collector since 4.0.0 and of the wrapper since 2.0.0; the native collector needs `UseSessionTransport()`) |
 
@@ -296,7 +296,7 @@ bool taken = await reports.SendFile(@"D:\MyApp\Reports\daily.csv", SensorStatus.
 - Routed values go before the files of the large-file API, in the order sent; one that waits goes before a large file in progress after its piece in flight, and that file then continues from the server's piece.
 - A value the server refuses for good, or that is given up, is a dropped file value: said with its path, name and size, and counted in `Queue overflow` under `File` (the native collector: in its one overflow counter).
 - **Without a file connection** (the HTTP transport, an older server, file connections switched off on the server) the value goes the ordinary way as before: on HTTP files up to the size limit are posted; on a session a file whose value does not fit a frame (about 1 MiB at the default) is dropped, said and counted.
-- `Stop`: in the managed collector a routed value not stored by then is a dropped file value; in the native collector a value whose upload had not begun goes back to the value queue before its stop drain (sent the ordinary way, or dropped and counted when it does not fit a frame), and one whose upload had begun is a dropped file value, said and counted.
+- `Stop`: a value whose upload had not begun goes back before the stop drain (the managed collector: to its file queue; the native collector: to its value queue) and is sent the ordinary way, or dropped and counted when it does not fit a frame; one whose upload had begun is a dropped file value, said and counted.
 
 ---
 
@@ -568,7 +568,7 @@ private:
 
 | Collector on | Against | What you see |
 |---|---|---|
-| the session | a server with large file values | watches `Active`, files stored; `SendFile` above the threshold as a large value |
+| the session | a server with large file values (3.46.0 or later) | watches `Active`, files stored; `SendFile` above the threshold as a large value |
 | HTTP (`CollectorTransport.Http`, `UseHttpTransport()`) | any server | watches `Unavailable`, handed-over files `Unavailable`; `SendFile` posts files as before |
 | the session | a server with sessions but without large file values (the releases 3.43.0 to 3.45.0) | the collector says once that the server does not take large files and asks again every 30 minutes; files wait; `SendFile` values go the ordinary way (a file above about 1 MiB does not fit a frame and is dropped, said and counted) |
 | the session | a server with file connections switched off (`CollectorSessions.MaxFileFrameBytes = 0`) | the same as the row above |
@@ -610,7 +610,7 @@ What the server allows is announced when the file connection opens and logged: `
 
 From an empty server to a dump in a watched folder, its download and the opened archive, and the same for a file of a few megabytes sent with `SendFile`. You need Docker Desktop, the .NET 8 SDK, `curl`, 7-Zip and a clone of the repository.
 
-**1. Run a server behind the bundled Caddy.** The download goes through Caddy, so run both. From the repository root, on a branch with large file values, in PowerShell, build the server and the Caddy image under names of their own:
+**1. Run a server behind the bundled Caddy.** The download goes through Caddy, so run both. From the repository root (branch `master`, 3.46.0 or later), in PowerShell, build the server and the Caddy image under names of their own:
 
 ```powershell
 dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -o ..\hsm-publish

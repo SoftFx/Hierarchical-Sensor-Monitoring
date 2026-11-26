@@ -10,6 +10,7 @@
  - [Server Self-Monitoring](HSM-Server-Monitoring)
  - [Sensor Types](Sensor-types)
  - [Table Sensors](Table-Sensors)
+ - [Large Files](Large-Files)
 
 **🔔 Alerts**
  - [Alerts Overview](Alerts-Overview)
@@ -27,6 +28,7 @@
  - [Statuses](DataCollector-statuses)
  - [Sensor Settings](DataCollector-sensor-settings)
  - [Table Sensors](DataCollector-Table-Sensors)
+ - [Large Files](DataCollector-Large-Files)
  - Default sensors
    - [Windows](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Windows-sensors-collection)
    - [Unix](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection)

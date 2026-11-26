@@ -1,6 +1,6 @@
 # Sensor Types
 
-> Describes HSMServer 3.45.0. The [Table](#table) section needs 3.45.0 or later; everything else is also true of 3.44.0.
+> Describes HSMServer 3.46.0. The [File](#file) section describes 3.46.0 (large file values and the paged **Files** tab need 3.46.0 or later); the [Table](#table) section needs 3.45.0 or later; everything else is also true of 3.44.0.
 
 Every sensor in HSM has a **kind** (its type). The kind decides what one value is, how the site shows it, which alerts it can have and how a collector sends it. The server knows **12 kinds**. Anything else you meet in a collector (rate sensors with a period, bar sensors with a period, "last value" sensors, function sensors) is a **convenience of the collector**: it computes values and sends them as one of the 12 kinds.
 
@@ -16,7 +16,7 @@ Every sensor in HSM has a **kind** (its type). The kind decides what one value i
 | String | 3 | a text | Table, Journal (no Graph) | `CreateStringSensor` | + Value (text), Value length |
 | IntegerBar | 4 | min, max, mean, count, first and last of integers over a period | Graph (candlesticks or mean ± sigma), Table, Journal | `CreateIntBarSensor`, `Create1MinIntBarSensor`, ... | + Min, Max, Mean, Count, First value, Last value, EMA of Min, Max, Mean and Count |
 | DoubleBar | 5 | the same of doubles | the same | `CreateDoubleBarSensor`, `Create5MinDoubleBarSensor`, ... | the same |
-| File | 6 | a file: bytes, a name and an extension | Files (Download, Preview), Journal | `CreateFileSensor`, `SendFileAsync` | + Size |
+| File | 6 | a file: bytes, a name and an extension; or a [large file](Large-Files) kept on the server's disk | Files (Download, Preview; a large file: its state and Download), Journal | `CreateFileSensor`, `SendFileAsync`, `WatchLargeFiles`, `SendLargeFileAsync` | + Size |
 | TimeSpan | 7 | a duration | Graph (line), Table, Journal | `CreateTimeSensor` | + Value |
 | Version | 8 | a version number such as `3.44.0` | Graph, Table, Journal | `CreateVersionSensor` | + Value (text operations) |
 | Rate | 9 | a double: a count per second (or per minute, hour, ...) | Graph (line), Table, Journal | `CreateRateSensor`, `CreateM1RateSensor`, `CreateM5RateSensor` | + Value, EMA (Value) |
@@ -188,7 +188,9 @@ Alerts: Min, Max, Mean, Count, First value, Last value, and EMA of Min, Max, Mea
 
 ## File
 
-One value is a file: its bytes, a name and an extension. The sensor page has the tabs **Files** and **Journal**: each value can be downloaded (**Download**) or opened (**Preview**); a `csv` file under 5 MB or a `txt` file under 1 MB is also shown inline. The server stores the bytes compressed when that makes them smaller.
+One value is a file: its bytes, a name and an extension. The sensor page has the tabs **Files** and **Journal**: the **Files** tab lists the values, newest first, 20 at a time (**Older files** for the next); each ordinary value can be downloaded (**Download**) or opened (**Preview**); a `csv` file under 5 MB or a `txt` file under 1 MB is also shown inline. The server stores the bytes compressed when that makes them smaller.
+
+A value can also be a **large file value**: its content is kept on the server's disk beside the database and is downloaded as a zip, encrypted under the product's dump password for a secure file. A dump, or any file up to the server's limit (64 GiB by default), becomes one when the application sends it with the large file API, and an ordinary file larger than about 1 MiB becomes one by itself on the collector session. A large value has no preview: the list shows its state (`uploading, N%`, `waiting for the product's password`, `ready`, ...) and **Download** once it is ready. See [Large Files](Large-Files) for the page, the password, the download and the alert, and [DataCollector Large Files](DataCollector-Large-Files) for sending them.
 
 ```csharp
 IFileSensor report = collector.CreateFileSensor("reports/daily", "report", "csv");
@@ -201,14 +203,14 @@ report.AddValue("time,value\n2026-11-26T00:00:00Z,1\n");        // text sent as 
 Limits:
 
 - The managed collector refuses a file larger than `FileSensorOptions.MaxFileSizeBytes`: 10 MB by default, at most 128 MB.
-- On the collector session (the default transport since collector 4.0.0) a file travels inside one frame of the server, where each byte takes up to four characters: with the server's default frame of 4 MiB a file of about 1 MiB fits. A larger file is dropped, logged and counted in the collector's `Queue overflow` sensor, unless the server's `CollectorSessions.MaxFrameBytes` is raised. Over the HTTP transport the server takes a request body of up to about 50 MB.
+- On the collector session (the default transport since collector 4.0.0) a file travels inside one frame of the server, where each byte takes up to four characters: with the server's default frame of 4 MiB a file of about 1 MiB fits. A larger file travels on the session's file connection as a large file value that is not secure (managed collector 4.2.0, native collector 0.16.0, against HSMServer 3.46.0 or later). Without a file connection it is dropped, logged and counted in the collector's `Queue overflow` sensor, unless the server's `CollectorSessions.MaxFrameBytes` is raised. Over the HTTP transport the server takes a request body of up to about 50 MB.
+- A large file value is limited by the server (`LargeFiles.MaxFileSizeBytes`, 64 GiB by default), not by `MaxFileSizeBytes`.
 - File values stay in the ordinary history store: they are never sealed (see [Sealed Sensor History](Sealed-Sensor-History)).
+- A File sensor that holds large files cannot be moved to another product or merged with another sensor.
 
-Native C++: `Collector::CreateFileSensor` (`AddContent`, `SendFile`); C: `hsm_collector_create_file_sensor`, `hsm_sensor_add_file`, `hsm_sensor_add_file_from_path`.
+Native C++: `Collector::CreateFileSensor` (`AddContent`, `SendFile`), `WatchLargeFiles`, `SendLargeFile`; C: `hsm_collector_create_file_sensor`, `hsm_sensor_add_file`, `hsm_sensor_add_file_from_path`, `hsm_collector_watch_large_files`, `hsm_collector_send_large_file`.
 
-Alerts: Size (the size of the file, numeric).
-
-> **Large file values (dumps)** are not part of this page: they are described by the pages of epic #1882.
+Alerts: Size (the size of the file, numeric). The message of a File sensor's alert can use `$fileName`, `$fileSize`, `$link` (the sensor page) and `$fileNote` (`waits for the product's dump password` for a secure large file whose product has no password; empty otherwise); a sensor registered for large files gets the alert "New data has been received" when it is created (see [Large Files](Large-Files#the-alert)).
 
 ## Table
 
