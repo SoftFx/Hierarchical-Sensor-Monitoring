@@ -13,7 +13,7 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
     /// and watermarks back after a restart and rebuilt from the marks, week databases flushed when their week closes and
     /// opened within a bound, dropped weeks, products apart, the region of moved batches, LevelDB's compactions.
     /// </summary>
-    public sealed class TableBatchDatabaseTests : IDisposable
+    public sealed partial class TableBatchDatabaseTests : IDisposable
     {
         // A Monday: the week of the first hours.
         private static readonly long Week0 = new DateTime(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc).Ticks;
@@ -882,7 +882,8 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         {
             var store = Open();
             store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 2))]);
-            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), Week0 + Hour, Mark(Week0 + Hour), [Batch(_sensorA, Week0 + Hour + 5, 0)]);
+            store.WriteHour(_product, Commit(Week0 + Hour, 2), [Part(1, (_sensorA, Hour + 5, 1))]);
+            store.CopySensorHours(_product, _sensorA, new TableBatchWeek(Week0, 1), 4, Week0 + Hour, Week0 + 2 * Hour);
 
             store.BatchMissing = (hour, ordinal) => ordinal == 1 || hour == Week0 + Hour;
             var read = store.ReadSensor(_product, _sensorA, 4, [Week0, Week0 + Hour], out var failed);
@@ -891,6 +892,109 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal([0], read.Select(r => r.Ordinal));
             Assert.Equal(2, failed);
             Assert.Equal(2, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_read_with_a_range_skips_a_record_out_of_it_before_its_batch_so_only_a_missing_batch_in_the_range_fails()
+        {
+            // A's batches of hour 0 in P4: [+0, +9], [+10, +19], [+20, +29]; and a moved batch of hour 1, [+5, +14].
+            var store = Open();
+            long hour1 = Week0 + Hour;
+            store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 3))]);
+            store.WriteHour(_product, Commit(hour1, 2), [Part(1, (_sensorA, Hour + 5, 1))]);
+            store.CopySensorHours(_product, _sensorA, new TableBatchWeek(Week0, 1), 4, hour1, hour1 + Hour);
+
+            // Every batch survives as its index record only. A range that meets three of the four records counts those three
+            // (#1850 part 4c): the first, out of it, is skipped before its batch is fetched.
+            store.BatchMissing = (_, _) => true;
+            var read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 10, hour1 + 6, out var failed);
+            Assert.Empty(read);
+            Assert.Equal((3, 3L), (failed, store.Statistics.ReadFailures));
+
+            // [from, to): a record whose last time is the first tick of the range meets it; one that starts at its end does not.
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 29, hour1 + 5, out failed);
+            Assert.Equal((0, 1), (read.Count, failed));
+            store.BatchMissing = null;
+
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], Week0 + 19, hour1 + 5, out failed);
+            Assert.Equal([(Week0, 1, false), (Week0, 2, false)], read.Select(r => (r.HourTicks, r.Ordinal, r.Moved)));
+            Assert.Equal(0, failed);
+
+            read = store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], hour1 + 14, hour1 + 15, out failed);
+            Assert.Equal([(hour1, 0, true)], read.Select(r => (r.HourTicks, r.Ordinal, r.Moved)));
+
+            // Without a range, every record.
+            Assert.Equal(4, store.ReadSensor(_product, _sensorA, 4, [Week0, hour1], out failed).Count);
+            Assert.Equal(4L, store.Statistics.ReadFailures);
+        }
+
+        [Fact]
+        public void A_sensors_generation_changes_with_its_own_placement_and_moved_batches_and_with_every_write_of_its_product()
+        {
+            var store = Open();
+            var sensorC = Guid.NewGuid();
+            var (p1, p4) = (new TableBatchWeek(Week0, 1), new TableBatchWeek(Week0, 4));
+            store.WriteHour(_product, Commit(Week0), [Part(1, (_sensorA, 0, 1), (_sensorB, 0, 1))]);
+
+            var readings = new List<(long Product, long A, long B, long C)>();
+            (long Product, long A, long B, long C) Read()
+            {
+                var reading = (store.GetGeneration(_product), store.GetGeneration(_product, _sensorA), store.GetGeneration(_product, _sensorB),
+                    store.GetGeneration(_product, sensorC));
+                readings.Add(reading);
+                return reading;
+            }
+
+            // A write of one sensor changes that sensor's generation and the product's, and no other sensor's (#1850 part 4c).
+            void OnlyA(Action write)
+            {
+                var before = Read();
+                write();
+                var after = Read();
+                Assert.True(after.A != before.A && after.Product != before.Product, "the sensor's and the product's generation change");
+                Assert.Equal((before.B, before.C), (after.B, after.C));
+            }
+
+            // A write of the product changes every sensor's generation, one never named included.
+            void Everyone(Action write)
+            {
+                var before = Read();
+                write();
+                var after = Read();
+                Assert.True(after.Product != before.Product && after.A != before.A && after.B != before.B && after.C != before.C,
+                    $"every generation changes: {before} -> {after}");
+            }
+
+            OnlyA(() => store.SetPlacement(_product, _sensorA, new TablePlacement(4, Week0, [new TablePlacementSegment(Week0, Week0 + Hour, 1)])));
+            // Moved batches of A, into a week database the write creates.
+            OnlyA(() => store.CopySensorHours(_product, _sensorA, p1, 4, Week0, Week0 + Hour));
+            Assert.Contains(p4, store.GetWeeks(_product));
+            OnlyA(() => store.DeleteSensorHours(_product, _sensorA, p1, Week0, Week0 + Hour));
+            OnlyA(() => store.SetPlacement(_product, _sensorA, new TablePlacement(4, Week0)));
+            OnlyA(() => store.SetPlacement(_product, _sensorA, null));
+
+            // A commit; a week database created by the write of an hour that does not reach its commit; a drop; hours forgotten.
+            Everyone(() => store.WriteHour(_product, Commit(Week0 + Hour, 2), [Part(1, (_sensorB, Hour, 1))]));
+            store.Checkpoint = point =>
+            {
+                if (point == "part-written")
+                    throw new CheckpointException(point);
+            };
+            Everyone(() => Assert.Throws<CheckpointException>(() => store.WriteHour(_product, Commit(Week0 + 2 * Hour, 3), [Part(5, (_sensorB, 2 * Hour, 1))])));
+            store.Checkpoint = null;
+            Assert.False(store.IsHourMerged(_product, Week0 + 2 * Hour));
+            Everyone(() => store.WriteHour(_product, Commit(Week0 + Week, 4), [Part(1, (_sensorB, Week, 1))]));
+            Everyone(() => store.DropWeek(_product, p4));
+            store.DropWeek(_product, new TableBatchWeek(Week0 + Week, 1));
+            Everyone(() => store.ForgetHours(_product, [Week0 + Week]));
+
+            // Never back, for any reader (the readings are in the order taken).
+            for (int i = 1; i < readings.Count; i++)
+                Assert.True(readings[i].Product >= readings[i - 1].Product && readings[i].A >= readings[i - 1].A &&
+                            readings[i].B >= readings[i - 1].B && readings[i].C >= readings[i - 1].C, $"reading {i} went back");
+
+            // A product without a folder: 0.
+            Assert.Equal(0, store.GetGeneration(Guid.NewGuid(), _sensorA));
         }
 
         // === Placements (#1850 part 4b) ===
@@ -925,11 +1029,12 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             // A in P1 for hours 0 and 1, then (its period changed) in P5 from hour 2; B in P5 throughout; C moved into P5 for
             // hour 1 (the region of moved batches) and in P5 from hour 2.
             store.WriteHour(_product, Commit(Week0, 1), [Part(1, (_sensorA, 0, 1)), Part(5, (_sensorB, 0, 1))]);
-            store.WriteHour(_product, Commit(Week0 + Hour, 2), [Part(1, (_sensorA, 0, 1)), Part(5, (_sensorB, 0, 1))]);
-            store.WriteHour(_product, Commit(Week0 + 2 * Hour, 3), [Part(5, (_sensorA, 0, 1), (_sensorB, 0, 1))]);
             var sensorC = Guid.NewGuid();
-            store.WriteMoved(_product, new TableBatchWeek(Week0, 5), Week0 + Hour, store.ReadMark(_product, new TableBatchWeek(Week0, 1), Week0 + Hour),
-                [Batch(sensorC, Week0 + Hour + 5, 0)]);
+            store.WriteHour(_product, Commit(Week0 + Hour, 2), [Part(1, (_sensorA, 0, 1), (sensorC, Hour + 5, 1)), Part(5, (_sensorB, 0, 1))]);
+            store.WriteHour(_product, Commit(Week0 + 2 * Hour, 3), [Part(5, (_sensorA, 0, 1), (_sensorB, 0, 1))]);
+            // C's hour 1 moved from P1 into P5 to the end: copied, and its source deleted.
+            store.CopySensorHours(_product, sensorC, new TableBatchWeek(Week0, 1), 5, Week0 + Hour, Week0 + 2 * Hour);
+            store.DeleteSensorHours(_product, sensorC, new TableBatchWeek(Week0, 1), Week0 + Hour, Week0 + 2 * Hour);
             store.Dispose();
 
             Directory.Delete(Path.Combine(_root, TableBatchDatabase.FolderName, _product.ToString("N"), TableBatchDatabase.PlacementsName), recursive: true);
@@ -1008,15 +1113,15 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         [Fact]
         public void A_part_written_again_also_deletes_the_moved_batches_of_its_hour_in_that_database()
         {
-            var store = Open();
+            var store = CreateProduct();
             var sensorC = Guid.NewGuid();
 
             // A move had written C's batches of hours 1 and 2 into P4, each with the mark of its hour (the move leaves it
             // itself: no run of the merge wrote into P4). Hour 1 is not committed here (as after a loss of Hours that did not
             // rebuild it), so the merge writes it again.
             var p4 = new TableBatchWeek(Week0, 4);
-            store.WriteMoved(_product, p4, Week0 + Hour, Mark(Week0 + Hour), [Batch(sensorC, Week0 + Hour + 5, 0)]);
-            store.WriteMoved(_product, p4, Week0 + 2 * Hour, Mark(Week0 + 2 * Hour), [Batch(sensorC, Week0 + 2 * Hour + 5, 0)]);
+            store = PutMoved(store, p4, Week0 + Hour, Mark(Week0 + Hour), Batch(sensorC, Week0 + Hour + 5, 0));
+            store = PutMoved(store, p4, Week0 + 2 * Hour, Mark(Week0 + 2 * Hour), Batch(sensorC, Week0 + 2 * Hour + 5, 0));
             Assert.Equal(Mark(Week0 + Hour), store.ReadMark(_product, p4, Week0 + Hour));
             Assert.Single(store.ReadSensor(_product, sensorC, 4, [Week0 + Hour]));
 
@@ -1031,25 +1136,15 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         [Fact]
         public void Writing_an_hour_clears_every_key_of_it_in_every_database_of_its_week_with_or_without_its_mark()
         {
-            var store = Open();
+            var store = CreateProduct();
             var sensorC = Guid.NewGuid();
             var p4 = new TableBatchWeek(Week0, 4);
             long hour1 = Week0 + Hour, hour2 = Week0 + 2 * Hour;
 
-            // Moved batches of C for hours 1 and 2 in P4, whose marks are then gone (taken out of the database by hand: the
-            // store itself never leaves moved batches without the mark of their hour). Neither hour is committed.
-            store.WriteMoved(_product, p4, hour1, Mark(hour1), [Batch(sensorC, hour1 + 5, 0)]);
-            store.WriteMoved(_product, p4, hour2, Mark(hour2), [Batch(sensorC, hour2 + 5, 0)]);
-            var path = store.WeekPath(_product, Week0, 4);
-            store.Dispose();
-
-            using (var db = new DB(path, new Options()))
-            {
-                db.Delete(TableBatchDatabase.HourKey(hour1, TableBatchDatabase.TagMark), new WriteOptions { Sync = true });
-                db.Delete(TableBatchDatabase.HourKey(hour2, TableBatchDatabase.TagMark), new WriteOptions { Sync = true });
-            }
-
-            store = Open();
+            // Moved batches of C for hours 1 and 2 in P4 without the marks of their hours (written by hand: the store itself
+            // never leaves moved batches without the mark of their hour). Neither hour is committed.
+            store = PutMoved(store, p4, hour1, null, Batch(sensorC, hour1 + 5, 0));
+            store = PutMoved(store, p4, hour2, null, Batch(sensorC, hour2 + 5, 0));
             Assert.Null(store.ReadMark(_product, p4, hour1));
             Assert.Single(store.ReadSensor(_product, sensorC, 4, [hour1]));
 
@@ -1078,16 +1173,15 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             Assert.Equal(mark, store.ReadMark(_product, p5, hour));
 
             // Into a database without a mark of the hour (a new one): the mark is written with the batches, the same bytes.
-            store.WriteMoved(_product, p4, hour, mark, [Batch(sensorC, hour + 5, 0)]);
+            store.CopySensorHours(_product, sensorC, p1, 4, hour, hour + Hour);
             Assert.Equal(mark, store.ReadMark(_product, p4, hour));
 
             // Into a database that has the hour's mark: it stays as it is.
-            store.WriteMoved(_product, p5, hour, mark, [Batch(sensorC, hour + 5, 0)]);
+            store.CopySensorHours(_product, sensorC, p1, 5, hour, hour + Hour);
             Assert.Equal(mark, store.ReadMark(_product, p5, hour));
 
-            // Bytes that are not the record of that hour are refused before anything is written.
-            Assert.Throws<ArgumentException>(() => store.WriteMoved(_product, p4, hour + Hour, mark, [Batch(sensorC, hour + Hour + 5, 0)]));
-            Assert.Throws<ArgumentException>(() => store.WriteMoved(_product, p4, hour + Hour, [1, 2, 3], [Batch(sensorC, hour + Hour + 5, 0)]));
+            // An hour the source holds no batch of the sensor in: no mark, nothing written.
+            store.CopySensorHours(_product, sensorC, p1, 4, hour + Hour, hour + 2 * Hour);
             Assert.Null(store.ReadMark(_product, p4, hour + Hour));
             Assert.Empty(store.ReadSensor(_product, sensorC, 4, [hour + Hour]));
 
@@ -1237,8 +1331,9 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             store.WriteHour(_product, Commit(Week0), [Part(4, (_sensorA, 0, 1))]);
             store.WriteHour(_product, Commit(Week0 + 2 * Hour), [Part(4, (_sensorB, 0, 1))]);
 
-            // What a move (#1850 PR 4) writes: sensor A's batches of hour 1 of the week, from another class.
-            store.WriteMoved(_product, new TableBatchWeek(Week0, 4), Week0 + Hour, Mark(Week0 + Hour), [Batch(_sensorA, Week0 + Hour + 7, 0), Batch(_sensorA, Week0 + Hour + 17, 1)]);
+            // What a move (#1850 part 4c) writes: sensor A's batches of hour 1 of the week, from another class.
+            store.WriteHour(_product, Commit(Week0 + Hour), [Part(1, (_sensorA, Hour + 7, 2))]);
+            store.CopySensorHours(_product, _sensorA, new TableBatchWeek(Week0, 1), 4, Week0 + Hour, Week0 + 2 * Hour);
 
             var read = store.ReadSensor(_product, _sensorA, 4, [Week0, Week0 + Hour, Week0 + 2 * Hour]);
             Assert.Equal([(Week0, false, 0), (Week0 + Hour, true, 0), (Week0 + Hour, true, 1)], read.Select(r => (r.HourTicks, r.Moved, r.Ordinal)));
@@ -1504,6 +1599,40 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             BlocksMerged = 1,
             Watermarks = new Dictionary<Guid, long> { [_producer] = sequence },
         };
+
+        // A product with its folder, Hours and Placements, and no hour: what a placement write leaves.
+        private TableBatchDatabase CreateProduct()
+        {
+            var store = Open();
+            store.SetPlacement(_product, Guid.NewGuid(), new TablePlacement(1, Week0));
+            return store;
+        }
+
+        // Moved batches of one sensor and hour written by hand into a week database, with a mark or without one, the store
+        // closed and opened again over it: what a move left of an hour that is not committed (Hours lost and the hour not
+        // rebuilt), which the store's own writes cannot leave.
+        private TableBatchDatabase PutMoved(TableBatchDatabase store, TableBatchWeek week, long hour, byte[] mark, params TableBatchToWrite[] batches)
+        {
+            var path = store.WeekPath(_product, week.WeekStartTicks, week.PeriodWeeks);
+            store.Dispose();
+
+            using (var db = new DB(path, new Options { CreateIfMissing = true }))
+            using (var batch = new WriteBatch())
+            {
+                for (int i = 0; i < batches.Length; i++)
+                {
+                    batch.Put(TableBatchDatabase.MovedIndexKey(batches[i].SensorId, hour, batches[i].FirstTime, i), TableBatchDatabase.EncodeIndex(batches[i]));
+                    batch.Put(TableBatchDatabase.MovedBatchKey(batches[i].SensorId, hour, i), batches[i].Batch);
+                }
+
+                if (mark is not null)
+                    batch.Put(TableBatchDatabase.HourKey(hour, TableBatchDatabase.TagMark), mark);
+
+                db.Write(batch, new WriteOptions { Sync = true });
+            }
+
+            return Open();
+        }
 
         // The record of an hour as a commit writes it, for a move of an hour this store did not commit.
         private byte[] Mark(long hour, long sequence = 1) => TableBatchDatabase.EncodeCommit(Commit(hour, sequence), [], Week0);
