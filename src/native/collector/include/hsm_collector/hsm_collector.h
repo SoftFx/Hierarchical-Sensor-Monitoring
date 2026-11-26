@@ -1011,9 +1011,10 @@ hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
    acknowledged and the collector is built with large files; it is then stored as a large value of the
    same File sensor (no preview; its time is the time the server accepted it). Otherwise, as before:
    a file whose value does not fit a session frame is dropped, logged and counted in Queue overflow,
-   like any value larger than a frame. A routed send that is refused for good, past the 64 MiB that
-   may wait in memory, or cut by a stop after its upload began is dropped, logged and counted the same
-   way; one a stop finds not begun goes back to the value queue. The call returns as it always did. */
+   like any value larger than a frame. A value past the 64 MiB of routed sends that may wait in
+   memory goes that way too. A routed send that is refused for good or cut by a stop after its upload
+   began is dropped, logged and counted the same way; one a stop finds not begun goes back to the value
+   queue. The call returns as it always did. */
 hsm_result_t hsm_sensor_add_file(
     hsm_sensor_t* sensor,
     const char* utf8_content,

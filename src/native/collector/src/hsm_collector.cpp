@@ -5349,8 +5349,13 @@ namespace
             const int64_t time_ms = UnixTimeMilliseconds();
             std::shared_ptr<const FileRoute> route;
 #if defined(HSM_COLLECTOR_LARGE_FILES)
-            if (use_session_)
+            // The route keeps a second copy of the content beside the JSON, so only a value that some session
+            // could route gets one: larger than a quarter of the smallest frame limit a server announces
+            // (CollectorSessions.MaxFrameBytes is 65,536 at least, so above 16,384 bytes). A smaller value can
+            // never be routed and is held once, as its JSON.
+            if (use_session_ && content.size() > kMinRoutableFileBytes)
             {
+                route_copies_for_tests_.fetch_add(1, std::memory_order_relaxed);
                 auto made = std::make_shared<FileRoute>();
                 made->path = path;
                 made->content = std::make_shared<const std::string>(content);
@@ -7316,6 +7321,16 @@ namespace
         mutable std::mutex large_files_mutex_;
         std::unique_ptr<large_files::LargeFiles> large_files_;
         std::atomic<bool> dispose_on_uploader_said_{ false };
+        // A file value is routable only above a quarter of the smallest session frame a server announces
+        // (65,536 bytes, the server's lower bound of CollectorSessions.MaxFrameBytes).
+        static constexpr size_t kMinRoutableFileBytes = 65536 / 4;
+        // File values given a route copy since creation (test seam).
+        std::atomic<std::uint64_t> route_copies_for_tests_{ 0 };
+
+    public:
+        std::uint64_t RouteCopiesForTests() const noexcept { return route_copies_for_tests_.load(); }
+
+    private:
         std::string data_folder_setting_;
 #if defined(HSM_COLLECTOR_LARGE_FILES)
         bool data_folder_note_said_ = false;
@@ -10779,5 +10794,10 @@ namespace hsm::collector::large_files::test
     void OnFinish(hsm_collector_t* collector, std::function<void(const std::string& phase)> hook)
     {
         collector->impl->LargeFilesFor(true)->on_finish_for_tests = std::move(hook);
+    }
+
+    std::uint64_t RouteCopies(hsm_collector_t* collector)
+    {
+        return collector->impl->RouteCopiesForTests();
     }
 } // namespace hsm::collector::large_files::test

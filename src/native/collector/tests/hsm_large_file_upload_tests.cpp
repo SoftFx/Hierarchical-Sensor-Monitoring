@@ -1271,14 +1271,57 @@ namespace
         const auto huge = std::make_shared<const std::string>(65 * 1024 * 1024, 'h');
         const auto ten = std::make_shared<const std::string>(10 * 1024 * 1024, 't');
         Check(files.Route(routed(huge)) == lf::RouteResult::Taken, "an empty queue takes any size");
-        Check(files.Route(routed(ten)) == lf::RouteResult::Dropped && dropped.load() == 1, "past 64 MiB: dropped and counted");
+        Check(files.Route(routed(ten)) == lf::RouteResult::NotRouted, "past 64 MiB: today's path");
+        Check(files.Route(routed(ten)) == lf::RouteResult::NotRouted, "again: today's path");
+        Check(dropped.load() == 0, "nothing is dropped by the bound");
+        const auto said = [&] {
+            std::lock_guard<std::mutex> guard(lines_mutex);
+            return std::count_if(lines.begin(), lines.end(), [](const std::string& line) { return line.find("wait for the file connection already") != std::string::npos; });
+        };
+        Check(said() == 1, "the bound is said once while it holds");
         files.Stop();
         Check(back.load() == 1, "the stop gives back the one no begin was answered for");
         Check(files.Route(routed(ten)) == lf::RouteResult::NotRouted, "not running: today's path");
-        {
-            std::lock_guard<std::mutex> guard(lines_mutex);
-            Check(std::any_of(lines.begin(), lines.end(), [](const std::string& line) { return line.find("was dropped") != std::string::npos; }), "the drop is said");
-        }
+    }
+
+    // Past the bound of routed sends waiting in memory a file value takes today's path: a list frame when it
+    // fits. The bound is lowered through a seam; the file connection cannot be opened (503), so the first
+    // routed send waits.
+    void NativeLargeFileRoutedBoundFullTakesTodaysPath()
+    {
+        Rig rig;
+        rig.server->RefuseSideUpgradesWith(503);
+        lf::test::Of(rig.collector)->max_routed_bytes_for_tests.store(2 * 1024 * 1024);
+        hsm_sensor_t* first = nullptr;
+        hsm_sensor_t* second = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "waiting", "bin", &first) == HSM_RESULT_OK, "file sensor");
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports2", "overflow", "bin", &second) == HSM_RESULT_OK, "file sensor");
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports2") >= 1; }), "the sensors are registered");
+        Check(hsm_sensor_add_file(first, std::string(1536 * 1024, '\x05').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return rig.server->SideRefusedUpgrades() >= 1; }), "the first one is routed and waits");
+        Check(hsm_sensor_add_file(second, std::string(1536 * 1024, '\x01').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return ListFrameWithName(rig, "overflow"); }), "past the bound: a list frame" + rig.log.All());
+        Check(!ListFrameWithName(rig, "waiting"), "the waiting one is still routed");
+        Check(rig.log.Count("wait for the file connection already") == 1, "the bound is said once");
+        Check(rig.log.Count("was dropped") == 0, "nothing dropped");
+        hsm_sensor_release(first);
+        hsm_sensor_release(second);
+    }
+
+    // A file value is held once: only a value that some session could route (above 16,384 bytes, a quarter of
+    // the smallest frame a server announces) keeps a route copy of its content beside its JSON.
+    void NativeLargeFileSmallFileValueHasNoRouteCopy()
+    {
+        Rig rig;
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "small", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.Start();
+        Check(hsm_sensor_add_file(sensor, std::string(16384, 'a').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(lf::test::RouteCopies(rig.collector) == 0, "16,384 bytes: no route copy");
+        Check(hsm_sensor_add_file(sensor, std::string(16385, 'a').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(lf::test::RouteCopies(rig.collector) == 1, "16,385 bytes: a route copy");
+        hsm_sensor_release(sensor);
     }
 
     // A wait of the uploader held (the clock does not move for it) while the collector is torn down from
@@ -1668,6 +1711,8 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_discard_after_a_cut", [](const std::string&) { NativeLargeFileDiscardAfterACut(); } },
         { "native_large_file_piece_send_timeout_begins_again", [](const std::string&) { NativeLargeFilePieceSendTimeoutBeginsAgain(); } },
         { "native_large_file_end_unreadable_is_bounded", [](const std::string&) { NativeLargeFileEndUnreadableIsBounded(); } },
+        { "native_large_file_routed_bound_full_takes_todays_path", [](const std::string&) { NativeLargeFileRoutedBoundFullTakesTodaysPath(); } },
+        { "native_large_file_small_file_value_has_no_route_copy", [](const std::string&) { NativeLargeFileSmallFileValueHasNoRouteCopy(); } },
 #if defined(_WIN32)
         { "native_large_file_writer_holds_the_file", [](const std::string&) { NativeLargeFileWriterHoldsTheFile(); } },
 #else

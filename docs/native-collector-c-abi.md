@@ -561,7 +561,8 @@ hsm_large_file_watch_release(w);                             /* stops watching *
   `hsm_sensor_add_file_from_path` is queued as before; when the value queue is about to send it, a content larger
   than a quarter of the frame limit of that session (1 MiB at the default) goes on the file connection as a large
   value that is not secure, when the server has file connections and the sensor's registration was acknowledged
-  (at most 60 s; a refused registration: at once the ordinary way); otherwise, as before, a value that does not fit
+  (at most 60 s; a refused registration: at once the ordinary way) and less than 64 MiB of routed sends wait;
+  otherwise, as before, a value that does not fit
   a frame is dropped, logged and counted. A routed send that waits when the collector stops goes back to the value
   queue before its stop drain unless its upload had begun (then dropped, logged and counted). Their result codes
   and the 10 MiB cap do not change (`aicontext/features/collector/large-files/native-collector.md`, "Ordinary sends

@@ -234,6 +234,8 @@ namespace hsm::collector::large_files
         std::atomic<bool> key_refused_{ false };
         // Bytes of the routed sends waiting (guarded by shared_.mutex), bounded by kMaxRoutedBytes.
         std::int64_t routed_bytes_ = 0;
+        // Guarded by shared_.mutex: the bound was said since the waiting sends last drained.
+        bool routed_full_said_ = false;
         std::map<std::uint64_t, int> changes_; // handed-over files that changed while sent
         std::map<std::uint64_t, int> busy_;    // handed-over files held open by another program
         std::int64_t stale_retry_at_ = 0;
@@ -1367,6 +1369,8 @@ namespace hsm::collector::large_files
                 return false;
             routed_.erase(found);
             routed_bytes_ -= static_cast<std::int64_t>(routed->content->size());
+            if (routed_.empty())
+                routed_full_said_ = false;
             file_not_before_.erase(routed->id);
             return true;
         }
@@ -1428,6 +1432,7 @@ namespace hsm::collector::large_files
                 std::lock_guard<std::mutex> guard(shared_.mutex);
                 back.swap(routed_);
                 routed_bytes_ = 0;
+                routed_full_said_ = false;
                 for (const auto& routed : back)
                     file_not_before_.erase(routed->id);
             }
@@ -2401,7 +2406,6 @@ namespace hsm::collector::large_files
     {
 #if defined(HSM_COLLECTOR_LARGE_FILES)
         bool make_thread = false;
-        std::function<void()> count;
         std::int64_t waiting = 0;
         // The collector's clock is read with no lock of large files held (it takes the collector's lock).
         std::function<std::int64_t()> now;
@@ -2415,10 +2419,14 @@ namespace hsm::collector::large_files
             if (!file || !file->content || !impl_->running_ || !impl_->UnavailableReason().empty() || impl_->key_refused_.load())
                 return RouteResult::NotRouted;
             const auto bytes = static_cast<std::int64_t>(file->content->size());
-            // Held in memory, bounded in bytes; one is always taken, whatever its size.
-            if (!impl_->routed_.empty() && impl_->routed_bytes_ + bytes > kMaxRoutedBytes)
+            const std::int64_t bound = max_routed_bytes_for_tests.load() > 0 ? max_routed_bytes_for_tests.load() : kMaxRoutedBytes;
+            // Held in memory, bounded in bytes; one is always taken, whatever its size. Past the bound the value
+            // takes today's path, as the managed collector's does.
+            if (!impl_->routed_.empty() && impl_->routed_bytes_ + bytes > bound)
             {
-                count = impl_->context_.count_dropped_value;
+                if (impl_->routed_full_said_)
+                    return RouteResult::NotRouted;
+                impl_->routed_full_said_ = true;
                 waiting = impl_->routed_bytes_;
             }
             else
@@ -2432,18 +2440,10 @@ namespace hsm::collector::large_files
         }
         if (waiting > 0)
         {
-            try
-            {
-                if (count)
-                    count();
-            }
-            catch (...)
-            {
-            }
-            impl_->Report(true, "A file value of " + file->sensor + " (" + file->name + ", " + std::to_string(file->content->size()) +
-                                    " bytes) was dropped: " + std::to_string(waiting) + " bytes of file values wait for the file connection already (the bound is " +
-                                    std::to_string(kMaxRoutedBytes) + ").");
-            return RouteResult::Dropped;
+            impl_->Report(false, std::to_string(waiting) + " bytes of file values wait for the file connection already (the bound is " +
+                                     std::to_string(max_routed_bytes_for_tests.load() > 0 ? max_routed_bytes_for_tests.load() : kMaxRoutedBytes) +
+                                     "): file values above it go in list frames, as without file connections, until they drain.");
+            return RouteResult::NotRouted;
         }
         if (make_thread)
             MakeThread();
@@ -2552,6 +2552,7 @@ namespace hsm::collector::large_files
             impl_->file_not_before_.clear();
             impl_->stale_checked_ = false;
             impl_->key_refused_.store(false);
+            impl_->routed_full_said_ = false;
             // A new transport numbers its sessions from 1 again: what the last run learned does not hold.
             impl_->route_absent_generation_.store(0);
             impl_->absent_generation_ = 0;
@@ -2667,6 +2668,7 @@ namespace hsm::collector::large_files
         {
             std::lock_guard<std::mutex> guard(shared_->mutex);
             routed.swap(impl_->routed_);
+            impl_->routed_full_said_ = false;
             impl_->routed_bytes_ = 0;
             for (const auto& one : routed)
                 impl_->file_not_before_.erase(one->id);

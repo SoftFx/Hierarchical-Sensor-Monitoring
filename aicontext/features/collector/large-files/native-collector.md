@@ -66,7 +66,7 @@ restart of either side.
 | Final refusal | 413, 422, a 400 at `begin`, another 4xx at `begin` or `end`, a 4xx at a piece other than 400, 404 and 409, a local size over `maxFileBytes`, a `begin` that cannot be built (a name not UTF-8 or over 1,024), a close with 1008: the file is left, said once, counted once, not tried again before the next Start. A handed-over file that cannot be read is `MISSING`, not `REFUSED` |
 | `end` answered 409 | always `begin` again (it names the piece to go on from), never pieces straight on: once the server's check has begun (a `202` came first) the connection no longer holds the upload |
 | `503` at `end` | the server could not read the part: wait (`retryAfter`), `begin`, `end` again; past 3 such rounds in a row (per attempt; for a routed send counted across attempts) the file waits 30 minutes, said once and not counted as a loss |
-| `404` on a piece or at `end` | a backoff, then `begin` again; past 3 such restarts of one attempt the file is given up |
+| `404` on a piece or at `end` | a backoff, then `begin` again; the 4th `404` in one attempt gives the file up (a routed send: dropped after its 4th, counted across attempts) |
 | Given up (persisted) | 3 discards (a 400 at a piece or at `end`), 10 checksum mismatches (3 in a row on one piece: reconnect and `begin`), 3 closes with 1002/1007/1009, a fourth `404`; recorded in the state file, reported again at every Start, offered again only when the file changes |
 | Changed file | size, time or identity differ before `end` or before the delete (Linux: also the path's inode): `discard` on the connection, or `begin` with the facts it was begun with and then `discard`; taken again when settled; `400 unknown op` (a server before `discard`): the part expires there, said once |
 | Delete | only after `stored` in this run (at `end`, or at `begin` for a file the server has), in delete mode, after the facts compare equal again; Windows through the open handle (`FileDispositionInfo`), Linux `unlink` with the descriptor still open over the comparison; the delivered entry is written first. Without an identity, a `stored` at `begin` deletes only with the collector's own record of sending that file. A hard link loses one name |
@@ -94,8 +94,14 @@ uploader instead of a `list` frame. The 10 MiB cap of these calls stays; the cal
   ack), it takes today's path.
 - A value whose name, path or comment is not valid UTF-8, or whose name or path is over 1,024 characters, is not
   routed (today's path).
-- Held in memory: at most 64 MiB of routed sends wait; one is always taken whatever its size; a send past the
-  bound is a dropped value (said, counted), not sent the ordinary way.
+- Held in memory: at most 64 MiB of routed sends wait; one is always taken whatever its size; a value past the
+  bound takes today's path (a `list` frame when it fits, else dropped, said and counted as a file value is today),
+  as in the managed collector. Reaching the bound is said once each time it is reached after the waiting sends
+  had drained.
+- **Held once.** A file value is queued as its JSON. Only a value some session could route keeps a second copy of
+  its content for the route: one larger than a quarter of the smallest frame limit a server announces
+  (`CollectorSessions.MaxFrameBytes` is 65,536 at least, so above 16,384 bytes). A value at or below 16,384 bytes
+  never has one.
 - Order: routed sends go before files of the large-file API, in the order sent; a routed send that is ready
   preempts a large file after its piece in flight; the large file then begins again and continues from the
   server's piece. The speed limit applies to both.
@@ -181,3 +187,5 @@ a Linux build with HTTP and tables (the CI sanitizer presets build without HTTP)
 - Stop joins the uploader without a time cap (a native thread must not outlive its collector); Windows cancels a
   blocked read, and the thread's priority is raised when a stop is asked.
 - The state files' schema, lock names and temporary names are native's own (see "The data folder").
+- The `404` bound: native gives a file up at the 4th `404` (on a piece or at `end`) in one attempt; the managed
+  collector allows about 30 (9 per attempt, 3 attempts). A stated difference, kept.

@@ -29,4 +29,6 @@ namespace hsm::collector::large_files::test
     bool UploaderAlive(hsm_collector_t* collector);
     /// Called on the uploader thread when a file was stored ("stored", then "deleted"; LargeFiles::on_finish_for_tests).
     void OnFinish(hsm_collector_t* collector, std::function<void(const std::string& phase)> hook);
+    /// File values given a route copy (their content kept beside their JSON) since the collector was made.
+    std::uint64_t RouteCopies(hsm_collector_t* collector);
 } // namespace hsm::collector::large_files::test

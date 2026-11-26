@@ -136,10 +136,9 @@ namespace hsm::collector::large_files
     {
         /// Queued for the uploader.
         Taken,
-        /// Not routed: the caller takes today's path (a `list` frame).
+        /// Not routed: the caller takes today's path (a `list` frame when it fits; else dropped, said and
+        /// counted as a file value is today). Also past the bound of routed sends waiting in memory.
         NotRouted,
-        /// Dropped, said and counted: the routed sends waiting in memory reached their bound.
-        Dropped,
     };
 
     /// An ordinary file send routed to the file connection (ADR-0022 point 20): the content of
@@ -221,8 +220,9 @@ namespace hsm::collector::large_files
         bool AddWatch(const std::shared_ptr<WatchState>& watch, std::string& error);
         void AddFile(const std::shared_ptr<FileState>& file);
         /// Queues a routed send. NotRouted when it cannot be routed now (not running, the route refused,
-        /// the key refused): the caller takes today's path. Dropped (said and counted here) when the
-        /// routed sends waiting in memory would pass 64 MiB; one is always taken when none waits.
+        /// the key refused) or when the routed sends waiting in memory would pass 64 MiB (one is always
+        /// taken when none waits): the caller takes today's path. Reaching the bound is said once each time
+        /// it is reached after the waiting sends had drained.
         RouteResult Route(std::shared_ptr<RoutedFile> file);
         /// False when the file connection was refused (404 or 400) on the session of `generation`.
         bool RouteAvailable(std::uint64_t generation) const noexcept;
@@ -263,6 +263,8 @@ namespace hsm::collector::large_files
         /// Runs on the uploader thread when a file was stored: "stored" before the outcome is committed,
         /// "deleted" after the source's delete (or keep) and before the outcome is settled.
         std::function<void(const std::string& phase)> on_finish_for_tests;
+        /// The bound of the routed sends waiting in memory, instead of 64 MiB, when positive.
+        std::atomic<std::int64_t> max_routed_bytes_for_tests{ 0 };
         bool UploaderAliveForTests() const;
 
     private:
