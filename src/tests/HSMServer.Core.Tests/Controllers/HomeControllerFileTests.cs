@@ -166,6 +166,9 @@ namespace HSMServer.Core.Tests.Controllers
         [InlineData("dump", "", "dump")]
         [InlineData("", "txt", "txt")]
         [InlineData("archive", ".zip", "archive.zip")]
+        [InlineData("backup.2026-11-25", "csv", "backup.2026-11-25.csv")]
+        [InlineData("app.log", "1", "app.log.1")]
+        [InlineData("DUMP.DMP", "dmp", "DUMP.DMP")]
         public void DisplayName_NeverRepeatsTheExtension(string name, string extension, string expected)
         {
             Assert.Equal(expected, HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(new FileValue { Name = name, Extension = extension }));

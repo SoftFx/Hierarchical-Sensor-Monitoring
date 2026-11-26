@@ -27,7 +27,8 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 
 1. The page loads the tab: `GetFileInfo` describes the last value. An ordinary csv/txt small enough is previewed; a large last value shows no preview and no buttons above the list.
 2. `GetRecentFilesView` returns the first page: the uploads of the sensor in progress, then up to 20 values (an ordinary last value is left out: it is shown above). "Older files" asks `GetFilesPage?olderThan=<ticks>` and replaces itself with the next page.
-3. A row of a large value shows its state; its download button links the archive (`/LargeFiles/Download/{fileId}/{archiveId}`, step 3), which checks access again and records the download.
+3. While the list shows an upload or a large file not yet ready, the tab reads the first page again every 10 seconds (the percentage, "being checked", "being packed" turning "ready"), unless the user went to older pages or opened a row.
+4. A row of a large value shows its state; its download button links the archive (`/LargeFiles/Download/{fileId}/{archiveId}`, step 3), which checks access again and records the download.
 
 ## States of a large file on the page
 

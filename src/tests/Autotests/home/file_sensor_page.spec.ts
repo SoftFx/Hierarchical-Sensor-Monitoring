@@ -131,7 +131,7 @@ test("A client's extension is text in the row, never script", async ({ page }) =
   const list = page.locator(`#recentValues_${sensorId}`);
   await list.locator('.file-page-older').click();
 
-  const odd = list.locator('.file-row').filter({ hasText: 'report-1' });
+  const odd = list.locator(`.file-row[data-extension="${oddExtension.replace(/["\\]/g, '\\$&')}"]`);
   await expect(odd).toHaveCount(1, { timeout: 15000 });
   await expect(odd).toHaveAttribute('data-extension', oddExtension);
 

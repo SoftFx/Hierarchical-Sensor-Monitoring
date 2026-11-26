@@ -94,19 +94,45 @@ namespace HSMServer.Core.Tests.SensorApi
         }
 
 
+        // The alert list of a registration reconciles the collector's own alerts; the default one is not the collector's.
+        [Fact]
+        public async Task TheAlertListOfARegistration_NeverRemovesTheDefaultAlert()
+        {
+            const string collectorAlert = "{\"Template\":\"collector alert\",\"Conditions\":[{\"Operation\":23,\"Property\":0,\"Target\":{\"Type\":0,\"Value\":\"\"}}]}";
+
+            await using var host = await SensorApiTestHost.StartAsync(_valuesCache, new CollectorSessionsConfig());
+
+            // The creating registration with an empty list (as the native default-sensor prototypes send).
+            await RegisterAsync(host, "large/listed", FileType, 4, "\"Alerts\":[]");
+            Assert.Equal([SensorPolicyCollection.LargeFileAlertTemplate], Templates("large/listed"));
+
+            // A later registration with one alert of the collector's: added beside it.
+            await RegisterAsync(host, "large/listed", FileType, 4, $"\"Alerts\":[{collectorAlert}]");
+            Assert.Equal([SensorPolicyCollection.LargeFileAlertTemplate, "collector alert"], Templates("large/listed"));
+
+            // And without it again: the collector's alert goes, the default stays.
+            await RegisterAsync(host, "large/listed", FileType, 4, "\"Alerts\":[]");
+            Assert.Equal([SensorPolicyCollection.LargeFileAlertTemplate], Templates("large/listed"));
+        }
+
+
+        private string[] Templates(string path) => Sensor(path).Policies.Select(p => p.Template).Order(StringComparer.Ordinal).ToArray();
+
         private BaseSensorModel Sensor(string path)
         {
             Assert.True(_valuesCache.TryGetSensorByPath(TestProductsManager.ProductId, path, out var sensor), path);
             return sensor;
         }
 
-        private async Task RegisterAsync(SensorApiTestHost host, string path, int type, long defaultAlerts)
+        private async Task RegisterAsync(SensorApiTestHost host, string path, int type, long defaultAlerts, string members = null)
         {
+            var extra = members is null ? string.Empty : $",{members}";
+
             using var deadline = new CancellationTokenSource(Patience);
             using var http = new HttpClient();
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(host.HttpBase, "commands"))
             {
-                Content = new StringContent($"[{{\"Type\":0,\"Path\":\"{path}\",\"SensorType\":{type},\"DefaultAlertsOptions\":{defaultAlerts}}}]",
+                Content = new StringContent($"[{{\"Type\":0,\"Path\":\"{path}\",\"SensorType\":{type},\"DefaultAlertsOptions\":{defaultAlerts}{extra}}}]",
                     Encoding.UTF8, "application/json"),
             };
 

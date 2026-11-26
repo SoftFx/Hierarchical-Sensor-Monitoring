@@ -24,7 +24,7 @@
 
 @foreach (var upload in Model.Uploads)
 {
-    <div class="card my-1 large-file-upload" data-state="@upload.State">
+    <div class="card my-1 large-file-upload" data-state="@upload.State" data-live="true">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between flex-wrap">
                 <div class="text-break">
@@ -52,7 +52,8 @@
 {
     <div class='accordion my-1 file-row' id='@row.RowId' data-time='@row.TimeTicks' data-extension='@row.Extension'
          data-preview='@(row.IsPreviewEnabled ? "true" : "false")' data-large='@(row.IsLarge ? "true" : "false")'
-         data-state='@(row.IsLarge ? row.LargeState.ToString() : string.Empty)'>
+         data-state='@(row.IsLarge ? row.LargeState.ToString() : string.Empty)'
+         data-live='@(row.IsLarge && row.LargeState is not (LargeFileRowState.Ready or LargeFileRowState.Missing) ? "true" : "false")'>
         <div class='accordion-item'>
             <h2 class='accordion-header'>
                 <button class='accordion-button collapsed pt-2 pb-1 file-row-toggle' type='button' data-bs-toggle='collapse'

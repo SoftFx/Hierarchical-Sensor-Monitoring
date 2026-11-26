@@ -257,7 +257,7 @@ Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionVie
 
 ADR-0022 points 17, 18. Code: `AlertState` (the variables), `FilePolicy.GetState`, `FileAlertContext` / `FileAlertVariables` (`HSMServer.Core/Model/Policies/Alerts/FileAlertContext.cs`), `ServerFileAlertContext` (`HSMServer/Model/FileSensors/`), `SensorPolicyCollection.AddLargeFileAlert`, `TreeValuesCache.TryAddSensorUnderLock`.
 
-**Variables.** Four variables are filled for the policies of File sensors only; on any other sensor they print nothing.
+**Variables.** Four variables are filled for the data alerts of File sensors only (`FilePolicy`); on any other sensor, and in the inactivity (TTL) alert of a File sensor, they print nothing.
 
 | Variable | Prints | Ordinary file value |
 |---|---|---|
@@ -266,14 +266,14 @@ ADR-0022 points 17, 18. Code: `AlertState` (the variables), `FilePolicy.GetState
 | `$link` | the address of the sensor page, `<base>/Home/<sensorId>` | the same |
 | `$fileNote` | `waits for the product's dump password` for a secure large value of a product without a dump password; empty otherwise (a not secure file never waits) | empty |
 
-- **The name rule** (`FileValueNameExtensions.GetDisplayName`, also the page and the management API): a name that already ends in an extension is shown as it is (a large value carries the whole original name), a name without one gets the value's extension; nothing prints `dump.dmp.dmp`.
+- **The name rule** (`FileValueNameExtensions.GetDisplayName`, also the page and the management API): a name that already ends with the value's extension is shown as it is (a large value carries the whole original name); any other name gets the extension (`backup.2026-11-25` + `csv`); nothing prints `dump.dmp.dmp`.
 - **A file name is the client's text.** Before it is substituted, `<`, `>` and `&` are replaced by look-alikes (`‹ › ＆`) and line breaks and control characters by a space: the Telegram path decodes HTML entities and honours `<markdown>…</markdown>` spans anywhere in a message, and the web comment renders markup too. `$value` and `$prevValue` of a file print the type name of its byte array, as before; the content never reaches a message.
 - **The link base:** `HSM_DOMAIN` (the bundled compose passes it to the app container), else `Agent.ExternalConnectionUrl`, else none: `$link` is then the path `/Home/<sensorId>` alone, which a chat does not make clickable. The server sets the process-wide `FileAlertContext` before the tree loads, so every File policy prints the link whatever created it (a registration, a load, a template, the management API, a move).
 - **Compatibility.** Templates are stored as raw text and parsed when a policy is loaded, so new variables need no migration. They are appended after `$target`, in the order of the `AlertState` properties and in the positional list of `BuildComment`; no variable name contains another (a template is substituted by substring), which a test guards. A stored template that happened to contain the literal text `$link`, `$fileName`, `$fileSize` or `$fileNote` now has it substituted. `AlertVariablesDocs` lists them for the management API and MCP schemas.
 
 **The default alert of a sensor registered for large files.** A registration (`AddOrUpdateSensor`, HTTP or session) carrying `DefaultAlertsOptions.LargeFiles = 4` that CREATES a File sensor gives it one policy: "new data has been received" (`NewSensorData` / `ReceivedNewValue`), status Ok, destination `FromParent` (where the product's other alerts go), template `[$product]$path new file $fileName ($fileSize) $link $fileNote`. The collectors send the flag for a sensor of `WatchLargeFiles` / `SendLargeFile` unless the application asked for the sensor without it (#1887, #1888).
 
-- It is an ordinary policy: stored with the sensor, journaled as a change of the sensor's alerts by the system (or by the registration's initiator), editable and removable; nothing adds it again.
+- It is an ordinary policy: stored with the sensor, journaled as a change of the sensor's alerts by the system (or by the registration's initiator), editable and removable; nothing adds it again. It is the server's, not the collector's: the alert list a registration carries (the creating registration too, and every later one) reconciles the collector's own alerts and neither removes it nor is blocked by it, as long as nobody changed it (its owner in the sensor's change table is the system, marked `default alert of large files`; an edit makes it the editor's). A user may remove it, and so may a forced registration, as for any alert.
 - Only at creation. A sensor that already exists gets nothing from a later registration with the flag: one registered by an older collector, one created by an ordinary value, one a registration reaches through an alias. Other sensor types ignore the flag.
 - The old default status-change alert (`AddDefault`) stays switched off; this is a separate call for this flag only.
 - A server older than this step ignores the flag: the cast keeps the bit and nothing reads it.

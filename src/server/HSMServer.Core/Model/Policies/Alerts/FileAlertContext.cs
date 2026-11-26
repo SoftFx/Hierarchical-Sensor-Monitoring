@@ -63,7 +63,8 @@ namespace HSMServer.Core.Model.Policies
         /// <summary>
         /// The file name for a message. A name is the client's text and a message is rendered as markup on the way (the
         /// web comment, Telegram, which honours tags and HTML entities): angle brackets and the ampersand are replaced by
-        /// look-alikes, line breaks and control characters by a space; then it is cut to <see cref="MaxFileNameLength"/>.
+        /// look-alikes, line breaks, control and format characters (a right-to-left override) by a space; then it is cut to
+        /// <see cref="MaxFileNameLength"/>.
         /// </summary>
         public static string FileName(FileValue file)
         {
@@ -81,7 +82,8 @@ namespace HSMServer.Core.Model.Policies
                     '<' => '\u2039',
                     '>' => '\u203A',
                     '&' => '\uFF06',
-                    _ when char.IsControl(ch) || ch is '\u2028' or '\u2029' or '\u0085' => ' ',
+                    _ when char.IsControl(ch) || ch is '\u2028' or '\u2029' or '\u0085' ||
+                           char.GetUnicodeCategory(ch) == System.Globalization.UnicodeCategory.Format => ' ',
                     _ => ch,
                 });
 

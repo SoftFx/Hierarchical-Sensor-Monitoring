@@ -152,6 +152,32 @@
 
         container.off('.fileRows');
 
+        // A list with uploads or large files on their way to ready is read again every 10 seconds, as long as the user has
+        // not gone to older pages nor opened a row (both would be lost); it stops when the tab is gone.
+        const recentAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetRecentFilesView), "Home")';
+
+        clearInterval(container.data('liveTimer'));
+        container.data('olderLoaded', false);
+        container.data('liveTimer', setInterval(function () {
+            if (!document.body.contains(container[0])) {
+                clearInterval(container.data('liveTimer'));
+                return;
+            }
+
+            if (container.data('olderLoaded') || container.find('[data-live="true"]').length === 0 || container.find('.accordion-collapse.show').length > 0)
+                return;
+
+            $.ajax({
+                type: 'GET',
+                url: recentAction + '?fileId=' + encodeURIComponent(encodedId),
+                cache: false,
+                success: function (response) {
+                    if (!container.data('olderLoaded') && container.find('.accordion-collapse.show').length === 0)
+                        container.html(response);
+                }
+            });
+        }, 10000));
+
         container.on('click.fileRows', '.file-row-download', function () {
             const row = rowOf(this);
             window.location.href = getFileAction + '?Selected=' + encodeURIComponent(encodedId) + '&dateTime=' + encodeURIComponent(row.dataset.time);
@@ -173,6 +199,7 @@
 
         container.on('click.fileRows', '.file-page-older', function () {
             const more = $(this).closest('.file-page-more');
+            container.data('olderLoaded', true);
 
             $.ajax({
                 type: 'GET',

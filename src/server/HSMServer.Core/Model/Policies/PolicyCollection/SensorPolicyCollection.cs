@@ -455,6 +455,10 @@ namespace HSMServer.Core.Model.Policies
                             if (policy.TemplateId != null && !initiator.IsForceUpdate && !initiator.IsTemplateApply)
                                 continue;
 
+                            // A collector's list reconciles the collector's own alerts, never the server's default of large files.
+                            if (initiator.Type == InitiatorType.DataCollector && !initiator.IsForceUpdate && IsUntouchedLargeFileAlert(id))
+                                continue;
+
                             RemovePolicy(id, initiator);
                         }
                     }
@@ -559,7 +563,9 @@ namespace HSMServer.Core.Model.Policies
 
         // The default alert of a File sensor created for large files (#1886): "new data has been received", sent where
         // the product's other alerts go, with the file's name, size and page. A policy like any other: persisted through
-        // Uploaded and journaled; the user may change or remove it, and nothing adds it again.
+        // Uploaded and journaled; the user may change or remove it, and nothing adds it again. It is the server's, not the
+        // collector's: the alert list a registration carries (the creating one too) reconciles the collector's own
+        // alerts, so it neither removes this one nor is blocked by it (see TryUpdate). A forced registration still may.
         internal override void AddLargeFileAlert(InitiatorInfo initiator)
         {
             var policy = new PolicyType();
@@ -583,10 +589,23 @@ namespace HSMServer.Core.Model.Policies
             {
                 AddPolicy(policy);
 
-                CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator);
+                CallDataJournal(policy.Id, string.Empty, policy.ToString(), initiator, stampOwnership: false);
+                AlertChangeTable[policy.Id.ToString()].SetUpdate(LargeFileAlertOwner);
                 Uploaded?.Invoke(ActionType.Add, policy);
             }
         }
+
+        internal const string LargeFileAlertOwnerInfo = "default alert of large files";
+
+        /// <summary>
+        /// The change-table owner of the default alert of large files: the system, marked. Any edit stamps another owner (a
+        /// user, a template), and from then on the alert is treated as that owner's.
+        /// </summary>
+        internal static InitiatorInfo LargeFileAlertOwner { get; } = InitiatorInfo.AsSystemInfo(LargeFileAlertOwnerInfo);
+
+        // The default alert of large files untouched since the server added it.
+        private bool IsUntouchedLargeFileAlert(Guid policyId) =>
+            AlertChangeTable[policyId.ToString()].Initiator is { Type: InitiatorType.System, Info: LargeFileAlertOwnerInfo };
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }

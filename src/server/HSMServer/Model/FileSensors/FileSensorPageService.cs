@@ -63,8 +63,11 @@ namespace HSMServer.Model.FileSensors
             if (timeTicks < DateTime.MinValue.Ticks || timeTicks > DateTime.MaxValue.Ticks)
                 return null;
 
-            var time = new DateTime(timeTicks, DateTimeKind.Utc);
-            var values = await _cache.GetSensorValuesPage(sensorId, time, time, 1).Flatten();
+            // Never a range of one tick: the weekly databases are chosen by a strict overlap, so [t, t] misses a value at
+            // the very first tick of a week. One tick more, and the value is picked by its time.
+            var from = new DateTime(timeTicks, DateTimeKind.Utc);
+            var to = new DateTime(Math.Min(timeTicks + 1, DateTime.MaxValue.Ticks), DateTimeKind.Utc);
+            var values = await _cache.GetSensorValuesPage(sensorId, from, to, 2).Flatten();
 
             return values.OfType<FileValue>().FirstOrDefault(file => file.Time.Ticks == timeTicks)?.DecompressContent();
         }
@@ -83,15 +86,18 @@ namespace HSMServer.Model.FileSensors
             if (sensor is null || olderThanTicks <= DateTime.MinValue.Ticks)
                 return new FileValuesPageViewModel { EncodedId = encodedId };
 
+            // The range ends AT the last value already shown, not a tick before it: a range ending at the first tick of a
+            // week would skip that week's database (a strict overlap). That value is dropped below.
             var to = olderThanTicks is { } older
-                ? new DateTime(Math.Min(older - 1, DateTime.MaxValue.Ticks), DateTimeKind.Utc)
+                ? new DateTime(Math.Min(older, DateTime.MaxValue.Ticks), DateTimeKind.Utc)
                 : DateTime.MaxValue;
 
             var firstPage = olderThanTicks is null;
 
-            // One more than a page tells whether an older page exists; one more again for the last value skipped.
-            var read = await _cache.GetSensorValuesPage(sensorId, DateTime.MinValue, to, PageSize + 2).Flatten();
-            var files = read.OfType<FileValue>().ToList();
+            // One more than a page tells whether an older page exists; one more for the last value skipped, one more for
+            // the value at the end of the range.
+            var read = await _cache.GetSensorValuesPage(sensorId, DateTime.MinValue, to, PageSize + 3).Flatten();
+            var files = read.OfType<FileValue>().Where(file => olderThanTicks is null || file.Time.Ticks < olderThanTicks).ToList();
 
             // An ordinary last value is shown above the list with its preview; a large one has no preview and stays in it.
             if (firstPage && files.Count > 0 && sensor.LastValue is FileValue last && !IsLarge(last) && files[0].Time.Ticks == last.Time.Ticks)

@@ -110,6 +110,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             Assert.DoesNotContain('&', comment);
             Assert.DoesNotContain('\n', comment);
             Assert.DoesNotContain('\u0007', comment);
+            Assert.DoesNotContain('\u202E', FileAlertVariables.FileName(File("invoice\u202Efdp.exe", "exe", 1)));
             Assert.Contains("line two", comment);
         }
 
