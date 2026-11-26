@@ -12,7 +12,9 @@ RUN apt-get update \
 
 COPY . /src
 
-RUN cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release -DHSM_COLLECTOR_WERROR=ON \
+# No -DHSM_COLLECTOR_WERROR: the warning gates are the native lanes' (native-collector-conformance.yml); a new
+# warning of this distribution's compiler must not fail the run of the rows against the server.
+RUN cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release \
        -DHSM_COLLECTOR_HTTP=ON -DHSM_COLLECTOR_TABLES=ON -DHSM_COLLECTOR_BUILD_EXAMPLES=OFF \
     && cmake --build /build --target hsm_table_e2e --parallel \
     && cp /build/hsm_table_e2e /usr/local/bin/ \

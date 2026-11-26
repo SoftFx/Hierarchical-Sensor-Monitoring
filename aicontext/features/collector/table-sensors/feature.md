@@ -684,9 +684,10 @@ lines in between; it checks nothing itself. The test builds it with `docker buil
 Linux agent's stack, no vcpkg) and runs it on the fixture's Docker network, where it reaches the server through the
 fixture's proxy with TLS to the server's self-signed certificate (`allow_untrusted_server_certificate`). Two runs:
 a sensor registers; 300 rows added one by one are stored at a tick; the proxy is cut, the collector reports its
-session ended, 200 rows are added at once; the proxy is back and the 500 rows are stored; 100 more go in the stop
-drain; the 600 rows read back as CSV (the whole text, compared with the expected one) and as JSON (each time to 100 ns
-with 37 ns given and rounded down, each double bit for bit, each empty cell, the order) are exactly the rows sent,
+session ended, 200 rows are added at once and a reconnect attempt fails (the outage is real; whether a tick packs the
+rows before the proxy is back is not controlled); the proxy is back and the 500 rows are stored; 100 more are sent by
+the stop at the latest; the 600 rows read back as CSV (the whole text, compared with the expected one) and as JSON (each time to 100 ns
+with 87 ns given and rounded down, each double bit for bit, each empty cell, the order) are exactly the rows sent,
 none twice, none lost, `rows_dropped` 0. And: a second collector registering the same path with other columns is
 `Refused` with the server's reason, its rows dropped and counted; a collector on HTTP has its table sensor
 `Unavailable` ("table sensors need the collector session transport (hsm_collector_use_session_transport)") from the

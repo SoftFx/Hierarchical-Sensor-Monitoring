@@ -43,6 +43,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
 
         private static readonly SemaphoreSlim BuildLock = new(1, 1);
         private static string? _image;
+        private static string? _buildFailure;
 
         private readonly HsmServerFixture _fixture;
         private readonly ITestOutputHelper _output;
@@ -77,12 +78,16 @@ namespace HSMDataCollector.IntegrationTests.Tests
             await UntilAsync(async () => await StoredRowsAsync(path, baseNs) == RowsAtTick, $"{RowsAtTick} rows stored");
 
             // The connection is lost: the rows added meanwhile are kept and delivered once it is back, each once.
+            // A failed reconnect after the rows were added says the outage was real when they were (the first failure
+            // after a session is always logged); whether a tick packs them before the proxy is back is not controlled.
             var sessionsEnded = driver.LogCount("The collector session ended");
+            var failedOpens = driver.LogCount("Cannot open a collector session");
             await _fixture.DisableConnectionAsync();
             try
             {
                 await UntilAsync(() => Task.FromResult(driver.LogCount("The collector session ended") > sessionsEnded), "the collector saw its session end");
                 Assert.Equal($"= ok {RowsWhileDown}", await driver.CommandAsync($"batch t {baseNs} {RowsAtTick} {RowsWhileDown}"));
+                await UntilAsync(() => Task.FromResult(driver.LogCount("Cannot open a collector session") > failedOpens), "a reconnect failed while the proxy was cut");
             }
             finally
             {
@@ -126,7 +131,9 @@ namespace HSMDataCollector.IntegrationTests.Tests
             Assert.Equal("Refused", refused.State);
             Assert.Equal($"Table sensor '{path}' is registered with the schema (time Time, c0 Double, c1 Int64); " +
                          "a registration with (time Time, c0 Double) is refused: a different shape is a different sensor.", refused.Reason);
-            Assert.Contains(driver.Lines, line => line.StartsWith($"log b error The server refused the table sensor {path}: ", StringComparison.Ordinal));
+            // The line is written after the state changes (with the next reports), so it is waited for.
+            await UntilAsync(() => Task.FromResult(driver.Lines.Any(line => line.StartsWith($"log b error The server refused the table sensor {path}: ", StringComparison.Ordinal))),
+                             "the refusal was logged");
 
             Assert.Equal("= ok 0", await driver.CommandAsync($"rows r {baseNs} 0 3"));
 
@@ -155,9 +162,9 @@ namespace HSMDataCollector.IntegrationTests.Tests
         }
 
         // The rows of the driver (hsm_table_e2e.cpp computes the same): row r has the time base + r ms
-        // + (r % 7) * 100 ns + 37 ns, kept to 100 ns (rounded down); its cell of value column c is empty when
+        // + (r % 7) * 100 ns + 87 ns, kept to 100 ns (rounded down, which 87 ns tells from rounding to the nearest); its cell of value column c is empty when
         // (r + c) % 7 == 3, else c + 1.0841 + r / 100000.0 (double) or r * 1000003 - 7 + c (int64).
-        private static long RowTicks(long baseNs, long row) => DateTime.UnixEpoch.Ticks + (baseNs + row * 1_000_000 + row % 7 * 100 + 37) / 100;
+        private static long RowTicks(long baseNs, long row) => DateTime.UnixEpoch.Ticks + (baseNs + row * 1_000_000 + row % 7 * 100 + 87) / 100;
 
         private static bool IsNull(long row, int column) => (row + column) % 7 == 3;
 
@@ -281,12 +288,18 @@ namespace HSMDataCollector.IntegrationTests.Tests
                 if (_image != null)
                     return _image;
 
+                Assert.True(_buildFailure == null, _buildFailure);
+
                 var collector = Path.Combine(RepositoryRoot(), "src", "native", "collector");
                 // One name, as the fixture's test image: a rebuild replaces it instead of adding one per run.
                 const string image = "hsm-native-table-e2e:latest";
                 var (exit, output) = await RunAsync("docker", new[] { "build", "-f", Path.Combine(collector, "tests", "server_e2e", "Dockerfile"), "-t", image, collector }, BuildPatience);
 
-                Assert.True(exit == 0, $"docker build of the native driver failed ({exit}):\n{output}");
+                if (exit != 0)
+                {
+                    _buildFailure = $"docker build of the native driver failed ({exit}):\n{output}";
+                    Assert.Fail(_buildFailure);
+                }
 
                 _image = image;
                 return image;
@@ -382,8 +395,16 @@ namespace HSMDataCollector.IntegrationTests.Tests
                 var process = Process.Start(start) ?? throw new InvalidOperationException("The native driver did not start.");
                 var driver = new NativeDriver(process, test._output, container);
 
-                Assert.StartsWith("= ready ", driver.Answer("start"));
-                return driver;
+                try
+                {
+                    Assert.StartsWith("= ready ", driver.Answer("start"));
+                    return driver;
+                }
+                catch
+                {
+                    await driver.DisposeAsync();
+                    throw;
+                }
             }
 
             public async Task<string> CommandAsync(string command)
@@ -459,11 +480,18 @@ namespace HSMDataCollector.IntegrationTests.Tests
                 if (_container != null)
                     await RunAsync("docker", new[] { "rm", "-f", _container }, Patience);
 
-                await Task.WhenAny(_reader, Task.Delay(TimeSpan.FromSeconds(5)));
+                // The pipes end with the process (or its container); the reader is not left using what is disposed here.
+                var readerDone = await Task.WhenAny(_reader, Task.Delay(Patience)) == _reader;
 
                 // The whole conversation, for a failed run.
                 foreach (var line in _lines)
                     _output.WriteLine(line);
+
+                if (!readerDone)
+                {
+                    _output.WriteLine($"The driver's output was still open {Patience.TotalSeconds} s after it ended.");
+                    return;
+                }
 
                 _process.Dispose();
                 _answers.Dispose();

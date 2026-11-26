@@ -19,10 +19,10 @@
 //   quit
 // An answer is "= ok ..." or "= error <text>".
 //
-// The rows (the test computes the same): row r has the time base + r ms + (r % 7) * 100 ns + 37 ns,
-// kept by the collector to 100 ns (rounded down); its cell of value column c is empty when
-// (r + c) % 7 == 3, else c + 1.0841 + r / 100000.0 for a double column and r * 1000003 - 7 + c for an
-// int64 column.
+// The rows (the test computes the same): row r has the time base + r ms + (r % 7) * 100 ns + 87 ns,
+// kept by the collector to 100 ns (rounded down: 87 ns tells it from rounding to the nearest); its
+// cell of value column c is empty when (r + c) % 7 == 3, else c + 1.0841 + r / 100000.0 for a double
+// column and r * 1000003 - 7 + c for an int64 column.
 
 #include <hsm_collector/hsm_collector.hpp>
 
@@ -101,7 +101,7 @@ namespace
 
     std::int64_t RowTime(std::int64_t base_ns, std::int64_t row)
     {
-        return base_ns + row * 1000000 + (row % 7) * 100 + 37;
+        return base_ns + row * 1000000 + (row % 7) * 100 + 87;
     }
 
     bool IsNull(std::int64_t row, std::size_t column)
