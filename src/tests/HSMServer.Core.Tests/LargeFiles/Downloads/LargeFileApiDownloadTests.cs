@@ -216,7 +216,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             using var request = new HttpRequestMessage(HttpMethod.Get, Url(open));
             request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            LargeFileWorld.FromPeer(request, LargeFileWorld.ProxyPeer);
             using var response = await client.SendAsync(request);
 
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -272,7 +272,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             // Even a request the bundled Caddy forwarded gets no instruction when the record failed.
             using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
             request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            LargeFileWorld.FromPeer(request, LargeFileWorld.ProxyPeer);
 
             var answer = await Snapshot(client.SendAsync(request));
 
@@ -402,7 +402,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
             request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            LargeFileWorld.FromPeer(request, LargeFileWorld.ProxyPeer);
             using var response = await client.SendAsync(request);
 
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -438,7 +438,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
             request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            LargeFileWorld.FromPeer(request, LargeFileWorld.ProxyPeer);
             var handedOver = await Snapshot(client.SendAsync(request));
             var served = await Snapshot(client.GetAsync(Url(_file)));
             var unknown = await Snapshot(client.GetAsync(LargeFileDownloadService.ApiDownloadPath(Guid.NewGuid(), _file.ArchiveId.Value)));
@@ -451,9 +451,12 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
         [Theory]
-        [InlineData(false, true)]  // the marker without a configured trusted proxy
-        [InlineData(true, false)]  // trusted proxies configured, but the request did not come through one
-        public async Task TheMarkerWithoutTheTrustedProxy_GetsTheFileItself(bool trustProxies, bool forwarded)
+        [InlineData(false, LargeFileWorld.ProxyPeer)] // the marker without a configured trusted proxy
+        [InlineData(true, null)]                      // trusted proxies configured, but no connection peer is known
+        [InlineData(true, "198.51.100.20")]           // a direct client
+        [InlineData(true, "10.0.0.2")]                // a neighbour of the trusted proxy
+        [InlineData(true, "::ffff:198.51.100.20")]    // a direct client over IPv6
+        public async Task TheMarkerWithoutTheTrustedProxy_GetsTheFileItself(bool trustProxies, string peer)
         {
             if (trustProxies)
                 _world.TrustProxies();
@@ -463,8 +466,46 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
             request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-            if (forwarded)
-                request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            if (peer is not null)
+                LargeFileWorld.FromPeer(request, peer);
+            using var response = await client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(_archive, await response.Content.ReadAsByteArrayAsync());
+            Assert.Null(Header(response, LargeFileDownloadResult.ArchiveHeader));
+        }
+
+        [Fact]
+        public async Task TheMarkerFromTheTrustedProxyOverIPv4MappedIPv6_HandsTheFileToCaddy()
+        {
+            _world.TrustProxies();
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ManagerA));
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
+            request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
+            LargeFileWorld.FromPeer(request, $"::ffff:{LargeFileWorld.ProxyPeer}");
+            using var response = await client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Equal($"{_world.ProductA.Id:N}/{_file.ArchiveId:N}.zip", Header(response, LargeFileDownloadResult.ArchiveHeader));
+        }
+
+        [Fact]
+        public async Task ADirectClientSendingTheForwardedHeaders_GetsTheFileItself()
+        {
+            // X-Original-For is what the forwarded-headers middleware sets on a trusted hop, but it leaves a copy the
+            // client sent in place: only the connection's own peer tells a trusted proxy.
+            _world.TrustProxies();
+
+            using var host = _world.BuildHost();
+            using var client = LargeFileWorld.ApiClient(host, _world.AddToken(_world.ManagerA));
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, Url(_file));
+            request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
+            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, $"{LargeFileWorld.ProxyPeer}:5000");
+            LargeFileWorld.FromPeer(request, "198.51.100.20");
             using var response = await client.SendAsync(request);
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -485,7 +526,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             {
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-                request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+                LargeFileWorld.FromPeer(request, LargeFileWorld.ProxyPeer);
                 return await client.SendAsync(request);
             }
 

@@ -1172,6 +1172,18 @@
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
         </member>
+        <member name="T:HSMServer.Middleware.ConnectionPeerMiddleware">
+            <summary>
+            Records the connection's own peer address, and whether it is one of the trusted proxies, before
+            UseForwardedHeaders replaces <see cref="P:Microsoft.AspNetCore.Http.ConnectionInfo.RemoteIpAddress"/> with the address the proxy stated.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Middleware.ConnectionPeerMiddleware.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpContext)">
+            <summary>True when the request's connection came from a trusted proxy (recorded by this middleware).</summary>
+        </member>
+        <member name="M:HSMServer.Middleware.ConnectionPeerMiddleware.GetPeerAddress(Microsoft.AspNetCore.Http.HttpContext)">
+            <summary>The connection's own peer address, before forwarded headers were applied; null when not recorded.</summary>
+        </member>
         <member name="M:HSMServer.Middleware.Telemetry.TelemetryCollector.TryRegisterPublicApiRequest(Microsoft.AspNetCore.Http.HttpContext,System.String@)">
             <summary>
             Resolve and register the request's public-API info (key, product,
@@ -3565,10 +3577,11 @@
             (status, body and headers), whatever the cause.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadResult.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpRequest,HSMServer.ServerConfiguration.IServerConfig)">
+        <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadResult.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpContext)">
             <summary>
-            True when the request reached HSM through a configured trusted proxy: the forwarded-headers middleware set
-            X-Original-For while it applied the proxy's X-Forwarded-For (the AgentController predicate, #1427).
+            True when the request's connection came from a configured trusted proxy: the connection's own peer address,
+            recorded by <see cref="T:HSMServer.Middleware.ConnectionPeerMiddleware"/> before the forwarded headers were applied, is one of the
+            proxies of the app's forwarded-headers options. Nothing recorded means not trusted.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadResult.NotFound(HSMServer.Model.ManagementApi.LargeFiles.LargeFileSurface)">

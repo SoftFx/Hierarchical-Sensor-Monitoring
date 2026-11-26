@@ -95,6 +95,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             AssertInOrder(body,
             [
+                // Before the forwarded headers: it records the connection's own peer, which they replace.
+                "ConnectionPeerMiddleware",
                 "UseForwardedHeaders",
                 "UseExceptionHandler",
                 "UseHttpsRedirection",
