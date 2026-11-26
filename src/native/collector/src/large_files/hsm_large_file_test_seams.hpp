@@ -27,4 +27,6 @@ namespace hsm::collector::large_files::test
     /// Adjusts the file connection's options of the runs started after the call (in the large files build).
     void AdjustConnection(hsm_collector_t* collector, std::function<void(FileConnectionOptions&)> adjust);
     bool UploaderAlive(hsm_collector_t* collector);
+    /// Called on the uploader thread when a file was stored ("stored", then "deleted"; LargeFiles::on_finish_for_tests).
+    void OnFinish(hsm_collector_t* collector, std::function<void(const std::string& phase)> hook);
 } // namespace hsm::collector::large_files::test

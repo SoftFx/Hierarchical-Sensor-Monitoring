@@ -17,6 +17,7 @@
 #include "../src/large_files/hsm_large_file_state.hpp"
 #include "../src/large_files/hsm_large_file_test_seams.hpp"
 #include "../src/large_files/hsm_file_connection.hpp"
+#include "../src/large_files/hsm_large_files.hpp"
 #include "file_server_script.hpp"
 #include "ws_test_server.hpp"
 
@@ -136,6 +137,10 @@ namespace
     {
         // The idle wait advances the clock too, unless a test drives the settle time itself.
         std::atomic<bool> idle_advances{ true };
+        // A wait of this name (set before Start) does not move the clock: the uploader stays in it, and
+        // `held` says it got there.
+        std::string hold;
+        std::atomic<bool> held{ false };
         std::mutex mutex;
         std::vector<std::pair<std::string, std::int64_t>> list;
         std::vector<std::pair<std::string, std::int64_t>> Copy()
@@ -228,6 +233,11 @@ namespace
                 {
                     std::lock_guard<std::mutex> guard(recorded->mutex);
                     recorded->list.emplace_back(what, ms);
+                }
+                if (!recorded->hold.empty() && what == recorded->hold)
+                {
+                    recorded->held.store(true);
+                    return;
                 }
                 if (what != "nothing to upload" || recorded->idle_advances.load())
                     hsm_collector_test_advance_clock_ms(self, ms);
@@ -328,6 +338,10 @@ namespace
         Check(!lf::CheckMask("[ab].dmp", why) && !lf::CheckMask("a;b", why) && !lf::CheckMask("a\\b", why) && !lf::CheckMask("a/b", why) && !lf::CheckMask("", why),
               "masks outside the shared subset are refused");
         Check(lf::CheckMask("*.dmp", why), "*.dmp is a mask");
+        Check(!lf::MaskMatches("a?", "a", false) && lf::MaskMatches("a?", "ab", false) && !lf::MaskMatches("a?", "abc", false), "? is exactly one character");
+        Check(!lf::MaskMatches("\xC3\x89.dmp", "\xC3\xA9.dmp", true), "case folding is ASCII only (E-acute is not folded)");
+        Check(lf::MaskMatches("A?C.DMP", "abc.dmp", true) && !lf::MaskMatches("A?C.DMP", "abc.dmp", false), "folding applies around ? on Windows only");
+        Check(!lf::CheckMask("a]", why) && !lf::CheckMask("a\tb", why) && !lf::CheckMask(std::string("a\x01b"), why), "] and control characters are refused");
     }
 
     void NativeLargeFileHandedFileIsStoredAndDeleted()
@@ -918,6 +932,528 @@ namespace
         }
     }
 
+    // ---- The review of #1912 ----
+
+    bool ListFrameWithName(Rig& rig, const std::string& name)
+    {
+        for (const auto& text : rig.server->Received())
+            if (text.find("\"op\":\"list\"") != std::string::npos && text.find("\"Type\":6") != std::string::npos &&
+                text.find("\"Name\":\"" + name + "\"") != std::string::npos)
+                return true;
+        return false;
+    }
+
+    // B2: end answered 202, then 409 "pieces are missing" (the store lost pieces during the check). The server
+    // let the upload go when the check began, so the client begins again and goes on from the piece begin
+    // names; a piece sent straight on would be a large frame without an upload (1002).
+    void NativeLargeFileMissingAfterCheckingBeginsAgain()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("lost.dmp");
+        const std::string bytes = Content(3 * 65536, 12);
+        WriteFile(source, bytes);
+        rig.script->SetCheckingRounds(1);
+        rig.script->SetCheckMissingFrom(1);
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file) + rig.log.All());
+        const auto ends = rig.script->Ends();
+        Check(ends.size() == 3 && ends[0].status == 202 && ends[1].status == 409 && ends[2].status == 200, "end: 202, 409, then stored");
+        Check(rig.script->Begins().size() == 2, "begun again after the 409");
+        std::vector<std::int64_t> numbers;
+        for (const auto& piece : rig.script->Pieces())
+            numbers.push_back(piece.number);
+        Check(numbers == std::vector<std::int64_t>{ 0, 1, 2, 1, 2 }, "went on from the piece begin named");
+        for (const auto& piece : rig.script->Pieces())
+            Check(piece.status == 200, "no piece without an upload");
+        Check(rig.log.Count("1002") == 0, "no protocol close");
+        Check(rig.script->StoredFiles().begin()->second == bytes, "the bytes");
+        hsm_large_file_release(file);
+    }
+
+    // B3: the comment of a begin is bounded in UTF-16 code units (the server's characters), the ellipsis
+    // included, and never cut inside a code point; path and name are bounded at 1,024.
+    void NativeLargeFileBeginTextIsBounded()
+    {
+        Check(lf::FileConnection::Utf16Length("abc") == 3 && lf::FileConnection::Utf16Length("\xC3\xA9") == 1 &&
+                  lf::FileConnection::Utf16Length("\xE2\x80\xA6") == 1 && lf::FileConnection::Utf16Length("\xF0\x9F\x98\x80") == 2,
+              "UTF-16 code units: 1 below U+10000, 2 above");
+        const std::string ellipsis = "\xE2\x80\xA6";
+        const std::string fits(4096, 'a');
+        Check(lf::FileConnection::BoundComment(fits) == fits, "4,096 characters fit");
+        const std::string cut = lf::FileConnection::BoundComment(std::string(5000, 'a'));
+        Check(cut == std::string(4095, 'a') + ellipsis && lf::FileConnection::Utf16Length(cut) == 4096, "cut to 4,095 and an ellipsis");
+        std::string wide;
+        for (int i = 0; i < 2100; ++i)
+            wide += "\xF0\x9F\x98\x80"; // 4,200 units
+        const std::string wide_cut = lf::FileConnection::BoundComment(wide);
+        Check(lf::FileConnection::Utf16Length(wide_cut) <= 4096 && wide_cut.size() == 2047 * 4 + 3 && wide_cut.substr(wide_cut.size() - 3) == ellipsis,
+              "whole code points above U+FFFF (two units each), then the ellipsis");
+        std::string mixed = "a";
+        for (int i = 0; i < 2048; ++i)
+            mixed += "\xF0\x9F\x98\x80"; // 4,097 units: the last one does not fit with the ellipsis
+        const std::string mixed_cut = lf::FileConnection::BoundComment(mixed);
+        Check(mixed_cut == "a" + wide.substr(0, 2047 * 4) + ellipsis && lf::FileConnection::Utf16Length(mixed_cut) == 4096, "no cut inside a code point");
+
+        Rig rig;
+        auto options = NoLimit();
+        const std::string long_path(1100, 'p');
+        Check(hsm_collector_watch_large_files(rig.collector, long_path.c_str(), rig.folder.Str().c_str(), "*", &options, nullptr) == HSM_RESULT_INVALID_ARGUMENT,
+              "a watch of a sensor path over 1,024 is refused at the call");
+        Check(hsm_collector_send_large_file(rig.collector, long_path.c_str(), rig.folder.File("a.dmp").c_str(), &options, nullptr) == HSM_RESULT_INVALID_ARGUMENT,
+              "so is a hand-over");
+        Check(std::string(hsm_collector_last_error(rig.collector)).find("1024") != std::string::npos, "with the reason");
+
+        // A name over 1,024 characters (no file system has one): a final refusal of that file.
+        rig.Start();
+        hsm_large_file_t* file = nullptr;
+        const std::string long_name = rig.folder.File(std::string(1030, 'n') + ".dmp");
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", long_name.c_str(), &options, &file) == HSM_RESULT_OK, "a long name is handed over");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_REFUSED && Reason(file).find("1024") != std::string::npos,
+              "and refused for good: " + Reason(file));
+        Check(rig.script->Begins().empty(), "no begin");
+        hsm_large_file_release(file);
+
+        // A routed send whose name is over 1,024 characters takes the ordinary path.
+        hsm_sensor_t* sensor = nullptr;
+        const std::string sensor_name(1030, 'r');
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", sensor_name.c_str(), "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        Check(hsm_sensor_add_file(sensor, std::string(1536 * 1024, '\x01').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return ListFrameWithName(rig, sensor_name); }), "a list frame" + rig.log.All());
+        Check(rig.script->Begins().empty(), "not on the file connection");
+        hsm_sensor_release(sensor);
+    }
+
+    // S2: a routed send whose comment is not UTF-8 cannot be a begin: the ordinary path.
+    void NativeLargeFileRoutedBadCommentTakesTodaysPath()
+    {
+        Rig rig;
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "latin", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        Check(hsm_sensor_add_file(sensor, std::string(1536 * 1024, '\x01').c_str(), HSM_SENSOR_STATUS_OK, "caf\xE9") == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return ListFrameWithName(rig, "latin"); }), "a list frame" + rig.log.All());
+        Check(rig.script->Begins().empty(), "not on the file connection");
+        hsm_sensor_release(sensor);
+    }
+
+#if !defined(_WIN32)
+    // S2: a handed-over path whose name is not UTF-8 (POSIX) is refused for good, not retried.
+    void NativeLargeFileBadNameIsRefused()
+    {
+        Rig rig;
+        const std::string source = rig.folder.Str() + "/bad\xFF.dmp";
+        WriteFile(source, Content(1000, 1));
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_REFUSED && Reason(file).find("UTF-8") != std::string::npos,
+              "refused: " + Reason(file));
+        Check(rig.script->Begins().empty(), "no begin");
+        hsm_large_file_release(file);
+    }
+#endif
+
+    // S5: a piece answered with a 4xx other than 400, 404 and 409 is a final refusal.
+    void NativeLargeFilePieceRefusalIsFinal()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("forbidden.dmp");
+        WriteFile(source, Content(70000, 1));
+        rig.script->AnswerPieceNext(FileScriptAnswer::WithStatus(403, -1, std::string(), "scripted"));
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_REFUSED, "refused: " + Reason(file));
+        Check(rig.script->Begins().size() == 1 && rig.script->Pieces().size() == 1, "not tried again");
+        Check(Exists(source), "left where it is");
+        hsm_large_file_release(file);
+    }
+
+    // 404 on a piece or at end: backed off and begun again; past three such restarts the file is given up
+    // (persisted), and a routed send is dropped and counted.
+    void NativeLargeFileNotHeldIsBounded()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("lease.dmp");
+        WriteFile(source, Content(70000, 2));
+        for (int i = 0; i < 4; ++i)
+            rig.script->AnswerPieceNext(FileScriptAnswer::WithStatus(404, -1, std::string(), "scripted"));
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_GIVEN_UP, "given up: " + Reason(file));
+        Check(rig.script->Begins().size() == 4, "begun again after each of the first three");
+        int backoffs = 0;
+        for (const auto& wait : rig.waits.Copy())
+            backoffs += wait.first == "the server lost the upload" ? 1 : 0;
+        Check(backoffs == 3, "a backoff before each begin again: " + std::to_string(backoffs));
+        hsm_large_file_release(file);
+        rig.Restart();
+        rig.Start();
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "again after a restart");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_GIVEN_UP, "the state remembers it");
+        hsm_large_file_release(file);
+
+        // A routed send.
+        Rig routed;
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(routed.collector, "reports", "lease", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        for (int i = 0; i < 4; ++i)
+            routed.script->AnswerPieceNext(FileScriptAnswer::WithStatus(404, -1, std::string(), "scripted"));
+        routed.Start();
+        Check(WaitFor([&] { return routed.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        Check(hsm_sensor_add_file(sensor, std::string(1536 * 1024, '\x02').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return routed.log.Count("was dropped: the server lost its upload") == 1; }), "dropped and said" + routed.log.All());
+        Check(routed.script->Begins().size() == 4 && routed.script->StoredFiles().empty(), "four begins, nothing stored");
+        hsm_sensor_release(sensor);
+    }
+
+    // S1: a cancel that races the `stored` answer. Before the outcome is committed: the source is kept and the
+    // outcome stays CANCELLED; after the delete: STORED wins.
+    void NativeLargeFileCancelRacingStored()
+    {
+        for (int round = 0; round < 2; ++round)
+        {
+            Rig rig;
+            const std::string source = rig.folder.File("race.dmp");
+            WriteFile(source, Content(1000, 3));
+            std::atomic<hsm_large_file_t*> handle{ nullptr };
+            const std::string phase = round == 0 ? "stored" : "deleted";
+            lf::test::OnFinish(rig.collector, [&handle, phase](const std::string& now) {
+                if (now == phase && handle.load() != nullptr)
+                    hsm_large_file_cancel(handle.load());
+            });
+            rig.Start();
+            auto options = NoLimit();
+            hsm_large_file_t* file = nullptr;
+            Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+            handle.store(file);
+            Check(WaitFor([&] { return rig.script->StoredFiles().size() == 1; }), "the server stored it");
+            // The uploader settles the outcome after the hook: wait for its last line.
+            Check(WaitFor([&] { return rig.log.Count("is stored on") >= 1; }), "the uploader said it" + rig.log.All());
+            const auto result = Result(file);
+            if (round == 0)
+                Check(result.outcome == HSM_LARGE_FILE_CANCELLED && Exists(source) && !result.source_deleted, "cancelled first: kept, CANCELLED");
+            else
+                Check(result.outcome == HSM_LARGE_FILE_STORED && !Exists(source) && result.source_deleted, "deleted first: STORED");
+            hsm_large_file_release(file);
+        }
+    }
+
+    // S7(a): a sensor whose registration the server refused is not acknowledged: its routed value takes the
+    // ordinary path at once.
+    void NativeLargeFileRefusedRegistrationTakesTodaysPath()
+    {
+        Rig rig;
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "refused", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.server->AckNextCommandFramesWith({ 422 });
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the registration was posted");
+        Check(hsm_sensor_add_file(sensor, std::string(1536 * 1024, '\x01').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return ListFrameWithName(rig, "refused"); }), "a list frame" + rig.log.All());
+        Check(rig.script->Begins().empty(), "no begin for a refused sensor");
+        hsm_sensor_release(sensor);
+    }
+
+    // S7(c): the threshold is a quarter of the frame limit of the session the value is sent on.
+    void NativeLargeFileThresholdFollowsTheSession()
+    {
+        Rig rig;
+        rig.server->SetHello(1024 * 1024, 30);
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "quarter", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        // 300,000 bytes: above 1 MiB / 4, far below 4 MiB / 4.
+        Check(hsm_sensor_add_file(sensor, std::string(300000, '\x03').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return rig.script->StoredFiles().size() == 1; }), "routed by this session's frame limit" + rig.log.All());
+        hsm_sensor_release(sensor);
+    }
+
+    // S7(d): an answer that is not final and carries no retryAfter waits 30 s.
+    void NativeLargeFileDefaultRetryIsThirtySeconds()
+    {
+        Rig rig;
+        const std::string source = rig.folder.File("wait.dmp");
+        WriteFile(source, Content(1000, 4));
+        rig.script->AnswerBeginNext(FileScriptAnswer::WithStatus(202, -1, "{\"state\":\"checking\"}"));
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file));
+        bool waited = false;
+        for (const auto& wait : rig.waits.Copy())
+            waited = waited || (wait.first == "begin: the server checks the file" && wait.second == 30000);
+        Check(waited, "waited 30 s");
+        hsm_large_file_release(file);
+    }
+
+    // S6: a routed send no begin was answered for goes back to the value queue at Stop, before its drain.
+    void NativeLargeFileStopGivesRoutedSendsBack()
+    {
+        Rig rig;
+        rig.server->RefuseSideUpgradesWith(503); // the file connection cannot be opened: nothing begins
+        hsm_sensor_t* sensor = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "back", "bin", &sensor) == HSM_RESULT_OK, "file sensor");
+        rig.waits.idle_advances.store(false);
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports") >= 1; }), "the sensor is registered");
+        Check(hsm_sensor_add_file(sensor, std::string(1536 * 1024, '\x01').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return rig.server->SideRefusedUpgrades() >= 1; }), "the route was tried");
+        Check(!ListFrameWithName(rig, "back"), "not sent yet");
+        Check(hsm_collector_stop(rig.collector) == HSM_RESULT_OK, "stop");
+        Check(ListFrameWithName(rig, "back"), "the stop drain sent it the ordinary way" + rig.log.All());
+        Check(rig.log.Count("was dropped") == 0, "nothing dropped");
+        hsm_sensor_release(sensor);
+    }
+
+    // S4: after a 1008 the routed sends already queued take the ordinary path at once.
+    void NativeLargeFileClose1008SendsRoutedBack()
+    {
+        Rig rig;
+        hsm_sensor_t* first = nullptr;
+        hsm_sensor_t* second = nullptr;
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports", "first", "bin", &first) == HSM_RESULT_OK, "file sensor");
+        Check(hsm_collector_create_file_sensor(rig.collector, "reports2", "second", "bin", &second) == HSM_RESULT_OK, "file sensor");
+        rig.script->AnswerPieceNext(FileScriptAnswer::CloseWith(1008, "the access key can no longer send"));
+        rig.Start();
+        Check(WaitFor([&] { return rig.Registrations("host/module/reports2") >= 1; }), "the sensors are registered");
+        Check(hsm_sensor_add_file(first, std::string(1536 * 1024, '\x02').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(hsm_sensor_add_file(second, std::string(1536 * 1024, '\x01').c_str(), HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return ListFrameWithName(rig, "second"); }), "the second went the ordinary way" + rig.log.All());
+        Check(rig.log.Count("first.bin") >= 1 && rig.log.Count("was dropped: the access key may no longer send") == 1, "the first was dropped and said");
+        Check(rig.script->Begins().size() == 1, "one begin only");
+        hsm_sensor_release(first);
+        hsm_sensor_release(second);
+    }
+
+    // S7(b): routed sends wait in memory bounded in bytes (64 MiB); one is always taken; the overflow is
+    // dropped and counted. And S6 at the level of the uploader: a stop gives back what no begin was answered for.
+    void NativeLargeFileRoutedSendsAreBoundedInBytes()
+    {
+        lf::LargeFiles files;
+        std::atomic<int> dropped{ 0 };
+        std::atomic<int> back{ 0 };
+        std::mutex lines_mutex;
+        std::vector<std::string> lines;
+        lf::RunContext context;
+        context.now_ms = [] { return std::int64_t{ 1000 }; };
+        context.report = [&](bool, const std::string& message) {
+            std::lock_guard<std::mutex> guard(lines_mutex);
+            lines.push_back(message);
+        };
+        context.count_lost_file = [] {};
+        context.count_dropped_value = [&] { ++dropped; };
+        context.session = [] { return hsm::http::SessionIdentity{}; }; // no session: nothing begins
+        context.commands = [](const std::string&, const std::atomic<bool>&) { return hsm::http::SessionResult{}; };
+        context.wake_session = [] {};
+        files.Start(std::move(context));
+
+        const auto routed = [&](std::shared_ptr<const std::string> content) {
+            auto file = std::make_shared<lf::RoutedFile>();
+            file->sensor = "host/module/reports";
+            file->name = "r.bin";
+            file->content = std::move(content);
+            file->registration = [] { return lf::RoutedRegistration::Pending; };
+            file->back_to_queue = [&](const lf::RoutedFile&) { ++back; };
+            return file;
+        };
+        const auto huge = std::make_shared<const std::string>(65 * 1024 * 1024, 'h');
+        const auto ten = std::make_shared<const std::string>(10 * 1024 * 1024, 't');
+        Check(files.Route(routed(huge)) == lf::RouteResult::Taken, "an empty queue takes any size");
+        Check(files.Route(routed(ten)) == lf::RouteResult::Dropped && dropped.load() == 1, "past 64 MiB: dropped and counted");
+        files.Stop();
+        Check(back.load() == 1, "the stop gives back the one no begin was answered for");
+        Check(files.Route(routed(ten)) == lf::RouteResult::NotRouted, "not running: today's path");
+        {
+            std::lock_guard<std::mutex> guard(lines_mutex);
+            Check(std::any_of(lines.begin(), lines.end(), [](const std::string& line) { return line.find("was dropped") != std::string::npos; }), "the drop is said");
+        }
+    }
+
+    // A wait of the uploader held (the clock does not move for it) while the collector is torn down from
+    // another thread; the test thread keeps reading and cancelling the handle meanwhile and joins last.
+    void TeardownDuringWait(const std::string& wait, int teardown)
+    {
+        Rig rig;
+        rig.waits.hold = wait;
+        const std::string source = rig.folder.File("wait.dmp");
+        WriteFile(source, Content(3 * 65536, 13));
+        auto options = NoLimit();
+        if (wait == "the speed limit")
+            options.max_bytes_per_second = 1000;
+        else if (wait == "a piece: the server could not write it")
+            rig.script->AnswerPieceNext(FileScriptAnswer::WithStatus(503, 60, std::string(), "no room"));
+        else
+            rig.script->SetCheckingRounds(1);
+        rig.Start();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return rig.waits.held.load(); }), "the uploader waits: " + wait + rig.log.All());
+        const auto began = std::chrono::steady_clock::now();
+        std::atomic<bool> done{ false };
+        std::thread other([&] {
+            switch (teardown)
+            {
+            case 0:
+                hsm_collector_stop(rig.collector);
+                break;
+            case 1:
+                hsm_collector_dispose(rig.collector);
+                break;
+            default:
+                rig.Destroy();
+                break;
+            }
+            done.store(true);
+        });
+        while (!done.load())
+        {
+            Result(file);
+            Reason(file);
+        }
+        other.join();
+        Check(std::chrono::steady_clock::now() - began < std::chrono::seconds(10), "the teardown did not wait for the wait");
+        Check(Exists(source), "the source stays");
+        hsm_large_file_cancel(file);
+        hsm_large_file_release(file);
+    }
+
+    void NativeLargeFileTeardownDuringWaits()
+    {
+        for (const char* wait : { "a piece: the server could not write it", "end: the server checks the file", "the speed limit" })
+            for (int teardown = 0; teardown < 3; ++teardown)
+                TeardownDuringWait(wait, teardown);
+    }
+
+    // hsm_large_file_watch_release from another thread while the watch's file is uploaded, and racing its
+    // completion; the collector goes on with other files.
+    void NativeLargeFileWatchReleaseRacingAnUpload()
+    {
+        for (int round = 0; round < 6; ++round)
+        {
+            Rig rig;
+            const std::string watched = rig.folder.File("w.dmp");
+            WriteFile(watched, Content(3 * 65536, 20 + round));
+            if (round % 2 == 0)
+                rig.script->AnswerPieceNext(FileScriptAnswer::NoAnswer()); // released in the middle
+            auto options = NoLimit();
+            options.keep_source = 1;
+            hsm_large_file_watch_t* watch = nullptr;
+            Check(hsm_collector_watch_large_files(rig.collector, "dumps", rig.folder.Str().c_str(), "w.dmp", &options, &watch) == HSM_RESULT_OK, "watch");
+            rig.StartDriven();
+            rig.Settle(60000);
+            Check(WaitFor([&] { return rig.script->Pieces().size() >= 1; }), "uploading");
+            std::thread other([&] { hsm_large_file_watch_release(watch); });
+            other.join();
+            // Another file afterwards: the uploader goes on.
+            const std::string next = rig.folder.File("next.dmp");
+            WriteFile(next, Content(1000, 1));
+            hsm_large_file_t* file = nullptr;
+            auto plain = NoLimit();
+            Check(hsm_collector_send_large_file(rig.collector, "dumps", next.c_str(), &plain, &file) == HSM_RESULT_OK, "send");
+            Check(WaitFor([&] {
+                      rig.Advance(1000);
+                      return Settled(file);
+                  }),
+                  "the next file settles" + rig.log.All());
+            Check(Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: " + Reason(file));
+            Check(Exists(watched), "the watched file stays");
+            hsm_large_file_release(file);
+        }
+    }
+
+    // The logger on the uploader thread calls stop and dispose: both are refused (the dispose said once) and
+    // nothing deadlocks; the upload goes on.
+    void NativeLargeFileLifecycleFromTheLoggerIsRefused()
+    {
+        Rig rig;
+        struct Calls
+        {
+            hsm_collector_t* collector = nullptr;
+            std::atomic<bool> called{ false };
+            std::atomic<int> stop_result{ -1 };
+            LogLines* log = nullptr;
+        } calls;
+        calls.collector = rig.collector;
+        calls.log = &rig.log;
+        hsm_collector_set_logger(
+            rig.collector,
+            [](hsm_log_level_t, const char* message, void* user) {
+                auto* self = static_cast<Calls*>(user);
+                const std::string text = message != nullptr ? message : "";
+                {
+                    std::lock_guard<std::mutex> guard(self->log->mutex);
+                    self->log->lines.push_back(text);
+                }
+                if (text.find("begin on") != std::string::npos && !self->called.exchange(true))
+                {
+                    self->stop_result.store(static_cast<int>(hsm_collector_stop(self->collector)));
+                    hsm_collector_dispose(self->collector);
+                }
+            },
+            &calls);
+        const std::string source = rig.folder.File("logger.dmp");
+        WriteFile(source, Content(1000, 1));
+        rig.Start();
+        auto options = NoLimit();
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+        Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored: no deadlock" + rig.log.All());
+        Check(calls.stop_result.load() == HSM_RESULT_INVALID_STATE, "stop on the uploader thread is refused");
+        Check(rig.log.Count("Dispose was called on the large file uploader's thread") == 1, "dispose is refused and said once");
+        Check(hsm_collector_status(rig.collector) == HSM_COLLECTOR_STATUS_RUNNING, "the collector still runs");
+        hsm_large_file_release(file);
+    }
+
+    // A record of an upload cut by a stop, whose file changed before the next run: that upload is discarded
+    // (begin with the facts it was begun with, then discard) and the new file sent; against a server without
+    // the op (400 "unknown op") it is said once and the part left to expire.
+    void NativeLargeFileDiscardAfterACut()
+    {
+        for (int round = 0; round < 2; ++round)
+        {
+            Rig rig;
+            const std::string source = rig.folder.File("cut.dmp");
+            WriteFile(source, Content(3 * 65536, 40));
+            rig.script->AnswerPieceNext(FileScriptAnswer::Default());
+            rig.script->AnswerPieceNext(FileScriptAnswer::NoAnswer());
+            rig.Start();
+            auto options = NoLimit();
+            hsm_large_file_t* file = nullptr;
+            Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+            Check(WaitFor([&] { return rig.script->Pieces().size() == 2; }), "a piece in flight");
+            Check(hsm_collector_stop(rig.collector) == HSM_RESULT_OK, "stop");
+            hsm_large_file_release(file);
+            rig.Destroy();
+            WriteFile(source, Content(2 * 65536, 41)); // another file under the same name
+            if (round == 1)
+                rig.script->SetDiscardUnknown(true);
+            rig.Make();
+            rig.Start();
+            Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send again");
+            Check(WaitFor([&] { return Settled(file); }) && Result(file).outcome == HSM_LARGE_FILE_STORED, "the new file is stored: " + Reason(file) + rig.log.All());
+            const auto discards = rig.script->Discards();
+            Check(!discards.empty(), "the cut upload was discarded");
+            if (round == 0)
+                Check(discards.back().status == 200, "discarded");
+            else
+                Check(rig.log.Count("The server has no discard") == 1, "an older server: said once");
+            Check(rig.script->StoredFiles().begin()->second.size() == 2 * 65536, "the new content");
+            hsm_large_file_release(file);
+        }
+    }
+
 #if defined(_WIN32)
     void NativeLargeFileWriterHoldsTheFile()
     {
@@ -999,10 +1535,27 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_http_transport_is_unavailable", [](const std::string&) { NativeLargeFileHttpTransportIsUnavailable(); } },
         { "native_large_file_argument_mistakes_and_dispose", [](const std::string&) { NativeLargeFileArgumentMistakesAndDispose(); } },
         { "native_large_file_stop_and_dispose_in_the_middle", [](const std::string&) { NativeLargeFileStopAndDisposeInTheMiddle(); } },
+        { "native_large_file_missing_after_checking_begins_again", [](const std::string&) { NativeLargeFileMissingAfterCheckingBeginsAgain(); } },
+        { "native_large_file_begin_text_is_bounded", [](const std::string&) { NativeLargeFileBeginTextIsBounded(); } },
+        { "native_large_file_routed_bad_comment_takes_todays_path", [](const std::string&) { NativeLargeFileRoutedBadCommentTakesTodaysPath(); } },
+        { "native_large_file_piece_refusal_is_final", [](const std::string&) { NativeLargeFilePieceRefusalIsFinal(); } },
+        { "native_large_file_not_held_is_bounded", [](const std::string&) { NativeLargeFileNotHeldIsBounded(); } },
+        { "native_large_file_cancel_racing_stored", [](const std::string&) { NativeLargeFileCancelRacingStored(); } },
+        { "native_large_file_refused_registration_takes_todays_path", [](const std::string&) { NativeLargeFileRefusedRegistrationTakesTodaysPath(); } },
+        { "native_large_file_threshold_follows_the_session", [](const std::string&) { NativeLargeFileThresholdFollowsTheSession(); } },
+        { "native_large_file_default_retry_is_thirty_seconds", [](const std::string&) { NativeLargeFileDefaultRetryIsThirtySeconds(); } },
+        { "native_large_file_stop_gives_routed_sends_back", [](const std::string&) { NativeLargeFileStopGivesRoutedSendsBack(); } },
+        { "native_large_file_close_1008_sends_routed_back", [](const std::string&) { NativeLargeFileClose1008SendsRoutedBack(); } },
+        { "native_large_file_routed_sends_are_bounded_in_bytes", [](const std::string&) { NativeLargeFileRoutedSendsAreBoundedInBytes(); } },
+        { "native_large_file_teardown_during_waits", [](const std::string&) { NativeLargeFileTeardownDuringWaits(); } },
+        { "native_large_file_watch_release_racing_an_upload", [](const std::string&) { NativeLargeFileWatchReleaseRacingAnUpload(); } },
+        { "native_large_file_lifecycle_from_the_logger_is_refused", [](const std::string&) { NativeLargeFileLifecycleFromTheLoggerIsRefused(); } },
+        { "native_large_file_discard_after_a_cut", [](const std::string&) { NativeLargeFileDiscardAfterACut(); } },
 #if defined(_WIN32)
         { "native_large_file_writer_holds_the_file", [](const std::string&) { NativeLargeFileWriterHoldsTheFile(); } },
 #else
         { "native_large_file_changed_file_is_discarded_and_sent_again", [](const std::string&) { NativeLargeFileChangedFileIsDiscardedAndSentAgain(); } },
+        { "native_large_file_bad_name_is_refused", [](const std::string&) { NativeLargeFileBadNameIsRefused(); } },
 #endif
 #endif
     };

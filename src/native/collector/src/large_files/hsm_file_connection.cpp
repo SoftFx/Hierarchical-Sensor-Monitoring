@@ -280,6 +280,8 @@ namespace hsm::collector::large_files
                 answer.kind = FileAnswerKind::NotHeld;
             else if (s == 400)
                 answer.kind = FileAnswerKind::Discarded;
+            else if (s >= 400 && s < 500 && s != 409)
+                answer.kind = FileAnswerKind::Final;
             else
                 answer.kind = FileAnswerKind::Fault;
         }
@@ -366,9 +368,22 @@ namespace hsm::collector::large_files
             if (facts.status >= 0)
                 body["status"] = facts.status;
             if (!facts.comment.empty())
-                body["comment"] = facts.comment;
+                body["comment"] = BoundComment(facts.comment);
+            std::string text;
+            try
+            {
+                text = body.dump();
+            }
+            catch (const nlohmann::json::type_error&)
+            {
+                // A name, path or comment that is not valid UTF-8: no begin can carry it, now or later.
+                FileAnswer answer;
+                answer.kind = FileAnswerKind::BadRequest;
+                answer.error = "the begin request cannot be built: the file's name or the comment is not valid UTF-8";
+                return answer;
+            }
             hsm::http::AckedLinkAck ack;
-            const auto result = link_->Request("begin", body.dump(), SendTimeoutMs(), options_.request_timeout_ms, ack);
+            const auto result = link_->Request("begin", text, SendTimeoutMs(), options_.request_timeout_ms, ack);
             return FromPut("begin", result, ack);
         }
         catch (...)
@@ -378,6 +393,41 @@ namespace hsm::collector::large_files
             answer.error = "the begin request could not be built";
             return answer;
         }
+    }
+
+    std::size_t FileConnection::Utf16Length(const std::string& text)
+    {
+        // Every lead byte starts a code point; one of four bytes (above U+FFFF) is two UTF-16 code units.
+        std::size_t units = 0;
+        for (const char c : text)
+        {
+            const auto byte = static_cast<unsigned char>(c);
+            if ((byte & 0xC0) == 0x80)
+                continue;
+            units += byte >= 0xF0 ? 2 : 1;
+        }
+        return units;
+    }
+
+    std::string FileConnection::BoundComment(const std::string& comment)
+    {
+        if (Utf16Length(comment) <= kMaxBeginTextUnits)
+            return comment;
+        // Whole code points while they leave room for the ellipsis (one unit), never a cut inside one.
+        std::size_t units = 0;
+        std::size_t i = 0;
+        while (i < comment.size())
+        {
+            const auto byte = static_cast<unsigned char>(comment[i]);
+            const std::size_t cost = byte >= 0xF0 ? 2 : 1;
+            if (units + cost > kMaxBeginTextUnits - 1)
+                break;
+            units += cost;
+            ++i;
+            while (i < comment.size() && (static_cast<unsigned char>(comment[i]) & 0xC0) == 0x80)
+                ++i;
+        }
+        return comment.substr(0, i) + "\xE2\x80\xA6"; // U+2026
     }
 
     FileAnswer FileConnection::Piece(const std::string& upload, std::int64_t number, std::uint32_t decompressed_length, const Sha256Digest& digest,

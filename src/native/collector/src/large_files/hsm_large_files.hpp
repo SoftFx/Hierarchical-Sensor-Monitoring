@@ -111,17 +111,47 @@ namespace hsm::collector::large_files
         /// Settles the outcome once; false when it was settled before.
         bool Settle(hsm_large_file_outcome_t outcome, const std::string& why);
         std::string Reason() const;
+        /// hsm_large_file_cancel: CANCELLED, unless the uploader committed STORED before.
+        void Cancel(const std::string& why);
+        /// The uploader has the server's `stored` and is about to delete the source (or keep it): from now
+        /// on the outcome is STORED whatever a cancel says. False when a cancel came first: the source is
+        /// then kept and the outcome stays CANCELLED.
+        bool CommitStored();
+
+    private:
+        bool committed_ = false; // guarded by reason_mutex
+    };
+
+    /// Where the registration of a routed send's sensor stands on the session.
+    enum class RoutedRegistration
+    {
+        Pending,
+        Acknowledged,
+        /// The server refused it (a 4xx or a per-path error): the value takes today's path at once.
+        Refused,
+    };
+
+    /// What Route did with a routed send.
+    enum class RouteResult
+    {
+        /// Queued for the uploader.
+        Taken,
+        /// Not routed: the caller takes today's path (a `list` frame).
+        NotRouted,
+        /// Dropped, said and counted: the routed sends waiting in memory reached their bound.
+        Dropped,
     };
 
     /// An ordinary file send routed to the file connection (ADR-0022 point 20): the content of
-    /// hsm_sensor_add_file and its kin larger than a quarter of the session's frame limit, from memory,
-    /// never secure, nothing on a disk. Not sent: a dropped value, counted where a dropped value is.
+    /// hsm_sensor_add_file and its kin larger than a quarter of the frame limit of the session it is sent
+    /// on (decided when the value is about to be sent), from memory, never secure, nothing on a disk. Not
+    /// sent: a dropped value, counted where a dropped value is.
     struct RoutedFile
     {
         std::uint64_t id = 0;
         std::string sensor; // the full registered path
         std::string name;   // name.extension
-        std::string content;
+        std::shared_ptr<const std::string> content;
         /// The value's status (the wire's number) and comment; HSM_SENSOR_STATUS_OK and empty are not sent.
         int status = HSM_SENSOR_STATUS_OK;
         std::string comment;
@@ -129,18 +159,24 @@ namespace hsm::collector::large_files
         std::int64_t time_ticks = 0;
         /// `send:<guid>`, made once per send.
         std::string source;
-        /// True once the sensor's ordinary registration was acknowledged on the session.
-        std::function<bool()> registered;
-        /// Today's path (a `list` frame), when the file connection turns out to be missing; the JSON of
-        /// the value is built from the file only then.
+        /// Where the sensor's ordinary registration stands on the session.
+        std::function<RoutedRegistration()> registration;
+        /// Today's path (a `list` frame): the value back into the value queue, never routed again. Also
+        /// called by a stop for a routed send no begin was answered for, before the value queue's drain.
         std::function<void(const RoutedFile&)> back_to_queue;
-        /// When it was routed (the real steady clock): a registration that is not acknowledged within a
+        /// When it was routed, on the collector's clock: a registration that is not acknowledged within a
         /// minute sends it back to today's path.
-        std::chrono::steady_clock::time_point routed_at{};
+        std::int64_t routed_at_ms = 0;
+        /// True once a begin was answered with an upload (a part exists on the server): a stop then drops
+        /// it (said and counted) instead of giving it back to the value queue.
+        bool begun = false;
         /// The bounds of its retries, kept across attempts.
         int discards = 0;
         int checksum_mismatches = 0;
         int protocol_closes = 0;
+        /// Begins again after `end` answered 409 "pieces are missing", and 404s on a piece or at end.
+        int no_progress = 0;
+        int not_held = 0;
     };
 
 #if defined(HSM_COLLECTOR_LARGE_FILES)
@@ -155,6 +191,8 @@ namespace hsm::collector::large_files
         std::function<void()> count_lost_file;
         /// One routed send not sent: a dropped value (the collector's overflow counter).
         std::function<void()> count_dropped_value;
+        /// Writes a line at debug level. Called with no lock held.
+        std::function<void(const std::string& message)> debug;
         /// The session that is up now.
         std::function<hsm::http::SessionIdentity()> session;
         /// A `commands` request on the session (the registration of a File sensor); the wait ends once
@@ -180,9 +218,10 @@ namespace hsm::collector::large_files
         /// Adds a watch; false, with `error`, for an equal live watch.
         bool AddWatch(const std::shared_ptr<WatchState>& watch, std::string& error);
         void AddFile(const std::shared_ptr<FileState>& file);
-        /// Queues a routed send; false when it cannot be routed now (not running, no route): the caller
-        /// takes today's path.
-        bool Route(std::shared_ptr<RoutedFile> file);
+        /// Queues a routed send. NotRouted when it cannot be routed now (not running, the route refused,
+        /// the key refused): the caller takes today's path. Dropped (said and counted here) when the
+        /// routed sends waiting in memory would pass 64 MiB; one is always taken when none waits.
+        RouteResult Route(std::shared_ptr<RoutedFile> file);
         /// False when the file connection was refused (404 or 400) on the session of `generation`.
         bool RouteAvailable(std::uint64_t generation) const noexcept;
         /// A new state shared with the handles of this collector.
@@ -205,7 +244,9 @@ namespace hsm::collector::large_files
         void Start(RunContext context);
 #endif
         /// Cuts the upload in progress and joins the uploader. Bounded: blocking reads are cancelled
-        /// (Windows) and the thread's priority is raised. Idempotent.
+        /// (Windows) and the thread's priority is raised. Then routed sends no begin was answered for go
+        /// back to the value queue (before its stop drain); one whose upload had begun is dropped, said
+        /// and counted. Idempotent.
         void Stop() noexcept;
         /// Stop, then every handed-over file not settled becomes CANCELLED (counted and said) and every
         /// watch STOPPED. Idempotent.
@@ -217,6 +258,9 @@ namespace hsm::collector::large_files
         void ScanNowForTests();
         /// Runs on the uploader thread for every wait it starts: what it waits for and for how long (ms).
         std::function<void(const std::string& what, std::int64_t ms)> on_wait_for_tests;
+        /// Runs on the uploader thread when a file was stored: "stored" before the outcome is committed,
+        /// "deleted" after the source's delete (or keep) and before the outcome is settled.
+        std::function<void(const std::string& phase)> on_finish_for_tests;
         bool UploaderAliveForTests() const;
 
     private:

@@ -1005,13 +1005,15 @@ hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
    transport the value travels with the other values: in a /list batch over HTTP, in a `list` frame
    on the collector session (since #1660 step 2b; before, the session refused it with
    HSM_RESULT_INVALID_STATE). Since 0.16.0 (ADR-0022 point 20, #1887): on the session, a content
-   larger than a quarter of the frame limit the server announced (1 MiB at the default 4 MiB) is sent
-   on the file connection as a large file value that is not secure, when the server has file
-   connections and the collector is built with large files; it is then stored as a large value of the
+   larger than a quarter of the frame limit of the session it is sent on (1 MiB at the default 4 MiB),
+   decided when the value queue is about to send it, is sent on the file connection as a large file
+   value that is not secure, when the server has file connections, the sensor's registration was
+   acknowledged and the collector is built with large files; it is then stored as a large value of the
    same File sensor (no preview; its time is the time the server accepted it). Otherwise, as before:
    a file whose value does not fit a session frame is dropped, logged and counted in Queue overflow,
-   like any value larger than a frame. A routed send that is refused for good or cut by a stop is
-   dropped, logged and counted the same way. The call returns as it always did. */
+   like any value larger than a frame. A routed send that is refused for good, past the 64 MiB that
+   may wait in memory, or cut by a stop after its upload began is dropped, logged and counted the same
+   way; one a stop finds not begun goes back to the value queue. The call returns as it always did. */
 hsm_result_t hsm_sensor_add_file(
     hsm_sensor_t* sensor,
     const char* utf8_content,
@@ -1400,7 +1402,8 @@ typedef enum hsm_large_file_watch_state_t HSM_ENUM_INT32
    may be NULL: the watch then lasts as long as the collector.
    HSM_RESULT_INVALID_ARGUMENT, with the reason in hsm_collector_last_error: a NULL or empty folder, mask
    or sensor path; a mask with [, ], ;, \, / or a control character; a sensor path with no segment, a
-   backslash or a tab; a struct_size of 0; settle_ms between 1 and 999 or negative; a negative
+   backslash or a tab, or whose full path is longer than 1024 characters (UTF-16, the server's bound
+   of a large file's begin); a struct_size of 0; settle_ms between 1 and 999 or negative; a negative
    max_bytes_per_second other than HSM_LARGE_FILE_NO_SPEED_LIMIT; sensor_location other than 0 or 1;
    another negative field; a live watch of the same folder, mask and sensor path.
    HSM_RESULT_INVALID_STATE: the collector is disposed. */
@@ -1466,7 +1469,9 @@ hsm_result_t hsm_large_file_get_result(const hsm_large_file_t* file, hsm_large_f
 size_t hsm_large_file_reason(const hsm_large_file_t* file, char* buffer, size_t size);
 
 /* Takes the file out of the queue; an upload of it in progress is cut (its part stays on the server).
-   The outcome becomes CANCELLED unless it was settled before. NULL is ignored. */
+   The outcome becomes CANCELLED unless it was settled before, or unless the collector already has the
+   server's "stored" and has decided the delete of the source (then it ends STORED). A cancel that comes
+   before that decision keeps the source. NULL is ignored. */
 void hsm_large_file_cancel(hsm_large_file_t* file);
 
 /* Frees the handle; the file stays queued. NULL is ignored. */

@@ -418,7 +418,23 @@ if(HSM_COLLECTOR_LARGE_FILES)
             native_large_file_checksum_mismatch_sends_the_piece_again
             native_large_file_http_transport_is_unavailable
             native_large_file_argument_mistakes_and_dispose
-            native_large_file_stop_and_dispose_in_the_middle)
+            native_large_file_stop_and_dispose_in_the_middle
+            native_large_file_missing_after_checking_begins_again
+            native_large_file_begin_text_is_bounded
+            native_large_file_routed_bad_comment_takes_todays_path
+            native_large_file_piece_refusal_is_final
+            native_large_file_not_held_is_bounded
+            native_large_file_cancel_racing_stored
+            native_large_file_refused_registration_takes_todays_path
+            native_large_file_threshold_follows_the_session
+            native_large_file_default_retry_is_thirty_seconds
+            native_large_file_stop_gives_routed_sends_back
+            native_large_file_close_1008_sends_routed_back
+            native_large_file_routed_sends_are_bounded_in_bytes
+            native_large_file_teardown_during_waits
+            native_large_file_watch_release_racing_an_upload
+            native_large_file_lifecycle_from_the_logger_is_refused
+            native_large_file_discard_after_a_cut)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
     if(WIN32)
@@ -426,6 +442,7 @@ if(HSM_COLLECTOR_LARGE_FILES)
     else()
         add_test(NAME native_large_file_changed_file_is_discarded_and_sent_again
             COMMAND hsm_collector_tests native_large_file_changed_file_is_discarded_and_sent_again)
+        add_test(NAME native_large_file_bad_name_is_refused COMMAND hsm_collector_tests native_large_file_bad_name_is_refused)
     endif()
     foreach(name
             native_file_connection_open_sends_the_upgrade_hello_and_probe
@@ -449,6 +466,9 @@ if(HSM_COLLECTOR_LARGE_FILES)
             native_file_connection_protocol_errors_close_the_connection)
         add_test(NAME ${name} COMMAND hsm_collector_tests ${name})
     endforeach()
+else()
+    # A build without large files: every call exists and answers UNAVAILABLE.
+    add_test(NAME native_large_file_build_without_them_is_unavailable COMMAND hsm_collector_tests native_large_file_build_without_them_is_unavailable)
 endif()
 
 if(HSM_COLLECTOR_TABLES)

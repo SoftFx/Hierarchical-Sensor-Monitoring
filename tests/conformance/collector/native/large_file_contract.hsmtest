@@ -31,6 +31,7 @@
 # large_file_send|sensor|name|keep_or_delete        hands the file over (managed SendLargeFileAsync)
 # large_file_watch|sensor|mask|settle_s|keep_or_delete  watches the case's folder (managed WatchLargeFiles)
 # large_file_send_not_secure|sensor|name|keep_or_delete  hands the file over with the option Secure off
+# large_file_send_without_alert|sensor|name|keep_or_delete  hands the file over with the option NewFileAlert off
 # large_file_change_after_piece|name|piece          once piece `piece` of the file was answered, the file's modification
 #                                                   time is an hour later (a file that changed while it was sent; the
 #                                                   driver may change what the collector reads, since Windows denies
@@ -412,3 +413,25 @@ a_1008_is_final_until_the_next_start|stop
 a_1008_is_final_until_the_next_start|start
 a_1008_is_final_until_the_next_start|expect_large_file_result|b.dmp|stored|30
 a_1008_is_final_until_the_next_start|expect_large_file_source|a.dmp|present
+
+# --- the registration of a large-file sensor: the default alert (DefaultAlertsOptions.LargeFiles = 4) ---
+
+the_registration_asks_for_the_default_alert|create_collector_on_session|100|50|10000
+the_registration_asks_for_the_default_alert|file_server_accept_upgrades
+the_registration_asks_for_the_default_alert|start
+the_registration_asks_for_the_default_alert|large_file_create|a.dmp|100|34
+the_registration_asks_for_the_default_alert|large_file_send|dumps|a.dmp|delete
+the_registration_asks_for_the_default_alert|expect_large_file_result|a.dmp|stored|30
+the_registration_asks_for_the_default_alert|expect_session_accepted_contains|commands|"Path":"conformance-host/conformance-module/dumps"|5
+the_registration_asks_for_the_default_alert|expect_session_accepted_contains|commands|"SensorType":6|5
+the_registration_asks_for_the_default_alert|expect_session_accepted_contains|commands|"DefaultAlertsOptions":4|5
+
+the_registration_without_the_alert_does_not_ask|create_collector_on_session|100|50|10000
+the_registration_without_the_alert_does_not_ask|file_server_accept_upgrades
+the_registration_without_the_alert_does_not_ask|start
+the_registration_without_the_alert_does_not_ask|large_file_create|a.dmp|100|35
+the_registration_without_the_alert_does_not_ask|large_file_send_without_alert|dumps|a.dmp|delete
+the_registration_without_the_alert_does_not_ask|expect_large_file_result|a.dmp|stored|30
+the_registration_without_the_alert_does_not_ask|expect_session_accepted_contains|commands|"Path":"conformance-host/conformance-module/dumps"|5
+the_registration_without_the_alert_does_not_ask|expect_session_accepted_contains|commands|"DefaultAlertsOptions":0|5
+the_registration_without_the_alert_does_not_ask|expect_session_no_request_contains|"DefaultAlertsOptions":4

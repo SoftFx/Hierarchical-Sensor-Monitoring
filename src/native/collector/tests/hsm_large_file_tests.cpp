@@ -137,6 +137,40 @@ namespace
         Check(!lf::FileConnection::ReadHello("{\"maxFrameBytes\":4194304,\"fileLimits\":{\"maxFileBytes\":1,\"pieceBytes\":4096}}", hello, why),
               "a piece below 64 KiB");
     }
+#else
+    // A build without large files (no HTTP or no tables): every call exists; a watch is UNAVAILABLE and a
+    // handed-over file ends UNAVAILABLE, with the reason; the calls return OK until the collector is disposed.
+    void NativeLargeFileBuildWithoutThemIsUnavailable()
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "test-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = 1;
+        options.module = "module";
+        options.computer_name = "host";
+        hsm_collector_t* collector = nullptr;
+        Check(hsm_collector_create(&options, &collector) == HSM_RESULT_OK, "collector create");
+        Check(hsm_collector_set_data_folder(collector, nullptr) == HSM_RESULT_OK, "the data folder");
+        auto large = hsm_large_file_options_default();
+        hsm_large_file_watch_t* watch = nullptr;
+        Check(hsm_collector_watch_large_files(collector, "dumps", ".", "*.dmp", &large, &watch) == HSM_RESULT_OK && watch != nullptr, "the watch call");
+        hsm_large_file_watch_stats_t stats{};
+        stats.struct_size = sizeof stats;
+        Check(hsm_large_file_watch_get_stats(watch, &stats) == HSM_RESULT_OK && stats.state == HSM_LARGE_FILE_WATCH_UNAVAILABLE, "the watch is UNAVAILABLE");
+        char reason[256] = {};
+        hsm_large_file_watch_state_reason(watch, reason, sizeof reason);
+        Check(std::string(reason).find("HSM_COLLECTOR_HTTP") != std::string::npos, std::string("with the reason: ") + reason);
+        hsm_large_file_t* file = nullptr;
+        Check(hsm_collector_send_large_file(collector, "dumps", "a.dmp", &large, &file) == HSM_RESULT_OK && file != nullptr, "the send call");
+        hsm_large_file_result_t result{};
+        result.struct_size = sizeof result;
+        Check(hsm_large_file_get_result(file, &result) == HSM_RESULT_OK && result.outcome == HSM_LARGE_FILE_UNAVAILABLE, "the file is UNAVAILABLE");
+        hsm_collector_dispose(collector);
+        Check(hsm_collector_send_large_file(collector, "dumps", "a.dmp", &large, nullptr) == HSM_RESULT_INVALID_STATE, "disposed");
+        hsm_collector_destroy(collector);
+        hsm_large_file_watch_release(watch);
+        hsm_large_file_release(file);
+    }
 #endif
 } // namespace
 
@@ -148,6 +182,8 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileT
         { "native_large_file_modified_is_written_as_the_wire_asks", [](const std::string&) { NativeLargeFileModifiedIsWrittenAsTheWireAsks(); } },
         { "native_large_file_every_answer_maps_to_its_kind", [](const std::string&) { NativeLargeFileEveryAnswerMapsToItsKind(); } },
         { "native_large_file_hello_is_checked", [](const std::string&) { NativeLargeFileHelloIsChecked(); } },
+#else
+        { "native_large_file_build_without_them_is_unavailable", [](const std::string&) { NativeLargeFileBuildWithoutThemIsUnavailable(); } },
 #endif
     };
     return tests;

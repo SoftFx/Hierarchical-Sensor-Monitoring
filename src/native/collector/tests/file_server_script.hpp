@@ -19,6 +19,7 @@
 #include <zlib.h>
 #include <zstd.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -230,6 +231,13 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(mutex_);
             checking_rounds_ = count;
         }
+        // The next end check finds the pieces from `from` on missing (a store that lost them): it answers 409
+        // {"next":from,"reason":"pieces are missing"} and the part keeps only its first `from` pieces.
+        void SetCheckMissingFrom(std::int64_t from)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            check_missing_from_ = from;
+        }
         // discard is answered 400 "unknown op", as a server before the op does.
         void SetDiscardUnknown(bool unknown)
         {
@@ -280,6 +288,7 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(mutex_);
             held_.clear();
             last_end_.clear();
+            checks_.clear();
             for (auto& part : parts_)
                 part.second.holder = 0;
         }
@@ -349,6 +358,7 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(mutex_);
             GiveBack(connection);
             last_end_.erase(connection);
+            checks_.erase(connection);
             for (auto& record : connections_)
                 if (record.connection == connection)
                     record.released = true;
@@ -645,6 +655,7 @@ namespace hsm::test
             // A connection holds one upload: the old one is given back first.
             GiveBack(connection);
             last_end_.erase(connection);
+            checks_.erase(connection);
 
             const std::string key = KeyOf(record.path, record.name, record.size, record.modified, record.source);
             auto found = parts_.find(key);
@@ -662,12 +673,17 @@ namespace hsm::test
                 }
                 if (part.checking)
                 {
-                    // The check is done by now: stored, or the part is removed and the file begins anew.
+                    // The check is done by now: stored, pieces missing (the part waits for them), or the part
+                    // is removed and the file begins anew.
                     std::string error;
-                    if (CheckAndStore(part, error))
+                    const CheckOutcome checked = FinishCheck(part, error);
+                    if (checked == CheckOutcome::Stored)
                         return answer(200, StoredBody(part.upload, false), {});
-                    parts_.erase(found);
-                    found = parts_.end();
+                    if (checked == CheckOutcome::Failed)
+                    {
+                        parts_.erase(found);
+                        found = parts_.end();
+                    }
                 }
                 else if (part.piece_bytes != record.piece_bytes)
                 {
@@ -876,6 +892,24 @@ namespace hsm::test
             Part* part = HeldBy(connection);
             if (part == nullptr || part->upload != record.upload)
             {
+                // The real server lets the upload go when the check begins and answers a repeated end from
+                // the check: still running, stored, pieces missing (the part is not held: begin again) or failed.
+                const auto check = checks_.find(connection);
+                if (check != checks_.end() && check->second == record.upload)
+                {
+                    Part* checked = PartWithUpload(record.upload);
+                    if (checked != nullptr && checked->checking)
+                    {
+                        if (checking_rounds_ > 0)
+                        {
+                            --checking_rounds_;
+                            return answer(202, "{\"upload\":\"" + checked->upload + "\",\"state\":\"checking\"}", {}, 1);
+                        }
+                        return CheckAnswer(connection, *checked, remembered);
+                    }
+                    if (checked != nullptr && checked->stored)
+                        return remembered(200, StoredBody(checked->upload, true), {});
+                }
                 const auto last = last_end_.find(connection);
                 if (last != last_end_.end() && last->second.upload == record.upload)
                     return answer(last->second.status, last->second.body, last->second.error);
@@ -884,21 +918,74 @@ namespace hsm::test
             if (part->next < part->pieces)
                 return answer(409, "{\"next\":" + std::to_string(part->next) + ",\"reason\":\"pieces are missing\"}", "pieces are missing");
             part->end_hash = Lower(record.hash);
+            // The check begins: the connection holds no upload from here on, as on the real server.
+            part->checking = true;
+            part->holder = 0;
+            held_.erase(connection);
+            checks_[connection] = part->upload;
             if (checking_rounds_ > 0)
             {
                 --checking_rounds_;
-                part->checking = true;
                 return answer(202, "{\"upload\":\"" + part->upload + "\",\"state\":\"checking\"}", {}, 1);
             }
-            std::string error;
-            if (!CheckAndStore(*part, error))
+            return CheckAnswer(connection, *part, remembered);
+        }
+
+        enum class CheckOutcome
+        {
+            Stored,
+            Missing,
+            Failed,
+        };
+
+        // The end check of a part (its `checking` set): stored; pieces from `check_missing_from_` missing when
+        // the script says so (the part keeps the others and waits); or failed (the part is removed).
+        CheckOutcome FinishCheck(Part& part, std::string& error)
+        {
+            if (check_missing_from_ >= 0)
             {
-                Remove(connection);
-                return remembered(400, {}, error);
+                const std::int64_t from = (std::min)(check_missing_from_, part.next);
+                check_missing_from_ = -1;
+                part.checking = false;
+                part.next = from;
+                part.data.resize(static_cast<std::size_t>(from));
+                part.digests.resize(static_cast<std::size_t>(from));
+                return CheckOutcome::Missing;
             }
-            const std::string upload = part->upload;
-            held_.erase(connection);
-            return remembered(200, StoredBody(upload, true), {});
+            return CheckAndStore(part, error) ? CheckOutcome::Stored : CheckOutcome::Failed;
+        }
+
+        template <class Remembered>
+        FileSideAction CheckAnswer(int connection, Part& part, const Remembered& remembered)
+        {
+            std::string error;
+            const std::string upload = part.upload;
+            switch (FinishCheck(part, error))
+            {
+            case CheckOutcome::Stored:
+                return remembered(200, StoredBody(upload, true), {});
+            case CheckOutcome::Missing:
+                checks_.erase(connection);
+                return remembered(409, "{\"next\":" + std::to_string(part.next) + ",\"reason\":\"pieces are missing\"}", "pieces are missing");
+            case CheckOutcome::Failed:
+                break;
+            }
+            for (auto it = parts_.begin(); it != parts_.end(); ++it)
+                if (it->second.upload == upload)
+                {
+                    parts_.erase(it);
+                    break;
+                }
+            checks_.erase(connection);
+            return remembered(400, {}, error);
+        }
+
+        Part* PartWithUpload(const std::string& upload)
+        {
+            for (auto& part : parts_)
+                if (part.second.upload == upload)
+                    return &part.second;
+            return nullptr;
         }
 
         static std::string StoredBody(const std::string& upload, bool with_time)
@@ -966,11 +1053,19 @@ namespace hsm::test
                 return answer(400, {}, "a malformed discard");
             Part* part = HeldBy(connection);
             if (part == nullptr || part->upload != record.upload)
+            {
+                // The end of this connection began a check that still runs: 409 until it settles.
+                const auto check = checks_.find(connection);
+                Part* checked = check != checks_.end() && check->second == record.upload ? PartWithUpload(record.upload) : nullptr;
+                if (checked != nullptr && checked->checking)
+                    return answer(409, "{\"state\":\"checking\"}", "checking", 1);
                 return answer(404, {}, "no such upload on this connection");
+            }
             if (part->checking)
                 return answer(409, "{\"state\":\"checking\"}", "checking", 1);
             Remove(connection);
             last_end_.erase(connection);
+            checks_.erase(connection);
             return answer(200, "{\"state\":\"discarded\"}", {});
         }
 
@@ -985,6 +1080,7 @@ namespace hsm::test
         std::deque<FileScriptAnswer> end_answers_;
         std::deque<FileScriptAnswer> discard_answers_;
         int checking_rounds_ = 0;
+        std::int64_t check_missing_from_ = -1;
         bool discard_unknown_ = false;
         int corrupt_crcs_ = 0;
         std::uint64_t uploads_ = 0;
@@ -994,6 +1090,7 @@ namespace hsm::test
         std::map<std::string, Part> parts_; // by KeyOf
         std::map<int, std::string> held_;   // connection -> the key of the part it holds
         std::map<int, EndAnswer> last_end_; // connection -> its last answered end
+        std::map<int, std::string> checks_; // connection -> the upload whose check its end began
         std::map<std::string, std::string> stored_files_;
         std::set<std::int64_t> unanswered_;
         int pings_ = 0;

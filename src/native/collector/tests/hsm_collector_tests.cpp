@@ -1547,14 +1547,16 @@ namespace
             return true;
         }
 
-        if (action == "large_file_send" || action == "large_file_send_not_secure")
+        if (action == "large_file_send" || action == "large_file_send_not_secure" || action == "large_file_send_without_alert")
         {
-            // sensor|name|keep_or_delete; large_file_send_not_secure with the option Secure off.
+            // sensor|name|keep_or_delete; large_file_send_not_secure with the option Secure off,
+            // large_file_send_without_alert with the option NewFileAlert off (no_new_file_alert = 1).
             args(3);
             auto& files = LargeFilesOf(state);
             files.EnsureRoot();
             auto options = LargeFileOptionsOf(step[3]);
             options.not_secure = action == "large_file_send_not_secure" ? 1 : 0;
+            options.no_new_file_alert = action == "large_file_send_without_alert" ? 1 : 0;
             const auto path = (files.Files() / std::filesystem::u8path(step[2])).u8string();
             hsm_large_file_t* file = nullptr;
             const auto result = hsm_collector_send_large_file(state.collector.value, step[1].c_str(), path.c_str(), &options, &file);

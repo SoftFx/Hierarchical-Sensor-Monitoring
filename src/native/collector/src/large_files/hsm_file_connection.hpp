@@ -29,6 +29,11 @@ namespace hsm::collector::large_files
     constexpr std::int64_t kMinPieceBytes = 65536;
     /// The longest `retryAfter` honoured (both collectors): 5 minutes.
     constexpr std::int64_t kMaxRetryAfterMs = 5 * 60 * 1000;
+    /// The longest comment a begin carries, in UTF-16 code units as the server counts it (.NET characters);
+    /// a longer one is cut at a code point and ends with an ellipsis (U+2026), so the server never refuses it.
+    constexpr std::size_t kMaxBeginTextUnits = 4096;
+    /// The longest `path` and `name` the server takes in a begin, in UTF-16 code units (400 beyond).
+    constexpr std::size_t kMaxBeginNameUnits = 1024;
 
     /// The hello of a file connection.
     struct FileHello
@@ -72,7 +77,8 @@ namespace hsm::collector::large_files
         RetryLater,
         /// A piece's 409 "checksum mismatch": the same piece again.
         ChecksumMismatch,
-        /// end 409 "pieces are missing": send from `next`.
+        /// end 409 "pieces are missing". The connection may no longer hold the upload (the server lets it
+        /// go when its check begins), so the client begins again and goes on from the piece begin names.
         Missing,
         /// 400 "...: the upload is discarded" on a piece or at end: the part is gone; begin from 0.
         Discarded,
@@ -80,8 +86,12 @@ namespace hsm::collector::large_files
         DiscardDone,
         /// 404: the connection holds no such upload; begin again.
         NotHeld,
-        /// A final refusal for this file until the next Start (413, 422, a 400 at begin, other 4xx).
+        /// A final refusal for this file until the next Start (413, 422, a 400 at begin, other 4xx; at a
+        /// piece a 4xx other than 400, 404 and 409).
         Final,
+        /// The request could not be built (a name or comment that is not valid UTF-8): nothing was sent;
+        /// final for this file.
+        BadRequest,
         /// discard answered 400 "unknown op": a server before the discard op; the part expires there.
         UnknownOp,
         /// A 5xx without retryAfter or an answer this version cannot read: try again after a backoff.
@@ -163,6 +173,10 @@ namespace hsm::collector::large_files
         static std::string FormatTicks(std::int64_t ticks_since_1970);
         /// 32 lower-case hex digits to 16 bytes; false for anything else.
         static bool ParseUploadId(const std::string& hex, std::uint8_t (&bytes)[16]);
+        /// `comment` cut to kMaxBeginTextUnits UTF-16 code units, the ellipsis included, when longer.
+        static std::string BoundComment(const std::string& comment);
+        /// The length of UTF-8 `text` in UTF-16 code units (a code point above U+FFFF counts 2).
+        static std::size_t Utf16Length(const std::string& text);
 
     private:
         FileAnswer FromPut(const char* op, hsm::http::AckedLinkPutResult result, const hsm::http::AckedLinkAck& ack);

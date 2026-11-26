@@ -16,6 +16,9 @@
 #include "large_files/hsm_large_file_mask.hpp"
 #include "large_files/hsm_large_file_platform.hpp"
 #include "large_files/hsm_large_file_state.hpp"
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+#include <nlohmann/json.hpp>
+#endif
 #endif
 
 #include <algorithm>
@@ -2357,6 +2360,27 @@ namespace
         {
             std::lock_guard<std::mutex> guard(registration_mutex_);
             posted_registration_version_ = (std::max)(posted_registration_version_, version);
+            // An accepted post of this version (or a newer one) lifts an earlier refusal.
+            if (refused_registration_version_ <= version)
+                refused_registration_version_ = 0;
+        }
+
+        // The server refused this registration: a 4xx to the request, or a per-path error in its answer.
+        void MarkRegistrationRefused(uint64_t version)
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            refused_registration_version_ = (std::max)(refused_registration_version_, version);
+        }
+
+        // Where the current registration stands with the server (a routed file send waits for an
+        // acknowledged one, #1887).
+        hsm::collector::large_files::RoutedRegistration RegistrationState() const
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            if (refused_registration_version_ != 0 && refused_registration_version_ >= registration_version_)
+                return hsm::collector::large_files::RoutedRegistration::Refused;
+            return posted_registration_version_ < registration_version_ ? hsm::collector::large_files::RoutedRegistration::Pending
+                                                                        : hsm::collector::large_files::RoutedRegistration::Acknowledged;
         }
 
         // The server may not hold the registration after all (a failed post, #1515): pending again.
@@ -2589,11 +2613,13 @@ namespace
         RegistrationOptions registration_options_;
         uint64_t registration_version_ = 0;
         uint64_t posted_registration_version_ = 0;
+        uint64_t refused_registration_version_ = 0; // 0: not refused
     };
 
     namespace tables = hsm::collector::tables;
     namespace large_files = hsm::collector::large_files;
 
+#if defined(HSM_COLLECTOR_LARGE_FILES)
     // A new random id as 32 lower-case hex digits: the `source` of a routed file send (#1887, ADR-0022
     // point 20), so two sends with one name and size are never one file.
     std::string NewGuidText()
@@ -2610,6 +2636,20 @@ namespace
         }
         return text;
     }
+#endif
+
+    // What a file value needs to travel on the file connection instead of a `list` frame (#1887,
+    // ADR-0022 point 20): decided when it is about to be sent, from the frame limit of the session then.
+    struct FileRoute
+    {
+        std::string path; // the sensor's full path
+        std::shared_ptr<const std::string> content;
+        std::string name;
+        std::string extension;
+        hsm_sensor_status_t status = HSM_SENSOR_STATUS_OK;
+        std::string comment;
+        int64_t time_ms = 0;
+    };
 
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>, private tables::TablePipelineHost
     {
@@ -2795,11 +2835,7 @@ namespace
             options.on_directive = [this](const std::string& directive) { DispatchServerDirective(directive); };
 
             auto made = std::make_shared<hsm::http::SessionTransport>(std::move(options));
-            {
-                // An application thread that routes a file reads the transport under this lock (#1887).
-                std::lock_guard<std::mutex> guard(session_ptr_mutex_);
-                session_transport_ = made;
-            }
+            session_transport_ = made;
             made->Start();
         }
 
@@ -2833,6 +2869,7 @@ namespace
             response.transport_ok = result.acked;
             response.status_code = result.status;
             response.error = result.error;
+            response.body = result.body;
             return response;
         }
 
@@ -2962,11 +2999,26 @@ namespace
                     LogMessage(HSM_LOG_LEVEL_DEBUG, message);
                 else
                     LogError(message);
+                if (!retry)
+                    for (size_t i = 0; i < sensors.size(); ++i)
+                        sensors[i]->MarkRegistrationRefused(versions[i]);
                 return retry ? RegistrationPost::Retry : RegistrationPost::Rejected;
             }
 
             for (size_t i = 0; i < sensors.size(); ++i)
                 sensors[i]->MarkRegistrationPosted(versions[i]);
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+            // A session's ack lists the paths it refused: such a sensor is not acknowledged (a routed file
+            // send of it takes today's path, #1887). Nothing else reads the list.
+            if (use_session_ && !response.body.empty())
+            {
+                const auto refused = nlohmann::json::parse(response.body, nullptr, /*allow_exceptions=*/false);
+                if (refused.is_object())
+                    for (size_t i = 0; i < sensors.size(); ++i)
+                        if (refused.contains(sensors[i]->Path()))
+                            sensors[i]->MarkRegistrationRefused(versions[i]);
+            }
+#endif
             if (runtime)
                 LogMessage(HSM_LOG_LEVEL_DEBUG, "Registered " + what + ".");
             else
@@ -3099,10 +3151,11 @@ namespace
             const std::string& name,
             const std::string& extension,
             hsm_sensor_status_t status,
-            const std::string& comment)
+            const std::string& comment,
+            int64_t time_ms)
         {
             if (send_wire_)
-                return BuildWireFileJson(extension, name, content, comment, /*comment_is_null=*/false, status, UnixTimeMilliseconds(), path);
+                return BuildWireFileJson(extension, name, content, comment, /*comment_is_null=*/false, status, time_ms, path);
 
             // Canonical cross-language file payload (string content asserted as UTF-8 text).
             std::ostringstream json;
@@ -3114,7 +3167,7 @@ namespace
                  << "\"Extension\":\"" << EscapeJson(extension) << "\","
                  << "\"Status\":" << static_cast<int>(status) << ","
                  << "\"Comment\":\"" << EscapeJson(comment) << "\","
-                 << "\"UnixTimeMs\":" << UnixTimeMilliseconds() << "}";
+                 << "\"UnixTimeMs\":" << time_ms << "}";
             return json.str();
         }
 
@@ -3646,7 +3699,13 @@ namespace
         void Dispose()
         {
             if (OnLargeFileThread())
-                return; // see Stop
+            {
+                // See Stop. Said once: the flag is set first, so a logger that calls Dispose again on the line
+                // below returns without a second line.
+                if (!dispose_on_uploader_said_.exchange(true))
+                    LogError("Dispose was called on the large file uploader's thread (from the logger); it is refused.");
+                return;
+            }
             std::lock_guard<std::mutex> op_guard(op_mutex_);
 
             {
@@ -4446,7 +4505,7 @@ namespace
         // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
         // out PackageCollectPeriod), so the worker is kicked to dispatch promptly. A collector that
         // is not running is the usual silent no-op.
-        void EnqueueFileIfRunning(std::string json)
+        void EnqueueFileIfRunning(std::string json, std::shared_ptr<const FileRoute> route = nullptr)
         {
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -4455,7 +4514,7 @@ namespace
                     return;
             }
 
-            Enqueue(std::move(json), /*is_file=*/true);
+            Enqueue(std::move(json), /*is_file=*/true, std::move(route));
 
             {
                 std::lock_guard<std::mutex> guard(queue_mutex_);
@@ -5136,6 +5195,17 @@ namespace
                 std::lock_guard<std::mutex> guard(mutex_);
                 full_path = CalculateSystemPath(path, registration);
             }
+            // Every begin names the sensor's full path; the server takes at most 1,024 characters (UTF-16 code
+            // units: a code point above U+FFFF counts two), in every build alike.
+            size_t units = 0;
+            for (const char c : full_path)
+            {
+                const auto byte = static_cast<unsigned char>(c);
+                if ((byte & 0xC0) != 0x80)
+                    units += byte >= 0xF0 ? 2 : 1;
+            }
+            if (units > 1024)
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "The sensor's full path " + full_path + " is longer than the 1024 characters a large file's begin may name.");
             registration_json = BuildWireRegistrationJson(full_path, HSM_SENSOR_TYPE_FILE, registration);
             return HSM_RESULT_OK;
         }
@@ -5250,6 +5320,7 @@ namespace
                 };
                 context.count_lost_file = [this] { TryReportDroppedTableRows(1); };
                 context.count_dropped_value = [this] { queue_overflow_count_.fetch_add(1, std::memory_order_relaxed); };
+                context.debug = [this](const std::string& message) { LogMessage(HSM_LOG_LEVEL_DEBUG, message); };
                 hsm::http::SessionTransport* session = session_transport_.get();
                 context.session = [session] { return session != nullptr ? session->CurrentSession() : hsm::http::SessionIdentity{}; };
                 const int64_t timeout = request_timeout_ms_ > 0 ? request_timeout_ms_ : 30000;
@@ -5269,76 +5340,93 @@ namespace
 #endif
         }
 
-        // ADR-0022 point 20: an ordinary file send on a session whose content is larger than a quarter of
-        // the session's frame limit goes to the large file uploader when the file connection is there. True
-        // when it was taken; false: today's path (a `list` frame).
-        bool TryRouteFile(const std::string& path, const std::string& content, const std::string& name, const std::string& extension, hsm_sensor_status_t status,
-                          const std::string& comment)
+        // A file value into the value queue. On a session of a build with large files it carries what a
+        // route to the file connection needs; whether it takes that route is decided when it is sent
+        // (RouteAtSend), from the frame limit of the session then (ADR-0022 point 20).
+        void EnqueueFileValue(const std::string& path, const std::string& content, const std::string& name, const std::string& extension, hsm_sensor_status_t status,
+                              const std::string& comment)
         {
+            const int64_t time_ms = UnixTimeMilliseconds();
+            std::shared_ptr<const FileRoute> route;
 #if defined(HSM_COLLECTOR_LARGE_FILES)
+            if (use_session_)
+            {
+                auto made = std::make_shared<FileRoute>();
+                made->path = path;
+                made->content = std::make_shared<const std::string>(content);
+                made->name = name;
+                made->extension = extension;
+                made->status = status;
+                made->comment = comment;
+                made->time_ms = time_ms;
+                route = std::move(made);
+            }
+#endif
+            EnqueueFileIfRunning(OutgoingFileJson(path, content, name, extension, status, comment, time_ms), std::move(route));
+        }
+
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        // On the sending thread, for a file value about to go in a `list` frame of this session (`room` =
+        // the session's body room): Taken or Dropped when it went to the file connection (settled), NotRouted
+        // for today's path. Routed: content larger than a quarter of the session's frame limit, the run of
+        // large files on, the route not refused on this session, and a name, path and comment a begin can
+        // carry. Never during the stop drain (large files are stopped by then).
+        large_files::RouteResult RouteAtSend(const FileRoute& route, size_t room) noexcept
+        {
             try
             {
-                if (!use_session_ || !CanAcceptData())
-                    return false;
-                // The application's thread: the transport of this run, held for the call (a Start may
-                // replace it meanwhile).
-                std::shared_ptr<hsm::http::SessionTransport> session;
-                {
-                    std::lock_guard<std::mutex> guard(session_ptr_mutex_);
-                    session = session_transport_;
-                }
-                if (!session)
-                    return false;
-                const size_t body = session->MaxBodyBytes();
-                // Before the first hello the server's default frame limit (4 MiB) is assumed.
-                const size_t frame = body > 0 ? body + hsm::http::SessionTransport::kEnvelopeRoom : static_cast<size_t>(4 * 1024 * 1024);
-                if (content.size() <= frame / 4)
-                    return false;
+                if (stop_drain_active_ || !session_transport_ || !route.content)
+                    return large_files::RouteResult::NotRouted;
+                const size_t frame = room + hsm::http::SessionTransport::kEnvelopeRoom;
+                if (route.content->size() <= frame / 4)
+                    return large_files::RouteResult::NotRouted;
+                const std::string full_name = route.extension.empty() ? route.name : route.name + "." + route.extension;
+                if (!large_files::IsValidUtf8(full_name) || !large_files::IsValidUtf8(route.comment) || !large_files::IsValidUtf8(route.path) ||
+                    full_name.empty() || large_files::FileConnection::Utf16Length(full_name) > large_files::kMaxBeginNameUnits ||
+                    large_files::FileConnection::Utf16Length(route.path) > large_files::kMaxBeginNameUnits)
+                    return large_files::RouteResult::NotRouted;
                 auto* files = LargeFilesFor(true);
-                if (!files->RouteAvailable(session->CurrentSession().generation))
-                    return false;
+                if (!files->RouteAvailable(session_transport_->CurrentSession().generation))
+                    return large_files::RouteResult::NotRouted;
 
                 std::weak_ptr<NativeSensor> sensor;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
-                    const auto found = sensors_.find(path);
+                    const auto found = sensors_.find(route.path);
                     if (found != sensors_.end())
                         sensor = found->second;
                 }
                 auto routed = std::make_shared<large_files::RoutedFile>();
-                routed->sensor = path;
-                routed->name = extension.empty() ? name : name + "." + extension;
-                routed->content = content;
-                routed->status = static_cast<int>(status);
-                routed->comment = comment;
-                routed->time_ticks = UnixTimeMilliseconds() * 10000;
+                routed->sensor = route.path;
+                routed->name = full_name;
+                routed->content = route.content;
+                routed->status = static_cast<int>(route.status);
+                routed->comment = route.comment;
+                routed->time_ticks = route.time_ms * 10000;
                 routed->source = "send:" + NewGuidText();
-                routed->registered = [sensor] {
+                routed->registration = [sensor] {
                     const auto alive = sensor.lock();
-                    return alive && !alive->RegistrationPostPending();
+                    return alive ? alive->RegistrationState() : large_files::RoutedRegistration::Refused;
                 };
-                // Back to today's path when the file connection turns out to be missing: the value as
-                // it would have been queued, built only then (a value that does not fit a frame is then
-                // dropped and counted, as before).
-                routed->back_to_queue = [this, path, name, extension](const large_files::RoutedFile& file) {
-                    EnqueueFileIfRunning(OutgoingFileJson(path, file.content, name, extension, static_cast<hsm_sensor_status_t>(file.status), file.comment));
+                // Back to today's path: the value as it was queued (its time kept), never routed again. Into the
+                // queue whatever the collector's state: a stop gives these back before its drain sends them.
+                const FileRoute back = route;
+                routed->back_to_queue = [this, back](const large_files::RoutedFile&) {
+                    Enqueue(OutgoingFileJson(back.path, *back.content, back.name, back.extension, back.status, back.comment, back.time_ms), /*is_file=*/true);
+                    {
+                        std::lock_guard<std::mutex> guard(queue_mutex_);
+                        dispatch_kick_ = true;
+                    }
+                    queue_cv_.notify_all();
                 };
                 return files->Route(std::move(routed));
             }
             catch (...)
             {
-                return false;
+                return large_files::RouteResult::NotRouted;
             }
-#else
-            (void)path;
-            (void)content;
-            (void)name;
-            (void)extension;
-            (void)status;
-            (void)comment;
-            return false;
-#endif
         }
+#endif
 
         void StopLargeFiles() noexcept
         {
@@ -5669,6 +5757,8 @@ namespace
         {
             std::string json;
             QueueStamp stamp;
+            // Set for a file value that may be routed; null otherwise (and once it went back from a route).
+            std::shared_ptr<const FileRoute> route;
         };
 
         // The queue wait of one package's counted values — managed DataPackage/PackageInfo: the sum
@@ -5693,13 +5783,13 @@ namespace
         // FIFO send queue. Lock discipline: `queue_mutex_` and `mutex_` are never held together —
         // the enqueue path locks mutex_ (state check) then queue_mutex_ sequentially, and the
         // dispatcher locks queue_mutex_ (pop) then mutex_ (record) sequentially.
-        void Enqueue(std::string json, bool is_file = false)
+        void Enqueue(std::string json, bool is_file = false, std::shared_ptr<const FileRoute> route = nullptr)
         {
             std::lock_guard<std::mutex> guard(queue_mutex_);
 
             // Stamped under the queue lock the push needs anyway (no extra lock on this hot path):
             // the managed QueueItem<T>.BuildDate, which "Package process time" measures from (#1480).
-            queue_.push_back(QueuedPayload{ std::move(json), QueueStamp{ queue_clock_->SteadyNowMs(), is_file } });
+            queue_.push_back(QueuedPayload{ std::move(json), QueueStamp{ queue_clock_->SteadyNowMs(), is_file }, std::move(route) });
 
             // This is the ONLY place a value is dropped: the (large) buffer is full. Monitoring
             // history keeps every value until then; on overflow the oldest is evicted first
@@ -6730,9 +6820,12 @@ namespace
                 // Each payload's stamp, index-aligned with `batch`: the sender only takes the JSON,
                 // but a failed send puts every value back with the stamp it first entered with.
                 std::vector<QueueStamp> stamps;
+                // A file value's route, index-aligned too (null for every other value).
+                std::vector<std::shared_ptr<const FileRoute>> routes;
                 const auto batch_size = std::min(queue_.size(), static_cast<size_t>(max_values_in_package_));
                 batch.reserve(batch_size);
                 stamps.reserve(batch_size);
+                routes.reserve(batch_size);
 
                 // The package's collect time, read BEFORE the values are popped — managed DataPackage
                 // captures its _now at construction — so a value's wait is package time - enqueue time.
@@ -6747,6 +6840,7 @@ namespace
                         wait.Add(package_ms - front.stamp.enqueued_ms);
                     stamps.push_back(front.stamp);
                     batch.push_back(std::move(front.json));
+                    routes.push_back(std::move(front.route));
                     queue_.pop_front();
                 }
 
@@ -6773,7 +6867,9 @@ namespace
                 }
 
                 batch_handled_ = 0;
+                batch_routes_ = &routes;
                 const auto sent = TrySendBatch(batch);
+                batch_routes_ = nullptr;
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
                 // queue_mutex_ and no enqueue from within dispatch.
@@ -6800,7 +6896,7 @@ namespace
                     for (size_t index = handled; index < batch.size(); ++index)
                     {
                         if (!batch[index].empty())
-                            ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
+                            ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index], std::move(routes[index]) });
                     }
 
                     return 0;
@@ -7016,6 +7112,17 @@ namespace
                 size_t count = 0;
                 while (index < batch.size())
                 {
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+                    // A file value above a quarter of this session's frame limit takes the file connection
+                    // when it is there (ADR-0022 point 20): emptied here, settled (taken or dropped).
+                    if (batch_routes_ != nullptr && index < batch_routes_->size() && (*batch_routes_)[index] && !batch[index].empty() &&
+                        RouteAtSend(*(*batch_routes_)[index], room) != large_files::RouteResult::NotRouted)
+                    {
+                        batch[index].clear();
+                        ++index;
+                        continue;
+                    }
+#endif
                     const std::string& element = batch[index];
                     // "[" + element + "]" must fit. A value that cannot fit a frame on its own
                     // has no way to the server: dropped and counted, or it would come back with
@@ -7133,6 +7240,9 @@ namespace
         // flight are settled (delivered, or dropped and counted). Read by the dispatcher after a
         // failed send; only the sending thread touches it.
         size_t batch_handled_ = 0;
+        // The routes of the batch in flight, index-aligned with it (DispatchQueuedLocked); only the sending
+        // thread touches it, null outside a send.
+        const std::vector<std::shared_ptr<const FileRoute>>* batch_routes_ = nullptr;
         std::chrono::steady_clock::time_point stop_drain_deadline_{};
 
         // Collector self-monitoring (#1198 follow-up): wires VALUES for the registered-but-empty
@@ -7201,18 +7311,21 @@ namespace
         // server WIRE format instead of the canonical/behavior-corpus format. Set once before Start,
         // read without a lock (same one-way contract as sender_).
         bool send_wire_ = false;
+        // Large file values (#1887), in every build (a build without them answers UNAVAILABLE): made with
+        // the first watch or file; the data folder the application set.
+        mutable std::mutex large_files_mutex_;
+        std::unique_ptr<large_files::LargeFiles> large_files_;
+        std::atomic<bool> dispose_on_uploader_said_{ false };
+        std::string data_folder_setting_;
+#if defined(HSM_COLLECTOR_LARGE_FILES)
+        bool data_folder_note_said_ = false;
+#endif
 #if defined(HSM_COLLECTOR_HTTP)
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
         // The collector session, when it is the transport (UseSessionTransport). Created by Start
         // and stopped by Stop; the pointer itself changes only while no sending thread runs.
         std::shared_ptr<hsm::http::SessionTransport> session_transport_;
-        std::mutex session_ptr_mutex_; // guards the replacement of session_transport_ against TryRouteFile
         bool use_session_ = false;
-        // Large file values (#1887): made with the first watch or file; the data folder the application set.
-        mutable std::mutex large_files_mutex_;
-        std::unique_ptr<large_files::LargeFiles> large_files_;
-        std::string data_folder_setting_;
-        bool data_folder_note_said_ = false;
         static constexpr int64_t kSessionCloseLingerMs = 1000;
         hsm::http::Endpoints endpoints_;
         // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
@@ -7576,11 +7689,10 @@ namespace
         // Instant gating: dropped unless the collector is running (values before Start are
         // lost). File payloads dispatch promptly — not gated by the package collect period. On a
         // session a file value travels in a `list` frame like every other value (#1660 step 2b),
-        // unless it is larger than a quarter of the session's frame limit and the file connection
-        // is there: then it is a large file value (ADR-0022 point 20, #1887).
-        if (collector->TryRouteFile(path_, content, name, extension, status, normalized_comment))
-            return HSM_RESULT_OK;
-        collector->EnqueueFileIfRunning(collector->OutgoingFileJson(path_, content, name, extension, status, normalized_comment));
+        // unless, when it is about to be sent, it is larger than a quarter of that session's frame
+        // limit and the file connection is there: then it is a large file value (ADR-0022 point 20,
+        // #1887).
+        collector->EnqueueFileValue(path_, content, name, extension, status, normalized_comment);
         return HSM_RESULT_OK;
     }
 
@@ -10620,8 +10732,7 @@ void hsm_large_file_cancel(hsm_large_file_t* file)
     if (file == nullptr)
         return;
     auto& state = *file->state;
-    state.cancelled.store(true);
-    state.Settle(HSM_LARGE_FILE_CANCELLED, "cancelled by the application");
+    state.Cancel("cancelled by the application");
     if (state.shared)
         state.shared->Cut(state.id);
 }
@@ -10663,5 +10774,10 @@ namespace hsm::collector::large_files::test
     {
         auto* files = collector->impl->LargeFilesFor(false);
         return files != nullptr && files->UploaderAliveForTests();
+    }
+
+    void OnFinish(hsm_collector_t* collector, std::function<void(const std::string& phase)> hook)
+    {
+        collector->impl->LargeFilesFor(true)->on_finish_for_tests = std::move(hook);
     }
 } // namespace hsm::collector::large_files::test
