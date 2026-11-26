@@ -1,6 +1,7 @@
 #include "agent/service_install.hpp"
 
 #include "agent/event_log.hpp"
+#include "agent/paths.hpp"
 
 #include <iostream>
 
@@ -30,23 +31,6 @@ namespace hsm::agent
             }
         };
     } // namespace
-
-    std::wstring CurrentExePath()
-    {
-        std::wstring path(MAX_PATH, L'\0');
-        for (;;)
-        {
-            const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-            if (length == 0)
-                return std::wstring{};
-            if (length < path.size())
-            {
-                path.resize(length);
-                return path;
-            }
-            path.resize(path.size() * 2); // truncated → grow and retry
-        }
-    }
 
     bool IsElevated()
     {

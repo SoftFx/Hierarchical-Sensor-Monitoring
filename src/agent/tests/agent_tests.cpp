@@ -5,8 +5,10 @@
 #include "agent/config.hpp"
 #include "agent/launch_hint.hpp"
 #include "agent/retired_port.hpp"
+#include "agent/update_state.hpp"
 
 #ifdef _WIN32
+#include "agent/apply_update.hpp"
 #include "agent/dir_acl.hpp"
 #include "agent/paths.hpp"
 
@@ -648,6 +650,206 @@ namespace
         }
     }
 
+    // --- Self-update policy (#1812) -----------------------------------------------------------------
+
+    using hsm::agent::UpdateAttemptRecord;
+
+    // A scratch directory under %TEMP% that the test removes again.
+    struct ScratchDir
+    {
+        std::filesystem::path path;
+
+        explicit ScratchDir(const std::string& tag)
+        {
+            path = std::filesystem::temp_directory_path() /
+                   ("hsm_agent_" + tag + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            std::filesystem::create_directories(path);
+        }
+
+        ~ScratchDir()
+        {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+        }
+    };
+
+    void WriteText(const std::filesystem::path& path, const std::string& content)
+    {
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        stream << content;
+    }
+
+    std::string ReadText(const std::filesystem::path& path)
+    {
+        std::ifstream stream(path, std::ios::binary);
+        std::ostringstream buffer;
+        buffer << stream.rdbuf();
+        return buffer.str();
+    }
+
+    void UpdateGateBlocksUntrustedCertificate()
+    {
+        using hsm::agent::SelfUpdateGate;
+        using hsm::agent::SelfUpdateGateFor;
+        using hsm::agent::SelfUpdateGateMessage;
+
+        AgentConfig config;
+        Check(SelfUpdateGateFor(config) == SelfUpdateGate::Enabled, "defaults: self-update enabled");
+        CheckEq(SelfUpdateGateMessage(SelfUpdateGate::Enabled), std::string{}, "nothing to say when enabled");
+
+        config.allow_untrusted_certificate = true;
+        Check(SelfUpdateGateFor(config) == SelfUpdateGate::DisabledUntrustedServer, "untrusted certificate disables self-update");
+        const std::string why = SelfUpdateGateMessage(SelfUpdateGate::DisabledUntrustedServer);
+        Check(why.find("allowUntrustedCertificate") != std::string::npos, "the notice names the setting");
+        Check(why.find("disabled") != std::string::npos, "the notice says self-update is disabled");
+
+        config.update_enabled = false;
+        Check(SelfUpdateGateFor(config) == SelfUpdateGate::DisabledByConfig, "update.enabled=false wins");
+        CheckEq(SelfUpdateGateMessage(SelfUpdateGate::DisabledByConfig), std::string{}, "an explicit opt-out needs no notice");
+
+        // Parsed from config.json the same way.
+        const auto parsed = ParseOk(R"({ "server": { "address": "h", "accessKey": "k", "allowUntrustedCertificate": true } })");
+        Check(SelfUpdateGateFor(parsed) == SelfUpdateGate::DisabledUntrustedServer, "parsed config: untrusted certificate disables self-update");
+    }
+
+    void UpdateBackoffSchedule()
+    {
+        using hsm::agent::UpdateBackoffSeconds;
+        CheckEq(UpdateBackoffSeconds(0), std::int64_t{ 0 }, "no attempts, no wait");
+        CheckEq(UpdateBackoffSeconds(1), std::int64_t{ 3600 }, "1 h after the first failure");
+        CheckEq(UpdateBackoffSeconds(2), std::int64_t{ 7200 }, "2 h after the second");
+        CheckEq(UpdateBackoffSeconds(3), std::int64_t{ 14400 }, "4 h after the third");
+        CheckEq(UpdateBackoffSeconds(5), std::int64_t{ 57600 }, "16 h after the fifth");
+        CheckEq(UpdateBackoffSeconds(6), std::int64_t{ 86400 }, "capped at 24 h");
+        CheckEq(UpdateBackoffSeconds(1000000), std::int64_t{ 86400 }, "stays capped");
+    }
+
+    void UpdateRecordRoundTripAndDue()
+    {
+        using hsm::agent::FormatUpdateAttemptRecord;
+        using hsm::agent::NextUpdateAttempt;
+        using hsm::agent::ParseUpdateAttemptRecord;
+        using hsm::agent::UpdateAttemptDue;
+
+        const std::int64_t t0 = 1800000000;
+
+        UpdateAttemptRecord none;
+        Check(UpdateAttemptDue(none, "0.6.1", t0), "no record: due");
+
+        const UpdateAttemptRecord first = NextUpdateAttempt(none, "0.6.1", t0);
+        CheckEq(first.version, std::string("0.6.1"), "record names the target");
+        CheckEq(first.attempts, 1, "first attempt");
+        CheckEq(first.last_unix, t0, "time of the attempt");
+
+        UpdateAttemptRecord parsed;
+        Check(ParseUpdateAttemptRecord(FormatUpdateAttemptRecord(first), parsed), "round trip parses");
+        CheckEq(parsed.version, first.version, "round trip version");
+        CheckEq(parsed.attempts, first.attempts, "round trip attempts");
+        CheckEq(parsed.last_unix, first.last_unix, "round trip time");
+        Check(ParseUpdateAttemptRecord("version=0.6.1\r\nattempts=2\r\nlast=5\r\nlater=x\r\n", parsed) && parsed.attempts == 2,
+              "CRLF and unknown keys are accepted");
+
+        Check(!UpdateAttemptDue(first, "0.6.1", t0 + 60), "a minute later: backing off");
+        Check(!UpdateAttemptDue(first, "0.6.1", t0 + 3599), "just under 1 h: backing off");
+        Check(UpdateAttemptDue(first, "0.6.1", t0 + 3600), "after 1 h: due");
+        Check(UpdateAttemptDue(first, "0.6.2", t0 + 60), "a different (newer) version is tried at once");
+        Check(UpdateAttemptDue(first, "0.6.1", t0 - 10), "a clock that went backwards does not block");
+
+        const UpdateAttemptRecord second = NextUpdateAttempt(first, "0.6.1", t0 + 3600);
+        CheckEq(second.attempts, 2, "second attempt of the same version");
+        Check(!UpdateAttemptDue(second, "0.6.1", t0 + 3600 + 3600), "1 h after the second: still backing off");
+        Check(UpdateAttemptDue(second, "0.6.1", t0 + 3600 + 7200), "2 h after the second: due");
+        CheckEq(NextUpdateAttempt(second, "0.6.2", t0).attempts, 1, "a new version starts its own count");
+
+        // Anything unreadable is no record (and so never blocks an update for good).
+        for (const char* bad : { "", "garbage", "version=\nattempts=1\nlast=1\n", "version=1.0.0\nattempts=0\nlast=1\n",
+                                 "version=1.0.0\nattempts=x\nlast=1\n", "version=1.0.0\nattempts=1\n", "version=1.0.0\nattempts=1\nlast=-5\n" })
+        {
+            Check(!ParseUpdateAttemptRecord(bad, parsed), std::string("rejects: ") + bad);
+            Check(parsed.version.empty(), "a rejected record is left empty");
+        }
+    }
+
+    void UpdateRecordBacksOffAcrossRestart()
+    {
+        using namespace hsm::agent;
+        ScratchDir dir("update_state");
+        const auto state = dir.path / "update-state.txt";
+        const std::int64_t t0 = 1800000000;
+
+        Check(LoadUpdateAttemptRecord(state).version.empty(), "absent file: no record");
+
+        // Run 1 records its attempt, then the process ends (the service stops for the swap).
+        Check(SaveUpdateAttemptRecord(state, NextUpdateAttempt(LoadUpdateAttemptRecord(state), "0.6.1", t0)), "record saved");
+
+        // Run 2 (the old version, after a failed swap) reads it from disk: no tight loop.
+        const UpdateAttemptRecord after_restart = LoadUpdateAttemptRecord(state);
+        CheckEq(after_restart.attempts, 1, "record survives the restart");
+        Check(ReadText(state).find("version=0.6.1") != std::string::npos, "the record is plain key=value text");
+        Check(!UpdateAttemptDue(after_restart, "0.6.1", t0 + 5), "the restarted agent backs off");
+        Check(UpdateAttemptDue(after_restart, "0.6.1", t0 + 3600), "and retries after the backoff");
+
+        Check(SaveUpdateAttemptRecord(state, NextUpdateAttempt(after_restart, "0.6.1", t0 + 3600)), "second attempt saved");
+        CheckEq(LoadUpdateAttemptRecord(state).attempts, 2, "count grows across restarts");
+        Check(!std::filesystem::exists(dir.path / "update-state.txt.tmp"), "no temp file left behind");
+
+        // A corrupt file is no record.
+        WriteText(state, "\x01\x02 not a record");
+        Check(LoadUpdateAttemptRecord(state).version.empty(), "corrupt file: no record");
+
+        Check(ClearUpdateAttemptRecord(state), "clear");
+        Check(!std::filesystem::exists(state), "cleared from disk");
+        Check(ClearUpdateAttemptRecord(state), "clearing an absent record is success");
+    }
+
+    void UpdateHandOffStopsOnlyWhenStagedAndRecorded()
+    {
+        using namespace hsm::agent;
+        ScratchDir dir("handoff");
+        const auto staged = dir.path / "hsm-agent.new.exe";
+        const auto state = dir.path / "update-state.txt";
+        const std::int64_t t0 = 1800000000;
+
+        int spawned = 0, stopped = 0;
+        const auto spawn_ok = [&spawned] { ++spawned; return true; };
+        const auto stop = [&stopped] { ++stopped; };
+        std::string error;
+
+        // Nothing staged: no helper, no stop, nothing recorded.
+        Check(!HandOffStagedUpdate(staged, state, "0.6.1", t0, spawn_ok, stop, error), "nothing staged: no hand-off");
+        CheckEq(spawned, 0, "nothing staged: no helper");
+        CheckEq(stopped, 0, "nothing staged: the service is not stopped");
+        Check(!std::filesystem::exists(state), "nothing staged: no attempt recorded");
+        Check(error.find("nothing staged") != std::string::npos, "the error says why");
+
+        // The attempt cannot be recorded: no stop (the failure would not back off across a restart).
+        WriteText(staged, "new");
+        Check(!HandOffStagedUpdate(staged, dir.path / "missing-dir" / "update-state.txt", "0.6.1", t0, spawn_ok, stop, error),
+              "unrecordable: no hand-off");
+        CheckEq(spawned, 0, "unrecordable: no helper");
+        CheckEq(stopped, 0, "unrecordable: the service is not stopped");
+        Check(!std::filesystem::exists(staged), "unrecordable: the staged exe is removed");
+
+        // The helper cannot be started: no stop.
+        WriteText(staged, "new");
+        Check(!HandOffStagedUpdate(staged, state, "0.6.1", t0, [] { return false; }, stop, error), "no helper: no hand-off");
+        CheckEq(stopped, 0, "no helper: the service is not stopped");
+        Check(!std::filesystem::exists(staged), "no helper: the staged exe is removed");
+        CheckEq(LoadUpdateAttemptRecord(state).attempts, 1, "no helper: the attempt still counts, so it backs off");
+
+        // Staged + recorded + helper started: exactly one stop, and the attempt is on disk first.
+        std::filesystem::remove(state);
+        WriteText(staged, "new");
+        int attempts_seen_at_stop = -1;
+        Check(HandOffStagedUpdate(staged, state, "0.6.1", t0, spawn_ok,
+                                  [&] { ++stopped; attempts_seen_at_stop = LoadUpdateAttemptRecord(state).attempts; }, error),
+              "hand-off");
+        CheckEq(spawned, 1, "helper started once");
+        CheckEq(stopped, 1, "service stopped once");
+        CheckEq(attempts_seen_at_stop, 1, "the attempt is recorded before the stop");
+        Check(std::filesystem::exists(staged), "the staged exe is left for the helper");
+    }
+
 #ifdef _WIN32
     // --- Data-dir DACL (#1279) ---------------------------------------------------------------------
     //
@@ -1169,6 +1371,314 @@ namespace
         if (ec)
             std::cerr << "  note: could not remove scratch dir " << root.string() << ": " << ec.message() << '\n';
     }
+    // #1812: the self-update files live next to the running exe, wherever the service was installed
+    // (a 64-bit service under "Program Files (x86)" staged its update in "Program Files" before).
+    std::wstring RunningExeForTest()
+    {
+        std::wstring path(MAX_PATH, L'\0');
+        const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+        path.resize(length);
+        return path;
+    }
+
+    void UpdatePathsFollowRunningExe()
+    {
+        const std::wstring exe = RunningExeForTest();
+        const std::wstring dir = exe.substr(0, exe.find_last_of(L"\\/"));
+        const std::string narrow_dir = std::filesystem::path(dir).string();
+
+        // A %ProgramFiles% that names some other folder must not matter.
+        wchar_t* old_value = nullptr;
+        std::size_t old_len = 0;
+        _wdupenv_s(&old_value, &old_len, L"ProgramFiles");
+        _wputenv_s(L"ProgramFiles", L"C:\\Somewhere Else");
+
+        CheckEq(std::filesystem::path(hsm::agent::InstallExePath()).string(), std::filesystem::path(exe).string(), "install exe is the running exe");
+        CheckEq(std::filesystem::path(hsm::agent::NewExePath()).string(), narrow_dir + "\\hsm-agent.new.exe", "staged exe next to the running exe");
+        CheckEq(std::filesystem::path(hsm::agent::OldExePath()).string(), narrow_dir + "\\hsm-agent.old.exe", "previous exe next to the running exe");
+
+        _wputenv_s(L"ProgramFiles", old_value != nullptr ? old_value : L"");
+        std::free(old_value);
+
+        // The derivation itself, for the install folder of the bug report.
+        const auto x86 = hsm::agent::UpdateFilesFor(L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe");
+        Check(x86.dir == L"C:\\Program Files (x86)\\HSM Agent", "x86 install dir");
+        Check(x86.exe == L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe", "x86 exe");
+        Check(x86.new_exe == L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.new.exe", "x86 staged exe");
+        Check(x86.old_exe == L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.old.exe", "x86 previous exe");
+        Check(hsm::agent::UpdateFilesFor(L"hsm-agent.exe").exe.empty(), "a bare file name has no install dir");
+        Check(hsm::agent::UpdateFilesFor(L"").new_exe.empty(), "an unresolved exe has no update files");
+    }
+
+    // --- --apply-update swap / health gate / rollback (#1812), on a temp dir with a fake service ---
+
+    // Scripted stand-in for the SCM. Each call pops the next scripted answer (the last one repeats)
+    // and is counted; Start() also notes which binary was in place, so a test can tell which version
+    // the service was started on.
+    class FakeService final : public hsm::agent::ServiceControl
+    {
+    public:
+        explicit FakeService(std::filesystem::path exe) : exe_(std::move(exe)) {}
+
+        std::vector<bool> stopped_answers{ true };
+        std::vector<bool> start_answers{ true };
+        std::vector<bool> running_answers{ true };
+        bool stop_answer = true;
+        std::vector<hsm::agent::ServiceBinaryMatch> binary_answers{ hsm::agent::ServiceBinaryMatch::Same };
+        int runs_exe_calls = 0;
+
+        int wait_stopped_calls = 0, start_calls = 0, wait_running_calls = 0, stop_calls = 0;
+        std::vector<std::string> started_on; // content of the exe at each Start()
+
+        bool WaitUntilStopped(unsigned) override { return Next(stopped_answers, wait_stopped_calls++); }
+        bool Start() override
+        {
+            started_on.push_back(ReadText(exe_));
+            return Next(start_answers, start_calls++);
+        }
+        bool WaitUntilRunning(unsigned) override { return Next(running_answers, wait_running_calls++); }
+        bool Stop(unsigned) override
+        {
+            ++stop_calls;
+            return stop_answer;
+        }
+        hsm::agent::ServiceBinaryMatch RunsExe(const std::wstring&) override
+        {
+            const std::size_t i = static_cast<std::size_t>(runs_exe_calls++);
+            return binary_answers[i < binary_answers.size() ? i : binary_answers.size() - 1];
+        }
+
+    private:
+        static bool Next(const std::vector<bool>& answers, int index)
+        {
+            if (answers.empty())
+                return true;
+            return answers[static_cast<std::size_t>(index) < answers.size() ? static_cast<std::size_t>(index) : answers.size() - 1];
+        }
+
+        std::filesystem::path exe_;
+    };
+
+    // An install dir with hsm-agent.exe ("old"), optionally a staged hsm-agent.new.exe ("new"), and an
+    // attempt record for the staged version.
+    struct ApplyFixture
+    {
+        ScratchDir dir{ "apply" };
+        hsm::agent::UpdateFiles files;
+        std::filesystem::path state;
+        std::vector<std::string> errors;
+        hsm::agent::ApplyLogFn log;
+
+        explicit ApplyFixture(bool staged = true)
+        {
+            files = hsm::agent::UpdateFilesFor((dir.path / "hsm-agent.exe").wstring());
+            state = dir.path / "update-state.txt";
+            WriteText(files.exe, "old");
+            if (staged)
+                WriteText(files.new_exe, "new");
+            hsm::agent::SaveUpdateAttemptRecord(state, hsm::agent::NextUpdateAttempt({}, "9.9.9", 1800000000));
+            log = [this](bool error, const std::string& message) {
+                if (error)
+                    errors.push_back(message);
+            };
+        }
+
+        int Apply(FakeService& service) { return hsm::agent::ApplyStagedUpdate(files, service, state, log); }
+        std::string Exe() const { return ReadText(files.exe); }
+        bool Has(const std::wstring& path) const { return std::filesystem::exists(path); }
+        bool RecordKept() const { return hsm::agent::LoadUpdateAttemptRecord(state).attempts == 1; }
+    };
+
+    void ApplyUpdateSwapsAndClearsRecord()
+    {
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        CheckEq(fx.Apply(service), 0, "update applied");
+        CheckEq(fx.Exe(), std::string("new"), "new binary in place");
+        CheckEq(ReadText(fx.files.old_exe), std::string("old"), "previous binary kept as hsm-agent.old.exe");
+        Check(!fx.Has(fx.files.new_exe), "nothing left staged");
+        CheckEq(service.start_calls, 1, "started once");
+        CheckEq(service.started_on.front(), std::string("new"), "started on the new binary");
+        Check(!std::filesystem::exists(fx.state), "a successful update clears the attempt record");
+        CheckEq(fx.errors.size(), std::size_t{ 0 }, "no errors");
+    }
+
+    void ApplyUpdateNothingStagedStartsServiceAgain()
+    {
+        ApplyFixture fx(/*staged=*/false);
+        FakeService service(fx.files.exe);
+        Check(fx.Apply(service) != 0, "nothing to apply");
+        CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+        Check(!fx.Has(fx.files.old_exe), "no rename happened");
+        CheckEq(service.start_calls, 1, "the stopped service is started again");
+        CheckEq(service.started_on.front(), std::string("old"), "on the old binary");
+        Check(fx.RecordKept(), "the failed attempt stays recorded, so it backs off");
+    }
+
+    void ApplyUpdateServiceNotStoppedKeepsBinary()
+    {
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        service.stopped_answers = { false };
+        Check(fx.Apply(service) != 0, "abandoned");
+        CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+        Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+        Check(!fx.Has(fx.files.old_exe), "no rename happened");
+        Check(service.start_calls >= 1, "a start is still asked for (a no-op when it still runs)");
+        CheckEq(service.stop_calls, 0, "never stops it");
+        Check(fx.RecordKept(), "attempt stays recorded");
+    }
+
+    void ApplyUpdateRenameFailureStartsOldBinary()
+    {
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        {
+            // Hold hsm-agent.exe open without FILE_SHARE_DELETE: it cannot be renamed.
+            HANDLE lock = CreateFileW(fx.files.exe.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+            Check(lock != INVALID_HANDLE_VALUE, "setup: exe locked");
+            Check(fx.Apply(service) != 0, "rename failure reported");
+            CloseHandle(lock);
+        }
+        CheckEq(fx.Exe(), std::string("old"), "old binary in place");
+        Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+        CheckEq(service.start_calls, 1, "the service is started again");
+        CheckEq(service.started_on.front(), std::string("old"), "on the old binary");
+        Check(!fx.errors.empty(), "the failure is logged");
+        Check(fx.RecordKept(), "attempt stays recorded");
+    }
+
+    void ApplyUpdateFailedStartRollsBack()
+    {
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        service.start_answers = { false, true }; // the new binary does not start, the old one does
+        Check(fx.Apply(service) != 0, "start failure reported");
+        CheckEq(fx.Exe(), std::string("old"), "rolled back to the old binary");
+        Check(!fx.Has(fx.files.new_exe), "the failed binary is removed");
+        Check(!fx.Has(fx.files.old_exe), "nothing left as hsm-agent.old.exe");
+        CheckEq(service.start_calls, 2, "started twice: new, then old");
+        CheckEq(service.started_on.back(), std::string("old"), "the service ends on the old binary");
+        Check(fx.RecordKept(), "attempt stays recorded");
+    }
+
+    void ApplyUpdateHealthGateRollsBack()
+    {
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        service.running_answers = { false, true }; // the new binary never reaches RUNNING
+        Check(fx.Apply(service) != 0, "health gate failure reported");
+        CheckEq(service.stop_calls, 1, "the new version is stopped");
+        CheckEq(fx.Exe(), std::string("old"), "rolled back to the old binary");
+        Check(!fx.Has(fx.files.new_exe), "the failed binary is removed");
+        CheckEq(service.started_on.back(), std::string("old"), "the service ends on the old binary");
+        Check(fx.RecordKept(), "attempt stays recorded");
+    }
+
+    void ApplyUpdateRetriesStartAfterRollback()
+    {
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        // New binary fails the gate; the old one needs two tries (e.g. the previous process was still
+        // exiting) before it runs.
+        service.running_answers = { false, false, true };
+        Check(fx.Apply(service) != 0, "failure reported");
+        CheckEq(service.start_calls, 3, "new once, old twice");
+        CheckEq(service.started_on.back(), std::string("old"), "the service ends on the old binary");
+
+        // When the old binary never starts either, the helper says so (it cannot do more).
+        ApplyFixture fx2;
+        FakeService dead(fx2.files.exe);
+        dead.running_answers = { false };
+        Check(fx2.Apply(dead) != 0, "failure reported");
+        CheckEq(dead.start_calls, 4, "new once, old three times");
+        bool told = false;
+        for (const auto& e : fx2.errors)
+            told = told || e.find("start it by hand") != std::string::npos;
+        Check(told, "the operator is told to start the service by hand");
+    }
+
+    void ApplyUpdateRefusesAnotherFolder()
+    {
+        // A copy of the exe outside the service's folder (a --console run, say) must not swap its own
+        // folder and report the service updated.
+        // That run was not the service, so the service is neither waited for nor started.
+        using hsm::agent::ServiceBinaryMatch;
+        {
+            ApplyFixture fx;
+            FakeService service(fx.files.exe);
+            service.binary_answers = { ServiceBinaryMatch::Different };
+            Check(fx.Apply(service) != 0, "refused");
+            CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+            Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+            Check(!fx.Has(fx.files.old_exe), "no rename happened");
+            CheckEq(service.wait_stopped_calls, 0, "does not wait for a stop nobody asked for");
+            CheckEq(service.start_calls, 0, "does not start a service it did not stop");
+            Check(fx.RecordKept(), "attempt stays recorded");
+        }
+
+        // Could not tell at first, then confirmed: the update goes ahead.
+        {
+            ApplyFixture fx;
+            FakeService service(fx.files.exe);
+            service.binary_answers = { ServiceBinaryMatch::Unknown, ServiceBinaryMatch::Same };
+            CheckEq(fx.Apply(service), 0, "applied after the second check");
+            CheckEq(fx.Exe(), std::string("new"), "new binary in place");
+        }
+
+        // Still cannot tell after the stop: no swap, and the stopped service is started again.
+        {
+            ApplyFixture fx;
+            FakeService service(fx.files.exe);
+            service.binary_answers = { ServiceBinaryMatch::Unknown };
+            Check(fx.Apply(service) != 0, "not applied");
+            CheckEq(fx.Exe(), std::string("old"), "binary untouched");
+            Check(!fx.Has(fx.files.new_exe), "staged exe discarded");
+            CheckEq(service.wait_stopped_calls, 1, "waited for the stop");
+            CheckEq(service.start_calls, 1, "the stopped service is started again");
+            CheckEq(service.started_on.front(), std::string("old"), "on the old binary");
+        }
+    }
+
+    void ApplyUpdateUnstoppableNewBinaryIsNotReportedAsRolledBack()
+    {
+        // The new binary hangs in START_PENDING and cannot be stopped: the files are rolled back, but
+        // no start is attempted (it would be a no-op on the hung process and claim the old one runs).
+        ApplyFixture fx;
+        FakeService service(fx.files.exe);
+        service.running_answers = { false };
+        service.stop_answer = false;
+        Check(fx.Apply(service) != 0, "failure reported");
+        CheckEq(service.start_calls, 1, "only the new version was started");
+        CheckEq(fx.Exe(), std::string("old"), "the previous binary is back for the next start");
+        bool told = false;
+        for (const auto& e : fx.errors)
+            told = told || e.find("still running") != std::string::npos;
+        Check(told, "the log says the new version is still running");
+    }
+
+    void ApplyUpdateServiceCommandExePath()
+    {
+        using hsm::agent::ServiceCommandExePath;
+        Check(ServiceCommandExePath(L"\"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe\"") ==
+                  L"C:\\Program Files (x86)\\HSM Agent\\hsm-agent.exe", "quoted");
+        Check(ServiceCommandExePath(L"  \"C:\\A B\\hsm-agent.exe\" --service") == L"C:\\A B\\hsm-agent.exe", "quoted with args");
+        Check(ServiceCommandExePath(L"C:\\A B\\hsm-agent.EXE --service") == L"C:\\A B\\hsm-agent.EXE", "unquoted with spaces");
+        Check(ServiceCommandExePath(L"C:\\tools\\agent.exec\\hsm-agent.exe --service") == L"C:\\tools\\agent.exec\\hsm-agent.exe",
+              "a folder named *.exec is not the exe");
+        Check(ServiceCommandExePath(L"C:\\x\\agent") == L"C:\\x\\agent", "no .exe: first word");
+        Check(ServiceCommandExePath(L"\"C:\\broken").empty(), "unterminated quote");
+        Check(ServiceCommandExePath(L"   ").empty(), "blank");
+
+        ScratchDir dir("samefile");
+        const auto a = dir.path / "a.exe";
+        const auto b = dir.path / "b.exe";
+        WriteText(a, "x");
+        WriteText(b, "x");
+        Check(hsm::agent::SameFile(a.wstring(), (dir.path / "." / "A.EXE").wstring()), "same file, other spelling");
+        Check(!hsm::agent::SameFile(a.wstring(), b.wstring()), "different files with equal content");
+        Check(!hsm::agent::SameFile(a.wstring(), (dir.path / "missing.exe").wstring()), "missing file");
+    }
 #endif // _WIN32
 
     const std::map<std::string, std::function<void()>>& Tests()
@@ -1196,11 +1706,27 @@ namespace
             { "agent_retired_port_notices_name_the_fix", RetiredPortNoticesNameTheFix },
             { "agent_retired_port_watcher_confirms_and_throttles", RetiredPortWatcherConfirmsAndThrottles },
             { "agent_retired_port_move_keeps_the_file_as_it_is_now", RetiredPortMoveKeepsTheFileAsItIsNow },
+            { "agent_update_gate_blocks_untrusted_certificate", UpdateGateBlocksUntrustedCertificate },
+            { "agent_update_backoff_schedule", UpdateBackoffSchedule },
+            { "agent_update_record_roundtrip_and_due", UpdateRecordRoundTripAndDue },
+            { "agent_update_record_backs_off_across_restart", UpdateRecordBacksOffAcrossRestart },
+            { "agent_update_handoff_stops_only_when_staged_and_recorded", UpdateHandOffStopsOnlyWhenStagedAndRecorded },
 #ifdef _WIN32
             { "agent_dir_acl_is_protected_system_and_admins_only", DirAclIsProtectedSystemAndAdminsOnly },
             { "agent_dir_acl_admin_reads_and_rewrites_config", DirAclAdminReadsAndRewritesConfig },
             { "agent_config_rewrite_replaces_planted_temp_file", ConfigRewriteReplacesPlantedTempFile },
             { "agent_dir_acl_refuses_reparse_points", DirAclRefusesReparsePoints },
+            { "agent_update_paths_follow_running_exe", UpdatePathsFollowRunningExe },
+            { "agent_apply_update_swaps_and_clears_record", ApplyUpdateSwapsAndClearsRecord },
+            { "agent_apply_update_nothing_staged_starts_service_again", ApplyUpdateNothingStagedStartsServiceAgain },
+            { "agent_apply_update_service_not_stopped_keeps_binary", ApplyUpdateServiceNotStoppedKeepsBinary },
+            { "agent_apply_update_rename_failure_starts_old_binary", ApplyUpdateRenameFailureStartsOldBinary },
+            { "agent_apply_update_failed_start_rolls_back", ApplyUpdateFailedStartRollsBack },
+            { "agent_apply_update_health_gate_rolls_back", ApplyUpdateHealthGateRollsBack },
+            { "agent_apply_update_retries_start_after_rollback", ApplyUpdateRetriesStartAfterRollback },
+            { "agent_apply_update_refuses_another_folder", ApplyUpdateRefusesAnotherFolder },
+            { "agent_apply_update_unstoppable_new_binary_is_reported", ApplyUpdateUnstoppableNewBinaryIsNotReportedAsRolledBack },
+            { "agent_apply_update_service_command_exe_path", ApplyUpdateServiceCommandExePath },
 #endif
         };
         return tests;

@@ -83,9 +83,12 @@ server image + the install→data→stop run). A plugin system is **not** planne
   running the install script, and a service started meanwhile must not find the mutex taken (exit 3).
   The text comes from the pure `BuildInteractiveLaunchMessage` (`src/launch_hint.cpp`, unit-tested);
   the detection and the box are `ShowLaunchHintIfInteractive` in `src/service/windows_service.cpp`.
-- On-disk layout: exe at `C:\Program Files\HSM Agent\` (placed by the installer, W7); config at
+- On-disk layout: exe at `%ProgramFiles%\HSM Agent\` of the install script's shell (normally
+  `C:\Program Files\HSM Agent\`; a 32-bit shell puts it under `Program Files (x86)`, W7). Self-update
+  works on whatever folder the service's exe is in (#1812). Config at
   `%ProgramData%\HSM Agent\config.json`; logs at `%ProgramData%\HSM Agent\logs\hsm-agent.log` + the
-  Windows Application Event Log (source `HSMAgent`, registered at install).
+  Windows Application Event Log (source `HSMAgent`, registered at install); the self-update attempt
+  record at `%ProgramData%\HSM Agent\update-state.txt`.
 
 ## Data directory access (issue #1279)
 
@@ -179,10 +182,11 @@ defaults. Maps onto `CollectorOptions` + runtime group gates:
   (issue #1175). Validated only when enabled (period/count > 0, minPercent ≥ 0).
 - `update.{enabled=true,checkPeriodHours=24}` — self-update channel (epic #1174). When enabled the
   agent periodically polls `GET <server>/api/agent/version` and self-updates when the server advertises
-  a newer version AND its global `AutoUpdateEnabled` flag is true. `enabled=false` opts this machine out
-  regardless of the server's flag. Validated: `checkPeriodHours ≥ 1`.
+  a newer version. This is the only switch (#1812): the server has none, `enabled=false` opts this
+  machine out. An agent with `server.allowUntrustedCertificate: true` does not self-update at all (see
+  below). Validated: `checkPeriodHours ≥ 1`.
 
-## Self-update (epic #1174)
+## Self-update (epic #1174, #1812)
 
 Server-driven auto-upgrade of the running Windows service. The server exposes:
 - `GET /api/agent/version` — public, returns `{ version, sha256, updateEnabled }`. Version is read from
@@ -195,32 +199,82 @@ Server-driven auto-upgrade of the running Windows service. The server exposes:
   `project(HsmAgent VERSION …)` and `agent-release.yml` builds, smokes, and publishes
   `hsm-agent.exe` + its SHA-256 (#1298). Servers consume that release by pin — see the release
   procedure in `src/agent/CLAUDE.md`.
-  `updateEnabled` mirrors `ServerConfig.Agent.AutoUpdateEnabled` (admin toggle, default false).
+  `updateEnabled` is always `true` since #1812 (the server-wide `Agent.AutoUpdateEnabled` setting is
+  gone; a settings file that still has the key loads as before). The field stays because agents up to
+  0.6.0 refuse a manifest without it; an agent still honours `false` from an older server.
 - `GET /api/agent/exe` — Key-header auth (agent's own access key), returns the binary stream with
   `X-Agent-Sha256` response header.
 
+**Install directory = directory of the running exe (#1812).** Staging, swap, rollback and the
+`.old.exe` cleanup all use the folder of the running `hsm-agent.exe` (`GetModuleFileNameW`,
+`UpdateFilesFor` in `src/agent/src/paths.cpp`), never `%ProgramFiles%`. Before #1812 a 64-bit service
+installed under `Program Files (x86)` staged its download in `Program Files`, the helper found nothing
+to swap, and the service ended up stopped after a few stop/start cycles. The checker and the helper
+agree by construction: the helper is spawned from the running exe and derives the same folder.
+
+**Untrusted certificate ⇒ no self-update (#1812).** The update channel never skips TLS validation
+(epic #1174 decision): a binary that runs as LocalSystem must come from a server whose certificate the
+machine trusts. An agent with `server.allowUntrustedCertificate: true` does not start its
+`UpdateChecker` and logs once per start that self-update is disabled and why. Sending data is not
+affected. The checker never sets `SECURITY_FLAG_IGNORE_*`. (The retired-port probe, which only asks
+whether a server answers, still follows the setting.)
+
 `UpdateChecker` (`src/agent/src/update_checker.cpp`, Windows-only) runs on a background thread after
-`collector.Start()`. Flow per poll:
-1. Fetch version manifest (WinHTTP, TLS enforced; `allow_untrusted_certificate` honoured for eval setups).
+`collector.Start()` when `SelfUpdateGateFor(config)` (`src/agent/src/update_state.cpp`) allows it.
+Flow per poll:
+1. Fetch version manifest (WinHTTP, certificate always validated).
 2. Parse version string into `(major, minor, patch)`; skip if `remote ≤ current` (downgrade protection).
-3. Skip if `updateEnabled == false` (server kill-switch).
-4. Download exe (`Key` header), verify SHA-256 against manifest value.
-5. Write to `%ProgramFiles%\HSM Agent\hsm-agent.new.exe`.
-6. Spawn `hsm-agent.exe --apply-update` as a detached process.
-7. Call `RequestStop()` → graceful service shutdown begins.
+3. Skip if an older server answered `updateEnabled: false`.
+4. Skip while a failed attempt of that version is backing off (attempt record, below); said once per
+   recorded attempt.
+5. Download exe (`Key` header), write `hsm-agent.new.exe` next to the running exe, verify SHA-256
+   against the manifest value.
+6. `HandOffStagedUpdate`: only if the staged exe exists **and** the attempt is recorded **and** the
+   detached `hsm-agent.exe --apply-update` helper started, call `RequestStop()`. Otherwise the staged
+   file is removed and the service keeps running.
 
-`--apply-update` (`src/agent/src/apply_update.cpp`) is the detached binary-swap helper:
-1. Wait up to 60 s for `HSMAgent` service to reach `STOPPED`.
-2. Rename dance: `hsm-agent.exe → hsm-agent.old.exe`; `hsm-agent.new.exe → hsm-agent.exe`.
-3. `StartService(HSMAgent)`.
-4. Health gate: wait 30 s for `SERVICE_RUNNING`; on failure, roll back (`hsm-agent.old.exe →
-   hsm-agent.exe`), restart old version, log error to Event Log.
+`--apply-update` (`src/agent/src/apply_update.cpp`, `ApplyStagedUpdate`) is the detached binary-swap
+helper. It works in the folder of its own exe:
+0. Open the service, retrying for about 30 s on a transient SCM error (nothing else could start it
+   again); no retry when the service does not exist or access is denied.
+1. The service's configured binary (`QueryServiceConfigW`, environment-expanded, compared by file
+   identity) is another file than the helper's own exe (e.g. a `--console` run from another folder):
+   discard the staged file and leave the service alone (that run did not stop it), stop here.
+2. Wait up to 60 s for `HSMAgent` to reach `STOPPED` and its process to exit (the old process holds the
+   single-instance mutex until it does).
+3. Nothing staged, or the binary check of step 1 still cannot tell → start the service again, stop here.
+4. Rename dance: `hsm-agent.exe → hsm-agent.old.exe`; `hsm-agent.new.exe → hsm-agent.exe`. A failed
+   rename restores the old binary and starts the service again.
+5. `StartService(HSMAgent)` and health gate: wait 30 s for `SERVICE_RUNNING`.
+6. Start or gate failed → stop the new version (a process hung in `START_PENDING` refuses the stop
+   control and is terminated; one in `STOP_PENDING` gets 30 s more instead), roll back (`hsm-agent.old.exe → hsm-agent.exe`, the new binary
+   deleted), start the old version (up to three start attempts, each waiting for RUNNING). If even
+   that fails, the Event Log says to start the service by hand. If the new version could not be
+   stopped at all, the files are rolled back and the Event Log says so; no start is claimed.
+7. Success → remove the attempt record.
 
-On next startup, `AgentRuntime::Run()` deletes `hsm-agent.old.exe` to confirm the new version is live.
+Whatever fails after the service stopped, the helper ends with the service started (old version);
+a service that never stopped is left running (a start request is a no-op on a running service).
+The steps run against the `ServiceControl` seam (wait stopped / start / wait running / stop / runs
+exe), so the swap, rollback and restart paths are unit-tested on a temp folder with a fake service
+(`agent_apply_update_*`). The health gate is still "reached RUNNING once": a new binary that crashes
+after that is not rolled back (pre-existing, not part of #1812).
 
-**Admin kill-switch:** `Agent.AutoUpdateEnabled: false` in `appsettings.json` (default). Flip to true
-when ready to roll out; flip back to halt. Per-machine opt-out: set `update.enabled: false` in the
-machine's `config.json`.
+**Attempt record and backoff (#1812).** `%ProgramData%\HSM Agent\update-state.txt`, three
+`key=value` lines: `version` (target), `attempts`, `last` (Unix seconds). The checker writes it before
+it stops the service; the helper removes it after the health gate passed. So a record naming the
+version the server offers means that version was tried and the agent is still on the old one. The next
+attempt of the same version waits 1 h after the first failure, doubled per further failure, capped at
+24 h (1, 2, 4, 8, 16, 24, 24 … h). A newer staged version is tried at once; a clock that went
+backwards counts as elapsed; an unreadable record counts as none. If the record cannot be written the
+agent does not update (a failure would not back off across the restart). This replaces the in-memory
+60 s debounce as the guard against a stop/start loop; the debounce still paces directive wake-ups.
+
+On next startup, `AgentRuntime::Run()` deletes `hsm-agent.old.exe` (next to the running exe).
+
+**Switches:** per machine only — `update.enabled: false` in the machine's `config.json` (or
+`allowUntrustedCertificate: true`, which disables it as a side effect). There is no server-wide
+switch: to stop a rollout, do not stage the newer agent on the server.
 
 ## Server directive channel (issue #1198)
 
@@ -228,13 +282,15 @@ The server piggybacks `X-Hsm-Directive` response headers on data-POST responses 
 agent without extra polling. The agent advertises its build via an `X-Agent-Version` request header;
 directives are emitted on **both** the typed value endpoints and the `/list` batch endpoint — the
 agent's real data path, so emitting only on the typed endpoints means it never sees them.
-- `update-available:<version>` — sent when `AutoUpdateEnabled` and a newer binary is staged
-  (`wwwroot/agent/version.txt`, read through a short-TTL cache so the hot `/list` path avoids
+- `update-available:<version>` — sent whenever a newer binary is staged (no server switch since
+  #1812; `wwwroot/agent/version.txt`, read through a short-TTL cache so the hot `/list` path avoids
   per-POST disk I/O). The agent wakes its `UpdateChecker` immediately instead of waiting for the next
-  poll. Because the server re-sends this on every POST while a newer build is staged, the checker
-  **debounces** directive-driven checks (a trigger within ~60 s of the last attempt is ignored), so a
-  persistently-failing update (download error / hash mismatch) doesn't re-download the exe every batch;
-  the first trigger after a quiet period still applies promptly. The scheduled poll is unaffected.
+  poll (an agent whose checker does not run ignores it). Because the server re-sends this on every POST
+  while a newer build is staged, the checker **debounces** directive-driven checks (a trigger within
+  ~60 s of the last attempt is ignored), so a persistently-failing download (download error / hash
+  mismatch) doesn't re-download the exe every batch; the first trigger after a quiet period still
+  applies promptly. The scheduled poll is unaffected. A version that was staged but failed to *apply*
+  is held back by the persistent attempt record instead (see Self-update), which survives restarts.
 - `sensor-disable:<group>` / `sensor-enable:<group>` (groups: computer/system/disk/network/module/
   process, mapped by `SensorGroupFlag` — the single source of truth shared with its unit test) —
   re-sent on **every** response while the group stays toggled, so the agent acts **only when the flag

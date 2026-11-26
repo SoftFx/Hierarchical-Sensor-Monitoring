@@ -174,9 +174,12 @@ namespace HSMServer.Controllers
 
 
         /// <summary>
-        /// Agent self-update manifest (epic #1174). Returns the version, SHA-256, and whether the
-        /// server permits auto-updates. No authentication — version info is not sensitive and agents
-        /// need to poll this before they have a user context. Returns 503 when no exe is staged.
+        /// Agent self-update manifest (epic #1174). Returns the version and SHA-256 of the staged agent,
+        /// and <c>updateEnabled</c>, which is always true: the server has no switch for self-update,
+        /// an agent opts out with <c>update.enabled</c> in its own config (#1812). The field stays
+        /// because deployed agents require it in the manifest. No authentication — version info is not
+        /// sensitive and agents need to poll this before they have a user context. Returns 503 when no
+        /// exe is staged.
         /// </summary>
         [HttpGet("version")]
         [AllowAnonymous]
@@ -204,7 +207,8 @@ namespace HSMServer.Controllers
             {
                 version,
                 sha256,
-                updateEnabled = _config.Agent.AutoUpdateEnabled,
+                // Wire compatibility: agents up to 0.6.0 fail to parse a manifest without it.
+                updateEnabled = true,
             });
         }
 

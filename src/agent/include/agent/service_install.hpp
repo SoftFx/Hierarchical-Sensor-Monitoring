@@ -12,9 +12,6 @@ namespace hsm::agent
     constexpr const wchar_t* kServiceDisplayName = L"HSM Agent";
     constexpr const wchar_t* kSingleInstanceMutex = L"Global\\HSMAgent";
 
-    /// Full path of the running executable.
-    std::wstring CurrentExePath();
-
     /// True if the current process token is elevated (required for SCM + Event Log registry writes).
     bool IsElevated();
 

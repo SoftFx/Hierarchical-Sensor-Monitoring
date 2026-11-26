@@ -1,5 +1,4 @@
 using HSMServer.Core.Model;
-using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Hosting;
 using System;
 using System.Collections.Generic;
@@ -14,8 +13,8 @@ namespace HSMServer.SensorApi
     // Who gets them: a client that states its agent version (X-Agent-Version), which is how a
     // directive-aware agent identifies itself. Ordinary collectors state none and get nothing.
     //
-    // What they are: the full desired state, not events. "update-available:<staged>" when
-    // auto-update is on and the staged agent is newer than the stated one, then the state of
+    // What they are: the full desired state, not events. "update-available:<staged>" when the
+    // staged agent is newer than the stated one, then the state of
     // every known sensor group, enabled or disabled, so that switching a group back on in the UI
     // reaches the agent too. The agent ignores a directive that changes nothing.
     public sealed class AgentDirectives
@@ -33,7 +32,6 @@ namespace HSMServer.SensorApi
 
         private const string NoVersion = "0.0.0";
 
-        private readonly IServerConfig _config;
         private readonly IWebHostEnvironment _environment;
         private readonly TimeProvider _time;
 
@@ -41,9 +39,8 @@ namespace HSMServer.SensorApi
         private volatile StagedVersion _staged;
 
 
-        public AgentDirectives(IServerConfig config, IWebHostEnvironment environment, TimeProvider time)
+        public AgentDirectives(IWebHostEnvironment environment, TimeProvider time)
         {
-            _config = config;
             _environment = environment;
             _time = time ?? TimeProvider.System;
         }
@@ -61,8 +58,9 @@ namespace HSMServer.SensorApi
 
             // Agent and staged versions are plain numeric "x.y.z"; a semver pre-release or build
             // suffix fails Version.TryParse and skips the directive (accepted by contract).
-            if (_config?.Agent?.AutoUpdateEnabled == true
-                && Version.TryParse(agentVersion, out var agent)
+            // No server-side switch (#1812): an agent that does not want updates has update.enabled
+            // set to false and ignores the directive.
+            if (Version.TryParse(agentVersion, out var agent)
                 && !string.IsNullOrEmpty(_environment?.WebRootPath))
             {
                 var staged = ReadStagedVersion(_environment.WebRootPath);
