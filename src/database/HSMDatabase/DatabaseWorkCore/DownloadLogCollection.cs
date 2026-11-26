@@ -7,6 +7,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -16,6 +17,11 @@ namespace HSMDatabase.DatabaseWorkCore
     // Like ChangeSetCollection, and for the same reason, WRITE failures propagate: a download that cannot be recorded is
     // refused, so the caller must see the failure. A READ of one corrupt row is skipped so one damaged row cannot hide the
     // rest of the log.
+    //
+    // A record is an unsynced Put, as a change set is: a power loss can drop the records of the last moments, which were
+    // downloads already allowed. A read iterates a LevelDB snapshot OUTSIDE the lock a record takes, so a long scan never
+    // makes a download wait for its record; the lock only hands out the database and counts the reads, and Dispose closes
+    // the database after the last read finished.
     //
     // The database opens on its first use, not in the constructor: a server that never gives out a large file does not
     // create the folder, and the many test servers that share one folder do not race for its lock. An open that fails is
@@ -34,6 +40,13 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private LevelDBDatabaseAdapter _database;
         private bool _disposed;
+        private int _readers; // under _sync
+
+
+        // Test seams: called after each row a read scans, and each time Dispose waits for a read to finish.
+        internal Action OnRowScanned { get; set; }
+
+        internal Action OnWaitingForReaders { get; set; }
 
 
         internal DownloadLogCollection(string path)
@@ -67,12 +80,22 @@ namespace HSMDatabase.DatabaseWorkCore
 
             var scanned = 0;
 
+            LevelDBDatabaseAdapter database;
+
             lock (_sync)
             {
-                foreach (var (key, value) in GetDatabase().GetValueKeyPairToFrom(from, to))
+                database = GetDatabase();
+                _readers++;
+            }
+
+            try
+            {
+                foreach (var (key, value) in database.GetValueKeyPairToFrom(from, to))
                 {
                     if (scanned++ >= maxScanned)
                         break;
+
+                    OnRowScanned?.Invoke();
 
                     DownloadRecordEntity entity;
 
@@ -93,6 +116,14 @@ namespace HSMDatabase.DatabaseWorkCore
 
                     if (records.Count >= limit)
                         break;
+                }
+            }
+            finally
+            {
+                lock (_sync)
+                {
+                    if (--_readers == 0)
+                        Monitor.PulseAll(_sync);
                 }
             }
 
@@ -127,6 +158,14 @@ namespace HSMDatabase.DatabaseWorkCore
             lock (_sync)
             {
                 _disposed = true;
+
+                // A read iterates outside the lock: its iterator must be gone before the database is closed.
+                while (_readers > 0)
+                {
+                    OnWaitingForReaders?.Invoke();
+                    Monitor.Wait(_sync);
+                }
+
                 _database?.Dispose();
                 _database = null;
             }

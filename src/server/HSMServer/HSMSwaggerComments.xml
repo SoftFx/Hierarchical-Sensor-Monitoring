@@ -118,6 +118,12 @@
             two builder runs never overlap, and signals that arrive during a run coalesce into one more run.
             </summary>
         </member>
+        <member name="P:HSMServer.BackgroundServices.LargeFileArchiveBackgroundService.OnWaitingForPeriod">
+            <summary>
+            Test seam: called each time the loop goes idle until its period or a signal, with true when a wake-up is
+            already pending (the next run then starts at once).
+            </summary>
+        </member>
         <member name="M:HSMServer.BackgroundServices.LargeFileArchiveBackgroundService.Signal">
             <summary>Asks for a builder run as soon as the current one (if any) ends. Never blocks.</summary>
         </member>
@@ -1260,6 +1266,18 @@
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
         </member>
+        <member name="T:HSMServer.Middleware.ConnectionPeerMiddleware">
+            <summary>
+            Records the connection's own peer address, and whether it is one of the trusted proxies, before
+            UseForwardedHeaders replaces <see cref="P:Microsoft.AspNetCore.Http.ConnectionInfo.RemoteIpAddress"/> with the address the proxy stated.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Middleware.ConnectionPeerMiddleware.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpContext)">
+            <summary>True when the request's connection came from a trusted proxy (recorded by this middleware).</summary>
+        </member>
+        <member name="M:HSMServer.Middleware.ConnectionPeerMiddleware.GetPeerAddress(Microsoft.AspNetCore.Http.HttpContext)">
+            <summary>The connection's own peer address, before forwarded headers were applied; null when not recorded.</summary>
+        </member>
         <member name="M:HSMServer.Middleware.Telemetry.TelemetryCollector.TryRegisterPublicApiRequest(Microsoft.AspNetCore.Http.HttpContext,System.String@)">
             <summary>
             Resolve and register the request's public-API info (key, product,
@@ -2069,16 +2087,16 @@
             has no allow-untrusted switch.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.ServerTerminatesClientTls(System.Boolean,System.Boolean,System.Boolean)">
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.ServerTerminatesClientTls(System.Boolean,System.Boolean)">
             <summary>
             Whether the TLS the probe will verify is terminated by this server. A Kestrel handshake on the
             download connection says only that the admin's request was not plaintext: in the reference
             deployment (docker-compose.yml, #1427) Caddy terminates the client's TLS with a public
             certificate and re-encrypts to Kestrel, which still serves the bundled default. A request that
             arrived through a configured trusted proxy is therefore proxy-terminated, whatever Kestrel did
-            on its own hop. <paramref name="forwardedByTrustedProxy"/> is the forwarded-headers middleware's
-            own verdict (it moves the consumed X-Forwarded-For into X-Original-For), and it counts only when
-            a trusted proxy is configured at all, so a header invented by a direct caller changes nothing.
+            on its own hop. <paramref name="cameThroughTrustedProxy"/> is
+            <see cref="M:HSMServer.Middleware.ConnectionPeerMiddleware.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpContext)"/>: the connection's
+            own peer is one of the configured trusted proxies.
             </summary>
         </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.Decide(System.Boolean,System.Boolean,System.Boolean)">
@@ -2478,6 +2496,9 @@
         <member name="P:HSMServer.Model.LargeFiles.DumpPasswordViewModel.ProductId">
             <summary>The root product the password belongs to.</summary>
         </member>
+        <member name="P:HSMServer.Model.LargeFiles.DumpPasswordViewModel.IsUnreadable">
+            <summary>The stored passwords of the product cannot be read: unavailable, not unset, and no new one is saved.</summary>
+        </member>
         <member name="P:HSMServer.Model.LargeFiles.DumpPasswordViewModel.CanManage">
             <summary>A Manager of the product or an admin: sees the versions and may show, generate and set.</summary>
         </member>
@@ -2653,6 +2674,9 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.UrlAuthority">
             <summary>The request host WITH port when non-default (the link URL's authority).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AgentInstaller.InstallerRequestContext.CameThroughTrustedProxy">
+            <summary>The request's connection came from a trusted proxy (<see cref="T:HSMServer.Middleware.ConnectionPeerMiddleware"/>).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AgentInstaller.AgentInstallerAdministrationService">
             <summary>
@@ -4221,10 +4245,11 @@
             (status, body and headers), whatever the cause.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadResult.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpRequest,HSMServer.ServerConfiguration.IServerConfig)">
+        <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadResult.CameThroughTrustedProxy(Microsoft.AspNetCore.Http.HttpContext)">
             <summary>
-            True when the request reached HSM through a configured trusted proxy: the forwarded-headers middleware set
-            X-Original-For while it applied the proxy's X-Forwarded-For (the AgentController predicate, #1427).
+            True when the request's connection came from a configured trusted proxy: the connection's own peer address,
+            recorded by <see cref="T:HSMServer.Middleware.ConnectionPeerMiddleware"/> before the forwarded headers were applied, is one of the
+            proxies of the app's forwarded-headers options. Nothing recorded means not trusted.
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadResult.NotFound(HSMServer.Model.ManagementApi.LargeFiles.LargeFileSurface)">
@@ -5145,6 +5170,15 @@
             itself, the subtree of a managed node, or the managed products of a managed folder. Empty for
             an unknown id and for one the user does not manage.
             </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsRootProductVisibleTo(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>
+            The visibility rule by the id of a root product, for a surface that resolves the root itself from the cache
+            (the large file downloads and the dump password section, #1885).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.CanManageRootProduct(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>The managing rule by the id of a root product (see <see cref="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsRootProductVisibleTo(HSMServer.Model.Authentication.User,System.Guid)"/>).</summary>
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.TryGetBackgroundSensor(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.SensorNodeViewModel,System.Boolean,HSMServer.Model.TreeViewModel.SensorNodeViewModel@)">
             <summary>

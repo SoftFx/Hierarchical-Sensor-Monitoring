@@ -79,6 +79,9 @@ namespace HSMServer.Core.LargeFiles.Archives
         /// <summary>The files whose status is kept in memory: only those with work pending or a failure reported.</summary>
         internal int TrackedCount => _files.Count;
 
+        /// <summary>Wraps the temporary archive's file stream before a build writes to it; null writes to the file itself.</summary>
+        internal Func<Stream, Stream> WrapTemporaryOutput { get; set; }
+
         public event Action<Guid, bool, string> BuildFinished;
 
 
@@ -156,8 +159,10 @@ namespace HSMServer.Core.LargeFiles.Archives
                 builtSinceListing++;
             }
 
-            RetireUnusedPasswordVersions();
-            RemoveExpiredPasswordVersions();
+            // The removal checks again, against the same listing, that no packed archive carries a version it removes;
+            // without a listing it waits for the next pass.
+            if (RetireUnusedPasswordVersions() is { } carried)
+                RemoveExpiredPasswordVersions(carried);
         }
 
         // The work of one listing, in the store's order: the first pack of a verified file (a secure one when its product
@@ -194,6 +199,11 @@ namespace HSMServer.Core.LargeFiles.Archives
                     continue;
 
                 _products.TryAdd(file.ProductId, 0);
+
+                // A product whose stored passwords cannot be read: its archives stay as they are, nothing is reported per
+                // archive (the settings page and the log say the row cannot be read).
+                if (_passwords.IsUnreadable(file.ProductId))
+                    continue;
 
                 var current = _passwords.GetCurrent(file.ProductId);
 
@@ -393,6 +403,8 @@ namespace HSMServer.Core.LargeFiles.Archives
 
                 if (IsGone(fileId, item.Kind))
                     Forget(fileId, "the file was removed during the build");
+                else if (ex is BuildException { OutOfSpace: true } || IsOutOfSpace(ex))
+                    WaitForRoom(fileId, productId, null); // space taken outside HSM after the store's reservation
                 else
                     Fail(fileId, productId, Describe(ex));
             }
@@ -414,7 +426,7 @@ namespace HSMServer.Core.LargeFiles.Archives
             var entryName = ArchiveEntryNames.Sanitize(record.Name, record.Extension);
 
             using var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferSize);
-            using var output = new HashingWriteStream(file);
+            using var output = new HashingWriteStream(WrapTemporaryOutput?.Invoke(file) ?? file);
 
             if (source is null)
             {
@@ -448,7 +460,7 @@ namespace HSMServer.Core.LargeFiles.Archives
             catch (Exception ex) when (ex is not (BuildException or ArchiveFormatException or OperationCanceledException))
             {
                 // The writer's own exceptions are not trusted to leave the password out of their text.
-                throw new BuildException($"the archive writer failed ({ex.GetType().Name})");
+                throw new BuildException($"the archive writer failed ({ex.GetType().Name})", IsOutOfSpace(ex));
             }
         }
 
@@ -622,9 +634,12 @@ namespace HSMServer.Core.LargeFiles.Archives
 
 
         // A replaced version that no archive carries and no build reads or writes is retired once; the password service
-        // keeps it readable until its retention ends and removes it in RemoveExpired.
-        private void RetireUnusedPasswordVersions()
+        // keeps it readable until its retention ends and removes it in RemoveExpired. Returns the (product, version) pairs
+        // the packed archives carry, or null when the store could not be listed.
+        private HashSet<(Guid, int)> RetireUnusedPasswordVersions()
         {
+            HashSet<(Guid, int)> carried = null;
+
             try
             {
                 // Products with a password but no file seen in this process (after a restart) are retired too.
@@ -632,14 +647,16 @@ namespace HSMServer.Core.LargeFiles.Archives
                     _products.TryAdd(productId, 0);
 
                 // Only a secure archive carries a version: one that is not secure keeps no replaced password alive.
-                var carried = new HashSet<(Guid, int)>();
+                var listed = new HashSet<(Guid, int)>();
                 foreach (var file in _store.GetFiles(LargeArchiveFileState.Packed))
                 {
                     _products.TryAdd(file.ProductId, 0);
 
                     if (CarriedVersion(file) is int version)
-                        carried.Add((file.ProductId, version));
+                        listed.Add((file.ProductId, version));
                 }
+
+                carried = listed;
 
                 var now = _utcNow();
                 foreach (var productId in _products.Keys)
@@ -667,13 +684,15 @@ namespace HSMServer.Core.LargeFiles.Archives
             {
                 _logger.Warn($"Large file archives: the retirement of dump password versions failed: {StoreError(ex)}");
             }
+
+            return carried;
         }
 
-        private void RemoveExpiredPasswordVersions()
+        private void RemoveExpiredPasswordVersions(IReadOnlySet<(Guid, int)> carried)
         {
             try
             {
-                var removed = _passwords.RemoveExpired(_utcNow());
+                var removed = _passwords.RemoveExpired(_utcNow(), carried);
                 if (removed > 0)
                     _logger.Info($"Large file archives: {removed} retired dump password version(s) removed after the retention");
             }
@@ -782,6 +801,17 @@ namespace HSMServer.Core.LargeFiles.Archives
 
         private static string StoreError(Exception ex) => $"{ex.GetType().Name}: {ex.Message}";
 
+        // A full volume: ERROR_HANDLE_DISK_FULL (0x27) or ERROR_DISK_FULL (0x70) as a Win32 HRESULT on Windows, the raw
+        // errno ENOSPC (28) that .NET puts in an IOException's HResult on Linux.
+        internal static bool IsOutOfSpace(Exception ex)
+        {
+            const int Win32Facility = unchecked((int)0x80070000);
+            const int Enospc = 28;
+
+            return ex is IOException { HResult: var hresult } &&
+                   (hresult == Enospc || (hresult & unchecked((int)0xFFFF0000)) == Win32Facility && (hresult & 0xFFFF) is 0x27 or 0x70);
+        }
+
 
         private enum BuildKind : byte
         {
@@ -803,7 +833,11 @@ namespace HSMServer.Core.LargeFiles.Archives
 
 
         /// <summary>A failure with a text the builder composed: it carries no password.</summary>
-        private sealed class BuildException(string message) : Exception(message);
+        private sealed class BuildException(string message, bool outOfSpace = false) : Exception(message)
+        {
+            /// <summary>The cause was a full volume: the build waits for room instead of failing.</summary>
+            public bool OutOfSpace { get; } = outOfSpace;
+        }
 
 
         /// <summary>
@@ -906,7 +940,7 @@ namespace HSMServer.Core.LargeFiles.Archives
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}");
+                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}", IsOutOfSpace(ex));
                 }
 
                 _sha.AppendData(buffer);
@@ -923,7 +957,7 @@ namespace HSMServer.Core.LargeFiles.Archives
                 }
                 catch (Exception ex)
                 {
-                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}");
+                    throw new BuildException($"writing the temporary archive failed: {StoreError(ex)}", IsOutOfSpace(ex));
                 }
             }
 

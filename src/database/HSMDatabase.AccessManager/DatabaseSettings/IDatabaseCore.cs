@@ -136,9 +136,10 @@ namespace HSMServer.Core.DataLayer
 
         #region Dump passwords
 
-        // The dump passwords of products (ADR-0022 point 13), apart from the product entity. A scan failure throws; the put
-        // and the remove THROW on failure (unlike UpdateProduct), so a change of a password fails visibly.
-        List<ProductDumpPasswordsEntity> GetAllDumpPasswords();
+        // The dump passwords of products (ADR-0022 point 13), apart from the product entity. A scan failure throws; a row
+        // that cannot be parsed is reported by its product; the put and the remove THROW on failure (unlike
+        // UpdateProduct), so a change of a password fails visibly.
+        DumpPasswordRows GetAllDumpPasswords();
         void PutDumpPasswords(ProductDumpPasswordsEntity entity);
         void RemoveDumpPasswords(Guid productId);
 

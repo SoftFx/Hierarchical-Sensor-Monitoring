@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -25,6 +26,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -118,7 +120,28 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         public User ManagerB { get; }
 
 
-        public void TrustProxies() => Config.Setup(c => c.Kestrel).Returns(new KestrelConfig { TrustedProxies = ["10.0.0.1"] });
+        /// <summary>The trusted proxy of <see cref="TrustProxies"/>, standing for the bundled Caddy.</summary>
+        public const string ProxyPeer = "10.0.0.1";
+
+        // A TestServer request has no connection: it names its peer address in this header.
+        private const string TestPeerHeader = "X-Test-Peer";
+
+        private ForwardedHeadersOptions _forwarding;
+
+
+        /// <summary>Configures <see cref="ProxyPeer"/> as the trusted proxy, with the forwarded-headers pipeline of the app.</summary>
+        public void TrustProxies()
+        {
+            Config.Setup(c => c.Kestrel).Returns(new KestrelConfig { TrustedProxies = [ProxyPeer] });
+            _forwarding = TrustedProxyOptionsFactory.Build([ProxyPeer]);
+        }
+
+        /// <summary>Sends the request from the connection peer <paramref name="peer"/>, stating a client address as a proxy does.</summary>
+        public static void FromPeer(HttpRequestMessage request, string peer)
+        {
+            request.Headers.Add(TestPeerHeader, peer);
+            request.Headers.Add("X-Forwarded-For", "203.0.113.7");
+        }
 
         public void RemoveSensor(BaseSensorModel sensor) => _sensors.Remove(sensor.Id);
 
@@ -199,6 +222,21 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
                     });
                     web.Configure(app =>
                     {
+                        app.Use((context, next) =>
+                        {
+                            if (context.Request.Headers.TryGetValue(TestPeerHeader, out var peer))
+                                context.Connection.RemoteIpAddress = IPAddress.Parse(peer.ToString());
+
+                            return next(context);
+                        });
+
+                        // The registration of ApplicationServiceExtensions.ConfigureMiddleware.
+                        if (_forwarding is not null)
+                        {
+                            app.UseMiddleware<ConnectionPeerMiddleware>(_forwarding);
+                            app.UseForwardedHeaders(_forwarding);
+                        }
+
                         app.UseRouting();
                         app.UseAuthentication();
                         app.UseAuthorization();

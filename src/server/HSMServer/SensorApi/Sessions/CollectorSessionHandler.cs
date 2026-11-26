@@ -402,7 +402,7 @@ namespace HSMServer.SensorApi.Sessions
                     kind);
 
                 if (isFile)
-                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger, FileQuickCheck);
+                    paired.Files = new FileConnection(paired, _files, _fileChecks, _filePieceBytes, _logger, FileQuickCheck, _time);
 
                 SessionProtocol.MarkUpgraded(context);
 
@@ -568,7 +568,7 @@ namespace HSMServer.SensorApi.Sessions
                 ? new TableFrameMemory(_tableBudget, maxFrameBytes, session.KeyId, (reservation, token) => WaitForTableBudgetAsync(session, silence, reservation, token), frameDeadline.Arm)
                 : null;
 
-            var fileMemory = session.IsFile ? new FileFrameMemory(maxFrameBytes, () => session.Files.HoldsUpload, frameDeadline.Arm) : null;
+            var fileMemory = session.IsFile ? new FileFrameMemory(maxFrameBytes, session.Files.HoldsLiveUploadOrReleaseIt, frameDeadline.Arm) : null;
 
             IFrameMemory memory = (IFrameMemory)tableMemory ?? fileMemory;
 

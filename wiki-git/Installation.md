@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-8 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-9 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
 Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only when a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
@@ -335,7 +335,7 @@ What must stay as it is, if you ever adapt it:
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-8 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; supports the stub-zone DNS-01 override (#1585); users do not build locally. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-9 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; forwards every site to the app's single 443 listener (#1590); passes the client Host header to HSM so login redirects stay client-reachable; supports the stub-zone DNS-01 override (#1585); serves large file archives on HSM's answer from a read-only view of the archives folder (#1885); users do not build locally. |
 | Published ports 80, 443 | 443 is the one address for everything (web UI, ingestion, downloads); 80 serves the ACME HTTP-01 challenge and the redirect to HTTPS. Downloaded agent bundles point at 443. |
 
 ### Internal DNS name

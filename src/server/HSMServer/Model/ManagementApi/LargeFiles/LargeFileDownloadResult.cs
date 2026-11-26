@@ -2,9 +2,8 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using HSMServer.ServerConfiguration;
+using HSMServer.Middleware;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 
@@ -27,8 +26,8 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
     /// (status, body and headers), whatever the cause.
     /// </summary>
     // The hand-over: a request the bundled Caddy forwarded carries X-Hsm-Serve-Archives: 1 (Caddy overwrites any client
-    // copy with header_up). It is honoured only on a connection from a configured trusted proxy (the AgentController
-    // predicate); otherwise HSM serves the file itself even when the header is present. The instruction is a 503 with
+    // copy with header_up). It is honoured only on a connection whose own peer address is a configured trusted proxy
+    // (ConnectionPeerMiddleware); otherwise HSM serves the file itself even when the header is present. The instruction is a 503 with
     // X-Hsm-Archive, which Caddy's handle_response turns into its own file_server answer; a client that somehow gets
     // the instruction sees an error, never an empty "complete" file. X-Hsm-Archive is set only here, after the download
     // record was written (the decision is made before this result runs) — no error answer can carry it.
@@ -67,12 +66,11 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
 
 
         /// <summary>
-        /// True when the request reached HSM through a configured trusted proxy: the forwarded-headers middleware set
-        /// X-Original-For while it applied the proxy's X-Forwarded-For (the AgentController predicate, #1427).
+        /// True when the request's connection came from a configured trusted proxy: the connection's own peer address,
+        /// recorded by <see cref="ConnectionPeerMiddleware"/> before the forwarded headers were applied, is one of the
+        /// proxies of the app's forwarded-headers options. Nothing recorded means not trusted.
         /// </summary>
-        public static bool CameThroughTrustedProxy(HttpRequest request, IServerConfig config) =>
-            config?.Kestrel?.TrustedProxies is { Length: > 0 } &&
-            request.Headers.ContainsKey(ForwardedHeadersDefaults.XOriginalForHeaderName);
+        public static bool CameThroughTrustedProxy(HttpContext context) => ConnectionPeerMiddleware.CameThroughTrustedProxy(context);
 
 
         /// <summary>The single NotFound answer of a surface.</summary>

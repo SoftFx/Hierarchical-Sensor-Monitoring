@@ -80,7 +80,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         private ServiceProvider BuildProvider(HSMDatabase.AccessManager.LargeFiles.ILargeFileStore largeFiles = null, bool replaceStore = true)
         {
             var database = new Mock<IDatabaseCore>();
-            database.Setup(d => d.GetAllDumpPasswords()).Returns([]);
+            database.Setup(d => d.GetAllDumpPasswords()).Returns(new DumpPasswordRows([], []));
             database.Setup(d => d.PutDumpPasswords(It.IsAny<ProductDumpPasswordsEntity>())).Callback<ProductDumpPasswordsEntity>(_rows.Add);
             database.Setup(d => d.LargeFiles).Returns(largeFiles);
 
