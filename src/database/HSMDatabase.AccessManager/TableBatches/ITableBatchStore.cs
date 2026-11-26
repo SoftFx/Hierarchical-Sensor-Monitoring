@@ -525,6 +525,12 @@ namespace HSMDatabase.AccessManager.TableBatches
         IReadOnlyList<TableRemoval> GetRemovals();
 
         /// <summary>
+        /// The removal recorded now for the same sensor as <paramref name="removal"/> (for a root product's mark, the same
+        /// product), or null: a keyed lookup, for a caller that checks marks one by one. Throws as <see cref="GetRemovals"/>.
+        /// </summary>
+        TableRemoval FindRemoval(TableRemoval removal);
+
+        /// <summary>
         /// Confirms marks of this run once the tree has removed their entities from its database (in memory only: after a
         /// restart every mark read from the file is <see cref="TableRemoval.Earlier"/>, and the tree loaded from the database
         /// says whether its entity is gone). A sensor or product without a mark of this run is skipped.

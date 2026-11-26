@@ -9,6 +9,12 @@ namespace HSMServer.Core.TableSensors
     public sealed record TableBlockOptions
     {
         public const int DefaultMaxReadRows = 1_000_000;
+
+        /// <summary>
+        /// The largest <c>MaxRows</c> of a block the server accepts: a read ranks the rows of an unmerged block by
+        /// <c>(block sequence &lt;&lt; 24) | row</c> (<see cref="TableRowCollector"/>), so a row index must fit in 24 bits.
+        /// </summary>
+        public const int MaxRowsPerBlockLimit = 1 << 24;
         public const long DefaultMinFreeDiskMb = 1024;
 
         /// <summary>The limits a block is checked against on a put.</summary>

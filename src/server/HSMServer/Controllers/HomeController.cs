@@ -18,6 +18,7 @@ using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.FileSensors;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -66,15 +67,18 @@ namespace HSMServer.Controllers
         private readonly IAlertScheduleProvider _alertScheduleProvider;
         private readonly PolicyAdministrationService _policies;
         private readonly SensorMoveAdministrationService _mover;
+        private readonly FileSensorPageService _files;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, UserTreeAccess tree,
                               IUserManager userManager, IJournalService journalService, IChatsManager chatsManager,
                               IDatabaseCore database, IAlertScheduleProvider provider,
                               PolicyAdministrationService policies,
-                              SensorMoveAdministrationService mover) : base(userManager)
+                              SensorMoveAdministrationService mover,
+                              FileSensorPageService files) : base(userManager)
         {
             _mover = mover;
+            _files = files;
             _treeValuesCache = treeValuesCache;
             _tree = tree;
             _folderManager = folderManager;
@@ -628,21 +632,22 @@ namespace HSMServer.Controllers
 
         #region File
 
+        // The file actions answer an unknown sensor and a sensor of a product the user may not see the same way
+        // (TryGetSensor, through the user's roles). The work is in FileSensorPageService; a large file value (#1886) is
+        // never served from here.
+
         [HttpGet]
         public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            // Unknown and not-visible ids answer the same 404 (the unchecked version threw on an unknown id).
             if (!TryGetSensor(encodedId, out var sensor))
                 return NotFound();
 
-            var value = await GetFileByReceivingTimeOrDefault(sensor, dateTime);
+            var read = await _files.GetFileAsync(sensor.Id, dateTime);
 
-            if (value is null)
-                return NotFound();
+            if (read.Busy)
+                return FileHistoryBusy();
 
-            // A large value (#1883) has no content here: its file is in the large file store and is given out by its own
-            // download (#1885), never as an empty file.
-            if (value is LargeFileValue)
+            if (read.Value is not { } value || FileSensorPageService.IsLarge(value))
                 return NotFound();
 
             var fileName = $"{sensor.Path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
@@ -654,15 +659,18 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
             if (!TryGetSensor(encodedId, out var sensor))
-                return _emptyResult;
-
-            var value = await GetFileByReceivingTimeOrDefault(sensor, dateTime);
-
-            if (value?.Value is null)
-                return _emptyResult;
-
-            if (value is LargeFileValue)
                 return NotFound();
+
+            var read = await _files.GetFileAsync(sensor.Id, dateTime);
+
+            if (read.Busy)
+                return FileHistoryBusy();
+
+            if (read.Value is not { } value || FileSensorPageService.IsLarge(value))
+                return NotFound();
+
+            if (value.Value is null)
+                return _emptyResult;
 
             var fileContentsStream = new MemoryStream(value.Value);
             var fileName = $"{sensor.Path.Replace('/', '_')}.{value.Extension}";
@@ -670,54 +678,50 @@ namespace HSMServer.Controllers
             return File(fileContentsStream, fileName.GetContentType(), fileName);
         }
 
+        // The description of the last value, never its bytes (#1886).
         [HttpGet]
-        public ActionResult<FileValue> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
+        public ActionResult<FileInfoDto> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
         {
-            var value = TryGetSensor(encodedId, out var sensor) ? GetFileSensorValue(sensor) : null;
+            if (!TryGetSensor(encodedId, out var sensor))
+                return NotFound();
 
-            return value is null ? _emptyResult : value;
+            var info = _files.GetInfo(sensor.Id);
+
+            return info is null ? _emptyResult : info;
         }
 
+        // The first page of the list of file values under the last one.
         [HttpGet]
-        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
-        {
-            if (!TryGetSensor(fileId, out var sensor) || await GetFileHistory(sensor) is not { } table)
-                return _emptyResult;
+        public Task<IActionResult> GetRecentFilesView([FromQuery] string fileId) => GetFilesPage(fileId, null);
 
-            return GetFileTable(table);
+        // A page of the list: the values older than olderThan (ticks of a value's time), newest first.
+        [HttpGet]
+        public async Task<IActionResult> GetFilesPage([FromQuery] string fileId, [FromQuery] long? olderThan)
+        {
+            if (!TryGetSensor(fileId, out var sensor) || sensor.Type is not SensorType.File)
+                return NotFound();
+
+            var page = await _files.GetPageAsync(sensor.Id, sensor.EncodedId, olderThan, CurrentUser);
+
+            return page.IsBusy ? FileHistoryBusy() : PartialView("_FileAccordions", page);
         }
 
-        private PartialViewResult GetFileTable(HistoryTableViewModel viewModel) =>
-            PartialView("_FileAccordions", viewModel);
-
-        private FileValue GetFileSensorValue(SensorNodeViewModel sensor) =>
-            _treeValuesCache.GetSensor(sensor.Id)?.LastValue as FileValue;
-
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(SensorNodeViewModel sensor, long ticks = default) =>
-            (ticks == default
-                ? GetFileSensorValue(sensor)
-                : (await GetFileHistory(sensor))?.Pages.FirstOrDefault()?.Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
-            ?.DecompressContent();
-
-        // The history table in the user's state belongs to ONE sensor (the last one selected, in any
-        // browser tab). The request names its sensor, already resolved for this user: the state is connected
-        // to that sensor first, so the files served are the files of the sensor asked for.
-        private async Task<HistoryTableViewModel> GetFileHistory(SensorNodeViewModel sensor)
+        // The history of the sensor was being read by another reader (one at a time): not "no file", ask again.
+        private IActionResult FileHistoryBusy()
         {
-            if (sensor.Type is not SensorType.File || _treeValuesCache.GetSensor(sensor.Id) is not { } model)
-                return null;
+            Response.Headers.RetryAfter = "1";
 
-            StoredUser.History.ConnectSensor(model);
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, "The files of this sensor are being read; try again.");
+        }
 
-            var request = new GetSensorHistoryRequest()
-            {
-                EncodedId = sensor.EncodedId,
-                Count = -20,
-            };
+        // Who downloaded a large file of the sensor, for a Manager of the product or an admin, read when the row asks for it.
+        [HttpGet]
+        public IActionResult GetLargeFileDownloads([FromQuery] string fileId, [FromQuery] Guid file)
+        {
+            if (!TryGetSensor(fileId, out var sensor) || _files.GetDownloads(sensor.Id, file, CurrentUser) is not { } downloads)
+                return NotFound();
 
-            await StoredUser.History.Reload(_treeValuesCache, request);
-
-            return StoredUser.History.Table;
+            return PartialView("_LargeFileDownloads", downloads);
         }
 
         #endregion

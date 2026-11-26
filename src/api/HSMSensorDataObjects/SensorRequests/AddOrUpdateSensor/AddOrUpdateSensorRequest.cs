@@ -64,6 +64,11 @@ namespace HSMSensorDataObjects.SensorRequests
     }
 
 
+    /// <summary>
+    /// Default-alert flags of a sensor registration. <c>DisableTtl</c> and <c>DisableStatusChange</c> register a default
+    /// disabled; <c>LargeFiles</c> adds the alert "new data has been received" to a File sensor created for large files.
+    /// A flag applies when the server creates the sensor; a server that does not know a flag ignores it.
+    /// </summary>
     [Flags]
     public enum DefaultAlertsOptions : long
     {

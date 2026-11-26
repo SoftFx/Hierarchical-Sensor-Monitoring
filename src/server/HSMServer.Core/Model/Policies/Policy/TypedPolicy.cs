@@ -94,6 +94,9 @@ namespace HSMServer.Core.Model.Policies
     {
         protected override PolicyCondition<FileValue, byte[]> BasePolicyCondition => new PolicyByteArrayCondition<FileValue>();
 
+        // The file variables ($fileName, $fileSize, $link, $fileNote, #1886) are filled for File policies only.
+        protected override AlertState GetState(BaseValue value) => AlertState.Build(value as FileValue, Sensor);
+
 
         protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
         {

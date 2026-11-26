@@ -19,6 +19,16 @@
             the kind and the state read from <paramref name="largeFiles"/> when it is given.
             </summary>
         </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvCell(System.String)">
+            <summary>One CSV cell as it is: quoted, a quote doubled. For typed values and the base64 content of a file.</summary>
+        </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvTextCell(System.String)">
+            <summary>
+            One CSV cell of free text a collector sent (a name, an extension, a comment, a string value), written as text:
+            the bidirectional control characters neutralized, a text that a spreadsheet would read as a formula (it starts
+            with = + - @, a tab or a carriage return) prefixed with an apostrophe, then quoted.
+            </summary>
+        </member>
         <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
@@ -46,12 +56,29 @@
             two counters are posted only once one of them is above zero (a sealed week is still read).
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileArchiveSide">
+            <summary>
+            What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+            password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+            </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileArchiveSide.#ctor(System.IServiceProvider)">
+            <summary>
+            What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+            password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+            </summary>
+        </member>
         <member name="T:HSMServer.BackgroundServices.LargeFileSensors">
             <summary>
             Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
             self-monitoring sample. Inert until the store has content (<c>uploads/</c> or <c>archives/</c> exists, not only its
             folder, which a bind mount creates): a server that never took a large file creates none of these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
-            Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
+            Error in the sample in which it grew and Ok again at the next sample without growth.
+            <para>
+            Step 4 (#1886) adds four gauges, computed again from the store's records at every sample (they do not restart with the
+            process): uploads in progress, files stored, the megabytes they hold, secure files waiting for their product's dump
+            password; the counter of archive builds that failed; and the default alert of "Refused for space".
+            </para>
             <para>
             The archive side (#1885) adds two Bool sensors, each created at its first report: <c>Archive build result</c> and
             <c>Download log</c>. Unlike the other self-monitoring sensors both carry a default alert on Error (ADR-0022, the
@@ -59,6 +86,15 @@
             that cannot be written refuses every download.
             </para>
             </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileSensors.UseArchiveSide(System.Func{System.Int64},System.Func{System.Guid,System.Boolean})">
+            <summary>The archive side (#1885): its count of failed builds and whether a product has a dump password.</summary>
+        </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileSensors.Gauges">
+            <summary>The gauges of one sample, from the store's records.</summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileSensors.Gauges.#ctor(System.Int64,System.Int64,System.Int64,System.Int64)">
+            <summary>The gauges of one sample, from the store's records.</summary>
         </member>
         <member name="T:HSMServer.BackgroundServices.TableBlockSensors">
             <summary>
@@ -1149,6 +1185,35 @@
         <member name="M:HSMServer.Controllers.TableSensorsController.Download(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime})">
             <summary>GET /TableSensors/Download?id=&amp;from=&amp;to=: the rows of a range as CSV.</summary>
         </member>
+        <member name="T:HSMServer.Controllers.TelegramBotApiController">
+            <summary>
+            The Telegram bot credential of the management API (#1830) — the first server-settings
+            surface of the area: the status of the bot, and the update that saves and applies a
+            change in one call. Bearer-token authenticated only (the HsmApiToken scheme).
+            Administrators only, on both actions — the web Configuration page's rule. The token
+            itself is write-only and never part of an answer.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.TelegramBotApiController.GetTelegramBot">
+            <summary>
+            The status of the Telegram bot credential (#1830): the bot name, whether Telegram
+            delivery is enabled, whether a token is stored and whether the bot is running.
+            The token itself is write-only and never returned. Administrators only — a
+            read-only token of an administrator may call it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.TelegramBotApiController.UpdateTelegramBot(HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto)">
+            <summary>
+            Change the Telegram bot credential (#1830) — a partial update: an omitted field
+            does not change. A new botToken is checked with Telegram BEFORE anything is saved
+            (a rejected token changes nothing and the running bot keeps running); a passed
+            botName must be the bot Telegram reports for the effective token; only a token
+            change restarts the bot. The 200 body is the resulting status — read its
+            isRunning after a token change. The token is write-only and never echoed.
+            Administrators only.
+            </summary>
+            <param name="request">The changes: botName, botToken, isEnabled — every field optional.</param>
+        </member>
         <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TtlAlert">
             <summary>Backward compat: maps single TtlAlert to TtlAlerts list.</summary>
         </member>
@@ -1660,6 +1725,13 @@
             the calling agent to self-correct, never as protocol-level crashes.
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.TelegramBotMcpTools">
+            <summary>
+            The Telegram bot credential tools of the MCP surface (#1830) — the first
+            server-settings tools: a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService"/>,
+            the engine the REST controller runs. Administrators only.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Agent.AgentConnectionResolver">
             <summary>
             Resolves the (address, port) the agent bundle's config.json points at. Prefers the admin-set
@@ -2090,11 +2162,42 @@
             bundled default; it is only evaluated when the server terminates TLS.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramBotSettings">
+            <summary>
+            The three bot settings as one value (#1830): what a save compares, applies and
+            journals. The web form posts all three; the management surface fills the omitted
+            ones from the stored settings.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramBotSettings.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            The three bot settings as one value (#1830): what a save compares, applies and
+            journals. The web form posts all three; the management surface fills the omitted
+            ones from the stored settings.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramBotSettingsDiff">
+            <summary>
+            Which of the three bot settings a save changes — the one definition of it, so what is
+            journaled and what is applied cannot drift apart. An absent and an empty token or name
+            are the same value: a server that was never configured holds nulls, and the web form
+            posts an empty field as an empty string.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramBotSettingsDiff.#ctor(System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Which of the three bot settings a save changes — the one definition of it, so what is
+            journaled and what is applied cannot drift apart. An absent and an empty token or name
+            are the same value: a server that was never configured holds nulls, and the web form
+            posts an empty field as an empty string.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges">
             <summary>
             One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
             of the save and its journal records. The bot token is a secret: the log and the
-            journal say THAT it changed, never the old or the new value.
+            journal say THAT it changed, never the old or the new value. Shared by the settings
+            page and the management surface (#1830).
             </summary>
         </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges.Change">
@@ -2124,8 +2227,280 @@
             configured holds nulls, and the form posts an empty field as an empty string.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.Model.Configuration.TelegramBotSettingsDiff,HSMServer.Model.Configuration.TelegramBotSettings,HSMServer.Model.Configuration.TelegramBotSettings)">
+            <inheritdoc cref="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.ServerConfiguration.TelegramConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel)"/>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Apply(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramBotSettingsDiff,HSMServer.Model.Configuration.TelegramBotSettings)">
+            <summary>
+            Applies a save to the configuration and persists it. Only a setting that changes
+            is written: one that keeps its value is not saved over, so a writer of another
+            setting racing this one is not overwritten.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileInfoDto">
+            <summary>
+            What the sensor page reads about the last value of a File sensor (#1886): its description, never its bytes. The
+            same answer for an ordinary file value and a large one.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileInfoDto.Name">
+            <summary>The name the value is shown under (<see cref="M:HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(HSMCommon.Model.FileValue)"/>).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileInfoDto.IsLarge">
+            <summary>True for a large file value: no preview, its own download.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileRowState">
+            <summary>
+            The state of a large file value on the sensor page, in the order of its life. A large value leaves the list with its
+            history (retention, a clear); "missing" is a value whose file the store has no record of.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.LargeFileRowState.WaitingForCollector">
+            <summary>An upload whose collector stopped sending: every piece in without its end, or no piece for a while.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileValueRowViewModel">
+            <summary>One file value in the list of a File sensor's page.</summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileValueRowViewModel.Unknown">
+            <summary>What a row shows where the store has no application or host.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.TimeTicks">
+            <summary>The time of the value: the key of its row, and what a download or a preview asks for.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.RowId">
+            <summary>An element id made of the time only (digits), never of anything a client sent.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Time">
+            <summary>The time the value was accepted (for a large value: the time the server verified the file).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.IsPreviewEnabled">
+            <summary>A text preview of an ordinary csv or txt file small enough; never for a large value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Kind">
+            <summary>The kind of a large file: "secure" (its archive under the dump password) or "not secure".</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Reason">
+            <summary>Why a large file cannot be downloaded yet; null when it can.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.DownloadUrl">
+            <summary>The download of a ready large file (its archive); null otherwise.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.SourceModified">
+            <summary>The modification time of the source file of a large value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.FileId">
+            <summary>The id of a large value's file in the store; null for an ordinary value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.ShowsDownloads">
+            <summary>The user may see who downloaded the file (a Manager of the product or an admin): the row offers it.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel">
+            <summary>An upload of the sensor that is not a value yet.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel.LastPieceUtc">
+            <summary>When the last piece came (the start, before any piece).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel.ExpiresUtc">
+            <summary>When the store removes the part if no piece comes.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel">
+            <summary>Who downloaded one large file and when, newest first (the download log, #1885).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel.IsCut">
+            <summary>The list holds the most recent records only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel.IsUnavailable">
+            <summary>The download log could not be read now.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileRead">
+            <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileRead.#ctor(HSMCommon.Model.FileValue,System.Boolean)">
+            <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileValuesPageViewModel">
+            <summary>A page of the file values of one File sensor, newest first.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.IsBusy">
+            <summary>The sensor's history was being read by another reader: nothing was read, ask again.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.Uploads">
+            <summary>The uploads in progress, on the first page only, at most a page of them.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.MoreUploads">
+            <summary>Uploads in progress beyond those listed.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.OlderThanTicks">
+            <summary>The time to ask the next (older) page before; null when there is none.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.ShowPasswordMissing">
+            <summary>The product has no dump password and the page lists secure large files: say what is missing and who sets it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.PasswordSettingsUrl">
+            <summary>The user may set the password (a Manager of the product or an admin): the notice links the settings.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileSensorPageService">
+            <summary>
+            The file values of a File sensor for its page (#1886): the description of the last value, one value by its time, and
+            the list of values page by page. Reads the sensor's history directly, not through the user's History tab state, so
+            the two never share a table. The caller has checked that the user may see the sensor's product.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize">
+            <summary>Values per page of the list.</summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileSensorPageService.MaxDownloadsShown">
+            <summary>The downloads of one file the page lists.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.IsPreviewEnabled(HSMCommon.Model.FileValue)">
+            <summary>A text preview for an ordinary csv or txt file small enough to show; never for a large value.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetFileAsync(System.Guid,System.Int64)">
+            <summary>
+            The value at <paramref name="timeTicks"/> (the key of its row), read by that time alone; the last value when it is
+            0. Null when there is none; <see cref="P:HSMServer.Model.FileSensors.FileRead.Busy"/> when the sensor's history was being read by another reader,
+            which is not "none": ask again. The content is decompressed for an ordinary file value.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetPageAsync(System.Guid,System.String,System.Nullable{System.Int64},HSMServer.Model.Authentication.User)">
+            <summary>
+            A page of the sensor's file values, newest first: the newest <see cref="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize"/> without an ordinary last value
+            (the page shows it on its own above the list), or the <see cref="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize"/> values older than
+            <paramref name="olderThanTicks"/>. No limit on how far back the pages go. The first page carries the uploads in
+            progress; a large value carries its state, its download and, for a Manager of the product or an admin, its
+            downloads.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetDownloads(System.Guid,System.Guid,HSMServer.Model.Authentication.User)">
+            <summary>
+            Who downloaded a large file of the sensor and when, for a Manager of the product or an admin; null when the user
+            may not see it or the file is not one of this sensor's. Read only when the user asks: the log is not read with a page.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.ProductSettingsPath(System.Guid)">
+            <summary>The settings page of a product, where its dump password is set.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.Decide(HSMServer.Model.FileSensors.LargeFileStoredFacts,System.Boolean)">
+            <summary>
+            The state of a large value's file: its record and archive first, then, for a secure file not packed, the
+            product's password before the builder's state (a product without one waits whatever the builder last said). A not
+            secure file never waits for a password.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.Decide(HSMServer.Model.FileSensors.LargeFileUploadFacts,System.DateTime)">
+            <summary>
+            The state of an upload that is not a value yet. Being checked only while the store runs its end check. An upload
+            whose every piece is in without a check, or that got no piece for longer than <see cref="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.StalledAfter"/>
+            (the collector went away, a check failed), waits for its collector; the store removes it at <see cref="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.ExpiresUtc"/>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileSensorPageService.Clock">
+            <summary>The page's clock (the time an upload is judged stalled at). Test seam.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileUploadFacts">
+            <summary>An upload of a File sensor that is not a value yet: its part in the large file store.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Name">
+            <summary>The original file name, as the collector named it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsChecking">
+            <summary>The store's end check of the upload is running now.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.LastPieceUtc">
+            <summary>When the last piece came; the start of the upload before any piece.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.ExpiresUtc">
+            <summary>
+            When the store removes the part if no piece comes: the last piece plus LargeFiles.AbandonedUploadDays, or, for a
+            part that never got a piece, the end of its lease.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.StalledAfter">
+            <summary>No piece for longer than this (the store's lease time) and the upload waits for its collector; zero: never.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsSecure">
+            <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Application">
+            <summary>The collector's client name; null when the record has none.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Host">
+            <summary>The address the collector connected from; null when the record has none.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileStoredFacts">
+            <summary>
+            A verified or packed large file, in the vocabulary of the download (#1885): <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> "verified" or
+            "packed", <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.BuildState"/> "none", "queued", "building", "waitingForPassword", "waitingForRoom" or "failed".
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.LargeFileStoredFacts.Unavailable">
+            <summary>The <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> of a file whose state could not be read now (a fault of the store).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.SensorId">
+            <summary>The sensor the file was uploaded to.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.IsSecure">
+            <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.NotReadyReason">
+            <summary>Why the file cannot be downloaded yet; null when it can.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.DownloadUrl">
+            <summary>The web download link of the current archive; null until the file is packed.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileDownloadFacts">
+            <summary>One allowed download of a file, from the download log.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.LargeFileDownloadFacts.#ctor(System.DateTime,System.String,System.String)">
+            <summary>One allowed download of a file, from the download log.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.ILargeFilePageSource">
+            <summary>
+            What the sensor page reads about large files (#1886) from the large file store (#1883), the archive builder, the
+            dump passwords and the download log (#1885). The caller has checked that the user may see the product.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ILargeFilePageSource.GetUploads(System.Guid)">
+            <summary>The uploads of the sensor that are not values yet, newest first.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ILargeFilePageSource.Describe(System.Guid)">
+            <summary>The state of the file of a large value; null when the store has no record of it.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ILargeFilePageSource.GetDownloads(System.Guid,System.Guid,System.Int32)">
+            <summary>The downloads of one file, newest first. Read when a user asks for them, never with a page.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.NoLargeFilePageSource">
+            <summary>A server without the large file store: no uploads, no records.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFilePageSource">
+            <summary>
+            What the sensor page reads about large files: the uploads of a sensor and the origin of a file from the large file
+            store (#1883); the state, the kind, the reason and the archive of a file in the download step's own words
+            (<see cref="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadService.DescribeFile(System.Guid,System.String)"/>), the product's dump password and the download log (#1885).
+            Without the archive side (a test, a tool) it answers from the store alone: nothing packed, nothing downloaded.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.ServerFileAlertContext">
+            <summary>
+            The server's <see cref="T:HSMServer.Core.Model.Policies.IFileAlertContext"/> (#1886). The base of <c>$link</c>: <c>HSM_DOMAIN</c> (the address the
+            bundled Caddy serves the web UI on), else <c>Agent.ExternalConnectionUrl</c>, else none: the link is then the path
+            of the page alone, which a chat does not make clickable.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.#ctor(HSMServer.ServerConfiguration.IServerConfig,System.Func{System.Guid,System.Guid,System.Boolean})">
+            <param name="waitsForDumpPassword">(product, file): a secure large file of a product without a dump password.</param>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(HSMDatabase.AccessManager.LargeFiles.ILargeFileStore,HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService,System.Guid,System.Guid)">
+            <summary>
+            A secure file (as its record says; a file the store cannot tell about counts as secure) of a product without a
+            dump password. A fault of the store answers false: a message without the note, never no message.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.BaseAddress">
+            <summary>Scheme, host and an explicit port, without a trailing slash; empty when none is known.</summary>
         </member>
         <member name="M:HSMServer.Model.Folders.ViewModels.FolderInfoViewModel.#ctor(HSMServer.Model.Folders.FolderModel,System.Collections.Generic.IEnumerable{HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
             <param name="folder">The folder.</param>
@@ -4713,7 +5088,7 @@
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Name">
-            <summary>File name without extension.</summary>
+            <summary>File name without extension (the extension is in extension), for an ordinary and a large file value alike.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Extension">
             <summary>File extension (with the leading dot, may be empty).</summary>
@@ -4746,6 +5121,88 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.Archive">
             <summary>The current archive (id, size, sha256, passwordVersion, downloadUrl); null until the file is packed.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService">
+            <summary>
+            The bot-credential surface of the management API (#1830) — the first server-settings
+            surface of the area: the status of the Telegram bot, and the update that saves and
+            applies a change in one call. Transport-agnostic: the REST controller and the MCP
+            tools both call it and get the area's envelopes back, never an IActionResult.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService.GetStatus(System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            The status of the bot credential: the name, the switch, whether a token is stored
+            (never the token) and whether the bot is up. Administrators only.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService.UpdateAsync(HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Change the bot credential: a partial update, administrators only. A new token is
+            asked of Telegram BEFORE anything is saved; the save is journaled; only a token
+            change restarts the bot. The echo is the resulting status.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime">
+            <summary>
+            The Telegram side the bot-credential surface needs from the running bot (#1830):
+            whether it is up, the username it remembers from its start, the answer to "who owns
+            this token?" and the restart. The bot behind NotificationsCenter is a sealed concrete
+            type, so the seam is this adapter (the IChatDelivery pattern).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime.UsernameOfRunningBot(System.String)">
+            <summary>
+            The username Telegram reported when the running bot started, when it runs on
+            exactly this token; null otherwise — the caller asks Telegram itself.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime.GetBotUsernameAsync(System.String)">
+            <summary>
+            Asks Telegram who owns a token. Nothing of the running bot is touched; the
+            outcome is answered, never thrown.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime.RestartAsync">
+            <summary>
+            Stops the running bot, if any, and starts it on the stored credential. Answers an
+            empty string when the bot is running afterwards, the bot's own error text (the
+            token wiped) when it is not.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto">
+            <summary>
+            The Telegram bot credential as the management surface shows and changes it (#1830) —
+            the first server-settings surface of the area. The token itself is never part of the
+            answer: hasBotToken says whether one is stored.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.BotName">
+            <summary>The bot's username as stored; invitation links are built from it. Null when none is stored.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.IsEnabled">
+            <summary>Whether Telegram delivery is switched on.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.HasBotToken">
+            <summary>Whether a bot token is stored; its value is write-only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.IsRunning">
+            <summary>Whether the bot is up and talking to Telegram.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto">
+            <summary>
+            The changes to the Telegram bot credential (#1830): a partial update — every field is
+            optional and an omitted one stays unchanged.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto.BotName">
+            <summary>The new bot username; must match the bot of the effective token.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto.BotToken">
+            <summary>The new bot token from BotFather — write-only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto.IsEnabled">
+            <summary>Whether the bot may send messages.</summary>
         </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).
@@ -4992,6 +5449,25 @@
             the maximum, so the name never breaks the length rule. A blank proposal — a
             Telegram user without a username — is left as it is: the row then has no name
             until one is given to it in the web form, which asks for it.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.TelegramTokenVerdict">
+            <summary>
+            What Telegram answered when the server asked who owns a bot token (#1830): the bot's
+            username, a refusal (the token is not valid), or no answer at all (Telegram could not
+            be reached).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.TelegramTokenProbe">
+            <summary>
+            The answer to one token probe. <see cref="P:HSMServer.Notifications.TelegramTokenProbe.Reason"/> is the text of a refusal or of a
+            failure, with the token wiped — never the token itself.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.TelegramTokenProbe.#ctor(HSMServer.Notifications.TelegramTokenVerdict,System.String,System.String)">
+            <summary>
+            The answer to one token probe. <see cref="P:HSMServer.Notifications.TelegramTokenProbe.Reason"/> is the text of a refusal or of a
+            failure, with the token wiped — never the token itself.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

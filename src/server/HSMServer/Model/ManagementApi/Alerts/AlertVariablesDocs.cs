@@ -37,6 +37,10 @@ $emaMean — Bar sensor EMA (Mean) value
 $emaCount — Bar sensor EMA (Count) value
 $property — Alert property
 $operation — Alert operation
-$target — Alert constant to compare";
+$target — Alert constant to compare
+$fileName — File sensor: the file name
+$fileSize — File sensor: the file size
+$link — File sensor: a link to the sensor page
+$fileNote — File sensor: why a large file cannot be downloaded yet, empty otherwise";
     }
 }

@@ -22,6 +22,19 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
     }
 
 
+    /// <summary>
+    /// The classes that run 7-Zip run alone, never beside other tests: on Windows a child process started with redirected
+    /// output inherits every inheritable handle of this process, and LevelDB opens its files (its <c>LOG</c> among them)
+    /// inheritable, so a 7-Zip started while another class has a database open holds that database's files until it
+    /// exits, and that class cannot delete its folder.
+    /// </summary>
+    [CollectionDefinition(Name, DisableParallelization = true)]
+    public sealed class SevenZipAloneCollection
+    {
+        public const string Name = "7-Zip child process (alone)";
+    }
+
+
     internal static class SevenZip
     {
         public static string Path { get; } = Find();
@@ -105,7 +118,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
 
     // #1885: a secure archive the builder wrote opens in a third-party archiver with the password and only with it; one
-    // that is not secure opens without a password.
+    // that is not secure opens without a password. It starts 7-Zip, so it runs alone (SevenZipAloneCollection).
+    [Collection(SevenZipAloneCollection.Name)]
     public sealed class SevenZipInteropTests : IDisposable
     {
         private const string Password = "Seven-Zip-Interop-Pass-123";

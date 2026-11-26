@@ -9,5 +9,6 @@ namespace HSMServer.Core.Model
         None = 0,
         DisableTtl = 1,
         DisableStatusChange = 2,
+        LargeFiles = 4,
     }
 }

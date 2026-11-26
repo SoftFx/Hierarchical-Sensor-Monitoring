@@ -85,11 +85,14 @@ namespace HSMServer.SensorApi.Sessions
         }
 
         // Waits until the bytes are free and the key holds no other take, and takes them. A cancelled
-        // wait takes nothing.
+        // wait takes nothing, also one whose token is cancelled before it starts (not even on the
+        // fast path).
         public async Task TakeAsync(long bytes, Guid key, CancellationToken token)
         {
             if (bytes > Capacity)
                 throw new ArgumentOutOfRangeException(nameof(bytes), bytes, $"more than the budget of {Capacity} bytes");
+
+            token.ThrowIfCancellationRequested();
 
             Waiter waiter;
             LinkedListNode<Waiter> node;

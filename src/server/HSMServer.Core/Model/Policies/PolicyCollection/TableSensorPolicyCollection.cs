@@ -33,6 +33,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void AddDefault(DefaultAlertsOptions options) { }
 
+        internal override Policy AddLargeFileAlert() => null;
+
         internal override void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies)
         {
             // A table sensor is never given a policy; one on its entity was written by hand or by a bug.

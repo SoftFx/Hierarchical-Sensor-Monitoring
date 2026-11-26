@@ -81,6 +81,7 @@ namespace HSMServer.Core.Tests.Mcp
             "get_node",
             "get_sensor",
             "get_sensor_history",
+            "get_telegram_bot",
             "list_access_keys",
             "list_alert_schedules",
             "list_alert_templates",
@@ -102,6 +103,7 @@ namespace HSMServer.Core.Tests.Mcp
             "update_chat",
             "update_sensor_policy",
             "update_sensor_ttl_policy",
+            "update_telegram_bot",
         ];
 
 
@@ -371,6 +373,17 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Contains("Use dryRun first", tools["delete_chat"].Description);
             Assert.Contains("WITHOUT removing anything", Descriptions(tools["delete_chat"]));
+
+            // The bot credential (#1830): the probe-first order and the secrets rule ride the
+            // tool description, the name rule and the write-only token ride the parameters —
+            // an agent must know before its first call that the token never comes back, and
+            // that a name of another bot is refused.
+            Assert.Contains("checked with Telegram BEFORE anything is saved", tools["update_telegram_bot"].Description);
+            Assert.Contains("never returned, never logged", tools["update_telegram_bot"].Description);
+
+            var updateBot = Descriptions(tools["update_telegram_bot"]);
+            Assert.Contains("Must match the bot Telegram reports for the effective token", updateBot);
+            Assert.Contains("write-only: never returned, never logged", updateBot);
         }
 
 
@@ -465,6 +478,12 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("how many sensors' alerts reference the chat", deletedChat);
             Assert.Contains("Nothing was removed. Absent after an applied deletion.", deletedChat);
 
+            // The bot credential (#1830), output side: the status never carries the token,
+            // and `isRunning` after a token change says whether the bot came up.
+            var botStatus = Descriptions(tools["get_telegram_bot"]);
+            Assert.Contains("hasBotToken says whether one is stored", botStatus);
+            Assert.Contains("read it after a token change", botStatus);
+
             // The folder surface: the entity disambiguation (access-grouping
             // folder, not the tree's nested products).
             var folder = Descriptions(tools["get_folder"]);
@@ -533,7 +552,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(47, tools.Count);
+                Assert.Equal(49, tools.Count);
 
                 foreach (var tool in tools)
                 {

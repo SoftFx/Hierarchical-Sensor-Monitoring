@@ -45,7 +45,7 @@ relinked DLL — no longer provides).
 | `HSMDefaultAlertsOptions` (`DisableTtl`/`DisableStatusChange`) on options | `SensorOptions` / `RateOptions` / `BarOptions::default_alert_options` (`DefaultAlertsOptions`) | shim — instant + rate + bar; the server attaches its default TTL + status-change alerts, these flags register them disabled |
 | `CreateIntRateSensor` / `CreateDoubleRateSensor` | `CreateRateSensor` (double) | **partial** — rate is double-only (matches .NET); the wrapper's int-rate is dropped |
 | `CreateNoParamsFuncSensor<T>` / `CreateParamsFuncSensor<T,U>` | `CreateFunctionSensor` / `CreateValuesFunctionSensor` (int) | **partial** — int / int-values only; no templated `T/U` (C ABI is int-only) |
-| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 10 MiB cap, UTF-8 text; on the collector session a file must also fit one frame of the server, about 1 MiB with its default 4 MiB frame: see "Transport" below); `AddContent` publishes raw string content |
+| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 10 MiB cap, UTF-8 text; on the collector session a file above a quarter of the server's frame, 1 MiB with its default 4 MiB, goes on the file connection since 2.1.0: see "Transport" below); `AddContent` publishes raw string content |
 | `AddServiceStateMonitoring(service_name)` | `EnableServiceStatusMonitoring(service_name, scan_period)` | shim — registers `.module/Service status` and starts a live SCM poller (Win32 `OpenService`/`QueryServiceStatus`, Windows only) that posts the service's `ServiceControllerStatus` on change; registration-only via `AddDefaultSensor(DefaultSensor::ServiceStatus)` |
 | `InitializeSystemMonitoring` / `…ProcessMonitoring` / `…DiskMonitoring` / `…OsMonitoring` / `…NetworkMonitoring` / `…QueueDiagnostic` / `…CollectorMonitoring` | `AddSystemMonitoringSensors` / `AddProcessMonitoringSensors` / `AddDiskMonitoringSensors` / `AddWindowsInfoMonitoringSensors` / `AddAllNetworkSensors` / `AddAllQueueDiagnosticSensors` / `AddCollectorMonitoringSensors` (or `AddAllComputerSensors` / `AddAllModuleSensors` / `AddAllDefaultSensors`) | shim — group helpers instead of boolean flags |
 | `InitializeProductVersion(version)` | `AddAllModuleSensors(product_version)` / `AddDefaultSensor(DefaultSensor::ProductVersion, …)` | shim |
@@ -106,8 +106,9 @@ no source edits.
 ### Transport: the collector session by default (wrapper 2.0.0)
 
 From wrapper 2.0.0 the proxy talks to the server over the **collector session**: one WebSocket to
-`/api/sensors/session` carries registrations, values and files, a file only up to about 1 MiB with a
-default server (see below) (ADR-0019, point 5 as amended on 2026-11-25). Until 2.0.0 the wrapper forced
+`/api/sensors/session` carries registrations, values and files; a file above about 1 MiB with a default
+server goes on the session's file connection since 2.1.0, when the server has file connections (see below) (ADR-0019, point 5 as amended on
+2026-11-25). Until 2.0.0 the wrapper forced
 HTTP.
 
 - **Rollout: update the server first.** The session needs **HSMServer 3.43.0 or later** with sessions
@@ -123,8 +124,15 @@ HTTP.
   A call made concurrently with a `StartAsync` on another thread is not ordered with it, so do not change
   the transport while another thread starts the collector. There is no call back to the session on the
   proxy.
-- **Files are limited by the server's frame on the session.** `SendFileAsync` sends a file as one
-  element of a `list` frame, in the wire JSON form where every byte of the file is a decimal number
+- **Files on the session (2.1.0, native collector 0.16.0).** `SendFileAsync` sends a file of up to a
+  quarter of the server's `CollectorSessions.MaxFrameBytes` (1 MiB with the default 4 MiB) as one element
+  of a `list` frame. A larger one, up to the wrapper's 10 MiB cap, travels on the session's file
+  connection as a large file value of the same File sensor that is not secure (a zip without a password
+  on the server; ADR-0022 points 20 and 21), when the server has file connections. Nothing in the
+  wrapper's code or ABI changed for it. A large value refused for good or cut by a stop is dropped,
+  logged and counted in `Queue overflow`.
+- **Against a server without file connections the frame is the limit, as in 2.0.0.** `SendFileAsync`
+  sends a file as one element of a `list` frame, in the wire JSON form where every byte of the file is a decimal number
   followed by a comma (2 to 4 JSON bytes per file byte: 4 for every byte from 100 to 255, about 3.6 on
   average for random binary). An element larger than the server's frame, less 64 bytes of envelope, is
   not sent: the collector drops it, logs `Dropped a value of N bytes: it is larger than a collector
@@ -134,9 +142,10 @@ HTTP.
   1.1 MiB for random binary). The wrapper still accepts files up to its 10 MiB cap (`SendFile` refuses a
   larger one); over HTTP (1.x, or after `UseHttpTransport()`) such files are posted, the server taking a
   request body up to 50 MiB (Kestrel `MaxRequestBodySize` 52,428,800), which a 10 MiB file (at most
-  40 MiB of JSON) fits. Ways out today: raise the server's `CollectorSessions.MaxFrameBytes` (allowed up
-  to 64 MiB; 42 MiB covers every file of the 10 MiB cap), or call `UseHttpTransport()` on a host that
-  sends large files. Large files as a first-class feature are epic
+  40 MiB of JSON) fits. Ways out against such a server: turn its file connections on, or call
+  `UseHttpTransport()` on a host that sends large files. Raising its `CollectorSessions.MaxFrameBytes`
+  helps little: the native collector uses at most 8 MiB of a frame, which carries a file of about 2 MiB
+  in the worst case, not the 10 MiB cap. Large files as a feature are epic
   [#1882](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/issues/1882).
 - **A proxy behind a proxy:** whatever sits between host and server must pass WebSocket upgrades (the
   shipped Caddy does).

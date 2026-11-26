@@ -72,7 +72,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _scheduleProviderMock.Object,
                 CreatePolicyWriter(),
                 new HSMServer.Model.ManagementApi.SensorTree.SensorMoveAdministrationService(
-                    _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object))
+                    _cacheMock.Object, _authorizationMock.Object, _userManagerMock.Object),
+                new HSMServer.Model.FileSensors.FileSensorPageService(_cacheMock.Object))
             {
                 // The actions resolve ids for the current user; alert authoring here is an admin's.
                 ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext

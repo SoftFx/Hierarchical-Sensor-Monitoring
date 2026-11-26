@@ -163,6 +163,13 @@
                 if (previousReceivedTime === response.time)
                     return;
 
+                // A large file value has no preview: the list shows its state and its download.
+                if (response.isLarge) {
+                    loadFiles();
+                    previousReceivedTime = response.time;
+                    return;
+                }
+
                 if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
                     (response.originalSize < 1024 * 1024 && response.extension === 'txt')) // 1MB
                     previewFile(viewFileAction, encodedId, response.extension);
@@ -175,7 +182,7 @@
         })
     }
 
-    function loadFiles() {
+    function loadFiles(attempt = 0) {
         $.ajax({
             type: 'GET',
             url: `@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")?fileId=@Model.EncodedId`,
@@ -183,6 +190,15 @@
             contentType: "application/json",
             success: function (response) {
                 $('#recentValues_@Model.EncodedId').html(response);
+            },
+            error: function (xhr) {
+                // The sensor's history was being read by another reader: ask again, then say so.
+                if (xhr.status === 503 && attempt < 5) {
+                    setTimeout(function () { loadFiles(attempt + 1); }, 1000);
+                    return;
+                }
+
+                $('#recentValues_@Model.EncodedId').text('The files of this sensor cannot be read now. Open the tab again to retry.');
             }
         })
     }

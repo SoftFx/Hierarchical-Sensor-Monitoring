@@ -38,6 +38,7 @@ using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.Folders;
 using HSMServer.Model.ManagementApi.SensorTree;
+using HSMServer.Model.ManagementApi.TelegramBot;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Mcp;
 using HSMServer.Notifications;
@@ -180,6 +181,14 @@ namespace HSMServer.ServiceExtensions
             services.AddScoped<IChatDelivery, NotificationsCenterChatDelivery>();
             services.AddScoped<ChatVerificationService>();
 
+            // The bot-credential surface (#1830): the first server-settings surface of the
+            // area, behind the REST controller and the MCP tools. Its Telegram side is the
+            // running bot behind NotificationsCenter (a sealed concrete type), reached
+            // through the ITelegramBotRuntime seam — the service asks for the interface, so
+            // the adapter must be registered under it (the IChatDelivery lesson above).
+            services.AddScoped<TelegramBotAdministrationService>();
+            services.AddScoped<ITelegramBotRuntime, NotificationsCenterTelegramBotRuntime>();
+
             // The shared folder read implementation — same shape: behind both
             // the REST folder controller and the MCP folder tools. The
             // folderId source of alert-template writes (the access-grouping
@@ -216,6 +225,23 @@ namespace HSMServer.ServiceExtensions
             // constructor dependency is itself a singleton and the gate
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
+
+            // What the self-monitoring of large files (#1886) asks the archive side, resolved at each sample: the builder
+            // reports to the collector wrapper, so the wrapper must not build it.
+            services.AddSingleton(provider => new LargeFileArchiveSide(provider));
+
+            // The file values of a File sensor for its page (#1886); stateless over the cache.
+            // Scoped: it reads the download step's description (LargeFileDownloadService is scoped).
+            services.AddScoped<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.LargeFilePageSource>();
+            services.AddScoped<HSMServer.Model.FileSensors.FileSensorPageService>();
+
+            // The alert variables of File sensors (#1886): the link to the sensor page and whether a secure large file waits
+            // for its product's dump password (#1885). Resolved at the call: the password service needs the tree.
+            services.AddSingleton<HSMServer.Core.Model.Policies.IFileAlertContext>(provider =>
+                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, (productId, fileId) =>
+                    HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(
+                        provider.GetRequiredService<IDatabaseCore>().LargeFiles,
+                        provider.GetRequiredService<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>(), productId, fileId)));
 
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its
@@ -501,6 +527,9 @@ namespace HSMServer.ServiceExtensions
 
         public static async Task InitStorages(this IServiceProvider services)
         {
+            // Before the tree loads: every File policy reads it, whatever creates the policy.
+            HSMServer.Core.Model.Policies.FileAlertContext.Use(services.GetRequiredService<HSMServer.Core.Model.Policies.IFileAlertContext>());
+
             services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
 
             foreach (var type in _asyncStorageTypes)

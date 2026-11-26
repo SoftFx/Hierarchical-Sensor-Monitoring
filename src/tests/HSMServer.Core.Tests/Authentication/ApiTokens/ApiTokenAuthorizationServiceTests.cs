@@ -948,6 +948,105 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
 
+        // ---- server settings: the Telegram bot credential (#1830) ---------------------
+
+        // The first server-settings surface mirrors the web Configuration page
+        // ([AuthorizeIsAdmin]): an admin token reads it even when read-only — the flag
+        // constrains writes only, as everywhere in the area.
+
+        [Fact]
+        public void ServerSettingsRead_AdminOwner_ReadOnlyToken_Allowed_AndRecordsNothing()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: true);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Allowed, service.AuthorizeServerSettingsRead(Principal()));
+
+            // Allowed decisions are not per-request events, here as everywhere.
+            Assert.Empty(events);
+        }
+
+
+        [Fact]
+        public void ServerSettingsRead_NonAdminOwner_Forbidden_AndRecordedAsDenied()
+        {
+            // The settings are one well-known block: nothing to enumerate, so the refusal is
+            // the 403 signal — one AuthorizationDenied record, never the per-target 404 one.
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeServerSettingsRead(Principal()));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+            Assert.Equal("read", denial.Operation);
+        }
+
+
+        [Fact]
+        public void ServerSettingsWrite_AdminOwner_ReadWriteToken_Allowed_AndRecordsNothing()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Allowed, service.AuthorizeServerSettingsWrite(Principal()));
+
+            Assert.Empty(events);
+        }
+
+
+        [Fact]
+        public void ServerSettingsWrite_NonAdminOwner_Forbidden()
+        {
+            // A non-admin never reaches the web Configuration page; the bot credential has
+            // a server-wide blast radius (every alert of every chat).
+            _owner.IsAdmin = false;
+            _info = BuildInfo(readOnly: false);
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, CreateService().AuthorizeServerSettingsWrite(Principal()));
+        }
+
+
+        [Fact]
+        public void ServerSettingsWrite_ReadOnlyToken_Forbidden_AndRecordedAsDenied()
+        {
+            // Even an admin's read-only credential cannot change the bot credential.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: true);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeServerSettingsWrite(Principal()));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, denial.Kind);
+            Assert.Equal("write", denial.Operation);
+        }
+
+
+        [Fact]
+        public void ServerSettingsWrite_RevokedToken_Forbidden_AndDeniedRecorded()
+        {
+            // A token revoked between authentication and this authorization fails closed:
+            // not an admin's read-write credential any more.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(readOnly: false);
+            _tokens.Setup(t => t.IsTokenLive(TokenId)).Returns(false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, service.AuthorizeServerSettingsWrite(Principal()));
+
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, Assert.Single(events).Kind);
+        }
+
+
         private static ApiTokenInfo BuildInfo(bool readOnly = false) => new()
         {
             EntityId = Guid.NewGuid(),

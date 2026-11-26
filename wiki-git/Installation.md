@@ -281,6 +281,8 @@ services:
       # SSO client secret (#1782), read from the environment only; empty = unused. SSO itself is
       # switched on in the Oidc section of Config/appsettings.json.
       Oidc__ClientSecret: '${HSM_OIDC_CLIENT_SECRET:-}'
+      # The address of the web UI in alert messages: $link of a File sensor (#1886) is https://<HSM_DOMAIN>/Home/<id>.
+      HSM_DOMAIN: '${HSM_DOMAIN:-}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
