@@ -30,6 +30,7 @@ namespace HSMServer.SensorApi.Sessions
     {
         public const string Subprotocol = "hsm.sensors.v1";
         public const string TablesSubprotocol = "hsm.tables.v1";
+        public const string FilesSubprotocol = "hsm.files.v1";
 
         // The ordinary session a table connection belongs to: its id from the hello, 32 hex digits.
         public const string SessionHeader = "X-Hsm-Session";
@@ -48,9 +49,19 @@ namespace HSMServer.SensorApi.Sessions
         public const string OpHello = "hello";
         public const string OpDirective = "directive";
 
+        // The requests of a file connection (#1884); its pieces are binary frames.
+        public const string OpBegin = "begin";
+        public const string OpEnd = "end";
+        public const string OpDiscard = "discard";
+
         // The status of an ack is the HTTP status the same request would have got.
         public const int StatusOk = 200;
+        public const int StatusAccepted = 202;
         public const int StatusBadRequest = 400;
+        public const int StatusNotFound = 404;
+        public const int StatusConflict = 409;
+        public const int StatusTooLarge = 413;
+        public const int StatusUnprocessable = 422;
         public const int StatusInternalError = 500;
         public const int StatusUnavailable = 503;
 
@@ -137,6 +148,51 @@ namespace HSMServer.SensorApi.Sessions
             writer.WriteNumber("maxTableIdLength", limits.MaxTableIdLength);
             writer.WriteEndObject();
             writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        // The hello of a file connection (#1884): the largest frame, the heartbeat, the largest file and the
+        // piece size that always fits a frame.
+        public static void WriteFileHello(IBufferWriter<byte> output, int maxFrameBytes, int heartbeatSeconds, long maxFileBytes, int pieceBytes)
+        {
+            using var writer = new Utf8JsonWriter(output);
+
+            writer.WriteStartObject();
+            writer.WriteString(_op, OpHello);
+            writer.WriteStartObject(_body);
+            writer.WriteNumber(_maxFrameBytes, maxFrameBytes);
+            writer.WriteNumber(_heartbeatSeconds, heartbeatSeconds);
+            writer.WriteStartObject("fileLimits");
+            writer.WriteNumber("maxFileBytes", maxFileBytes);
+            writer.WriteNumber("pieceBytes", pieceBytes);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        // An answer of a file connection (#1884) that carries a body: `body` writes the fields of the body
+        // object; `error` and `retryAfterSeconds` are added when given.
+        public static void WriteFileAck(IBufferWriter<byte> output, long id, int status, Action<Utf8JsonWriter> body, string error = null, int? retryAfterSeconds = null)
+        {
+            using var writer = new Utf8JsonWriter(output);
+
+            writer.WriteStartObject();
+            writer.WriteNumber(_ack, id);
+            writer.WriteNumber(_status, status);
+
+            if (body is not null)
+            {
+                writer.WriteStartObject(_body);
+                body(writer);
+                writer.WriteEndObject();
+            }
+
+            if (error is not null)
+                writer.WriteString(_error, error);
+
+            if (retryAfterSeconds is { } seconds)
+                writer.WriteNumber(_retryAfter, seconds);
+
             writer.WriteEndObject();
         }
 
