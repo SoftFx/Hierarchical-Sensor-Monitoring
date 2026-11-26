@@ -19,6 +19,16 @@
             the kind and the state read from <paramref name="largeFiles"/> when it is given.
             </summary>
         </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvCell(System.String)">
+            <summary>One CSV cell as it is: quoted, a quote doubled. For typed values and the base64 content of a file.</summary>
+        </member>
+        <member name="M:HSMServer.ApiObjectsConverters.ApiCsvConverters.CsvTextCell(System.String)">
+            <summary>
+            One CSV cell of free text a collector sent (a name, an extension, a comment, a string value), written as text:
+            the bidirectional control characters neutralized, a text that a spreadsheet would read as a formula (it starts
+            with = + - @, a tab or a carriage return) prefixed with an apostrophe, then quoted.
+            </summary>
+        </member>
         <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
@@ -46,12 +56,29 @@
             two counters are posted only once one of them is above zero (a sealed week is still read).
             </summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileArchiveSide">
+            <summary>
+            What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+            password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+            </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileArchiveSide.#ctor(System.IServiceProvider)">
+            <summary>
+            What the self-monitoring of large files asks the archive side (#1885), resolved at each call: the builder and the
+            password service are built after the collector wrapper (the builder reports to it), and a sample runs long after both.
+            </summary>
+        </member>
         <member name="T:HSMServer.BackgroundServices.LargeFileSensors">
             <summary>
             Self-monitoring of the large file store (#1883), under <c>Large files</c>, posted from the 5-minute
             self-monitoring sample. Inert until the store has content (<c>uploads/</c> or <c>archives/</c> exists, not only its
             folder, which a bind mount creates): a server that never took a large file creates none of these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
-            Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
+            Error in the sample in which it grew and Ok again at the next sample without growth.
+            <para>
+            Step 4 (#1886) adds four gauges, computed again from the store's records at every sample (they do not restart with the
+            process): uploads in progress, files stored, the megabytes they hold, secure files waiting for their product's dump
+            password; the counter of archive builds that failed; and the default alert of "Refused for space".
+            </para>
             <para>
             The archive side (#1885) adds two Bool sensors, each created at its first report: <c>Archive build result</c> and
             <c>Download log</c>. Unlike the other self-monitoring sensors both carry a default alert on Error (ADR-0022, the
@@ -59,6 +86,15 @@
             that cannot be written refuses every download.
             </para>
             </summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileSensors.UseArchiveSide(System.Func{System.Int64},System.Func{System.Guid,System.Boolean})">
+            <summary>The archive side (#1885): its count of failed builds and whether a product has a dump password.</summary>
+        </member>
+        <member name="T:HSMServer.BackgroundServices.LargeFileSensors.Gauges">
+            <summary>The gauges of one sample, from the store's records.</summary>
+        </member>
+        <member name="M:HSMServer.BackgroundServices.LargeFileSensors.Gauges.#ctor(System.Int64,System.Int64,System.Int64,System.Int64)">
+            <summary>The gauges of one sample, from the store's records.</summary>
         </member>
         <member name="T:HSMServer.BackgroundServices.TableBlockSensors">
             <summary>
@@ -2203,6 +2239,268 @@
         </member>
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileInfoDto">
+            <summary>
+            What the sensor page reads about the last value of a File sensor (#1886): its description, never its bytes. The
+            same answer for an ordinary file value and a large one.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileInfoDto.Name">
+            <summary>The name the value is shown under (<see cref="M:HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(HSMCommon.Model.FileValue)"/>).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileInfoDto.IsLarge">
+            <summary>True for a large file value: no preview, its own download.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileRowState">
+            <summary>
+            The state of a large file value on the sensor page, in the order of its life. A large value leaves the list with its
+            history (retention, a clear); "missing" is a value whose file the store has no record of.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.LargeFileRowState.WaitingForCollector">
+            <summary>An upload whose collector stopped sending: every piece in without its end, or no piece for a while.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileValueRowViewModel">
+            <summary>One file value in the list of a File sensor's page.</summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileValueRowViewModel.Unknown">
+            <summary>What a row shows where the store has no application or host.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.TimeTicks">
+            <summary>The time of the value: the key of its row, and what a download or a preview asks for.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.RowId">
+            <summary>An element id made of the time only (digits), never of anything a client sent.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Time">
+            <summary>The time the value was accepted (for a large value: the time the server verified the file).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.IsPreviewEnabled">
+            <summary>A text preview of an ordinary csv or txt file small enough; never for a large value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Kind">
+            <summary>The kind of a large file: "secure" (its archive under the dump password) or "not secure".</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.Reason">
+            <summary>Why a large file cannot be downloaded yet; null when it can.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.DownloadUrl">
+            <summary>The download of a ready large file (its archive); null otherwise.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.SourceModified">
+            <summary>The modification time of the source file of a large value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.FileId">
+            <summary>The id of a large value's file in the store; null for an ordinary value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValueRowViewModel.ShowsDownloads">
+            <summary>The user may see who downloaded the file (a Manager of the product or an admin): the row offers it.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel">
+            <summary>An upload of the sensor that is not a value yet.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel.LastPieceUtc">
+            <summary>When the last piece came (the start, before any piece).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadRowViewModel.ExpiresUtc">
+            <summary>When the store removes the part if no piece comes.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel">
+            <summary>Who downloaded one large file and when, newest first (the download log, #1885).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel.IsCut">
+            <summary>The list holds the most recent records only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileDownloadsViewModel.IsUnavailable">
+            <summary>The download log could not be read now.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileRead">
+            <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileRead.#ctor(HSMCommon.Model.FileValue,System.Boolean)">
+            <summary>One file value read by its time: the value (null when there is none), or busy (ask again).</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileValuesPageViewModel">
+            <summary>A page of the file values of one File sensor, newest first.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.IsBusy">
+            <summary>The sensor's history was being read by another reader: nothing was read, ask again.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.Uploads">
+            <summary>The uploads in progress, on the first page only, at most a page of them.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.MoreUploads">
+            <summary>Uploads in progress beyond those listed.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.OlderThanTicks">
+            <summary>The time to ask the next (older) page before; null when there is none.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.ShowPasswordMissing">
+            <summary>The product has no dump password and the page lists secure large files: say what is missing and who sets it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileValuesPageViewModel.PasswordSettingsUrl">
+            <summary>The user may set the password (a Manager of the product or an admin): the notice links the settings.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.FileSensorPageService">
+            <summary>
+            The file values of a File sensor for its page (#1886): the description of the last value, one value by its time, and
+            the list of values page by page. Reads the sensor's history directly, not through the user's History tab state, so
+            the two never share a table. The caller has checked that the user may see the sensor's product.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize">
+            <summary>Values per page of the list.</summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.FileSensorPageService.MaxDownloadsShown">
+            <summary>The downloads of one file the page lists.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.IsPreviewEnabled(HSMCommon.Model.FileValue)">
+            <summary>A text preview for an ordinary csv or txt file small enough to show; never for a large value.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetFileAsync(System.Guid,System.Int64)">
+            <summary>
+            The value at <paramref name="timeTicks"/> (the key of its row), read by that time alone; the last value when it is
+            0. Null when there is none; <see cref="P:HSMServer.Model.FileSensors.FileRead.Busy"/> when the sensor's history was being read by another reader,
+            which is not "none": ask again. The content is decompressed for an ordinary file value.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetPageAsync(System.Guid,System.String,System.Nullable{System.Int64},HSMServer.Model.Authentication.User)">
+            <summary>
+            A page of the sensor's file values, newest first: the newest <see cref="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize"/> without an ordinary last value
+            (the page shows it on its own above the list), or the <see cref="F:HSMServer.Model.FileSensors.FileSensorPageService.PageSize"/> values older than
+            <paramref name="olderThanTicks"/>. No limit on how far back the pages go. The first page carries the uploads in
+            progress; a large value carries its state, its download and, for a Manager of the product or an admin, its
+            downloads.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.GetDownloads(System.Guid,System.Guid,HSMServer.Model.Authentication.User)">
+            <summary>
+            Who downloaded a large file of the sensor and when, for a Manager of the product or an admin; null when the user
+            may not see it or the file is not one of this sensor's. Read only when the user asks: the log is not read with a page.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.ProductSettingsPath(System.Guid)">
+            <summary>The settings page of a product, where its dump password is set.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.Decide(HSMServer.Model.FileSensors.LargeFileStoredFacts,System.Boolean)">
+            <summary>
+            The state of a large value's file: its record and archive first, then, for a secure file not packed, the
+            product's password before the builder's state (a product without one waits whatever the builder last said). A not
+            secure file never waits for a password.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.FileSensorPageService.Decide(HSMServer.Model.FileSensors.LargeFileUploadFacts,System.DateTime)">
+            <summary>
+            The state of an upload that is not a value yet. Being checked only while the store runs its end check. An upload
+            whose every piece is in without a check, or that got no piece for longer than <see cref="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.StalledAfter"/>
+            (the collector went away, a check failed), waits for its collector; the store removes it at <see cref="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.ExpiresUtc"/>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.FileSensorPageService.Clock">
+            <summary>The page's clock (the time an upload is judged stalled at). Test seam.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileUploadFacts">
+            <summary>An upload of a File sensor that is not a value yet: its part in the large file store.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Name">
+            <summary>The original file name, as the collector named it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsChecking">
+            <summary>The store's end check of the upload is running now.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.LastPieceUtc">
+            <summary>When the last piece came; the start of the upload before any piece.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.ExpiresUtc">
+            <summary>
+            When the store removes the part if no piece comes: the last piece plus LargeFiles.AbandonedUploadDays, or, for a
+            part that never got a piece, the end of its lease.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.StalledAfter">
+            <summary>No piece for longer than this (the store's lease time) and the upload waits for its collector; zero: never.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.IsSecure">
+            <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Application">
+            <summary>The collector's client name; null when the record has none.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileUploadFacts.Host">
+            <summary>The address the collector connected from; null when the record has none.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileStoredFacts">
+            <summary>
+            A verified or packed large file, in the vocabulary of the download (#1885): <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> "verified" or
+            "packed", <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.BuildState"/> "none", "queued", "building", "waitingForPassword", "waitingForRoom" or "failed".
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.FileSensors.LargeFileStoredFacts.Unavailable">
+            <summary>The <see cref="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.State"/> of a file whose state could not be read now (a fault of the store).</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.SensorId">
+            <summary>The sensor the file was uploaded to.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.IsSecure">
+            <summary>Secure (a dump: its archive under the product's dump password) or not, as the application marked it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.NotReadyReason">
+            <summary>Why the file cannot be downloaded yet; null when it can.</summary>
+        </member>
+        <member name="P:HSMServer.Model.FileSensors.LargeFileStoredFacts.DownloadUrl">
+            <summary>The web download link of the current archive; null until the file is packed.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFileDownloadFacts">
+            <summary>One allowed download of a file, from the download log.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.LargeFileDownloadFacts.#ctor(System.DateTime,System.String,System.String)">
+            <summary>One allowed download of a file, from the download log.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.ILargeFilePageSource">
+            <summary>
+            What the sensor page reads about large files (#1886) from the large file store (#1883), the archive builder, the
+            dump passwords and the download log (#1885). The caller has checked that the user may see the product.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ILargeFilePageSource.GetUploads(System.Guid)">
+            <summary>The uploads of the sensor that are not values yet, newest first.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ILargeFilePageSource.Describe(System.Guid)">
+            <summary>The state of the file of a large value; null when the store has no record of it.</summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ILargeFilePageSource.GetDownloads(System.Guid,System.Guid,System.Int32)">
+            <summary>The downloads of one file, newest first. Read when a user asks for them, never with a page.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.NoLargeFilePageSource">
+            <summary>A server without the large file store: no uploads, no records.</summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.LargeFilePageSource">
+            <summary>
+            What the sensor page reads about large files: the uploads of a sensor and the origin of a file from the large file
+            store (#1883); the state, the kind, the reason and the archive of a file in the download step's own words
+            (<see cref="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadService.DescribeFile(System.Guid,System.String)"/>), the product's dump password and the download log (#1885).
+            Without the archive side (a test, a tool) it answers from the store alone: nothing packed, nothing downloaded.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.FileSensors.ServerFileAlertContext">
+            <summary>
+            The server's <see cref="T:HSMServer.Core.Model.Policies.IFileAlertContext"/> (#1886). The base of <c>$link</c>: <c>HSM_DOMAIN</c> (the address the
+            bundled Caddy serves the web UI on), else <c>Agent.ExternalConnectionUrl</c>, else none: the link is then the path
+            of the page alone, which a chat does not make clickable.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.#ctor(HSMServer.ServerConfiguration.IServerConfig,System.Func{System.Guid,System.Guid,System.Boolean})">
+            <param name="waitsForDumpPassword">(product, file): a secure large file of a product without a dump password.</param>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(HSMDatabase.AccessManager.LargeFiles.ILargeFileStore,HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService,System.Guid,System.Guid)">
+            <summary>
+            A secure file (as its record says; a file the store cannot tell about counts as secure) of a product without a
+            dump password. A fault of the store answers false: a message without the note, never no message.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.FileSensors.ServerFileAlertContext.BaseAddress">
+            <summary>Scheme, host and an explicit port, without a trailing slash; empty when none is known.</summary>
         </member>
         <member name="M:HSMServer.Model.Folders.ViewModels.FolderInfoViewModel.#ctor(HSMServer.Model.Folders.FolderModel,System.Collections.Generic.IEnumerable{HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
             <param name="folder">The folder.</param>
@@ -4790,7 +5088,7 @@
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Name">
-            <summary>File name without extension.</summary>
+            <summary>File name without extension (the extension is in extension), for an ordinary and a large file value alike.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Extension">
             <summary>File extension (with the leading dot, may be empty).</summary>

@@ -196,7 +196,8 @@ namespace HSMServer.Core.Tests.Controllers
         public HomeController Home(User user) =>
             new(Cache.Object, Folders.Object, Access, Users.Object, Journal, Chats.Object,
                 new Mock<IDatabaseCore>().Object, Schedules.Object, PolicyWriter(),
-                new SensorMoveAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object))
+                new SensorMoveAdministrationService(Cache.Object, TokenAuthorization.Object, Users.Object),
+                new HSMServer.Model.FileSensors.FileSensorPageService(Cache.Object))
             {
                 ControllerContext = Context(user),
             };

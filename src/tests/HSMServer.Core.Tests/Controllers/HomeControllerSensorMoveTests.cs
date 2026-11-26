@@ -161,7 +161,8 @@ namespace HSMServer.Core.Tests.Controllers
                 new UserTreeAccess(new TreeViewModel(_cache.Object, _folders.Object, _users.Object), _folders.Object),
                 _users.Object, new Mock<IJournalService>().Object, _chats.Object, new Mock<IDatabaseCore>().Object,
                 _schedules.Object, policyWriter,
-                new SensorMoveAdministrationService(_cache.Object, _tokenAuthorization.Object, _users.Object))
+                new SensorMoveAdministrationService(_cache.Object, _tokenAuthorization.Object, _users.Object),
+                new HSMServer.Model.FileSensors.FileSensorPageService(_cache.Object))
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = user } },
             };

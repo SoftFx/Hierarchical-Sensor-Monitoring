@@ -90,10 +90,16 @@ namespace HSMServer.Controllers
             StoredUser.History.Table is { } table && _tree.TryGetSensor(CurrentUser, table.SensorId.ToGuid(), out _) ? table : null;
 
 
-        public SensorHistoryController(ITreeValuesCache cache, UserTreeAccess tree, IUserManager userManager) : base(userManager)
+        // The large file store of the export's large rows (#1886); absent without the archive side.
+        private readonly HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore _largeFiles;
+
+
+        public SensorHistoryController(ITreeValuesCache cache, UserTreeAccess tree, IUserManager userManager,
+            HSMServer.Core.LargeFiles.Archives.ILargeFileArchiveStore largeFiles = null) : base(userManager)
         {
             _cache = cache;
             _tree = tree;
+            _largeFiles = largeFiles;
         }
 
 
@@ -483,7 +489,8 @@ namespace HSMServer.Controllers
             Response.Headers["Content-Disposition"] = $"attachment;filename={fileName}";
 
             var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
-            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
+            // A large file value's row names its file, its size, its kind and its state (#1886), read from the store.
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions, _largeFiles));
 
             return File(content, fileName.GetContentType(), fileName);
         }

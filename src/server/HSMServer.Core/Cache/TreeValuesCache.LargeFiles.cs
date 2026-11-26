@@ -151,7 +151,8 @@ namespace HSMServer.Core.Cache
                     Status = record.Status,
                     Comment = record.Comment,
                     Value = [],
-                    Name = record.Name,
+                    // Without its extension, as every file value carries its name; the store's record keeps the whole name.
+                    Name = HSMServer.Core.Extensions.FileValueNameExtensions.StemOf(record.Name, record.Extension),
                     Extension = record.Extension,
                     OriginalSize = record.Size,
                     FileId = record.FileId,

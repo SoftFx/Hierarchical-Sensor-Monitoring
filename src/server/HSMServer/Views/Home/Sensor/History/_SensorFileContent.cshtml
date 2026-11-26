@@ -5,8 +5,10 @@
 
 @{
     var file = Model.LastValue as FileValue;
+    // A large file value (#1886) has no content here: no preview and no download above the list, which shows its state.
+    var isLarge = file is not null && HSMServer.Core.Extensions.FileValueNameExtensions.IsLargeFile(file);
     bool isEnabledPreview = false;
-    if (file is not null)
+    if (file is not null && !isLarge)
         isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
                            (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
 
@@ -85,7 +87,11 @@
                     </h2>
                     <div id='file_collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
                         <div class='accordion-body p-3'>
-                            @if (Model.LastValue != null)
+                            @if (isLarge)
+                            {
+                                <div class="text-muted" style="font-size: smaller">A large file: its state and its download are in the list below.</div>
+                            }
+                            else if (Model.LastValue != null)
                             {
                                 <div class="row">
                                     <div class="d-flex col-6">
@@ -131,3 +137,163 @@
     </div>
     @await Html.PartialAsync("Sensor/History/_SensorJournalTabContent", Model)
 </div>
+
+<script>
+    // The list of file values (#1886): the handlers read the data-* attributes of a row; the only value written into this
+    // script is the sensor's encoded id, made by the server.
+    (function () {
+        const encodedId = '@sensorId';
+        const container = $('#recentValues_' + encodedId);
+        const filesPageAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetFilesPage), "Home")';
+        const downloadsAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetLargeFileDownloads), "Home")';
+
+        function rowOf(element) {
+            return $(element).closest('.file-row')[0];
+        }
+
+        container.off('.fileRows');
+
+        // A list with an upload in progress or a large file being packed is read again every 10 seconds while the tab is
+        // visible and the user has not gone to older pages nor opened a row (both would be lost); it stops when the tab is
+        // gone. A file waiting for a password, for room or after a failed build is not polled: it changes rarely.
+        const recentAction = '@Url.Action(nameof(HSMServer.Controllers.HomeController.GetRecentFilesView), "Home")';
+
+        clearInterval(container.data('liveTimer'));
+        container.data('olderLoaded', false);
+        container.data('liveTimer', setInterval(function () {
+            if (!document.body.contains(container[0])) {
+                clearInterval(container.data('liveTimer'));
+                return;
+            }
+
+            if (document.hidden || container.data('olderLoaded') || container.find('[data-live="true"]').length === 0 || container.find('.accordion-collapse.show').length > 0)
+                return;
+
+            $.ajax({
+                type: 'GET',
+                url: recentAction + '?fileId=' + encodeURIComponent(encodedId),
+                cache: false,
+                success: function (response) {
+                    // An empty answer while the list holds files is a read that met another one (the sensor's history is
+                    // read by one reader at a time): keep the list, the next poll reads again.
+                    const listed = '.file-row, .large-file-upload';
+                    if ($('<div>').html(response).find(listed).length === 0 && container.find(listed).length > 0)
+                        return;
+
+                    if (!container.data('olderLoaded') && container.find('.accordion-collapse.show').length === 0)
+                        container.html(response);
+                }
+            });
+        }, 10000));
+
+        container.on('click.fileRows', '.file-row-download', function () {
+            const row = rowOf(this);
+            downloadFile(getFileAction + '?Selected=' + encodeURIComponent(encodedId) + '&dateTime=' + encodeURIComponent(row.dataset.time), 0);
+        });
+
+        // The name the server gave: filename* (RFC 5987, UTF-8) first, then the plain filename as it is; never throws.
+        function fileNameOf(disposition) {
+            const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(disposition);
+
+            if (star) {
+                try {
+                    return decodeURIComponent(star[1].trim());
+                } catch (e) {
+                    // A malformed escape: the plain name below.
+                }
+            }
+
+            const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(disposition);
+
+            return plain ? plain[1].trim() : 'file';
+        }
+
+        // A busy history (503) is asked again a few times; a missing file says so; the browser stays on the page.
+        function downloadFile(url, attempt) {
+            fetch(url, { credentials: 'same-origin' }).then(function (response) {
+                if (response.status === 503 && attempt < 3) {
+                    setTimeout(function () { downloadFile(url, attempt + 1); }, 1000);
+                    return;
+                }
+
+                if (!response.ok) {
+                    showToast(response.status === 503 ? 'The files of this sensor are being read; try again.' : 'The file is no longer there.');
+                    return;
+                }
+
+                const name = fileNameOf(response.headers.get('Content-Disposition') || '');
+
+                return response.blob().then(function (blob) {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = name;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(function () { URL.revokeObjectURL(link.href); }, 10000);
+                });
+            }).catch(function () {
+                showToast('The file could not be downloaded.');
+            });
+        }
+
+        container.on('click.fileRows', '.file-row-view', function () {
+            const row = rowOf(this);
+            openFileInBrowser(encodedId, row.dataset.extension, viewFileAction, row.dataset.time);
+        });
+
+        container.on('click.fileRows', '.file-row-toggle', function () {
+            const row = rowOf(this);
+
+            if (row.dataset.preview !== 'true' || $('#preview-content_' + row.id)[0].innerHTML !== '')
+                return;
+
+            previewFile(viewFileAction, row.id, row.dataset.extension, row.dataset.time, encodedId);
+        });
+
+        container.on('click.fileRows', '.large-file-downloads-show', function () {
+            const block = $(this).closest('.large-file-downloads');
+
+            $.ajax({
+                type: 'GET',
+                url: downloadsAction + '?fileId=' + encodeURIComponent(encodedId) + '&file=' + encodeURIComponent(block[0].dataset.file),
+                cache: false,
+                success: function (response) {
+                    block.find('.large-file-downloads-list').html(response);
+                }
+            });
+        });
+
+        container.on('click.fileRows', '.file-page-older', function () {
+            const more = $(this).closest('.file-page-more');
+            const button = $(this);
+            container.data('olderLoaded', true);
+            button.prop('disabled', true);
+
+            loadOlder(more, button, this.dataset.older, 0);
+        });
+
+        function loadOlder(more, button, older, attempt) {
+            $.ajax({
+                type: 'GET',
+                url: filesPageAction + '?fileId=' + encodeURIComponent(encodedId) + '&olderThan=' + encodeURIComponent(older),
+                cache: false,
+                success: function (response) {
+                    more.replaceWith(response);
+                },
+                error: function (xhr) {
+                    // The history was being read by another reader: the list keeps its button and asks again.
+                    if (xhr.status === 503 && attempt < 3) {
+                        setTimeout(function () { loadOlder(more, button, older, attempt + 1); }, 1000);
+                        return;
+                    }
+
+                    // The list stays on its first pages: the live refresh may read it again.
+                    container.data('olderLoaded', false);
+                    button.prop('disabled', false);
+                    showToast(xhr.status === 503 ? 'The files of this sensor are being read; try again.' : 'The older files could not be read.');
+                }
+            });
+        }
+    })();
+</script>

@@ -20,7 +20,7 @@ namespace HSMServer.Core.Tests.Controllers
             {
                 Time = DateTime.UtcNow,
                 Value = [],
-                Name = "app.dmp",
+                Name = "app",
                 Extension = "dmp",
                 OriginalSize = 8L << 30,
                 FileId = Guid.NewGuid(),
@@ -35,9 +35,22 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.IsType<NotFoundResult>(await controller.GetFile(id));
             Assert.IsType<NotFoundResult>(await controller.GetFileStream(id));
 
-            var info = Assert.IsType<LargeFileValue>(controller.GetFileInfo(id).Value);
-            Assert.Equal(value.FileId, info.FileId);
-            Assert.Empty(info.Value);
+            // The description, never the bytes (#1886): FileInfoDto has no content and no file id.
+            var info = Assert.IsType<HSMServer.Model.FileSensors.FileInfoDto>(controller.GetFileInfo(id).Value);
+            Assert.True(info.IsLarge);
+            Assert.Equal("app.dmp", info.Name);
+            Assert.Equal(8L << 30, info.OriginalSize);
+
+            // Neither is the large value served by its time, and a user without the product gets what an unknown id gets.
+            Assert.IsType<NotFoundResult>(await controller.GetFile(id, value.Time.Ticks));
+
+            var outsider = tree.Home(tree.Outsider);
+            Assert.IsType<NotFoundResult>(await outsider.GetFile(id));
+            Assert.IsType<NotFoundResult>(await outsider.GetFileStream(id));
+            Assert.IsType<NotFoundResult>(outsider.GetFileInfo(id).Result);
+            Assert.IsType<NotFoundResult>(await outsider.GetRecentFilesView(id));
+            Assert.IsType<NotFoundResult>(await outsider.GetFilesPage(id, null));
+            Assert.IsType<NotFoundResult>(outsider.GetLargeFileDownloads(id, value.FileId));
         }
     }
 }

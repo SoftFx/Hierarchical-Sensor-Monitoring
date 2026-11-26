@@ -226,6 +226,23 @@ namespace HSMServer.ServiceExtensions
             // registry is the only state (lock-protected).
             services.AddSingleton<PolicyAdministrationService>();
 
+            // What the self-monitoring of large files (#1886) asks the archive side, resolved at each sample: the builder
+            // reports to the collector wrapper, so the wrapper must not build it.
+            services.AddSingleton(provider => new LargeFileArchiveSide(provider));
+
+            // The file values of a File sensor for its page (#1886); stateless over the cache.
+            // Scoped: it reads the download step's description (LargeFileDownloadService is scoped).
+            services.AddScoped<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.LargeFilePageSource>();
+            services.AddScoped<HSMServer.Model.FileSensors.FileSensorPageService>();
+
+            // The alert variables of File sensors (#1886): the link to the sensor page and whether a secure large file waits
+            // for its product's dump password (#1885). Resolved at the call: the password service needs the tree.
+            services.AddSingleton<HSMServer.Core.Model.Policies.IFileAlertContext>(provider =>
+                new HSMServer.Model.FileSensors.ServerFileAlertContext(config, (productId, fileId) =>
+                    HSMServer.Model.FileSensors.ServerFileAlertContext.WaitsForPassword(
+                        provider.GetRequiredService<IDatabaseCore>().LargeFiles,
+                        provider.GetRequiredService<HSMServer.Core.LargeFiles.DumpPasswords.IDumpPasswordService>(), productId, fileId)));
+
             // The undo-journal read/rollback engine (#1570): list/get with
             // caller-sight filtering and the rollback replay. Scoped like its
             // readers; every stateful collaborator it touches (the journal,
@@ -510,6 +527,9 @@ namespace HSMServer.ServiceExtensions
 
         public static async Task InitStorages(this IServiceProvider services)
         {
+            // Before the tree loads: every File policy reads it, whatever creates the policy.
+            HSMServer.Core.Model.Policies.FileAlertContext.Use(services.GetRequiredService<HSMServer.Core.Model.Policies.IFileAlertContext>());
+
             services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
 
             foreach (var type in _asyncStorageTypes)

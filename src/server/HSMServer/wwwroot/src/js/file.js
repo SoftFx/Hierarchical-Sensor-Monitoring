@@ -4,7 +4,7 @@ mimeTypesMap.set('html', 'text/html');
 mimeTypesMap.set('pdf', 'application/pdf');
 mimeTypesMap.set('csv', 'application/csv');
 
-window.openFileInBrowser = function (path, fileName, viewFileAction, time = undefined) {
+window.openFileInBrowser = function (path, fileName, viewFileAction, time = undefined, attempt = 0) {
     let fileType = getMimeType(fileName);
 
     $("#spinner").css("display", "block");
@@ -31,10 +31,19 @@ window.openFileInBrowser = function (path, fileName, viewFileAction, time = unde
             $("#mainContainer").css("display", "block");
             $("#navbar").css("display", "block");
         },
-        error: function (_) {
+        error: function (xhr) {
+            // The sensor's history was being read by another reader: ask again a few times, then say so.
+            if (xhr.status === 503 && attempt < 3) {
+                setTimeout(function () { openFileInBrowser(path, fileName, viewFileAction, time, attempt + 1); }, 1000);
+                return;
+            }
+
             $("#spinner").css("display", "none");
             $("#mainContainer").css("display", "block");
             $("#navbar").css("display", "block");
+
+            if (xhr.status === 503)
+                showToast('The files of this sensor are being read; try again.');
         }
     });
 }
@@ -79,7 +88,8 @@ const csvStringToArray = (data) => {
     return result
 }
 
-window.previewFile = function(url, id, extension, time = null, fileNumber = null){
+window.previewFile = function(url, id, extension, time = null, fileNumber = null, attempt = 0){
+    const baseUrl = url;
     let fileId = '';
     if (time === null)
         url = `${url}?Selected=${id}`;
@@ -120,6 +130,16 @@ window.previewFile = function(url, id, extension, time = null, fileNumber = null
                 $(`#preview${fileId}`).removeClass('d-none container');
                 $(`#preview-content${fileId}`).addClass('w-100 mw-100 text-break').text(file);
             }
+        },
+        error: function (xhr) {
+            // The sensor's history was being read by another reader: ask again a few times, then say so.
+            if (xhr.status === 503 && attempt < 3) {
+                setTimeout(function () { previewFile(baseUrl, id, extension, time, fileNumber, attempt + 1); }, 1000);
+                return;
+            }
+
+            if (xhr.status === 503)
+                showToast('The files of this sensor are being read; try again.');
         }
     })
 }

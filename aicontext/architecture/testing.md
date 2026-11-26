@@ -79,6 +79,8 @@ ones:
 |---|---|---|
 | `NLog isolated` | `AlertScheduleProviderMissingIdLoggingTests`, `LoggingExceptionMiddlewareTests`, `ChannelTestSendResultTests`, `TelegramBotStartFailureLoggingTests`, `TableFeedSensorsServiceTests`, `DumpPasswordServiceLoggingTests` | They swap the process-global NLog configuration. |
 | `Process-wide measurement` | `CollectorSessionTests` | `IdleSession_CostsTensOfKilobytes` reads the process-wide managed heap, and a shutdown test bounds a wall-clock time. |
+| `File alert context` | `FileAlertVariablesTests` | They swap the process-wide `FileAlertContext` that File sensor alert messages read (#1886). |
+| `7-Zip child process (alone)` | `SevenZipInteropTests`, `LargeFileEndToEndTests` | They start 7-Zip (when it is installed) with redirected output: the child inherits the open LevelDB files of the classes running beside it, which then cannot delete their folders. |
 | `Large file store kill (alone)` (`HSMDatabase.LevelDB.Tests`) | `LargeFileStoreKillTests` | It starts and kills a child process with redirected output, which inherits every open (inheritable) LevelDB file handle of the test host. |
 
 Measured locally (24 cores, other suites running on the machine; #1943): `HSMServer.Core.Tests` went
