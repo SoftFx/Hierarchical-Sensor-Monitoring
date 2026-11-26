@@ -19,6 +19,14 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     }
 
 
+    // The dump password rows as one read of the configuration database found them: the rows it could parse, and the
+    // products whose row it could not (that row is kept as it is; the products' passwords are unavailable, not unset).
+    public sealed record DumpPasswordRows(List<ProductDumpPasswordsEntity> Rows, List<Guid> UnreadableProductIds)
+    {
+        public override string ToString() => $"{Rows?.Count ?? 0} dump password rows, {UnreadableProductIds?.Count ?? 0} unreadable";
+    }
+
+
     public sealed class DumpPasswordVersionEntity
     {
         public int Version { get; set; }

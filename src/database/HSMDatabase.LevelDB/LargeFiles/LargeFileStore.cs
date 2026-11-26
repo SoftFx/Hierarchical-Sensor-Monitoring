@@ -139,17 +139,22 @@ namespace HSMDatabase.LevelDB.LargeFiles
 
         // uploads/ is made only by the first begin. archives/ alone is not content: the bundled compose mounts it into Caddy,
         // and a bind mount creates the folder on every server; it counts once it holds an entry.
-        public bool HasContent => Directory.Exists(Path.Combine(_folder, UploadsFolderName)) || HasEntries(Path.Combine(_folder, ArchivesFolderName));
+        public bool HasContent => Directory.Exists(Path.Combine(_folder, UploadsFolderName)) ||
+                                  HasEntries(Path.Combine(_folder, ArchivesFolderName), Directory.EnumerateFileSystemEntries);
 
-        private static bool HasEntries(string folder)
+        // A folder that exists but cannot be listed counts as content: "cannot tell" must not read as "empty".
+        internal static bool HasEntries(string folder, Func<string, IEnumerable<string>> enumerate)
         {
+            if (!Directory.Exists(folder))
+                return false;
+
             try
             {
-                return Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any();
+                return enumerate(folder).Any();
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return false;
+                return true;
             }
         }
 

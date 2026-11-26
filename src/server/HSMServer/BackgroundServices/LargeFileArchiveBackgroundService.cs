@@ -35,6 +35,13 @@ namespace HSMServer.BackgroundServices
         private DateTime? _lastCleanupUtc;
 
 
+        /// <summary>
+        /// Test seam: called each time the loop goes idle until its period or a signal, with true when a wake-up is
+        /// already pending (the next run then starts at once).
+        /// </summary>
+        internal Action<bool> OnWaitingForPeriod { get; set; }
+
+
         public LargeFileArchiveBackgroundService(IArchiveBuilder builder, ILargeFileArchiveStore store, IDumpPasswordService passwords,
             IDownloadLog downloads, ILargeFilesMonitor monitor, IServerConfig config, TimeProvider time,
             ILogger<LargeFileArchiveBackgroundService> logger)
@@ -126,6 +133,8 @@ namespace HSMServer.BackgroundServices
                 try
                 {
                     await RunOnceAsync(stoppingToken);
+
+                    OnWaitingForPeriod?.Invoke(_wakeUp.CurrentCount > 0);
                     await _wakeUp.WaitAsync(RunPeriod, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

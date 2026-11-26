@@ -6,13 +6,13 @@ using System.Security.Cryptography;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Middleware;
 using HSMServer.Model.Agent;
 using HSMServer.Model.Authentication;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpOverrides;
 
 namespace HSMServer.Model.ManagementApi.AgentInstaller
 {
@@ -41,7 +41,8 @@ namespace HSMServer.Model.ManagementApi.AgentInstaller
 
         public bool TlsHandshake { get; init; }
 
-        public bool ForwardedByOriginalFor { get; init; }
+        /// <summary>The request's connection came from a trusted proxy (<see cref="ConnectionPeerMiddleware"/>).</summary>
+        public bool CameThroughTrustedProxy { get; init; }
 
 
         public static InstallerRequestContext Of(ClaimsPrincipal user, HttpContext http) => new()
@@ -52,7 +53,7 @@ namespace HSMServer.Model.ManagementApi.AgentInstaller
             HostPort = http.Request.Host.Port,
             UrlAuthority = http.Request.Host.ToString(),
             TlsHandshake = http.Features.Get<ITlsHandshakeFeature>() is not null,
-            ForwardedByOriginalFor = http.Request.Headers.ContainsKey(ForwardedHeadersDefaults.XOriginalForHeaderName),
+            CameThroughTrustedProxy = ConnectionPeerMiddleware.CameThroughTrustedProxy(http),
         };
     }
 
@@ -326,7 +327,7 @@ namespace HSMServer.Model.ManagementApi.AgentInstaller
             // comment): this server's only when Kestrel terminated the TLS
             // the client saw, not a trusted proxy's.
             var serverTerminatesTls = LinuxProbeServerCa.ServerTerminatesClientTls(
-                request.TlsHandshake, _config.Kestrel.TrustedProxies.Length > 0, request.ForwardedByOriginalFor);
+                request.TlsHandshake, request.CameThroughTrustedProxy);
 
             var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(serverTerminatesTls,
                 () => (_config.ServerCertificate.Certificate, _config.ServerCertificate.IsBundledDefault));

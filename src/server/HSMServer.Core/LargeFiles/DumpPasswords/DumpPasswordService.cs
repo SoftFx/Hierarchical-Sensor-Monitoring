@@ -33,6 +33,9 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         // The kept versions of each product, newest first; an array is never changed once it is published here.
         private readonly Dictionary<Guid, DumpPasswordVersion[]> _versions = [];
 
+        // The products whose stored row could not be read at load: unavailable, and never overwritten.
+        private readonly HashSet<Guid> _unreadable = [];
+
         private readonly IDatabaseCore _database;
         private readonly IJournalService _journal;
         private readonly ITreeValuesCache _cache;
@@ -64,7 +67,9 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
             if (_retention < TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(retention), "The retention of replaced dump passwords cannot be negative.");
 
-            foreach (var entity in _database.GetAllDumpPasswords())
+            var rows = _database.GetAllDumpPasswords();
+
+            foreach (var entity in rows.Rows)
             {
                 var versions = FromEntity(entity);
 
@@ -72,9 +77,16 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                     _versions[entity.ProductId] = versions;
             }
 
+            foreach (var productId in rows.UnreadableProductIds)
+                _unreadable.Add(productId);
+
             _cache.ChangeProductEvent += ChangeProductHandler;
 
             _logger.Info($"Dump passwords loaded for {_versions.Count} products");
+
+            foreach (var productId in _unreadable)
+                _logger.Error($"The stored dump passwords of product {productId} cannot be read: they are unavailable, and no new password " +
+                              "is stored over them until an administrator has looked at the configuration database");
         }
 
 
@@ -105,6 +117,12 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                 return _versions.ContainsKey(productId);
         }
 
+        public bool IsUnreadable(Guid productId)
+        {
+            lock (_lock)
+                return _unreadable.Contains(productId);
+        }
+
         public IReadOnlyCollection<Guid> GetProductIds()
         {
             lock (_lock)
@@ -120,6 +138,10 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
 
             if (!product.IsRoot)
                 return new DumpPasswordSetResult(DumpPasswordSetOutcome.NotRootProduct, 0);
+
+            // A row that cannot be read is never overwritten: it may hold the only copy of versions archives carry.
+            if (IsUnreadable(productId))
+                return new DumpPasswordSetResult(DumpPasswordSetOutcome.StoredRowUnreadable, 0);
 
             var outcome = Validate(password, generated);
 
@@ -186,12 +208,15 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         }
 
         /// <summary>
-        /// Removes the replaced versions retired longer than the retention ago; the current version stays. A product whose row
-        /// cannot be written keeps its versions in memory and on disk (the next run tries again); the other products go on,
-        /// and the failures are thrown together at the end.
+        /// Removes the replaced versions retired longer than the retention ago; the current version stays, and so does an
+        /// expired version a packed archive of the product still carries (checked again here, apart from the retirement).
+        /// A product whose row cannot be written keeps its versions in memory and on disk (the next run tries again); the
+        /// other products go on, and the failures are thrown together at the end.
         /// </summary>
-        public int RemoveExpired(DateTime nowUtc)
+        public int RemoveExpired(DateTime nowUtc, IReadOnlySet<(Guid ProductId, int Version)> carried)
         {
+            ArgumentNullException.ThrowIfNull(carried);
+
             var removed = 0;
             List<Exception> failures = null;
 
@@ -200,7 +225,7 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                 foreach (var productId in _versions.Keys.ToArray())
                 {
                     var versions = _versions[productId];
-                    var next = versions.Where((v, i) => i == 0 || !IsExpired(v, nowUtc)).ToArray();
+                    var next = versions.Where((v, i) => i == 0 || !IsExpired(v, nowUtc) || IsCarried(productId, v, carried)).ToArray();
 
                     if (next.Length == versions.Length)
                         continue;
@@ -243,6 +268,8 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                     _logger.Error(ex, $"The dump passwords of product {productId} could not be removed");
                     throw;
                 }
+
+                _unreadable.Remove(productId);
 
                 if (!_versions.Remove(productId))
                     return;
@@ -289,8 +316,22 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
             }
         }
 
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(Guid, int), byte> _carriedLogged = new();
+
         private bool IsExpired(DumpPasswordVersion version, DateTime nowUtc) =>
             version.RetiredUtc is { } retired && retired + _retention < nowUtc;
+
+        // Logs the product and the version number only, once per version in this process.
+        private bool IsCarried(Guid productId, DumpPasswordVersion version, IReadOnlySet<(Guid, int)> carried)
+        {
+            if (!carried.Contains((productId, version.Version)))
+                return false;
+
+            if (_carriedLogged.TryAdd((productId, version.Version), 0))
+                _logger.Warn($"Dump password version {version.Version} of product {productId} is retired and expired, " +
+                         "but an archive still carries it: it is kept");
+            return true;
+        }
 
         // Under _lock. Throws when the row cannot be written; logs the product and the version only.
         private void Store(Guid productId, DumpPasswordVersion[] versions, int version)

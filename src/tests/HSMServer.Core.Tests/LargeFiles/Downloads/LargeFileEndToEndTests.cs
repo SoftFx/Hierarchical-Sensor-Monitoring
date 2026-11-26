@@ -192,7 +192,7 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             using var request = new HttpRequestMessage(HttpMethod.Get, Url(file));
             request.Headers.Add(LargeFileDownloadResult.ServeArchivesHeader, "1");
-            request.Headers.Add(ForwardedHeadersDefaults.XOriginalForHeaderName, "10.0.0.1:5000");
+            LargeFileWorld.FromPeer(request, LargeFileWorld.ProxyPeer);
             using var response = await client.SendAsync(request);
 
             var relative = Header(response, LargeFileDownloadResult.ArchiveHeader);

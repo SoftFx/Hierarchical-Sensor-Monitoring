@@ -422,8 +422,13 @@ namespace HSMServer.ServiceExtensions
         {
             // Behind the bundled Caddy (#1427): restore the client address first, so token
             // audit, the invalid-attempt limiter and key telemetry see the client, not the proxy.
+            // ConnectionPeerMiddleware first: it records the connection's own peer, which UseForwardedHeaders replaces,
+            // and whether it is a trusted proxy of the same options (the large file hand-over reads it).
             if (forwardedHeaders is not null)
+            {
+                applicationBuilder.UseMiddleware<ConnectionPeerMiddleware>(forwardedHeaders);
                 applicationBuilder.UseForwardedHeaders(forwardedHeaders);
+            }
 
             if (isDevelopment)
                 applicationBuilder.UseDeveloperExceptionPage();

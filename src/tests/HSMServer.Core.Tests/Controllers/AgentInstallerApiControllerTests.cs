@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Formats.Tar;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
@@ -68,7 +70,8 @@ namespace HSMServer.Core.Tests.Controllers
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
         private (AgentInstallerApiController Controller, Guid ProductId) CreateController(
-            string webRoot = null, User owner = null, bool stageExe = true)
+            string webRoot = null, User owner = null, bool stageExe = true, bool tls = false, string peer = null,
+            bool originalForHeader = false)
         {
             var product = new ProductModel("Garage server");
             var key = AccessKeyModel.BuildDefault(product);
@@ -92,7 +95,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var config = new Mock<IServerConfig>();
             config.Setup(c => c.Agent).Returns(new AgentConfig { ExternalConnectionUrl = "https://hsm.example.com" });
-            config.Setup(c => c.Kestrel).Returns(new KestrelConfig { TrustedProxies = [] });
+            config.Setup(c => c.Kestrel).Returns(new KestrelConfig { TrustedProxies = peer is null ? [] : ConnectionPeers.TrustedProxies });
             config.Setup(c => c.ServerCertificate).Returns(new ServerCertificateConfig());
 
             var installer = new AgentInstallerAdministrationService(_cache.Object, _authorization.Object,
@@ -101,6 +104,15 @@ namespace HSMServer.Core.Tests.Controllers
             var context = new DefaultHttpContext { User = Principal() };
             context.Request.Scheme = "https";
             context.Request.Host = new HostString("hsm.example.com");
+            if (tls)
+                context.Features.Set(new Mock<ITlsHandshakeFeature>().Object);
+
+            // With trusted proxies configured the app records the connection's peer before anything else reads it.
+            if (peer is not null)
+                ConnectionPeers.Record(context, peer);
+
+            if (originalForHeader)
+                context.Request.Headers[ForwardedHeadersDefaults.XOriginalForHeaderName] = "203.0.113.7:51000";
 
             return (new AgentInstallerApiController(installer)
             {
@@ -156,6 +168,36 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal("application/gzip", result.ContentType);
             Assert.Equal("hsm-linux-probe-Garage_server.tar.gz", result.FileDownloadName);
+        }
+
+
+        [Fact]
+        public void GetInstaller_LinuxBundle_ShipsNoCa_BehindTheTrustedProxy()
+        {
+            // The proxy terminated the client's TLS; the bundled default Kestrel serves on the proxy hop is not
+            // what the probe will verify, so nothing is refused and no CA ships.
+            var (controller, productId) = CreateController(tls: true, peer: ConnectionPeers.TrustedProxy);
+            StageLinuxPackage();
+
+            var result = Assert.IsType<FileContentResult>(controller.GetInstaller(productId, "linux"));
+
+            Assert.DoesNotContain(TarEntryNames(result.FileContents), n => n.EndsWith("/server-ca.pem"));
+        }
+
+
+        [Fact]
+        public void GetInstaller_LinuxBundle_RefusesTheBundledDefault_ForADirectClient_WithAnOriginalForHeader()
+        {
+            // Trusted proxies are configured, but this connection comes from the client itself: Kestrel's
+            // handshake is the one the probe would verify, whatever headers the request carries.
+            var (controller, productId) = CreateController(tls: true, peer: ConnectionPeers.DirectClient, originalForHeader: true);
+            StageLinuxPackage();
+
+            var body = Assert.IsType<ObjectResult>(controller.GetInstaller(productId, "linux"));
+
+            Assert.Equal(400, body.StatusCode);
+            Assert.Contains(LinuxProbeServerCa.BundledDefaultMessage,
+                Assert.IsType<string[]>(Assert.IsType<ManagementApiErrorDto>(body.Value).Details["certificate"]));
         }
 
 
@@ -329,6 +371,24 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.True(expiresAt <= clock);
         }
 
+
+        private void StageLinuxPackage()
+        {
+            Directory.CreateDirectory(Path.Combine(_webRoot, "probe"));
+            File.WriteAllBytes(Path.Combine(_webRoot, "probe", "hsm-linux-probe_0.1.0_amd64.deb"), new byte[] { 0x21, 0x3C });
+        }
+
+        private static List<string> TarEntryNames(byte[] tarGz)
+        {
+            using var gzip = new GZipStream(new MemoryStream(tarGz), CompressionMode.Decompress);
+            using var reader = new TarReader(gzip);
+
+            var names = new List<string>();
+            while (reader.GetNextEntry() is { } entry)
+                names.Add(entry.Name);
+
+            return names;
+        }
 
         private static string Sha256Hex(byte[] bytes)
         {

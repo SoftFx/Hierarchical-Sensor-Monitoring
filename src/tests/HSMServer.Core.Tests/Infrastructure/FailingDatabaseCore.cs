@@ -210,7 +210,15 @@ namespace HSMServer.Core.Tests.Infrastructure
         // service's memory, the journal and its event untouched.
         internal Func<string, bool> ShouldFailDumpPasswordOp { get; set; }
 
-        public List<ProductDumpPasswordsEntity> GetAllDumpPasswords() => _inner.GetAllDumpPasswords();
+        // Products whose dump password row the read reports as unreadable, on top of what the real database reports.
+        internal List<Guid> UnreadableDumpPasswordRows { get; } = [];
+
+        public DumpPasswordRows GetAllDumpPasswords()
+        {
+            var rows = _inner.GetAllDumpPasswords();
+
+            return rows with { UnreadableProductIds = [.. rows.UnreadableProductIds, .. UnreadableDumpPasswordRows] };
+        }
 
         public void PutDumpPasswords(ProductDumpPasswordsEntity entity)
         {

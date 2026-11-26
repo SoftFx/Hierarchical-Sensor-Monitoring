@@ -73,6 +73,16 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             using var service = CreateService();
             using var stop = new CancellationTokenSource();
 
+            // The loop reports each time it goes idle for its period: the number of runs so far, and whether a wake-up is
+            // still pending (a pending one would start another run at once).
+            var idleAfterTwoRuns = new TaskCompletionSource<(int Runs, bool Pending)>(TaskCreationOptions.RunContinuationsAsynchronously);
+            service.OnWaitingForPeriod = pending =>
+            {
+                var sofar = Volatile.Read(ref runs);
+                if (sofar >= 2)
+                    idleAfterTwoRuns.TrySetResult((sofar, pending));
+            };
+
             await service.StartAsync(stop.Token);
             await firstRunEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -83,12 +93,13 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
             releaseFirstRun.SetResult();
 
-            await WaitUntil(() => Volatile.Read(ref runs) >= 2);
-            await Task.Delay(300);
+            // Idle after the second run with nothing pending: the three signals made exactly one more run, and no third
+            // one comes before the period.
+            var idle = await idleAfterTwoRuns.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             await service.StopAsync(CancellationToken.None);
 
-            Assert.Equal(2, runs);
+            Assert.Equal((2, false), idle);
             Assert.Equal(1, maxRunning);
         }
 
@@ -244,14 +255,6 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             public override DateTimeOffset GetUtcNow() => _now;
 
             public void Advance(TimeSpan by) => _now += by;
-        }
-
-        private static async Task WaitUntil(Func<bool> condition)
-        {
-            for (var i = 0; i < 200 && !condition(); i++)
-                await Task.Delay(25);
-
-            Assert.True(condition());
         }
     }
 }

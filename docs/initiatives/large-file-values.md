@@ -233,7 +233,7 @@ Epic #1882. One PR per step, or per part of a large step, into the integration b
 | 4 | #1886 | Server: the sensor page, the alert variables, the default alert, self-monitoring | |
 | 5 | #1887 | Native collector: reading a file in pieces, the watched folder, the state file, the speed limit; conformance scenarios | Binary frames and zstd shared with #1848, which it waits for. Consumer: the Aggregator |
 | 6 | #1888 | Managed collector: the same behaviour, in parallel with step 5; whichever lands first writes the conformance scenarios, marks their verbs `CONFORMANCE-UNSUPPORTED: <verb> (#1887 or #1888)` in the other driver and keeps the scenarios out of that driver's run (native: not registered in `CMakeLists.txt`; managed: under `tests/conformance/collector/native/`, because the managed driver runs every scenario of the folder); the second step removes both | net6.0 and net472. Does not wait for #1848. Consumer: TTS |
-| 7 | #1889 | Rollout: a real dump end to end, a file of 64 GB, the settings of production, the wiki | |
+| 7 | #1889 | Rollout: a real dump end to end, a file of 64 GB, the settings of production, the wiki | The order of the release: `hsm-caddy:2.11.4-9` (the hand-over rule, #1885) is published by the master run of `caddy-image.yml`; the reference compose in `wiki-git/Installation.md` names it already (the compose-wiki-sync check keeps that copy equal to `docker-compose.yml`), so the wiki is pushed only after that run has published the image |
 
 ## Risks
 
