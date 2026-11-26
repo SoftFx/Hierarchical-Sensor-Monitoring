@@ -234,6 +234,119 @@ On a large deployment enable it with a night window: the first start after that 
 
 ---
 
+## Large Files
+
+Collectors can send big files, crash dumps above all, as **large file values** of File sensors: the content travels in compressed pieces on a connection of its own and is kept on the server's disk, not in the database. Users download a file only as a zip, checked and recorded by HSM. How a collector sends them is on [DataCollector Large Files](DataCollector-Large-Files), what users see on [Large Files](Large-Files). Nothing needs to be switched on: a server takes large files with its defaults, and nothing is created on the disk before the first upload.
+
+### The large files folder
+
+The server keeps uploads in progress, checked files and finished archives in a folder of its own, `LargeFiles.Folder`: `LargeFiles` by default, relative to the working directory like `Databases` (so next to it; `/app/LargeFiles` in the container), or an absolute path on another volume.
+
+- It is **not a database** and **not part of the backups** (sensor history is not either).
+- Its layout is the server's own: `uploads/` (the parts of uploads, the records of all files, archives being built) and `archives/` (finished archives only). Do not rename, move or replace `archives/` while the server or the bundled Caddy runs: Caddy has that very directory mounted.
+- **Size it for the files you expect.** A finished file takes the size of its archive (about the compressed size of the file: a dump often compresses three times or more); while it is uploaded and packed, its part and its archive are on the disk together.
+
+**With Docker Compose** the folder is the host folder `HSM_LARGE_FILES` of `.env`, `./LargeFiles` next to `docker-compose.yml` by default. The reference compose file mounts it twice from that one variable: whole into the server at `/app/LargeFiles`, and its `archives/` subtree read-only into Caddy at `/srv/hsm-archives`. To put large files on another volume, set `HSM_LARGE_FILES` alone and leave `LargeFiles.Folder` at its default inside the container:
+
+```dotenv
+HSM_LARGE_FILES=/mnt/bigdisk/hsm-large-files
+```
+
+Then `docker compose up -d`. If the two mounts pointed at different folders, every download through Caddy would answer 404.
+
+### Settings
+
+```json
+"LargeFiles": {
+  "Folder": "LargeFiles",
+  "MaxFileSizeBytes": 68719476736,
+  "MaxUploadsInProgress": 4,
+  "MinFreeDiskMb": 10240,
+  "AbandonedUploadDays": 7,
+  "LeaseTimeoutSeconds": 180,
+  "MaxUploadingPartsPerProduct": 16
+},
+"LargeFileArchives": {
+  "DeflateLevel": 1,
+  "PasswordRetentionDays": 30,
+  "DownloadLogWindowMinutes": 10,
+  "DownloadLogRetentionDays": 365,
+  "DownloadLogMaxCallers": 10000
+}
+```
+
+`LargeFiles`:
+
+| Setting | Default | Description |
+|---|---|---|
+| `Folder` | `LargeFiles` | The folder above. Must not be empty. |
+| `MaxFileSizeBytes` | 68,719,476,736 (64 GiB) | The largest file the server accepts (1 to 2^50). A larger one is refused, and the collector reports it as not sent. |
+| `MaxUploadsInProgress` | 4 | Uploads at once, over all collectors (1 to 1,024). One more waits: the server tells its collector to try again in 30 seconds. |
+| `MinFreeDiskMb` | 10,240 (10 GiB) | The free space an upload must leave on the folder's volume (0 or more). See below. |
+| `AbandonedUploadDays` | 7 | An upload that received no piece for this many days is removed (1 to 3,650). A checked file is never removed for its age. |
+| `LeaseTimeoutSeconds` | 180 | How long an upload stays held for its collector without a new piece (10 to 86,400). See below. |
+| `MaxUploadingPartsPerProduct` | 16 | Unfinished uploads one product may hold; a new one beyond them waits (1 to 100,000). |
+
+`LargeFileArchives`:
+
+| Setting | Default | Description |
+|---|---|---|
+| `DeflateLevel` | 1 | Compression of new archives, 0 (none) to 9. Level 1 builds about 1.7 times faster than 6 for an archive about 4% larger. |
+| `PasswordRetentionDays` | 30 | How long a replaced dump password stays readable to the product's Managers and admins after the last archive under it was re-encrypted (0 to 3,650). |
+| `DownloadLogWindowMinutes` | 10 | The requests of one user or token for one archive within this window make one record of the download log (1 to 1,440). |
+| `DownloadLogRetentionDays` | 365 | Download records older than this are removed once a day (1 to 3,650). |
+| `DownloadLogMaxCallers` | 10,000 | The windows of the download log kept in memory (1 to 10,000,000). |
+
+Both sections are read when the server starts and written into `Config/appsettings.json` with their defaults. A value out of range stops the start with an error that names the key, for example `LargeFiles.MaxUploadsInProgress = 0 is invalid: expected 1..1024.`
+
+`CollectorSessions.MaxFileFrameBytes` (4,194,304 by default; 131,072 to 67,108,864) is the largest piece frame a collector may send, and with it the piece size (4,173,824 bytes at the default). **0 switches file connections off**: sessions go on, large files wait on the collectors, and ordinary file values above about 1 MiB no longer fit a session frame.
+
+**Free space.** The server begins a new upload only when the free space of the folder's volume, less `MinFreeDiskMb`, less what the uploads already begun have reserved, holds the new one's reservation: twice its size plus 1 MiB (the part and its archive). A reservation shrinks as the part arrives and ends when the archive is finished. A refused upload is not lost: the server asks the collector to wait 10 minutes (a collector asks again after at most 5) and the collector keeps the file. The refusals are counted in **HSM Server Monitoring → Large files → Refused for space**.
+
+**The lease.** An upload belongs to one connection of its collector while pieces arrive. When no piece came for `LeaseTimeoutSeconds`, another connection may take it over (the collector continues on its next connection from the piece the server has). The lease is never shorter than the collector sessions' silence limit (three heartbeats, 90 seconds by default): a shorter setting is raised to it at start, with a warning in the log (`LargeFiles.LeaseTimeoutSeconds = 30 is shorter than the collector sessions' silence limit (90 s, three heartbeats): the lease is raised to 90 s, ...`).
+
+### Downloads through the bundled Caddy
+
+With the reference compose file a download is decided by HSM and served by Caddy:
+
+1. The request reaches HSM through Caddy like any other. HSM checks the user (or API token), checks that the file may be given out, and writes the record of the download log.
+2. Instead of the bytes, HSM answers Caddy with an instruction naming the archive. Caddy serves that file from its read-only mount of `archives/`, with byte ranges and resumption. The instruction never reaches the client.
+3. The client sees `Server: Caddy`, the archive with `Content-Disposition`, `Repr-Digest` (its SHA-256) and, for a secure file, `X-Hsm-Password-Version`.
+
+Caddy has no route of its own to the folder: an archive is reachable only as HSM's answer to a request it has checked. HSM honours Caddy's marker header (`X-Hsm-Serve-Archives`) only on a connection from a **trusted proxy**; the reference compose file trusts its own network for that (`Kestrel__TrustedProxies__0: 'attached-networks'`, see [Ports](#ports)).
+
+A Caddyfile of your own ([Advanced Caddyfile customization](Installation#advanced-caddyfile-customization)) made from a bundled file older than the image `hsmonitoring/hsm-caddy:2.11.4-9` has no hand-over rule: HSM then serves the archives itself. Such a copy also passes a client's own `X-Hsm-Serve-Archives` header on to HSM, which then answers that client with an error instead of the file. Re-merge your copy with the current bundled file.
+
+### The link in alert messages
+
+The alerts of File sensors can print `$link`, the address of the sensor page (`https://<address>/Home/<sensor id>`; see [Large Files](Large-Files#the-alert)). The server takes the address from the environment variable `HSM_DOMAIN`, which the reference compose file passes to it from `.env`, or, without it, from `Agent.ExternalConnectionUrl`; without either, `$link` prints the path alone. `HSM_DOMAIN` has no port: on a server whose site is on a port other than 443 the links lack it, and whoever opens one adds it. `Agent.ExternalConnectionUrl` keeps its scheme and port.
+
+### Without Caddy, or behind another reverse proxy
+
+- **Without Caddy** (`docker-compose.direct.yml`, a plain `docker run`, a service install): HSM serves the archives itself, with byte ranges and resumption. `docker-compose.direct.yml` mounts the same `HSM_LARGE_FILES` folder.
+- **Behind another reverse proxy** that you list in `Kestrel__TrustedProxies`: the proxy must **overwrite or remove** the request header `X-Hsm-Serve-Archives` on every request it forwards, whether or not it serves archives itself.
+  - To let it serve the archives, repeat the bundled rule: set `X-Hsm-Serve-Archives: 1` on every forwarded request; on an answer that carries `X-Hsm-Archive: <path>`, serve the file at that path under a read-only view of the `archives/` folder instead of the answer, copy the headers `Content-Disposition`, `Repr-Digest`, `X-Hsm-Password-Version` and `Cache-Control`, and never pass `X-Hsm-Archive` on.
+  - Otherwise remove the header, and HSM serves the files itself.
+- A proxy that is **not** listed in `Kestrel__TrustedProxies` changes nothing: HSM ignores the marker from it and serves the files itself (and records the proxy's address as the client's, see [Ports](#ports)).
+
+### What the server reports
+
+The node **HSM Server Monitoring → Large files** appears once the server has taken its first upload:
+
+| Sensor | What it shows |
+|---|---|
+| `Archive build result` | Error when an archive could not be built (the comment names the file and the reason) or waits for disk room; the file is kept and tried again. Has a default alert. |
+| `Download log` | Error when a download record cannot be written: every download is refused meanwhile. Has a default alert. |
+| `Refused for space` | uploads refused for free space since the start; Error in the sample in which it grew, with a default alert: `[$product]$path: a large file upload was refused, the disk is short ($value since the server started)` |
+| `Archive builds failed` | archive builds (first packs and re-encryptions) that failed since the start; Error in the sample in which it grew |
+| `Uploads in progress`, `Files stored`, `Bytes stored` (MB), `Files waiting for a password` | what the folder holds now, read from its records at every sample: uploads not finished, stored files of every product, the megabytes of the parts of uploads and of stored files and of the archives, secure files of products without a dump password |
+| `Parts removed`, `Files removed`, `Leftovers removed` | what the server removed: abandoned or discarded parts, files whose value is gone (retention, a clear, a removed sensor), files left behind |
+| `Start disagreements`, `Rows written again`, `Rows that disagree`, `Files of sensors not loaded`, `Write failures` | checks of the folder against the database; each is Error in the sample in which it grew, and the log names every case |
+
+`Uploads in progress`, `Files stored`, `Bytes stored` and `Files waiting for a password` are read again at every sample (every 5 minutes); the other number sensors count since the server started. The server's log names every upload begun, stored or discarded, every archive built, and every removal (logger `LargeFiles`). The download log is a database of its own, `Databases/DownloadLog`.
+
+---
+
 ## Docker Volume Mounts
 
 Always mount these directories to preserve data across container restarts and updates:
@@ -244,6 +357,7 @@ docker run \
   -v /host/Config:/app/Config \
   -v /host/Databases:/app/Databases \
   -v /host/DatabasesBackups:/app/DatabasesBackups \
+  -v /host/LargeFiles:/app/LargeFiles \
   -p 443:443 \
   hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
@@ -256,6 +370,7 @@ With Docker Compose, use the [reference docker-compose.yml](Installation#referen
 | `Config/` | `appsettings.json` and TLS certificate |
 | `Databases/` | LevelDB databases (sensor history, metadata, dashboards) |
 | `DatabasesBackups/` | Automatic database backups |
+| `LargeFiles/` | Large file values: uploads and finished archives ([Large Files](#large-files)); not part of the backups |
 
 > If you do not mount `Databases/`, all sensor data is lost when the container is removed or updated.
 
