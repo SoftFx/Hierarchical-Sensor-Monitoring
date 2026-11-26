@@ -162,16 +162,30 @@ namespace HSMServer.Core.Tests.Controllers
 
         [Theory]
         [InlineData("report", "csv", "report.csv")]
-        [InlineData("dump.dmp", "dmp", "dump.dmp")]
         [InlineData("dump", "", "dump")]
-        [InlineData("", "txt", "txt")]
+        [InlineData("dump", null, "dump")]
+        [InlineData("", "env", ".env")]
         [InlineData("archive", ".zip", "archive.zip")]
         [InlineData("backup.2026-11-25", "csv", "backup.2026-11-25.csv")]
         [InlineData("app.log", "1", "app.log.1")]
-        [InlineData("DUMP.DMP", "dmp", "DUMP.DMP")]
-        public void DisplayName_NeverRepeatsTheExtension(string name, string extension, string expected)
+        [InlineData("x.dmp", "dmp", "x.dmp.dmp")]
+        public void DisplayName_JoinsTheNameAndTheExtension(string name, string extension, string expected)
         {
             Assert.Equal(expected, HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(new FileValue { Name = name, Extension = extension }));
+        }
+
+        // A large value is split as an ordinary one: its name and extension join back into the original exactly.
+        [Theory]
+        [InlineData("dump.dmp", "dmp", "dump")]
+        [InlineData("dump", null, "dump")]
+        [InlineData("backup.tar.gz", "gz", "backup.tar")]
+        [InlineData(".env", "env", "")]
+        [InlineData("x.dmp.dmp", "dmp", "x.dmp")]
+        [InlineData("name.", null, "name.")]
+        public void ALargeValuesName_IsItsOriginalWithoutTheExtension(string original, string extension, string stem)
+        {
+            Assert.Equal(stem, HSMServer.Core.Extensions.FileValueNameExtensions.StemOf(original, extension));
+            Assert.Equal(original, HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(new FileValue { Name = stem, Extension = extension }));
         }
 
         [Fact]
@@ -493,7 +507,7 @@ namespace HSMServer.Core.Tests.Controllers
             {
                 Time = Start.AddMinutes(rows.Count),
                 ReceivingTime = Start.AddMinutes(rows.Count),
-                Name = name,
+                Name = HSMServer.Core.Extensions.FileValueNameExtensions.StemOf(name, System.IO.Path.GetExtension(name).TrimStart('.')),
                 Extension = System.IO.Path.GetExtension(name).TrimStart('.'),
                 OriginalSize = size,
                 Value = [],

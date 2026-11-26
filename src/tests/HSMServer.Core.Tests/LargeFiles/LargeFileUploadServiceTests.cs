@@ -120,7 +120,8 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Equal(finish.FileId, last.FileId);
             Assert.Empty(last.Value);
             Assert.Equal(content.Length, last.OriginalSize);
-            Assert.Equal("dump.dmp", last.Name);
+            // The name without its extension, as for every file value (#1886); the record keeps the whole name.
+            Assert.Equal("dump", last.Name);
             Assert.Equal("dmp", last.Extension);
             Assert.Equal(Modified, last.SourceModified);
             Assert.Equal(SHA256.HashData(content), last.Hash);
@@ -592,6 +593,25 @@ namespace HSMServer.Core.Tests.LargeFiles
             {
                 _valuesCache.NewAlertMessageEvent -= Record;
             }
+        }
+
+        // #1886: a large value carries its name without the extension, as every file value, and shows the original name.
+        [Theory]
+        [InlineData("app.dmp", "app", "dmp")]
+        [InlineData("core", "core", null)]
+        [InlineData("backup.tar.gz", "backup.tar", "gz")]
+        [InlineData(".env", "", "env")]
+        public async Task A_large_value_reads_like_every_file_value(string original, string name, string extension)
+        {
+            var sensor = await CreateFileSensorAsync($"named-{Guid.NewGuid():N}");
+
+            var finish = await UploadAsync(sensor, Content(Piece), name: original);
+
+            var row = Assert.IsType<LargeFileValue>(sensor.Convert(_databaseCoreManager.DatabaseCore.GetSensorValue(sensor.Id, finish.ValueTimeUtc.Value.Ticks)));
+
+            Assert.Equal((name, extension), (row.Name, string.IsNullOrEmpty(row.Extension) ? null : row.Extension));
+            Assert.Equal(original, HSMServer.Core.Extensions.FileValueNameExtensions.GetDisplayName(row));
+            Assert.Equal(original, Store.TryGetFile(finish.FileId).Name);
         }
 
         [Fact]

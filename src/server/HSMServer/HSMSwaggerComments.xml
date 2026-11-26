@@ -4568,7 +4568,7 @@
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Name">
-            <summary>File name as the value carries it: an ordinary file value usually without its extension (see extension); a large file value (largeFile set) with its whole original name.</summary>
+            <summary>File name without extension (the extension is in extension), for an ordinary and a large file value alike.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Extension">
             <summary>File extension (with the leading dot, may be empty).</summary>

@@ -15,10 +15,10 @@ namespace HSMServer.Core.Extensions
         public static System.DateTime? LargeFileSourceModifiedOrDefault(this FileValue file) => (file as LargeFileValue)?.SourceModified;
 
         /// <summary>
-        /// The name a file value is shown under (the sensor page, the alert variable <c>$fileName</c>, the management API).
-        /// An ordinary file value usually carries its name without the extension and the extension apart; a large file value
-        /// (#1886) carries the whole original name. A name that already ends with the value's extension is shown as it is,
-        /// so nothing prints "dump.dmp.dmp"; any other name gets the extension ("backup.2026-11-25" + "csv").
+        /// The name a file value is shown under: the sensor page, the alert variable <c>$fileName</c>. Every file value, an
+        /// ordinary one and a large one alike, carries its name without the extension and the extension apart (a large value
+        /// is split so by <see cref="StemOf"/>), so the name is the two joined: "dump" + "dmp", "backup.tar" + "gz",
+        /// "" + "env" (a dotfile), "dump" + nothing.
         /// </summary>
         public static string GetDisplayName(this FileValue file)
         {
@@ -28,13 +28,22 @@ namespace HSMServer.Core.Extensions
             var name = file.Name ?? string.Empty;
             var extension = (file.Extension ?? string.Empty).TrimStart('.');
 
-            if (name.Length == 0)
-                return extension;
+            return extension.Length == 0 ? name : $"{name}.{extension}";
+        }
 
-            if (extension.Length == 0 || name.EndsWith($".{extension}", System.StringComparison.OrdinalIgnoreCase))
-                return name;
+        /// <summary>
+        /// The name of a large value (#1886): the original file name without its extension, as every file value carries its
+        /// name, so that the name and the extension join back into the original exactly. The extension is the one the
+        /// server took from the same name (after its last dot); a name that does not end with it is kept whole.
+        /// </summary>
+        public static string StemOf(string fileName, string extension)
+        {
+            if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(extension))
+                return fileName;
 
-            return $"{name}.{extension}";
+            var suffix = $".{extension}";
+
+            return fileName.EndsWith(suffix, System.StringComparison.Ordinal) ? fileName[..^suffix.Length] : fileName;
         }
     }
 }

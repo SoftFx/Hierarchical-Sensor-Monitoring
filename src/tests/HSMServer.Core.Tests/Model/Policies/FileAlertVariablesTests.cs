@@ -113,7 +113,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             Assert.DoesNotContain('\u202E', FileAlertVariables.FileName(File("invoice\u202Efdp.exe", "exe", 1)));
 
             // A format character outside the BMP (a TAG character, a surrogate pair) is one character to replace.
-            Assert.Equal("a b.txt", FileAlertVariables.FileName(File("a\U000E0041b.txt", "txt", 1)));
+            Assert.Equal("a b.txt", FileAlertVariables.FileName(File("a\U000E0041b", "txt", 1)));
             Assert.Contains("line two", comment);
         }
 

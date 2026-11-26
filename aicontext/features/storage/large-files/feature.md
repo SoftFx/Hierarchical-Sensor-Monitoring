@@ -25,7 +25,7 @@ Nothing is created on a server that never takes a large file: the folder appears
 | `FileId` | The id of the file in the store, a GUID the server makes. Never an archive id: a pack or a re-encryption never rewrites history. |
 | `Hash` | SHA-256 of the original (decompressed) content, 32 bytes: the checker's `ContentHash`. Not the hash the collector sends at the end, which is only an input of the check. |
 | `SourceModified` | The modification time of the source file, UTC. |
-| `Name`, `Extension` | The original name as the collector named it (shown, an archive entry name, never a path on the server) and its extension without the dot. |
+| `Name`, `Extension` | The original name without its extension, as every file value carries its name (#1886: `dump.dmp` is `dump` + `dmp`, `.env` is `` + `env`), and its extension without the dot: joined, they give the name the collector sent. The record keeps the whole name (shown, an archive entry name, never a path on the server). |
 | `Value` | Always empty. |
 | `OriginalSize` | The size of the file. |
 | `Time`, `ReceivingTime` | The time the server accepted the file, unique within the sensor (below). |
