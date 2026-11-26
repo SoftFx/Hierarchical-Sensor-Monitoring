@@ -117,7 +117,7 @@ Let's look at the folder settings that user could configure. On _General_ tab we
 ![01Folder_General](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/assets/84241056/f9fffd8b-d3f3-413a-a429-f3799226533b)
 
 On _Settings_ tab user could set "Keep sensors history". The period during which the sensor history will be stored. After this period has expired, the history will be clean up. 
-"Remove sensors after inactivity" defines the period after which the sensor will be deleted by the system. This settings applied only for sensors. Empty nodes user have to delete manually. Default values for "Keep sensors history" and "Remove sensors after inactivity" settings is 1 month.
+"Remove sensors after inactivity" defines the period after which the sensor will be deleted by the system. This settings applied only for sensors. Empty nodes user have to delete manually. Default values for "Keep sensors history" and "Remove sensors after inactivity" settings of a new folder are 3 months (they were 1 month before; existing folders keep what they were saved with). A new product gets the same two values of its own, 3 months.
 Parameter "Time to sensors live" used for TTL alert. These settings will be used as parent when setting up TTL alert. Default value is Never.
 
 ![02Folder_Settings](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/assets/84241056/36666398-356c-4f75-ac29-76cd6580e7aa)

@@ -7,6 +7,8 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Configuration;
+using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
@@ -26,19 +28,21 @@ namespace HSMServer.Controllers
         private readonly TelegramBot _telegramBot;
         private readonly NotificationsCenter _notifications;
         private readonly ChatSensorUsageCalculator _usageCalculator;
+        private readonly ChatAdministrationService _chatEngine;
 
         internal IChatsManager ChatsManager { get; }
 
 
         public NotificationsController(IChatsManager chatsManager, NotificationsCenter notifications,
             IFolderManager folderManager, IUserManager userManager,
-            ChatSensorUsageCalculator usageCalculator) : base(userManager)
+            ChatSensorUsageCalculator usageCalculator, ChatAdministrationService chatEngine) : base(userManager)
         {
             ChatsManager = chatsManager;
             _folderManager = folderManager;
             _notifications = notifications;
             _telegramBot = notifications.TelegramBot;
             _usageCalculator = usageCalculator;
+            _chatEngine = chatEngine;
         }
 
 
@@ -63,6 +67,17 @@ namespace HSMServer.Controllers
             ChatsManager.TryGetValue(model.Id, out var stored);
             ValidateWebhooks(model, stored);
 
+            // The write rules live in the engine (#1825): webhook URL shape, the partial update,
+            // the managed-folder binding. Field errors land under the same ModelState keys the
+            // form-level guards use, so the tab-routing below works unchanged. Only the Invalid
+            // outcome carries field errors; a NotFound/Conflict keeps the OLD failed-write arm —
+            // no folder mutation (the engine gates it), the admin lands on the list, exactly
+            // what the pre-engine flow did when TryUpdate answered false.
+            var engineResult = ModelState.IsValid
+                ? await _chatEngine.UpdateChatAsync(model.ToUpdate(), BuildFolderBinding(model), CurrentInitiator)
+                : null;
+            ApplyEngineErrors(engineResult);
+
             if (!ModelState.IsValid)
             {
                 RestoreStoredDisplayState(model, stored);
@@ -77,9 +92,6 @@ namespace HSMServer.Controllers
 
                 return View(model);
             }
-
-            if (await ChatsManager.TryUpdate(model.ToUpdate()))
-                await SyncFolders(model);
 
             // Index (the chats list) is [AuthorizeIsAdmin], but EditChat is also open to
             // ProductManagers of folders the chat is bound to. Redirecting everyone to Index
@@ -122,38 +134,23 @@ namespace HSMServer.Controllers
             ChatsManager.TryGetValue(model.Id, out var stored);
             ValidateWebhooks(model, stored);
 
+            // The create-or-update idempotency (the row may already exist, pre-created by /start
+            // against the pre-allocated guid) lives in the engine (#1825).
+            var engineResult = ModelState.IsValid
+                ? await _chatEngine.CreateChatAsync(model.ToUpdate(), BuildFolderBinding(model), CurrentUser.Id, CurrentInitiator)
+                : null;
+            ApplyEngineErrors(engineResult);
+
             if (!ModelState.IsValid)
             {
-                // Same re-render restoration as EditChat POST — see there for why the server-owned
-                // folder/display data must be repopulated before re-render.
+                // Same re-render restoration and tab-routing as EditChat POST — see there for why
+                // the server-owned folder/display data must be repopulated and the failing
+                // field's tab must become active (otherwise the rejection error is rendered
+                // into a display:none pane).
                 RestoreStoredDisplayState(model, stored);
-
-                // And the same tab-routing — see EditChat POST for why the failing field's tab must
-                // become active or the rejection error is rendered into a display:none pane.
                 SetTabFromWebhookErrors();
 
                 return View(nameof(EditChat), model);
-            }
-
-            // The user may have already triggered /start against the pre-allocated guid, in which
-            // case the Chat row exists in storage with a Telegram binding but no admin-set name.
-            // TryAdd would refuse (id collision) and silently lose the Name the user just typed.
-            // Detect that case and switch to an update path so the form Save is idempotent w.r.t.
-            // the order of "fill name" vs "click setup help".
-            if (ChatsManager.TryGetValue(model.Id, out _))
-            {
-                if (await ChatsManager.TryUpdate(model.ToUpdate()))
-                    await SyncFolders(model);
-
-                return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
-            }
-
-            var chat = model.ToNewChat(CurrentUser.Id);
-
-            if (await ChatsManager.TryAdd(chat))
-            {
-                model.Id = chat.Id;
-                await SyncFolders(model);
             }
 
             return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
@@ -230,50 +227,55 @@ namespace HSMServer.Controllers
         [HttpPost]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> RemoveTelegramBinding(Guid id) =>
-            await ClearChannel(id, clearTelegram: true);
+            MapEngineResult(await _chatEngine.ClearChannelAsync(id, ChatChannel.Telegram, CurrentInitiator));
 
         [HttpPost]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> ClearSlackWebhook(Guid id) =>
-            await ClearChannel(id, clearSlack: true);
+            MapEngineResult(await _chatEngine.ClearChannelAsync(id, ChatChannel.Slack, CurrentInitiator));
 
         [HttpPost]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> ClearMattermostWebhook(Guid id) =>
-            await ClearChannel(id, clearMattermost: true);
+            MapEngineResult(await _chatEngine.ClearChannelAsync(id, ChatChannel.Mattermost, CurrentInitiator));
 
+        private IActionResult MapEngineResult(PolicyWriteResult result) =>
+            result.Success ? Ok() : NotFound();
 
-        private async Task<IActionResult> ClearChannel(Guid id, bool clearTelegram = false, bool clearSlack = false, bool clearMattermost = false)
+        // The binding the caller asks for, in the form's two halves, against the folders the
+        // caller manages. The halves are same-typed, so they are passed by name: the hidden
+        // kept rows (model.Folders.Folders) decide only removals — a stale kept row never
+        // re-binds (the #1840 review) — and the SelectedFolders half is the only source of new
+        // bindings (its picker is commented out in _ChatFolders.cshtml today, so an honest post
+        // carries none). The engine applies the intersection rules.
+        private ChatFolderBinding BuildFolderBinding(ChatViewModel model)
         {
-            var update = new ChatUpdate
-            {
-                Id = id,
-                ClearTelegramBinding = clearTelegram,
-                ClearSlackWebhook = clearSlack,
-                ClearMattermostWebhook = clearMattermost,
-            };
+            var managed = _folderManager.GetUserFolders(CurrentUser).Select(f => f.Id).ToHashSet();
 
-            return await ChatsManager.TryUpdate(update) ? Ok() : NotFound();
+            var keep = new HashSet<Guid>(model.Folders?.Folders ?? []);
+            var add = new HashSet<Guid>(model.Folders?.SelectedFolders ?? []);
+
+            return new ChatFolderBinding(Keep: keep, Add: add, Managed: managed);
+        }
+
+        // Only the Invalid outcome's field-keyed errors reach the form; the other outcomes keep
+        // the pre-engine arms (the form has no spans for them and the old flow surfaced none).
+        private void ApplyEngineErrors(PolicyWriteResult result)
+        {
+            if (result?.Failure?.Errors is not { Count: > 0 })
+                return;
+
+            foreach (var (field, messages) in result.Failure.Errors)
+                foreach (var message in messages)
+                    ModelState.AddModelError(field, message);
         }
 
 
-        // Webhook URL validation moved server-side (was [Url] on ChatViewModel — the masked display
-        // value `https://…/••••` fails Uri.TryCreate, so the attribute was removed). The masked
-        // sentinel must match Mask(stored) exactly, or the post is rejected: the field is a plain
-        // editable input pre-filled with the mask, so an admin who partially edits it (e.g. changes
-        // only the host) must be told — otherwise ToUpdate would silently drop the edit because
-        // IsMasked is a substring test (#1329 review: a rotation could appear to succeed while
-        // nothing changed). The classification lives in WebhookUrlMasker.ValidatePosted so it's unit-
-        // covered; a real pasted URL still has to pass the absolute http/https check here.
-        //
-        // Empty-field guard: an empty/whitespace post with a stored webhook is rejected with a
-        // pointer to Remove Slack / Remove Mattermost. This is a deliberate UX tightening, not a
-        // regression fix — empty input has always bound to null (MVC ConvertEmptyStringToNull) and
-        // Chat.ApplyUpdate's `?? current` has always meant "no change", so clearing the field was a
-        // silent no-op before this PR too. Rejecting turns that no-op into feedback. storedUrl uses
-        // IsNullOrWhiteSpace to stay symmetric with Mask/ResolveWebhook — a whitespace-only stored
-        // value would otherwise make the chat unsavable (the "Use Remove …" error fires while the
-        // whitespace hides the Remove button via HasSlack, see #1329 review).
+        // Form-level webhook guards (#1329): the masked-sentinel partial-edit rejection and the
+        // empty-field pointer to the per-channel Remove button. These need the POSTED form value
+        // and the stored chat, so they stay with the form; the URL-SHAPE rule (absolute http/https)
+        // lives in the write engine (#1825) — its field errors arrive through ApplyEngineErrors
+        // under the same keys, so the tab-routing below treats them identically.
         private void ValidateWebhooks(ChatViewModel model, Chat stored)
         {
             ValidateWebhook(model.SlackWebhookUrl, stored?.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl), "Slack");
@@ -284,9 +286,7 @@ namespace HSMServer.Controllers
                 // MVC binds an empty text input to null via ConvertEmptyStringToNull, so both null
                 // and "" reach here. Empty + stored webhook = point to Remove. Empty + no stored
                 // webhook is legitimate (new chat, or an already-cleared channel) — MUST return
-                // here, not fall through: Uri.TryCreate(null, Absolute) returns false, which would
-                // add a spurious "must be a valid URL" error to a field the user never filled in,
-                // breaking AddChat for any chat missing one of the two webhooks (#1329 review).
+                // here, not fall through: the guards below assume a non-empty post.
                 if (string.IsNullOrWhiteSpace(posted))
                 {
                     if (!string.IsNullOrWhiteSpace(storedUrl))
@@ -295,23 +295,17 @@ namespace HSMServer.Controllers
                     return;
                 }
 
+                // The masked sentinel must match Mask(stored) exactly, or the post is rejected: the
+                // field is a plain editable input pre-filled with the mask, so an admin who partially
+                // edits it (e.g. changes only the host) must be told — otherwise ToUpdate would
+                // silently drop the edit because IsMasked is a substring test (#1329 review: a
+                // rotation could appear to succeed while nothing changed). storedUrl uses
+                // IsNullOrWhiteSpace to stay symmetric with Mask/ResolveWebhook — a whitespace-only
+                // stored value would otherwise make the chat unsavable (the "Use Remove …" error
+                // fires while the whitespace hides the Remove button via HasSlack).
                 var maskError = WebhookUrlMasker.ValidatePosted(posted, storedUrl);
                 if (maskError != null)
-                {
                     ModelState.AddModelError(key, maskError);
-                    return;
-                }
-
-                // ValidatePosted returned null: the only remaining case is a real URL. Masked values
-                // can't reach here (IsMasked + matching Mask(stored) returned null from ValidatePosted;
-                // IsMasked + mismatch returned an error). Real URLs must be well-formed absolute
-                // http/https.
-                if (WebhookUrlMasker.IsMasked(posted))
-                    return;
-
-                if (!Uri.TryCreate(posted, UriKind.Absolute, out var uri) ||
-                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                    ModelState.AddModelError(key, "Webhook URL must be a valid URL");
             }
         }
 
@@ -368,47 +362,6 @@ namespace HSMServer.Controllers
             var chatFolders = _folderManager.GetValues().Where(f => chat.Folders.Contains(f.Id)).ToList();
 
             return new(availableFolders, chatFolders);
-        }
-
-        private async Task SyncFolders(ChatViewModel model)
-        {
-            if (!ChatsManager.TryGetValue(model.Id, out var updated))
-                return;
-
-            // SelectedFolders and the implicit "removed" set are attacker-controlled POST data.
-            // EditChat's role filter only guarantees the user manages *some* folder this chat is
-            // bound to — it does not authorise mutating other folders. Re-check membership here.
-            var managedFolderIds = _folderManager.GetUserFolders(CurrentUser).Select(f => f.Id).ToHashSet();
-
-            var removedFolders = updated.Folders
-                .Except(model.Folders.Folders)
-                .Where(managedFolderIds.Contains)
-                .ToList();
-
-            foreach (var folderId in model.Folders.SelectedFolders.Where(managedFolderIds.Contains))
-                if (_folderManager.TryGetValue(folderId, out var folder))
-                    await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { model.Id });
-
-            foreach (var folderId in removedFolders)
-                if (_folderManager.TryGetValue(folderId, out var folder))
-                {
-                    var folderChats = new HashSet<Guid>(folder.Chats);
-                    folderChats.Remove(model.Id);
-
-                    await UpdateFolder(folderId, folderChats);
-                }
-        }
-
-        private async Task UpdateFolder(Guid folderId, HashSet<Guid> folderChats)
-        {
-            var update = new FolderUpdate()
-            {
-                Id = folderId,
-                Chats = folderChats,
-                Initiator = CurrentInitiator,
-            };
-
-            await _folderManager.TryUpdate(update);
         }
     }
 }

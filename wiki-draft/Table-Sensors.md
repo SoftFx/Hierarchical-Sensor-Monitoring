@@ -177,7 +177,7 @@ One exception, a known issue of this branch that is not decided yet: a table sen
 | Inactivity Period (TTL) | None, and it does not inherit one from its folder. Use a TTL on the feed sensor `Rows`. |
 | Status, value edit | It has no status or value. "Edit status" shows no value field. |
 | Move, rename, merge with another sensor | Refused (the management API answers `notSupported`). Another place or another shape is another sensor: register a new path. |
-| Rename a node above it | Refused with an error that names the table sensor. Renaming the **product** itself is allowed. |
+| Rename a node above it | Refused: no node below the product's root can be renamed on this server (its name is part of its sensors' paths). Renaming the **product** itself is allowed. |
 | Change its columns | Refused: a registration of the same path with other columns is answered "Table sensor '…' is registered with the schema (time Time, bid Double, ask Double); a registration with (time Time, bid Double) is refused: a different shape is a different sensor." |
 | Clear history | Refused for the sensor; a clear of a node skips it. |
 | Aggregate values | The switch is hidden. |

@@ -2,6 +2,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications.Telegram.Tokens;
@@ -25,6 +26,7 @@ namespace HSMServer.Notifications.Chats
         private readonly TelegramConfig _config;
         private readonly IDatabaseCore _database;
         private readonly IUserManager _userManager;
+        private readonly JournalAppender _journal;
 
         public TokensManager TokenManager { get; } = new();
 
@@ -43,11 +45,12 @@ namespace HSMServer.Notifications.Chats
         public event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
-        public ChatsManager(IDatabaseCore database, IUserManager userManager, IServerConfig config)
+        public ChatsManager(IDatabaseCore database, IUserManager userManager, IServerConfig config, JournalAppender journal)
         {
             _database = database;
             _config = config.Telegram;
             _userManager = userManager;
+            _journal = journal;
         }
 
 
@@ -66,26 +69,43 @@ namespace HSMServer.Notifications.Chats
                 return false;
             }
 
+            _journal.Write(model.Id, JournalKinds.Chat, ChatJournal.CreateEnviroment, model.Name, AuthorOf(model),
+                ChatJournal.CreationChanges(ChatJournal.StateOf(model)));
+
             return true;
         }
 
-        public async override Task<bool> TryRemove(RemoveRequest remove) =>
-            TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove)
-            && (chat.TelegramChatId is null || _telegramChatIds.TryRemove(chat.TelegramChatId, out _));
+        public async override Task<bool> TryRemove(RemoveRequest remove)
+        {
+            if (!TryGetValue(remove.Id, out var chat) || !await base.TryRemove(remove))
+                return false;
+
+            _journal.Write(chat.Id, JournalKinds.Chat, ChatJournal.RemoveEnviroment, chat.Name, remove.Initiator,
+                [new("chat", chat.Name, "")]);
+
+            return chat.TelegramChatId is null || _telegramChatIds.TryRemove(chat.TelegramChatId, out _);
+        }
 
         public override async Task<bool> TryUpdate(ChatUpdate update)
         {
             TryGetValue(update.Id, out var chat);
             var oldTelegramChatId = chat?.TelegramChatId;
+            var before = chat is null ? default : ChatJournal.StateOf(chat);
 
             var result = await base.TryUpdate(update);
 
-            if (result && chat is not null && !Nullable.Equals(oldTelegramChatId, chat.TelegramChatId))
+            if (result && chat is not null)
             {
-                if (oldTelegramChatId is not null)
-                    _telegramChatIds.TryRemove(oldTelegramChatId, out _);
-                if (chat.TelegramChatId is not null)
-                    _telegramChatIds[chat.TelegramChatId] = chat;
+                if (!Nullable.Equals(oldTelegramChatId, chat.TelegramChatId))
+                {
+                    if (oldTelegramChatId is not null)
+                        _telegramChatIds.TryRemove(oldTelegramChatId, out _);
+                    if (chat.TelegramChatId is not null)
+                        _telegramChatIds[chat.TelegramChatId] = chat;
+                }
+
+                _journal.Write(chat.Id, JournalKinds.Chat, ChatJournal.UpdateEnviroment, chat.Name,
+                    update.Initiator, ChatJournal.ChangesBetween(before, ChatJournal.StateOf(chat)));
             }
 
             return result;
@@ -110,6 +130,18 @@ namespace HSMServer.Notifications.Chats
 
         public Chat GetChatByChatId(ChatId chatId) => _telegramChatIds.GetValueOrDefault(chatId);
 
+        // The initiator of a chat's creation is its author. A fresh row has no slot for the
+        // write's initiator, and whoever creates a row is its author: the web flow passes the
+        // signed-in user, the /start flow the user who issued the invitation. A row whose
+        // author is gone journals under System.
+        private InitiatorInfo AuthorOf(Chat chat)
+        {
+            var name = chat.Author
+                ?? (_userManager.TryGetValueById(chat.AuthorId, out var author) ? author.Name : null);
+
+            return name is null ? InitiatorInfo.System : InitiatorInfo.AsUser(name);
+        }
+
         // Test-only seam to inject a stale _telegramChatIds entry — mirrors the production failure
         // mode where a binding was cleared through a path that bypassed TryUpdate. Lets the self-heal
         // tests reproduce the user-facing symptom without relying on a real storage corruption.
@@ -123,10 +155,16 @@ namespace HSMServer.Notifications.Chats
             $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
 
         public string GetChatInvitationLink(Guid chatId, User user) =>
-            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+            GetChatInvitationLink(chatId, user, InvitationToken.DefaultExpiration);
 
         public string GetChatGroupInvitation(Guid chatId, User user) =>
-            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+            GetChatGroupInvitation(chatId, user, InvitationToken.DefaultExpiration);
+
+        public string GetChatInvitationLink(Guid chatId, User user, TimeSpan invitationLifetime) =>
+            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";
+
+        public string GetChatGroupInvitation(Guid chatId, User user, TimeSpan invitationLifetime) =>
+            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user, invitationLifetime)}";
 
         public async Task<ChatConnectResult> TryConnect(Message message, InvitationToken token)
         {
@@ -136,8 +174,10 @@ namespace HSMServer.Notifications.Chats
             // Both share the strict conflict policy (refuse rebind / refuse theft).
             if (token.ChatId is Guid chatId && chatId != Guid.Empty)
             {
+                // The binding is the work of the user who issued the invitation: the /start
+                // command is typed in Telegram, but the journal names the issuer.
                 if (TryGetValue(chatId, out var existing))
-                    return await BindTelegramToChat(existing, message);
+                    return await BindTelegramToChat(existing, message, InitiatorInfo.AsUser(token.User.Name));
 
                 return await CreateChatWithTelegram(chatId, message, token.User);
             }
@@ -228,7 +268,7 @@ namespace HSMServer.Notifications.Chats
         // as FailedAlreadyBound with the owner name). The theft check goes through GetActiveTelegramOwner,
         // which silently drops stale index entries (owner.TelegramChatId cleared or moved) so storage
         // corruption doesn't permanently block legitimate binds.
-        private async Task<ChatConnectResult> BindTelegramToChat(Chat existing, Message message)
+        private async Task<ChatConnectResult> BindTelegramToChat(Chat existing, Message message, InitiatorInfo initiator)
         {
             if (message?.Chat is null)
                 return new ChatConnectResult(ChatConnectOutcome.Failed);
@@ -261,6 +301,7 @@ namespace HSMServer.Notifications.Chats
                 Id = existing.Id,
                 TelegramChatId = incomingChat.Id,
                 TelegramChatTitle = isUserChat ? message.From?.Username : incomingChat.Title,
+                Initiator = initiator,
             };
 
             var updated = await TryUpdate(update);
