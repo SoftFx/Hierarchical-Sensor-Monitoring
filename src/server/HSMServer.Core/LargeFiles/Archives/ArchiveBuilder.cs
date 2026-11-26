@@ -156,8 +156,10 @@ namespace HSMServer.Core.LargeFiles.Archives
                 builtSinceListing++;
             }
 
-            RetireUnusedPasswordVersions();
-            RemoveExpiredPasswordVersions();
+            // The removal checks again, against the same listing, that no packed archive carries a version it removes;
+            // without a listing it waits for the next pass.
+            if (RetireUnusedPasswordVersions() is { } carried)
+                RemoveExpiredPasswordVersions(carried);
         }
 
         // The work of one listing, in the store's order: the first pack of a verified file (a secure one when its product
@@ -624,9 +626,12 @@ namespace HSMServer.Core.LargeFiles.Archives
 
 
         // A replaced version that no archive carries and no build reads or writes is retired once; the password service
-        // keeps it readable until its retention ends and removes it in RemoveExpired.
-        private void RetireUnusedPasswordVersions()
+        // keeps it readable until its retention ends and removes it in RemoveExpired. Returns the (product, version) pairs
+        // the packed archives carry, or null when the store could not be listed.
+        private HashSet<(Guid, int)> RetireUnusedPasswordVersions()
         {
+            HashSet<(Guid, int)> carried = null;
+
             try
             {
                 // Products with a password but no file seen in this process (after a restart) are retired too.
@@ -634,14 +639,16 @@ namespace HSMServer.Core.LargeFiles.Archives
                     _products.TryAdd(productId, 0);
 
                 // Only a secure archive carries a version: one that is not secure keeps no replaced password alive.
-                var carried = new HashSet<(Guid, int)>();
+                var listed = new HashSet<(Guid, int)>();
                 foreach (var file in _store.GetFiles(LargeArchiveFileState.Packed))
                 {
                     _products.TryAdd(file.ProductId, 0);
 
                     if (CarriedVersion(file) is int version)
-                        carried.Add((file.ProductId, version));
+                        listed.Add((file.ProductId, version));
                 }
+
+                carried = listed;
 
                 var now = _utcNow();
                 foreach (var productId in _products.Keys)
@@ -669,13 +676,15 @@ namespace HSMServer.Core.LargeFiles.Archives
             {
                 _logger.Warn($"Large file archives: the retirement of dump password versions failed: {StoreError(ex)}");
             }
+
+            return carried;
         }
 
-        private void RemoveExpiredPasswordVersions()
+        private void RemoveExpiredPasswordVersions(IReadOnlySet<(Guid, int)> carried)
         {
             try
             {
-                var removed = _passwords.RemoveExpired(_utcNow());
+                var removed = _passwords.RemoveExpired(_utcNow(), carried);
                 if (removed > 0)
                     _logger.Info($"Large file archives: {removed} retired dump password version(s) removed after the retention");
             }

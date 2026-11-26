@@ -74,6 +74,8 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
 
     public sealed class DumpPasswordServiceTests : IDisposable
     {
+        private static readonly IReadOnlySet<(Guid, int)> NoArchives = new HashSet<(Guid, int)>();
+
         private const string TypedPassword = "correct-horse-battery-staple";
 
         private static readonly InitiatorInfo Manager = InitiatorInfo.AsUser("manager");
@@ -406,13 +408,41 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             service.MarkRetired(id, 2, now - retention + TimeSpan.FromSeconds(1)); // recent
             // Version 3 is replaced and not retired: an archive may still carry it.
 
-            Assert.Equal(1, service.RemoveExpired(now));
+            Assert.Equal(1, service.RemoveExpired(now, NoArchives));
 
             Assert.Equal([4, 3, 2], service.GetVersions(id).Select(v => v.Version));
             Assert.Null(service.GetVersion(id, 1));
             Assert.Equal([4, 3, 2], _context.CreateService(retention).GetVersions(id).Select(v => v.Version));
 
-            Assert.Equal(0, service.RemoveExpired(now));
+            Assert.Equal(0, service.RemoveExpired(now, NoArchives));
+        }
+
+        [Fact]
+        public void RemoveExpired_Keeps_An_Expired_Version_An_Archive_Still_Carries()
+        {
+            var retention = TimeSpan.FromDays(30);
+            var service = _context.CreateService(retention);
+            var id = _context.Product.Id;
+            var other = Guid.NewGuid();
+
+            for (var i = 0; i < 3; i++)
+                service.SetPassword(id, service.Generate(), true, Manager);
+
+            var now = _context.Now.AddDays(100);
+            service.MarkRetired(id, 1, now - retention - TimeSpan.FromDays(1));
+            service.MarkRetired(id, 2, now - retention - TimeSpan.FromDays(1));
+
+            // An archive of the product carries version 1; version 2 of another product says nothing about this one.
+            var carried = new HashSet<(Guid, int)> { (id, 1), (other, 2) };
+
+            Assert.Equal(1, service.RemoveExpired(now, carried));
+
+            Assert.Equal([3, 1], service.GetVersions(id).Select(v => v.Version));
+            Assert.Equal([3, 1], _context.CreateService(retention).GetVersions(id).Select(v => v.Version));
+
+            // Once no archive carries it, it goes.
+            Assert.Equal(1, service.RemoveExpired(now, NoArchives));
+            Assert.Equal([3], service.GetVersions(id).Select(v => v.Version));
         }
 
         [Fact]
@@ -423,7 +453,7 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
 
             service.SetPassword(id, TypedPassword, false, Manager);
 
-            Assert.Equal(0, service.RemoveExpired(_context.Now.AddYears(10)));
+            Assert.Equal(0, service.RemoveExpired(_context.Now.AddYears(10), NoArchives));
             Assert.Equal(1, service.GetCurrent(id).Version);
         }
 
@@ -438,12 +468,12 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
             service.MarkRetired(id, 1, _context.Now);
             _context.Database.ShouldFailDumpPasswordOp = _ => true;
 
-            Assert.Throws<AggregateException>(() => service.RemoveExpired(_context.Now.AddDays(10)));
+            Assert.Throws<AggregateException>(() => service.RemoveExpired(_context.Now.AddDays(10), NoArchives));
             Assert.NotNull(service.GetVersion(id, 1));
 
             _context.Database.ShouldFailDumpPasswordOp = null;
 
-            Assert.Equal(1, service.RemoveExpired(_context.Now.AddDays(10)));
+            Assert.Equal(1, service.RemoveExpired(_context.Now.AddDays(10), NoArchives));
         }
 
         [Fact]

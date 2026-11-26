@@ -186,12 +186,15 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         }
 
         /// <summary>
-        /// Removes the replaced versions retired longer than the retention ago; the current version stays. A product whose row
-        /// cannot be written keeps its versions in memory and on disk (the next run tries again); the other products go on,
-        /// and the failures are thrown together at the end.
+        /// Removes the replaced versions retired longer than the retention ago; the current version stays, and so does an
+        /// expired version a packed archive of the product still carries (checked again here, apart from the retirement).
+        /// A product whose row cannot be written keeps its versions in memory and on disk (the next run tries again); the
+        /// other products go on, and the failures are thrown together at the end.
         /// </summary>
-        public int RemoveExpired(DateTime nowUtc)
+        public int RemoveExpired(DateTime nowUtc, IReadOnlySet<(Guid ProductId, int Version)> carried)
         {
+            ArgumentNullException.ThrowIfNull(carried);
+
             var removed = 0;
             List<Exception> failures = null;
 
@@ -200,7 +203,7 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
                 foreach (var productId in _versions.Keys.ToArray())
                 {
                     var versions = _versions[productId];
-                    var next = versions.Where((v, i) => i == 0 || !IsExpired(v, nowUtc)).ToArray();
+                    var next = versions.Where((v, i) => i == 0 || !IsExpired(v, nowUtc) || IsCarried(productId, v, carried)).ToArray();
 
                     if (next.Length == versions.Length)
                         continue;
@@ -291,6 +294,17 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
 
         private bool IsExpired(DumpPasswordVersion version, DateTime nowUtc) =>
             version.RetiredUtc is { } retired && retired + _retention < nowUtc;
+
+        // Logs the product and the version number only.
+        private static bool IsCarried(Guid productId, DumpPasswordVersion version, IReadOnlySet<(Guid, int)> carried)
+        {
+            if (!carried.Contains((productId, version.Version)))
+                return false;
+
+            _logger.Warn($"Dump password version {version.Version} of product {productId} is retired and expired, " +
+                         "but an archive still carries it: it is kept");
+            return true;
+        }
 
         // Under _lock. Throws when the row cannot be written; logs the product and the version only.
         private void Store(Guid productId, DumpPasswordVersion[] versions, int version)

@@ -628,6 +628,28 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
         [Fact]
+        public async Task TheRemovalOfExpiredVersions_IsGivenTheVersionsThePackedArchivesCarry()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(100_000));
+            await _h.Run();
+
+            // A version retired although its archive was never rewritten (the re-encryption keeps failing): the removal
+            // after the retention still sees that an archive carries it, and keeps it.
+            _h.Passwords.Set(_h.Product, Password2);
+            _h.Writer.FailWrite = _ => new InvalidOperationException("the writer is broken");
+            _h.Passwords.MarkRetired(_h.Product, 1, _h.Now);
+            _h.Advance(TimeSpan.FromDays(31));
+
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.Failed, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Contains((_h.Product, 1), _h.Passwords.LastCarried);
+            Assert.NotNull(_h.Passwords.GetVersion(_h.Product, 1));
+            Assert.Equal(TestContent.Compressible(100_000), _h.ReadArchive(file.FileId, Password1));
+        }
+
+        [Fact]
         public async Task ConcurrentPasses_NeverRunTwoBuildsAtOnce()
         {
             _h.Passwords.Set(_h.Product, Password1);

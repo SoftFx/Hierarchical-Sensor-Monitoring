@@ -94,8 +94,11 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
         /// <summary>Marks a replaced version as no longer carried by any archive; kept readable until the retention ends.</summary>
         void MarkRetired(Guid productId, int version, DateTime utc);
 
-        /// <summary>Removes replaced versions retired for longer than the retention; returns how many were removed.</summary>
-        int RemoveExpired(DateTime nowUtc);
+        /// <summary>
+        /// Removes replaced versions retired for longer than the retention; returns how many were removed. A version in
+        /// <paramref name="carried"/> (the (product, version) pairs the packed archives carry, from one listing) is kept.
+        /// </summary>
+        int RemoveExpired(DateTime nowUtc, IReadOnlySet<(Guid ProductId, int Version)> carried);
 
         /// <summary>Removes every version of a product (with the product).</summary>
         void RemoveProduct(Guid productId);
