@@ -157,13 +157,15 @@ Rows are stored by week and deleted a whole week at a time, once the period has 
 
 One exception, a known issue of this branch that is not decided yet: a table sensor that takes "1 month" (or another preset) from a **folder** is currently kept for ever, as an ordinary sensor's history is in that case.
 
-**Changing the period.** What this branch does today:
+**Changing the period.**
 
 - A **longer** period protects the sensor's rows from the moment you save it, including rows of weeks that would have expired under the old period, as long as they were not deleted yet. Rows already deleted do not come back.
-- A **shorter** period frees nothing early: rows stored before the change are deleted only when the **old, longer** period has passed for them. Rows stored from the next hour after the change on are deleted by the new period.
-- In both cases the change applies to rows that arrive from the hour after the change; rows of the current hour stay under the old period.
+- A **shorter** period deletes the rows it no longer covers: a few minutes after the change, rows of the weeks for which the new period has already passed are deleted, and the sensor's newer rows follow the new period from then on.
+- In both cases the server then moves the sensor's stored rows, in the background, into the files of the new period, so that each week file holds only rows of one period and is deleted whole when its time comes. The move runs once a minute for at most 10 seconds and 256 MB of rows (the server settings `TableSensors.MoveSecondsPerPass` and `MoveMegabytesPerPass`); moving a year of a busy table took about an hour in our measurement. A move never changes what a read of the sensor returns, apart from the rows a shorter period deletes.
+- Rows of the current hour, and rows not merged yet, are moved after they are merged (within the next hour). While a product's merge lags behind, its rows wait for it.
+- Deleted rows give their disk space back when a tenth of their week file is deleted (the file is then compacted) or when the whole week file is deleted.
 
-**Not built yet:** moving a sensor's stored rows to its new period in the background, so that a shortened period frees disk soon and a lengthened sensor stops holding the old week files. Until then, the server's sensor `Move weeks pending` (under `Database/Tables`) counts the week files it keeps for that reason.
+The server's sensors under `Database/Tables` show the move: `Move steps pending` (sensor-weeks still in the files of an old period), `Moved rows`, `Rows expired by the move`, and `Move faults` (see "The server's own sensors" below).
 
 **Removing a table sensor** (Remove in the tree) removes the sensor. Its rows are no longer shown and are not given to a new sensor created later at the same path. Rows of the removed sensor that are already stored stay on disk until their week is deleted by the period; deleting them at once is decided and not built yet. If the sensor's collector is still running, it registers the sensor again, as a new, empty sensor.
 
@@ -216,7 +218,7 @@ The feed never changes a sensor that exists: your description, unit, alerts and 
 
 ## The server's own sensors
 
-The server reports its table store in its own product, **HSM Server Monitoring**, under **`Database/Tables`**, every 5 minutes. They appear at the next 5-minute sample after the table store is first opened in the server's run (the first registration of a table sensor, or the first rows); the merge and retention sensors (from `Batch databases open` down) appear after the first hourly merge. Most are counters since the server started; `Blocks in store`, `Batch databases open`, `Batch week databases`, `Merge lag`, `Merged hours holding blocks` and `Move weeks pending` show the current state.
+The server reports its table store in its own product, **HSM Server Monitoring**, under **`Database/Tables`**, every 5 minutes. They appear at the next 5-minute sample after the table store is first opened in the server's run (the first registration of a table sensor, or the first rows); the merge and retention sensors (from `Batch databases open` down) appear after the first hourly merge. Most are counters since the server started; `Blocks in store`, `Batch databases open`, `Batch week databases`, `Merge lag`, `Merged hours holding blocks`, `Move weeks pending`, `Move steps pending`, `Move steps blocked` and `Move steps refused now` show the current state.
 
 | Sensor | Means trouble when |
 |---|---|
@@ -237,7 +239,12 @@ The server reports its table store in its own product, **HSM Server Monitoring**
 | `Merged hours holding blocks` | — (hours whose original data waits for its 24 hours) |
 | `Batch weeks dropped`, `Expired blocks deleted`, `Expired block rows deleted` | — (retention) |
 | `Retention faults` | Error: a week could not be deleted; tried again an hour later |
-| `Move weeks pending` | — (week files kept for a changed period, see above) |
+| `Move weeks pending` | — (week files kept because a sensor whose period changed still has rows in them; they go once the move is done) |
+| `Move steps pending` | stays above 0 for hours: sensors whose period changed are not moved |
+| `Move steps blocked` | above 0 for long: the move cannot run for some products (their merge lags, or `Move faults`) |
+| `Move steps refused`, `Move steps refused now` | it grows: a step could not run (too little free disk, damaged data); the rows stay where they are and are read there; the log has the reason |
+| `Moved rows`, `Moved batches size` (MB), `Rows expired by the move`, `Move leftovers cleaned`, `Batch databases compacted` | — (the move) |
+| `Move faults` | Error: a step of the move or a compaction failed; tried again a minute later |
 
 The server's log (`Logs/HSM-all-log.txt`, `Logs/HSM-error-log.txt`) has a line when the store opens (`Table block store Databases/Tables opened in 59 ms: 0 blocks, next sequence 0`) and one per table connection of a collector (`Collector table connection … of session … opened: product "TableDocs", key "DefaultKey", client "table-quick-start", …`). Refused tables are summarised in a warning at most once a minute. The Configuration page shows the size of the table store as "Table blocks (MB)".
 
