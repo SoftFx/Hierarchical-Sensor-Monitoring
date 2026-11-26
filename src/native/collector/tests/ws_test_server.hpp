@@ -15,6 +15,10 @@
 
 #include "http_capture_server.hpp" // socket_t, platform socket headers
 
+#if !defined(_WIN32)
+#include <sys/ioctl.h> // FIONREAD
+#endif
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -480,6 +484,13 @@ namespace hsm::test
         // Drops the TCP connection without a close frame.
         void Drop() { drop_.store(true, std::memory_order_release); }
 
+        // A peer that stops reading (#1848): while paused, main connections read nothing more, so
+        // what a client sends fills the socket buffers and its writes stop being taken. Plaintext:
+        // here libcurl answers CURLE_AGAIN and the client's own wait bounds the send; the wait
+        // inside libcurl's Schannel send that #1848 is about is not driven by this server
+        // (docs/test/NativeWsStalledPeer.md).
+        void PauseReading(bool paused) { main_paused_.store(paused, std::memory_order_release); }
+
         // The sessionId the hellos of the sessions accepted from now on state. Without a call each
         // hello gets a new one, 32 hex digits. An empty `id` leaves the field out (a server before
         // #1845); any other text is sent as it is, malformed or not.
@@ -814,6 +825,26 @@ namespace hsm::test
         // answers keeps a client's close linger waiting for its whole bound.
         void SetTableAnswerCloses(bool answer) { table_answer_closes_.store(answer, std::memory_order_release); }
 
+        // A table connection that stops reading after its probe was answered, before its first block
+        // frame (#1848): `connection` 1 = the first table connection accepted, 0 = every one from now
+        // on, -1 = none (the default). Until ResumeTableReading the paused connection reads nothing,
+        // so a block larger than the socket buffers cannot be written whole. On resume it reads what
+        // arrived up to the end of the stream: a block frame cut short (the client gave the
+        // connection up) is recorded in TableTruncatedFrames with what its header said.
+        void PauseTableReading(int connection) { table_pause_.store(connection, std::memory_order_release); }
+        void ResumeTableReading() { table_pause_.store(-1, std::memory_order_release); }
+        // Bytes a paused table connection has not read yet (what the client's write put there);
+        // 0 when none is paused.
+        size_t PausedTableBytes() const { return paused_table_bytes_.load(std::memory_order_acquire); }
+        // Block frames a paused table connection got only in part: `connection`, `producer`,
+        // `sequence` from the frame's header, `frame_bytes` the payload bytes that arrived,
+        // `outcome` "truncated of N" with the payload length the frame declared.
+        std::vector<TableFrameRecord> TableTruncatedFrames() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return table_truncated_;
+        }
+
         // Runs on the server's thread when the client's close frame of a session arrives, before it
         // is answered.
         void SetSessionCloseReceived(std::function<void()> hook)
@@ -852,6 +883,12 @@ namespace hsm::test
         {
             while (!stop_.load(std::memory_order_acquire) && !drop.load(std::memory_order_acquire))
             {
+                // PauseReading: a main connection (the one drop_ guards) reads nothing meanwhile.
+                if (&drop == &drop_ && main_paused_.load(std::memory_order_acquire))
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                    continue;
+                }
                 fd_set readfds;
                 FD_ZERO(&readfds);
                 FD_SET(sock, &readfds);
@@ -1143,6 +1180,84 @@ namespace hsm::test
             side_threads_.emplace_back([this, conn] { ServeSide(conn); });
         }
 
+        bool TablePaused(int index) const
+        {
+            const int pause = table_pause_.load(std::memory_order_acquire);
+            return pause == 0 || pause == index;
+        }
+
+        static size_t BytesWaiting(socket_t conn)
+        {
+#if defined(_WIN32)
+            u_long waiting = 0;
+            return ioctlsocket(conn, FIONREAD, &waiting) == 0 ? static_cast<size_t>(waiting) : 0;
+#else
+            int waiting = 0;
+            return ioctl(conn, FIONREAD, &waiting) == 0 && waiting > 0 ? static_cast<size_t>(waiting) : 0;
+#endif
+        }
+
+        // PauseTableReading: reads nothing until resumed (or the server stops), then reads to the end
+        // of the stream and records the block frame that came in part.
+        void ReadPausedTableConnection(socket_t conn, int index)
+        {
+            while (TablePaused(index) && !stop_.load(std::memory_order_acquire))
+            {
+                paused_table_bytes_.store(BytesWaiting(conn), std::memory_order_release);
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+            paused_table_bytes_.store(0, std::memory_order_release);
+
+            std::string raw;
+            char buffer[65536];
+            while (WaitReadable(conn, side_drop_))
+            {
+                const int n = recv(conn, buffer, static_cast<int>(sizeof buffer), 0);
+                if (n <= 0)
+                    break;
+                raw.append(buffer, static_cast<size_t>(n));
+            }
+
+            // The frame header: 2 bytes, the extended length, the mask; then the payload so far.
+            if (raw.size() < 2)
+                return;
+            uint64_t length = static_cast<uint8_t>(raw[1]) & 0x7Fu;
+            size_t at = 2;
+            if (length == 126 && raw.size() >= 4)
+            {
+                length = (static_cast<uint64_t>(static_cast<uint8_t>(raw[2])) << 8) | static_cast<uint8_t>(raw[3]);
+                at = 4;
+            }
+            else if (length == 127 && raw.size() >= 10)
+            {
+                length = 0;
+                for (size_t i = 2; i < 10; ++i)
+                    length = (length << 8) | static_cast<uint8_t>(raw[i]);
+                at = 10;
+            }
+            if (raw.size() < at + 4)
+                return;
+            const std::string mask = raw.substr(at, 4);
+            std::string payload = raw.substr(at + 4, static_cast<size_t>((std::min<uint64_t>)(length, raw.size() - at - 4)));
+            for (size_t i = 0; i < payload.size(); ++i)
+                payload[i] = static_cast<char>(payload[i] ^ mask[i % 4]);
+
+            TableFrameRecord record;
+            record.connection = index;
+            record.frame_bytes = payload.size();
+            record.outcome = "truncated of " + std::to_string(length);
+            if (payload.size() >= 40)
+            {
+                for (int i = 0; i < 8; ++i)
+                    record.id |= static_cast<int64_t>(static_cast<uint8_t>(payload[8 + i])) << (8 * i);
+                record.producer = payload.substr(16, 16);
+                for (int i = 0; i < 8; ++i)
+                    record.sequence |= static_cast<int64_t>(static_cast<uint8_t>(payload[32 + i])) << (8 * i);
+            }
+            std::lock_guard<std::mutex> guard(mutex_);
+            table_truncated_.push_back(std::move(record));
+        }
+
         // The scripted table connection: hello, probes, block frames and their answers.
         void ServeTable(socket_t conn, const std::string& session_id)
         {
@@ -1178,8 +1293,17 @@ namespace hsm::test
             uint8_t message_opcode = 0;
             Frame frame;
             bool open = true;
-            while (open && ReadFrame(conn, side_drop_, frame))
+            bool probed = false;
+            while (open)
             {
+                if (probed && TablePaused(index))
+                {
+                    ReadPausedTableConnection(conn, index);
+                    open = false;
+                    break;
+                }
+                if (!ReadFrame(conn, side_drop_, frame))
+                    break;
                 if (frame.opcode == 0x8)
                 {
                     bool closing = false;
@@ -1231,13 +1355,14 @@ namespace hsm::test
                 else if (message_opcode == 0x2)
                 {
                     open = AnswerTableFrame(index, message, reply, close_with);
+                    probed = true; // the first binary message of a connection is its probe
                 }
                 message.clear();
                 message_opcode = 0;
             }
 
             // A closing connection is read on until the client's close (or its end).
-            while (!open && ReadFrame(conn, side_drop_, frame))
+            while (!open && !stop_.load(std::memory_order_acquire) && ReadFrame(conn, side_drop_, frame))
             {
                 if (frame.opcode == 0x8)
                 {
@@ -1770,6 +1895,9 @@ namespace hsm::test
         int port_ = 0;
         std::atomic<bool> stop_{ false };
         std::atomic<bool> drop_{ false };
+        std::atomic<bool> main_paused_{ false };
+        std::atomic<int> table_pause_{ -1 };
+        std::atomic<size_t> paused_table_bytes_{ 0 };
         std::atomic<bool> connected_{ false };
         std::atomic<int> upgrades_{ 0 };
         std::atomic<int> pongs_{ 0 };
@@ -1832,6 +1960,7 @@ namespace hsm::test
         std::deque<TableAnswer> table_script_answers_;                            // guarded by mutex_
         std::vector<int64_t> table_probes_;                                       // guarded by mutex_
         std::vector<TableFrameRecord> table_frames_;                              // guarded by mutex_
+        std::vector<TableFrameRecord> table_truncated_;                           // guarded by mutex_
         std::map<std::string, TableFrameRecord> table_stored_;                    // guarded by mutex_
         std::set<int64_t> table_unanswered_;                                      // guarded by mutex_
         std::function<void()> session_close_received_;                            // guarded by mutex_
