@@ -166,7 +166,7 @@ Section `TableSensors` of `Config/appsettings.json` (`TableSensorsConfig`), read
 |---|---|---|
 | `MaxDecompressedBytes` | 67,108,864 (64 MiB) | A block's limits on a put (`TableBlockLimits`); the format's maxima bound them. A stored block is read back with the format's maxima, so lowering a limit later does not hide it. |
 | `MaxTables` | 65,536 | Any value the format allows: the envelope's refusal count is 32-bit. |
-| `MaxRows` | 8,388,608 | |
+| `MaxRows` | 8,388,608 | At most 16,777,216 (`TableBlockOptions.MaxRowsPerBlockLimit`, #1919): a read ranks an unmerged block's rows by `(block sequence << 24) \| row`, so a row index must fit in 24 bits. Before, any value up to 2,147,483,647 was taken and rows past the 2^24th of a block would have been ranked out of order. |
 | `MaxColumnsPerTable` | 64 | |
 | `MaxTableIdLength` | 1,024 | |
 | `MaxReadRows` | 1,000,000 | The most rows one read returns (ten million rows of five columns would be 400 MB in one request); at most 2,147,483,646, since a read collects one row past its limit to know where the next page starts. |
