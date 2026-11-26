@@ -126,6 +126,11 @@ namespace HSMServer.Core.Cache
         private readonly Task _updateTask;
         private readonly CancellationTokenSource _cts = new();
 
+        // The background history load of the sensors read at start (FillSensorsData). DisposeAsync stops it and waits
+        // for it before it closes the database: a read still running on a closed LevelDB is a native use-after-free
+        // that kills the process (the server-tests host crash of PR #1955, #1943 follow-up).
+        private Task _fillSensorsDataTask = Task.CompletedTask;
+
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IJournalService _journalService;
         private readonly IDatabaseCore _database;
@@ -186,6 +191,16 @@ namespace HSMServer.Core.Cache
         public async ValueTask DisposeAsync()
         {
             _cts?.Cancel();
+
+            // Stops between two sensors; the load of the sensor in progress ends before the database closes below.
+            try
+            {
+                await _fillSensorsDataTask;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "The history load of the sensors failed");
+            }
 
             if (_updateTask != null)
             {
@@ -4331,7 +4346,8 @@ namespace HSMServer.Core.Cache
 
             MigrateDatabseV2();
 
-            Task.Run(() => FillSensorsData()).Forget(_logger);
+            _fillSensorsDataTask = Task.Run(() => FillSensorsData(_cts.Token));
+            _fillSensorsDataTask.Forget(_logger);
 
             //_logger.Info($"{nameof(FillSensorsData)} is started");
             //FillSensorsData();
@@ -4794,12 +4810,15 @@ namespace HSMServer.Core.Cache
             return _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
         }
 
-        private ValueTask FillSensorsData()
+        private void FillSensorsData(CancellationToken token)
         {
             foreach (var sensor in GetSensors())
-                sensor.Initialize();
+            {
+                if (token.IsCancellationRequested)
+                    return;
 
-            return ValueTask.CompletedTask;
+                sensor.Initialize();
+            }
         }
 
         //private void FillSensorsData()
