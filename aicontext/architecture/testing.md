@@ -87,6 +87,17 @@ from 23 m 40 s to 1 m 43 s with the same 3,641 passed and 5 skipped tests. The l
 `SealedWeekDifferentialTests` and `HistorySealingJobTests` take about 4 min each, their tests in order
 inside the class; splitting them into several classes is what would shorten that run.
 
+#### On pull requests
+
+`.github/workflows/server-tests.yml` runs every test project of `HSMServer.sln` (`HSMServer.Core.Tests`,
+`HSMDatabase.LevelDB.Tests`, `HSMDatabase.SealedHistory.Tests`, `HSMTableBlocks.Tests`) on every pull
+request and on `workflow_dispatch`, on `windows-latest`, with the same restore and
+`dotnet test HSMServer.sln --no-restore -c Release` as the `build` job of `server-build.yml` (which keeps
+its own run on a push to master/develop). It has no paths filter, so it can become a required check; a
+new push to the pull request cancels the superseded run; the trx files are uploaded as the
+`server-test-results` artifact when the run fails. A test project added to `HSMServer.sln` runs there
+with no change to the workflow.
+
 ### 3. Database Tests
 
 Location: `src/tests/HSMDatabase.LevelDB.Tests/`
