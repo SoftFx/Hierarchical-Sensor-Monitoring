@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMCommon.Extensions;
@@ -80,7 +80,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // Parentless sensors cannot resolve product/parent refs — the controller's
         // visibility pass drops them before mapping; defensive nulls here keep the
         // mapper total anyway.
-        public static SensorDto ToSensorDto(BaseSensorModel sensor) => new()
+        public static SensorDto ToSensorDto(BaseSensorModel sensor) => ToSensorDto(sensor, null);
+
+        // describeLargeFile: the large file block of a large file value (the read service reads the store); without it
+        // the block carries the file id only.
+        public static SensorDto ToSensorDto(BaseSensorModel sensor, Func<LargeFileValue, LargeFileValueDto> describeLargeFile) => new()
         {
             Id = sensor.Id,
             Path = sensor.FullPath,
@@ -95,7 +99,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             LastUpdate = sensor.HasData ? sensor.LastUpdate.ToUtcInstant() : null,
             Product = sensor.Parent?.Root is { } product ? ToNodeRef(product) : null,
             Parent = sensor.Parent is { } parent ? ToNodeRef(parent) : null,
-            LastValue = ToValueDto(sensor, sensor.LastValue),
+            LastValue = ToValueDto(sensor, sensor.LastValue, describeLargeFile),
             EnumOptions = sensor.Type == SensorType.Enum ? ToEnumOptions(sensor) : null,
             Aliases = sensor.Aliases.Select(a => new SensorAliasDto
             {
@@ -107,7 +111,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         };
 
 
-        public static SensorValueDto ToValueDto(BaseSensorModel sensor, BaseValue value)
+        public static SensorValueDto ToValueDto(BaseSensorModel sensor, BaseValue value) => ToValueDto(sensor, value, null);
+
+        public static SensorValueDto ToValueDto(BaseSensorModel sensor, BaseValue value, Func<LargeFileValue, LargeFileValueDto> describeLargeFile)
         {
             if (value is null)
                 return null;
@@ -117,20 +123,21 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 Time = value.Time.ToUtcInstant(),
                 Status = value.Status.ToString(),
                 Comment = value.Comment,
-                Value = BoxValue(sensor, value),
+                Value = BoxValue(sensor, value, describeLargeFile),
             };
         }
 
 
         // The polymorphic `value` of the envelope, by sensor value type. File values
         // render metadata only — the byte[] content never reaches a response.
-        private static object BoxValue(BaseSensorModel sensor, BaseValue value) => value switch
+        private static object BoxValue(BaseSensorModel sensor, BaseValue value, Func<LargeFileValue, LargeFileValueDto> describeLargeFile) => value switch
         {
             FileValue file => new FileValueDto
             {
                 Name = file.Name,
                 Extension = file.Extension,
                 Size = file.OriginalSize,
+                LargeFile = file is LargeFileValue large ? describeLargeFile?.Invoke(large) ?? new LargeFileValueDto { FileId = large.FileId } : null,
             },
 
             EnumValue enumValue => new EnumValueDto

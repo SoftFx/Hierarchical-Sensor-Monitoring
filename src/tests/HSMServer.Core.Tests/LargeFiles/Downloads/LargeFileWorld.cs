@@ -18,6 +18,7 @@ using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi.LargeFiles;
+using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -183,6 +184,12 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
                         services.AddSingleton(new ApiTokensConfig { Enabled = true });
                         services.AddSingleton<ApiTokenInvalidAttemptLimiter>();
                         services.AddScoped<LargeFileDownloadService>();
+
+                        // The sensor reads of the management API, whose File values carry the large file block.
+                        services.AddHttpContextAccessor();
+                        services.AddScoped<SensorTreeReadService>();
+                        services.AddScoped<SensorDeletionAdministrationService>();
+                        services.AddScoped<SensorMoveAdministrationService>();
                     });
                     web.Configure(app =>
                     {

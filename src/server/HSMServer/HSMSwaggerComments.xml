@@ -3650,6 +3650,14 @@
             <see cref="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadService.WebDownloadPath(System.Guid,System.Guid)"/>: <c>DownloadUrl</c> is the API route, which takes a token, not a cookie.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadService.DescribeValue(System.Guid,System.Guid,System.String)">
+            <summary>
+            The large file block of a File sensor value (the sensor-tree reads of the management API and MCP), for a surface
+            that has already decided the caller sees the sensor: the kind, the state, the not-ready reason and the archive of
+            <see cref="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDownloadService.DescribeFile(System.Guid,System.String)"/>. "removed" when the store no longer holds the file as a value of this sensor,
+            "unavailable" when the store cannot be read now. No password.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.LargeFiles.LargeFileDto">
             <summary>
             A large file value as the management API and the MCP tool describe it: what it is, whether it can be downloaded
@@ -4201,6 +4209,9 @@
             DTOs or a <see cref="T:HSMServer.Model.ManagementApi.ManagementReadFailure"/> back, never an IActionResult.
             </summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ToSensorDto(HSMServer.Core.Model.BaseSensorModel)">
+            <summary>The sensor DTO with its current value, a large file value described from the store.</summary>
+        </member>
         <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ListProducts(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
             <summary>
             Root products visible to the token's owner, ordered by name then id.
@@ -4320,6 +4331,32 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Size">
             <summary>Original file size in bytes.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.LargeFile">
+            <summary>
+            A large file value (its content kept by the server's large file store, #1885): the file id, its kind, where it
+            stands and, once packed, its archive with the download link. Null for an ordinary file value.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto">
+            <summary>
+            The large file block of a File sensor value. No password is ever part of it: the operator gives the dump password.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.FileId">
+            <summary>The id of the file: GET /api/v1/sensors/{sensorId}/large-files/{fileId} describes it in full.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.Secure">
+            <summary>True: the archive is AES-256 under the product's dump password; false: the same zip without a password. Null when the server no longer holds the file.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.State">
+            <summary>"verified" (kept, no archive yet), "packed" (the archive can be downloaded), "removed" (the server no longer holds the file) or "unavailable" (the store could not be read).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.NotReadyReason">
+            <summary>Why the file cannot be downloaded yet; null when it can or when the server no longer holds it.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.Archive">
+            <summary>The current archive (id, size, sha256, passwordVersion, downloadUrl); null until the file is packed.</summary>
         </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).

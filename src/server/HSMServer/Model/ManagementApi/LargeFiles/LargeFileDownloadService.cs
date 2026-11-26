@@ -4,10 +4,12 @@ using System.Security.Claims;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
+using HSMServer.Core.LargeFiles;
 using HSMServer.Core.LargeFiles.Archives;
 using HSMServer.Core.LargeFiles.Downloads;
 using HSMServer.Core.LargeFiles.DumpPasswords;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Model.ManagementApi.LargeFiles
@@ -278,6 +280,42 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
         }
 
 
+        /// <summary>
+        /// The large file block of a File sensor value (the sensor-tree reads of the management API and MCP), for a surface
+        /// that has already decided the caller sees the sensor: the kind, the state, the not-ready reason and the archive of
+        /// <see cref="DescribeFile"/>. "removed" when the store no longer holds the file as a value of this sensor,
+        /// "unavailable" when the store cannot be read now. No password.
+        /// </summary>
+        public LargeFileValueDto DescribeValue(Guid sensorId, Guid fileId, string baseUrl)
+        {
+            LargeFileDto file;
+
+            try
+            {
+                file = DescribeFile(fileId, baseUrl);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning("The large file {FileId} of the sensor {SensorId} could not be described: {ErrorType}: {Error}",
+                    fileId, sensorId, ex.GetType().Name, ex.Message);
+
+                return new LargeFileValueDto { FileId = fileId, State = LargeFileValueStates.Unavailable };
+            }
+
+            if (file is null || file.SensorId != sensorId)
+                return new LargeFileValueDto { FileId = fileId, State = LargeFileValueStates.Removed };
+
+            return new LargeFileValueDto
+            {
+                FileId = file.FileId,
+                Secure = file.Secure,
+                State = file.State,
+                NotReadyReason = file.NotReadyReason,
+                Archive = file.Archive,
+            };
+        }
+
+
         // Null for a file that is not a value yet (uploading).
         private LargeFileDto ToDto(LargeArchiveFile file, string baseUrl)
         {
@@ -297,7 +335,7 @@ namespace HSMServer.Model.ManagementApi.LargeFiles
                 Size = file.Size,
                 SourceModifiedUtc = file.SourceModifiedUtc,
                 Secure = file.IsSecure,
-                State = packed ? "packed" : "verified",
+                State = packed ? LargeFileValueStates.Packed : LargeFileValueStates.Verified,
                 BuildState = ToWire(status?.State ?? ArchiveBuildState.None),
                 NotReadyReason = packed ? null : NotReadyReason(file),
                 Archive = packed
