@@ -181,7 +181,7 @@ namespace HSMServer.Core.TableSensors
             try
             {
                 var all = Batches.ClearRemovals(done.Select(d => d.Mark).ToList());
-                Checkpoint?.Invoke("removal-cleared");
+                Checkpoint?.Invoke("removal-sensors-cleared");
                 kept = all ? [] : done.Where(d => Batches.FindRemoval(d.Mark) is not null).Select(d => d.Mark).ToHashSet();
             }
             catch (Exception ex)
@@ -363,7 +363,7 @@ namespace HSMServer.Core.TableSensors
             if (!Batches.ClearRemovals(Batches.GetRemovals().Where(m => m.ProductId == product && (m.SensorId is not null || m == mark)).ToList()))
                 return false;
 
-            Checkpoint?.Invoke("removal-cleared");
+            Checkpoint?.Invoke("removal-product-cleared");
 
             _removalProgress.Remove(product);
             Stats.Add(ref Stats.RemovalsDone);
