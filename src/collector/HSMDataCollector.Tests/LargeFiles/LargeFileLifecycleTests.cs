@@ -344,7 +344,8 @@ namespace HSMDataCollector.Tests.LargeFiles
                 Assert.True(again.Wait(Wait));
                 Assert.Equal(LargeFileOutcome.Stored, again.Result.Outcome);
                 Assert.Equal(content, h.Store.StoredFile("a.dmp"));
-                Assert.Empty(Directory.GetFiles(h.DataFolder, "upload-*"));
+                Assert.Empty(Directory.GetFiles(h.DataFolder, "upload-*.json"));
+                Assert.Empty(Directory.GetFiles(h.DataFolder, "upload-*.digests"));
             }
         }
 

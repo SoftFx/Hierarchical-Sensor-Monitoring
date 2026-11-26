@@ -143,8 +143,9 @@ every new session and every 30 minutes; `409` waits for the next session; others
   again and the file is deleted through the open handle on Windows (`SetFileInformationByHandle(FileDispositionInfo)`:
   exactly the file that was sent). A file that changed after it was sent is not deleted (logged). **Without an identity**
   a `stored` answered at `begin` deletes the source only when this collector has its own record of having sent it
-  (an in-progress or delivered entry); otherwise the file is kept and said. Off Windows the compare is by path and the
-  delete by path: a file replaced under the same name between the two is the one deleted. **The state's word alone
+  (an in-progress or delivered entry); otherwise the file is kept and said. Off Windows the compare and the delete
+  are by path (the managed collector has no file identity there): a system without file identity cannot tell a file
+  from another put under the same name in the moment between them. **The state's word alone
   deletes nothing**: a file found through a delivered entry in delete mode (a crash between the state and the delete) is
   deleted only after a `begin` with its facts answered `stored` in this run; anything else uploads it. A hand-over the
   caller cancelled while it was stored is not deleted.

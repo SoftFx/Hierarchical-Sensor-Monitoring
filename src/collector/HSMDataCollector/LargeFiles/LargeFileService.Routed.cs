@@ -176,6 +176,18 @@ namespace HSMDataCollector.LargeFiles
             }
         }
 
+        // A routed value that cannot go on the file connection now goes the ordinary way.
+        private void GiveBackRouted(Job job)
+        {
+            bool waiting;
+
+            lock (_gate)
+                waiting = _routed.Remove(job.Routed);
+
+            if (waiting)
+                GiveBack(job.Routed);
+        }
+
         private void CompleteRouted(Job job)
         {
             lock (_gate)

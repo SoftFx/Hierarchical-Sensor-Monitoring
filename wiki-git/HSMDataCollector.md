@@ -320,8 +320,8 @@ await fileSensor.SendFileAsync("/path/to/report.csv");
 ```
 
 A file value is limited to 10 MiB by default (`FileSensorOptions.MaxFileSizeBytes`); larger files, such as dumps, are
-sent as **large files** (below). On the session transport (4.2.0) a file value larger than about 1 MiB (a quarter of the
-server's session frame) travels on the large-file connection and is stored as a large file value without a password; it
+sent as **large files** (below). On the session transport (4.2.0), when the server offers large files, a file value larger than about 1 MiB (a quarter
+of the server's session frame) travels on the large-file connection and is stored as a large file value without a password; it
 has no preview on the sensor page.
 
 ### Large files (4.2.0)

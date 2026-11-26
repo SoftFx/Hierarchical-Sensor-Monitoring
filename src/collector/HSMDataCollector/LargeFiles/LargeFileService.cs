@@ -330,6 +330,10 @@ namespace HSMDataCollector.LargeFiles
                     return;
 
                 _running = true;
+
+                // The run of the last Stop is over (its token was cancelled): its source goes.
+                try { _run.Dispose(); } catch (Exception) { }
+
                 _run = new CancellationTokenSource();
                 Interlocked.Increment(ref _generation);
                 Interlocked.Increment(ref _runNumber);
@@ -434,6 +438,13 @@ namespace HSMDataCollector.LargeFiles
 
             foreach (var watch in watches)
                 ReleaseWatchLockIfIdle(watch);
+
+            // The thread is gone or was waited for its bound; a thread still blocked holds neither of these.
+            if (thread == null || !thread.IsAlive)
+            {
+                try { _wake.Dispose(); } catch (Exception) { }
+                try { _run.Dispose(); } catch (Exception) { }
+            }
         }
 
         private void WaitForThread(Thread thread)

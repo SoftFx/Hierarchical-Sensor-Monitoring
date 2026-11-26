@@ -234,8 +234,11 @@ namespace HSMDataCollector.LargeFiles
             {
                 try
                 {
-                    // Deleted when it is let go, so locks of files long gone do not pile up in the data folder.
-                    return new StateLock(new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose));
+                    // On Windows deleted when it is let go (nobody else can open it meanwhile: no sharing, no delete sharing), so
+                    // locks of files long gone do not pile up. Elsewhere the lock is advisory and a delete on close could race a
+                    // waiter that opened the old file: the lock file is kept.
+                    return new StateLock(new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1,
+                                                        SourceFile.IsWindows ? FileOptions.DeleteOnClose : FileOptions.None));
                 }
                 catch (IOException) when (until.Elapsed < wait)
                 {
@@ -245,10 +248,16 @@ namespace HSMDataCollector.LargeFiles
                 {
                     return null;
                 }
+                catch (UnauthorizedAccessException) when (until.Elapsed < wait)
+                {
+                    // Access denied on a lock file is someone else's: a lock file another handle is deleting, or one another
+                    // account made. Waited for like a held lock.
+                    Thread.Sleep(50);
+                }
                 catch (UnauthorizedAccessException ex)
                 {
-                    Say($"The collector cannot lock its large file state {path} ({ex.Message}); it goes on without it.");
-                    return new StateLock(null);
+                    Say($"The collector cannot take the lock {path} ({ex.Message}): it treats that state as held by another process and does not write it.");
+                    return null;
                 }
             }
         }

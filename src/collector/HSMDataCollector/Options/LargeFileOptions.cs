@@ -12,7 +12,7 @@ namespace HSMDataCollector.Options
         public static readonly TimeSpan DefaultSettleTime = TimeSpan.FromSeconds(60);
 
         /// <summary>The speed limit by default: 10,000,000 bytes sent per second (10 MB/s).</summary>
-        public const long DefaultMaxBytesPerSecond = 10_000_000;
+        public static readonly long DefaultMaxBytesPerSecond = 10_000_000;
 
 
         /// <summary>
@@ -34,7 +34,7 @@ namespace HSMDataCollector.Options
         /// The most bytes per second the upload sends (compressed pieces, as they go on the wire), kept by waiting between
         /// pieces: a piece, once begun, is sent at full speed. 10,000,000 (10 MB/s) by default; 0 means no limit.
         /// </summary>
-        public long MaxBytesPerSecond { get; set; } = DefaultMaxBytesPerSecond;
+        public long MaxBytesPerSecond { get; set; } = 10_000_000;
 
         /// <summary>
         /// True (the default): the File sensor is registered with <c>DefaultAlertsOptions.LargeFiles</c>, which asks the

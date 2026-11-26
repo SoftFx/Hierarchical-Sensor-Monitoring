@@ -259,6 +259,110 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
+        public void A_routed_value_whose_registration_was_answered_with_an_error_goes_the_ordinary_way()
+        {
+            var (h, requeued, dropped) = Routing();
+
+            using (h)
+            {
+                h.Transport.Registration = _ => false;
+
+                var value = FileValue(Piece + 1);
+
+                Assert.True(h.Service.Route(value));
+                Assert.True(LargeFileHarness.Until(() => { lock (requeued) return requeued.Count == 1; }));
+                Assert.Same(value, requeued.Single());
+                Assert.Empty(dropped);
+                Assert.Equal(0, h.Store.BeginCount("report.txt"));
+            }
+        }
+
+        [Fact]
+        public void Answers_that_the_server_holds_no_such_upload_are_waited_for_and_bounded()
+        {
+            using (var h = new LargeFileHarness(Piece))
+            {
+                for (var i = 0; i < 40; i++)
+                    h.Store.AnswerPieceNext(FileAnswer.With(404));
+
+                h.Start();
+
+                var task = h.Service.Send("dumps", h.WriteFile("a.dmp", Piece * 2), null, CancellationToken.None);
+
+                Assert.True(h.AdvanceUntil(() => task.IsCompleted, 60));
+                Assert.Equal(LargeFileOutcome.GivenUp, task.Result.Outcome);
+                Assert.True(h.Timings.Waits.Count(w => w.Kind == WaitKind.Retry) >= 9);
+                Assert.InRange(h.Store.BeginCount("a.dmp"), 10, 40);
+            }
+        }
+
+        [Fact]
+        public void A_handed_over_file_that_cannot_be_read_is_missing()
+        {
+#if NETFRAMEWORK
+            using (var h = new LargeFileHarness(Piece))
+            {
+                var path = h.WriteFile("a.dmp", 10);
+                var user = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+                var security = File.GetAccessControl(path);
+                var deny = new System.Security.AccessControl.FileSystemAccessRule(user, System.Security.AccessControl.FileSystemRights.ReadData,
+                                                                                  System.Security.AccessControl.AccessControlType.Deny);
+
+                security.AddAccessRule(deny);
+                File.SetAccessControl(path, security);
+
+                try
+                {
+                    h.Start();
+
+                    var task = h.Service.Send("dumps", path, null, CancellationToken.None);
+
+                    Assert.True(task.Wait(Wait));
+                    Assert.Equal(LargeFileOutcome.Missing, task.Result.Outcome);
+                    Assert.Equal(1, h.Dropped);
+                }
+                finally
+                {
+                    security.RemoveAccessRule(deny);
+                    File.SetAccessControl(path, security);
+                }
+            }
+#endif
+        }
+
+        [Fact]
+        public void A_lock_that_cannot_be_opened_is_held_by_another_and_its_state_is_not_written()
+        {
+            using (var h = new LargeFileHarness(Piece))
+            {
+                h.WriteFile("a.dmp", 10);
+                Directory.CreateDirectory(h.DataFolder);
+
+                var key = LargeFileStateStore.WatchKey("host/module/dumps", Path.GetFullPath(h.Folder), "*.dmp");
+                var lockPath = Path.Combine(h.DataFolder, key + ".lock");
+
+                File.WriteAllText(lockPath, string.Empty);
+                File.SetAttributes(lockPath, FileAttributes.ReadOnly);
+
+                try
+                {
+                    h.Start();
+
+                    var watch = h.Service.Watch("dumps", h.Folder, "*.dmp", null);
+
+                    Assert.True(h.AdvanceUntil(() => watch.StateReason != null && watch.StateReason.Contains("another collector process")));
+                    h.Steps(70);
+                    Assert.Equal(0, h.Store.BeginCount("a.dmp"));
+                    Assert.False(File.Exists(Path.Combine(h.DataFolder, key + ".json")));
+                }
+                finally
+                {
+                    File.SetAttributes(lockPath, FileAttributes.Normal);
+                }
+            }
+        }
+
+        [Fact]
         public void A_1008_refuses_the_file_and_sends_nothing_more_until_the_next_start()
         {
             using (var h = new LargeFileHarness(Piece))

@@ -215,6 +215,18 @@ namespace HSMDataCollector.Tests
                     return true;
                 }
 
+                case "large_file_send_without_alert":
+                {
+                    // sensor|name|keep_or_delete, with LargeFileOptions.NewFileAlert off.
+                    EnsureLargeFileRoot(state);
+
+                    var options = LargeFileOptionsOf(step.Arg(2));
+
+                    options.NewFileAlert = false;
+                    state.HandedFiles[step.Arg(1)] = state.Collector.SendLargeFileAsync(step.Arg(0), Path.Combine(state.LargeFileFolder, step.Arg(1)), options);
+                    return true;
+                }
+
                 case "large_file_watch":
                 {
                     // sensor|mask|settle_s|keep_or_delete, on the case's folder.

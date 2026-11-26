@@ -376,6 +376,7 @@ namespace HSMDataCollector.Client.Session
                         _link = null;
 
                 try { link.Socket.Dispose(); } catch (Exception) { }
+                try { link.Stop.Dispose(); } catch (Exception) { }
 
                 link.MarkClosed();
                 _logger?.Info($"The file connection ended: {why}.");

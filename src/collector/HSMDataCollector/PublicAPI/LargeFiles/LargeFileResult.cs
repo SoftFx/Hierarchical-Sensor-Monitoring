@@ -18,7 +18,8 @@ namespace HSMDataCollector.PublicInterface
         /// only when it changes.</summary>
         GivenUp = 2,
 
-        /// <summary>The file was not there, was a symbolic link or a reparse point, or could not be read.</summary>
+        /// <summary>The file was not there, was a symbolic link or a reparse point, or could not be opened for reading (access
+        /// denied, an error of the system).</summary>
         Missing = 3,
 
         /// <summary>This collector cannot send large files (the HTTP transport, a custom <c>DataSender</c>, the session of

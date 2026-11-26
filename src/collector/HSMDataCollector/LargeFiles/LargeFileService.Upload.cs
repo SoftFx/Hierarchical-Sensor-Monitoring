@@ -80,6 +80,7 @@ namespace HSMDataCollector.LargeFiles
             internal int MismatchesInARow;
             internal bool AskedSmallerPieces;
             internal int EndRounds;
+            internal int NotHeld;
 
             internal LargeFileWatch Watch => Work.Watch;
             internal bool IsHanded => Work.Handed != null;
@@ -206,7 +207,12 @@ namespace HSMDataCollector.LargeFiles
                     return;
 
                 default:
-                    Final(job, $"the large file {job.Path} cannot be read: {why}");
+                    // Unreadable: a hand-over is Missing (LargeFileOutcome.Missing: "not there, a link or reparse point, or
+                    // unreadable"); a watched file is refused for this run.
+                    if (handed != null)
+                        NotSent(job, LargeFileOutcome.Missing, $"the large file {job.Path} cannot be read: {why}");
+                    else
+                        Final(job, $"the large file {job.Path} cannot be read: {why}");
                     return;
             }
 
@@ -310,13 +316,15 @@ namespace HSMDataCollector.LargeFiles
                     break;
 
                 case false:
-                    DropRouted(job, $"its sensor {routed.SensorPath} was refused by the server");
+                    // The server answered the registration with an error for this path: the sensor may still take values. The
+                    // value goes the ordinary way, as it did before large files (nothing worse than before, decision 11).
+                    GiveBackRouted(job);
                     return;
 
                 default:
                     if (_timings.Now - routed.Queued > RoutedRegistrationWait)
                     {
-                        DropRouted(job, $"the registration of its sensor {routed.SensorPath} was not acknowledged within {RoutedRegistrationWait.TotalMinutes:0} minutes");
+                        GiveBackRouted(job);
                         return;
                     }
 
@@ -718,7 +726,7 @@ namespace HSMDataCollector.LargeFiles
                     }
 
                     if (reply.Status == 404)
-                        return Next.Begin;
+                        return NotHeld(job, reply);
 
                     if (reply.Status == 400)
                         return Discarded(job, reply);
@@ -782,7 +790,7 @@ namespace HSMDataCollector.LargeFiles
                     return Discarded(job, reply);
 
                 if (reply.Status == 404)
-                    return Next.Begin;
+                    return NotHeld(job, reply);
 
                 if (reply.Status == 503 && reply.RetryAfter.HasValue)
                 {
@@ -901,6 +909,22 @@ namespace HSMDataCollector.LargeFiles
             return Next.Reconnect;
         }
 
+        // 404: the connection holds no such upload (a lease lost, a check that lost it): begin again after a backoff, and not
+        // for ever: past a bound it is a protocol fault, which ends in GivenUp (every loop bounded, design §12.6).
+        private Next NotHeld(Job job, FileReply reply)
+        {
+            if (++job.NotHeld > MaxProtocolCloses * 3)
+            {
+                var times = job.NotHeld;
+
+                job.NotHeld = 0;
+                return ProtocolFault(job, $"the server answered {times} times that it holds no such upload ({reply})");
+            }
+
+            Sleep(_transport.Backoff(job.NotHeld - 1), WaitKind.Retry, job);
+            return Next.Begin;
+        }
+
         private Next ProtocolFault(Job job, string why)
         {
             Report($"The file connection is not trusted any more: {why}. It is opened again.");
@@ -989,7 +1013,7 @@ namespace HSMDataCollector.LargeFiles
                         continue;
                     }
 
-                    if (begun.Status == 202 || begun.RetryAfter.HasValue)
+                    if (begun.Status == 202 || begun.RetryAfter.HasValue || begun.Status >= 500)
                         return false;
 
                     // A refusal: the server holds no part of it that this collector can reach.
