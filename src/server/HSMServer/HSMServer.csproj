@@ -12,6 +12,8 @@
     <Copyright>Copyright © 2025</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <TypescriptCompileBlocked>true</TypescriptCompileBlocked>
+    <!-- The checks of a large file's pieces (#1884) read zstd frame headers through ZstdSharp.Unsafe.Methods over a pinned span. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants>DEBUG;TRACE</DefineConstants>

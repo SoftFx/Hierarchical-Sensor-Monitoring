@@ -97,5 +97,40 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>Original file size in bytes.</summary>
         [Description("Original file size in bytes.")]
         public long Size { get; init; }
+
+        /// <summary>
+        /// A large file value (its content kept by the server's large file store, #1885): the file id, its kind, where it
+        /// stands and, once packed, its archive with the download link. Null for an ordinary file value.
+        /// </summary>
+        [Description("A large file value (its content kept by the server's large file store): the file id, its kind, where it stands and, once packed, its archive with the download link. Null for an ordinary file value.")]
+        public LargeFileValueDto LargeFile { get; init; }
+    }
+
+
+    /// <summary>
+    /// The large file block of a File sensor value. No password is ever part of it: the operator gives the dump password.
+    /// </summary>
+    [Description("The large file block of a File sensor value. No password is ever part of it: the operator gives the dump password.")]
+    public sealed record LargeFileValueDto
+    {
+        /// <summary>The id of the file: GET /api/v1/sensors/{sensorId}/large-files/{fileId} describes it in full.</summary>
+        [Description("The id of the file: GET /api/v1/sensors/{sensorId}/large-files/{fileId} describes it in full.")]
+        public Guid FileId { get; init; }
+
+        /// <summary>True: the archive is AES-256 under the product's dump password; false: the same zip without a password. Null when the server no longer holds the file.</summary>
+        [Description("True: the archive is AES-256 under the product's dump password; false: the same zip without a password. Null when the server no longer holds the file.")]
+        public bool? Secure { get; init; }
+
+        /// <summary>"verified" (kept, no archive yet), "packed" (the archive can be downloaded), "removed" (the server no longer holds the file) or "unavailable" (the store could not be read).</summary>
+        [Description("\"verified\" (kept, no archive yet), \"packed\" (the archive can be downloaded), \"removed\" (the server no longer holds the file) or \"unavailable\" (the store could not be read).")]
+        public string State { get; init; }
+
+        /// <summary>Why the file cannot be downloaded yet; null when it can or when the server no longer holds it.</summary>
+        [Description("Why the file cannot be downloaded yet; null when it can or when the server no longer holds it.")]
+        public string NotReadyReason { get; init; }
+
+        /// <summary>The current archive (id, size, sha256, passwordVersion, downloadUrl); null until the file is packed.</summary>
+        [Description("The current archive (id, size, sha256, passwordVersion, downloadUrl); null until the file is packed.")]
+        public HSMServer.Model.ManagementApi.LargeFiles.LargeFileArchiveDto Archive { get; init; }
     }
 }

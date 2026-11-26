@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDatabase.AccessManager.LargeFiles;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using NLog;
 
 namespace HSMServer.BackgroundServices
 {
@@ -15,11 +17,29 @@ namespace HSMServer.BackgroundServices
     /// self-monitoring sample. Inert until the store has content (<c>uploads/</c> or <c>archives/</c> exists, not only its
     /// folder, which a bind mount creates): a server that never took a large file creates none of these sensors. Counters since the process started, posted when they change; a failure or disagreement counter is
     /// Error in the sample in which it grew and Ok again at the next sample without growth. Step 4 (#1886) adds the rest.
+    /// <para>
+    /// The archive side (#1885) adds two Bool sensors, each created at its first report: <c>Archive build result</c> and
+    /// <c>Download log</c>. Unlike the other self-monitoring sensors both carry a default alert on Error (ADR-0022, the
+    /// owner's decision on #1885): a build that fails or waits for room keeps a file undownloadable, and a download log
+    /// that cannot be written refuses every download.
+    /// </para>
     /// </summary>
-    public sealed class LargeFileSensors
+    public sealed class LargeFileSensors : ILargeFilesMonitor
     {
         // The node of the large file store's sensors; steps 3 and 4 (#1885, #1886) add theirs to this class.
         internal const string NodeName = "Large files";
+
+        internal const string ArchiveBuildResultName = "Archive build result";
+        internal const string DownloadLogName = "Download log";
+
+        private static readonly Logger _logger = LogManager.GetLogger(nameof(LargeFileSensors));
+
+        private readonly object _archiveLock = new();
+        private IInstantValueSensor<bool> _archiveBuildResult;
+        private IInstantValueSensor<bool> _downloadLog;
+
+        // The download log posts on a change only: every allowed download would otherwise post an Ok value.
+        private bool? _downloadLogOk;
 
         private readonly IDataCollector _collector;
         private readonly ILargeFileStore _store;
@@ -77,6 +97,73 @@ namespace HSMServer.BackgroundServices
                 "Writes of the store that failed since the server started (a piece, an index, a record, a value row after a verified check): nothing was acknowledged.");
 
             _created = true;
+        }
+
+        public void ReportArchiveBuild(Guid fileId, bool ok, string error)
+        {
+            lock (_archiveLock)
+                Post(ArchiveBuildResultName, () => ArchiveBuildResult().AddValue(ok, ok ? SensorStatus.Ok : SensorStatus.Error,
+                    ok ? $"File {fileId}: archive built." : $"File {fileId}: {error ?? "the build failed."}"));
+        }
+
+        public void ReportDownloadLog(bool ok, string error)
+        {
+            lock (_archiveLock)
+            {
+                if (ok && _downloadLogOk == true)
+                    return;
+
+                _downloadLogOk = ok;
+
+                // Inside the lock, so an Ok and an Error of two requests cannot be posted in the opposite order.
+                Post(DownloadLogName, () => DownloadLog().AddValue(ok, ok ? SensorStatus.Ok : SensorStatus.Error,
+                    ok ? string.Empty : error ?? "A download record could not be written."));
+            }
+        }
+
+
+        // Under _archiveLock.
+        private IInstantValueSensor<bool> ArchiveBuildResult() => _archiveBuildResult ??= _collector.CreateBoolSensor(
+            $"{NodeName}/{ArchiveBuildResultName}", AlertedOptions(
+                "Outcome of the last archive build of a large file (the first pack after the upload was verified, or a re-encryption " +
+                "after the product's dump password changed): true and Ok when the archive was written and verified, false and Error " +
+                "when the build failed or the disk had no room for it (the comment says why; the build is tried again later and the " +
+                "file is kept). Posted once per attempt.",
+                "[$product] Large file archive build failed: $comment"));
+
+        // Under _archiveLock.
+        private IInstantValueSensor<bool> DownloadLog() => _downloadLog ??= _collector.CreateBoolSensor(
+            $"{NodeName}/{DownloadLogName}", AlertedOptions(
+                "Whether the download log of large files can be written: false and Error when a download record could not be written. " +
+                "A download that cannot be recorded is refused, so while this is Error every large file download answers 503. " +
+                "Posted when the state changes.",
+                "[$product] Large file download log cannot be written, every download is refused: $comment"));
+
+        private static InstantSensorOptions AlertedOptions(string description, string alertTemplate) => new()
+        {
+            Alerts = new List<InstantAlertTemplate>
+            {
+                AlertsFactory.IfStatus(AlertOperation.IsChangedToError)
+                             .ThenSendNotification(alertTemplate)
+                             .AndSetIcon(AlertIcon.Error)
+                             .Build(),
+            },
+            TTL = TimeSpan.MaxValue,
+            EnableForGrafana = true,
+            Description = description + " See the large file download feature documentation (#1885).",
+        };
+
+        // A failing self-monitoring post must never break a build or a download.
+        private static void Post(string sensorName, Action post)
+        {
+            try
+            {
+                post();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Posting '{NodeName}/{sensorName}' failed: {ex.Message}");
+            }
         }
 
         private void Add(string name, Func<long> read, bool errorWhenGrown, string description)

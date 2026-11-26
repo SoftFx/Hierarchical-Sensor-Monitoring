@@ -23,9 +23,9 @@ namespace HSMServer.SensorApi.Sessions
     // "which collectors are connected", enforces the server-wide cap, and reaches every
     // session at once (the close at shutdown now, pushes later).
     //
-    // Table connections (#1845) are kept apart: one at most per ordinary session, tied to it.
-    // They take no slot of their own, so the cap and the limit per address count collectors,
-    // and a server holds at most twice MaxSessions sockets.
+    // Table connections (#1845) and file connections (#1884) are kept apart: one of each at most
+    // per ordinary session, tied to it. They take no slot of their own, so the cap and the limit
+    // per address count collectors, and a server holds at most three times MaxSessions sockets.
     public sealed class CollectorSessionRegistry
     {
         private readonly ConcurrentDictionary<Guid, CollectorSession> _sessions = new();
@@ -37,12 +37,15 @@ namespace HSMServer.SensorApi.Sessions
         private readonly Dictionary<string, AddressSlots> _slotsByAddress = new();
         private int _slots;
 
-        // Table connections: by their own id, and the one of each ordinary session. The pair map
-        // is changed under its lock only; a session leaves _sessions before its pair is looked
-        // at, so a table connection is never attached to a session that has ended.
+        // Table and file connections: by their own id, and the one of each kind of each ordinary
+        // session. The pair maps are changed under their lock only; a session leaves _sessions
+        // before its pairs are looked at, so a paired connection is never attached to a session
+        // that has ended.
         private readonly ConcurrentDictionary<Guid, CollectorSession> _tables = new();
+        private readonly ConcurrentDictionary<Guid, CollectorSession> _files = new();
         private readonly object _pairLock = new();
         private readonly Dictionary<Guid, CollectorSession> _tableBySession = new();
+        private readonly Dictionary<Guid, CollectorSession> _fileBySession = new();
 
         // The table connection that last stored a block of each (product, producer id): at most one
         // entry per live table connection (a connection's entry goes when it notes another producer
@@ -60,10 +63,13 @@ namespace HSMServer.SensorApi.Sessions
         // Table connections that completed the upgrade.
         public int TableConnectionCount => _tables.Count;
 
+        // File connections that completed the upgrade.
+        public int FileConnectionCount => _files.Count;
+
         public IReadOnlyList<CollectorSessionInfo> GetSessions() => _sessions.Values.Select(session => session.ToInfo()).ToList();
 
         // True while the close of some session or table connection waits for a frame that is being handled.
-        internal bool AnyDeferredClose => _sessions.Values.Concat(_tables.Values).Any(session => session.HasDeferredClose);
+        internal bool AnyDeferredClose => _sessions.Values.Concat(_tables.Values).Concat(_files.Values).Any(session => session.HasDeferredClose);
 
 
         // Takes a slot before the upgrade is accepted, so a refusal is still an ordinary
@@ -114,9 +120,9 @@ namespace HSMServer.SensorApi.Sessions
         // freed before the session leaves the dictionary: whoever sees the session gone can
         // rely on its slot being free.
         //
-        // Returns the session's table connection, which the caller closes: a table connection
-        // lives only as long as its session.
-        internal CollectorSession Release(CollectorSession session, string address)
+        // Returns the session's table and file connections, which the caller closes: a paired
+        // connection lives only as long as its session.
+        internal (CollectorSession Table, CollectorSession File) Release(CollectorSession session, string address)
         {
             var key = AddressKey(address);
 
@@ -129,52 +135,62 @@ namespace HSMServer.SensorApi.Sessions
             }
 
             if (session is null)
-                return null;
+                return (null, null);
 
             _sessions.TryRemove(session.Id, out _);
 
             lock (_pairLock)
             {
-                if (_tableBySession.Remove(session.Id, out var table))
-                    return table;
-            }
+                _tableBySession.Remove(session.Id, out var table);
+                _fileBySession.Remove(session.Id, out var file);
 
-            return null;
+                return (table, file);
+            }
         }
 
         // The live ordinary session with this id; null when there is none.
-        internal CollectorSession FindSession(Guid id) => _sessions.TryGetValue(id, out var session) && !session.IsTable ? session : null;
+        internal CollectorSession FindSession(Guid id) => _sessions.TryGetValue(id, out var session) && session.Kind == SessionKind.Session ? session : null;
 
-        // Makes `table` the table connection of its session. False when the session has ended
-        // meanwhile. `replaced` is the connection it takes the place of, which the caller closes.
-        internal bool TryAttachTable(CollectorSession table, out CollectorSession replaced)
+        // Makes `paired` (a table or a file connection) the connection of its kind of its session.
+        // False when the session has ended meanwhile. `replaced` is the connection it takes the
+        // place of, which the caller closes.
+        internal bool TryAttachPaired(CollectorSession paired, out CollectorSession replaced)
         {
             replaced = null;
 
+            var (bySession, all) = PairMaps(paired);
+
             lock (_pairLock)
             {
-                if (!_sessions.ContainsKey(table.PairedSessionId))
+                if (!_sessions.ContainsKey(paired.PairedSessionId))
                     return false;
 
-                _tableBySession.TryGetValue(table.PairedSessionId, out replaced);
-                _tableBySession[table.PairedSessionId] = table;
-                _tables[table.Id] = table;
+                bySession.TryGetValue(paired.PairedSessionId, out replaced);
+                bySession[paired.PairedSessionId] = paired;
+                all[paired.Id] = paired;
 
                 return true;
             }
         }
 
-        // The table connection has ended. Its pair entry goes only if it still points at it (a
+        // The paired connection has ended. Its pair entry goes only if it still points at it (a
         // replaced connection ends after its successor took its place).
-        internal void DetachTable(CollectorSession table)
+        internal void DetachPaired(CollectorSession paired)
         {
+            var (bySession, all) = PairMaps(paired);
+
             lock (_pairLock)
             {
-                if (_tableBySession.TryGetValue(table.PairedSessionId, out var current) && ReferenceEquals(current, table))
-                    _tableBySession.Remove(table.PairedSessionId);
+                if (bySession.TryGetValue(paired.PairedSessionId, out var current) && ReferenceEquals(current, paired))
+                    bySession.Remove(paired.PairedSessionId);
 
-                _tables.TryRemove(table.Id, out _);
+                all.TryRemove(paired.Id, out _);
             }
+
+            if (!paired.IsTable)
+                return;
+
+            var table = paired;
 
             lock (_producerLock)
             {
@@ -227,6 +243,9 @@ namespace HSMServer.SensorApi.Sessions
             }
         }
 
+        private (Dictionary<Guid, CollectorSession> BySession, ConcurrentDictionary<Guid, CollectorSession> All) PairMaps(CollectorSession paired) =>
+            paired.IsFile ? (_fileBySession, _files) : (_tableBySession, _tables);
+
         // What "one address" means for the limit. An IPv4 address is itself. An IPv6 host
         // usually owns a whole /64 and can pick any source address in it, so the limit is
         // kept per /64: otherwise one host could hold one session per address.
@@ -250,12 +269,12 @@ namespace HSMServer.SensorApi.Sessions
             public long WarnedAtTicks;
         }
 
-        // Starts the close handshake on every session and table connection and gives the peers
+        // Starts the close handshake on every session, table and file connection and gives the peers
         // `budget` to answer; whoever has not answered by then is cut off. Used at shutdown,
         // where the web server would otherwise wait for these connections.
         internal async Task CloseAllAsync(WebSocketCloseStatus status, string reason, TimeSpan budget)
         {
-            var sessions = _sessions.Values.Concat(_tables.Values).ToList();
+            var sessions = _sessions.Values.Concat(_tables.Values).Concat(_files.Values).ToList();
 
             if (sessions.Count == 0)
                 return;
@@ -266,12 +285,12 @@ namespace HSMServer.SensorApi.Sessions
 
             try
             {
-                while (!_sessions.IsEmpty || !_tables.IsEmpty)
+                while (!_sessions.IsEmpty || !_tables.IsEmpty || !_files.IsEmpty)
                     await Task.Delay(TimeSpan.FromMilliseconds(20), timeout.Token);
             }
             catch (OperationCanceledException)
             {
-                foreach (var session in _sessions.Values.Concat(_tables.Values))
+                foreach (var session in _sessions.Values.Concat(_tables.Values).Concat(_files.Values))
                     session.Abort(reason);
             }
         }

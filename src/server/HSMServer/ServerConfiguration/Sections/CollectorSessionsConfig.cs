@@ -18,6 +18,10 @@ namespace HSMServer.ServerConfiguration
         public const int DefaultMaxFrameBytes = 4 * 1024 * 1024;
         public const int DefaultMaxTableFrameBytes = 4 * 1024 * 1024;
         public const long DefaultMaxTableBytesInFlight = 256L * 1024 * 1024;
+        public const int DefaultMaxFileFrameBytes = 4 * 1024 * 1024;
+
+        // The smallest file frame that still carries a piece of 64 KiB, the smallest piece a store takes.
+        private const int MinFileFrameBytes = 128 * 1024;
 
         private const long MaxTableBytesInFlightCeiling = 64L * 1024 * 1024 * 1024;
 
@@ -67,11 +71,22 @@ namespace HSMServer.ServerConfiguration
         // connections. At least one reservation.
         public long MaxTableBytesInFlight { get; set; } = DefaultMaxTableBytesInFlight;
 
+        // The largest binary frame on a file connection (#1884, ADR-0022 point 6): one piece of a large
+        // file with its 88-byte header. The piece size announced in the file connection's hello follows
+        // from it (the frame less the header and less the most zstd can add), so a piece always fits.
+        // A larger frame closes the file connection with 1009. Zero turns file connections off (the
+        // upgrade answers 404) while the ordinary sessions go on. The memory of file frames is bounded
+        // by LargeFiles.MaxUploadsInProgress such frames, not by a budget of its own.
+        public int MaxFileFrameBytes { get; set; } = DefaultMaxFileFrameBytes;
+
         [JsonIgnore]
         public bool Enabled => MaxSessions > 0;
 
         [JsonIgnore]
         public bool TablesEnabled => Enabled && MaxTableFrameBytes > 0;
+
+        [JsonIgnore]
+        public bool FilesEnabled => Enabled && MaxFileFrameBytes > 0;
 
         // What one table frame beyond the free allowance reserves from MaxTableBytesInFlight; defined
         // once, by the frame memory that takes and releases it.
@@ -109,6 +124,9 @@ namespace HSMServer.ServerConfiguration
                 throw new InvalidOperationException($"{section}.{nameof(MaxTableBytesInFlight)} = {MaxTableBytesInFlight} is invalid: expected " +
                                                     $"{(MaxTableFrameBytes > 0 ? TableFrameReservation : 0)}..{MaxTableBytesInFlightCeiling} " +
                                                     $"(at least twice {nameof(MaxTableFrameBytes)} plus one byte: what one large frame reserves).");
+
+            if (MaxFileFrameBytes != 0 && MaxFileFrameBytes is < MinFileFrameBytes or > MaxFrameBytesCeiling)
+                throw new InvalidOperationException($"{section}.{nameof(MaxFileFrameBytes)} = {MaxFileFrameBytes} is invalid: use 0 to turn file connections off, or {MinFileFrameBytes}..{MaxFrameBytesCeiling}.");
         }
     }
 }
