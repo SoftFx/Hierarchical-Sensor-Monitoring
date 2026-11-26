@@ -3,7 +3,7 @@
 > Owner: shared | Last reviewed: 2026-11-26 | Canonical: yes
 
 Large file values in the native C++ collector (`src/native/collector`), since 0.16.0 (#1887, epic #1882,
-ADR-0022). The behaviour is the managed collector's (#1888, `feature.md` in this folder once it lands): the same
+ADR-0022). The behaviour is the managed collector's (#1888, [`feature.md`](./feature.md)): the same
 rules are listed here as the native collector keeps them, with what differs at the end. Its first consumer is the
 Aggregator, a native application that writes a dump when it crashes and restarts by itself.
 
