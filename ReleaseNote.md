@@ -6,7 +6,7 @@
 * Take the new `docker-compose.yml`: Caddy image `2.11.4-9`, the `LargeFiles` folder (`HSM_LARGE_FILES`), `HSM_DOMAIN` passed to the server.
 
 ## Large file values (new, #1882, ADR-0022)
-* Collectors upload large files, crash dumps above all, of up to 64 GiB in compressed pieces over the collector session (managed collector 4.2.0-preview, native collector 0.16.0, C++ wrapper 2.1.0). They are values of a File sensor, kept on the server's disk.
+* Collectors upload large files, crash dumps above all, of up to 64 GiB in compressed pieces over the collector session (managed collector 4.2.0-preview, native collector 0.16.0). They are values of a File sensor, kept on the server's disk.
 * The sensor's Files tab shows each file with its state; an alert on a new file; a file downloads as a zip.
 * A dump is a secure file: an AES-256 zip under the product's dump password, set by a Manager of the product. Downloads are checked and logged by HSM and given out by the bundled Caddy.
 * REST API and MCP access with an API token.
