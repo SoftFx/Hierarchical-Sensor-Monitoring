@@ -69,6 +69,18 @@ namespace HSMDataCollector.LargeFiles
         private readonly Action<int> _countDroppedFileValues;
         private readonly Action<FileSensorValue> _requeueFile;
 
+        // The values the uploader gave back to the ordinary path: they never take the route again (the file queue sends them
+        // back through SendFileAsync, which would otherwise hand them over again, for ever). By reference, held weakly.
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<FileSensorValue, object> _givenBack =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<FileSensorValue, object>();
+
+        private static readonly object Marked = new object();
+
+        /// <summary>For tests: how many values the route took.</summary>
+        internal long RoutesTaken => Interlocked.Read(ref _routesTaken);
+
+        private long _routesTaken;
+
         // Under _gate: routed sends in the order they came.
         private readonly List<Routed> _routed = new List<Routed>();
 
@@ -92,8 +104,9 @@ namespace HSMDataCollector.LargeFiles
         /// </summary>
         internal bool Route(FileSensorValue value)
         {
-            // Nothing goes on the file connection before the next Start after a 1008: the ordinary path takes it.
-            if (value == null || _transport == null || _keyRefused != null)
+            // Nothing goes on the file connection before the next Start after a 1008, nor a value the uploader gave back, nor
+            // anything while the data folder cannot be written: the ordinary path takes it.
+            if (value == null || _transport == null || _keyRefused != null || _givenBack.TryGetValue(value, out _) || _store.KnownUnusable)
                 return false;
 
             var size = value.Value?.Count ?? 0;
@@ -115,6 +128,7 @@ namespace HSMDataCollector.LargeFiles
                 _wake.Set();
             }
 
+            Interlocked.Increment(ref _routesTaken);
             return true;
         }
 
@@ -166,6 +180,10 @@ namespace HSMDataCollector.LargeFiles
         {
             try
             {
+                lock (_gate)
+                    if (!_givenBack.TryGetValue(item.Value, out _))
+                        _givenBack.Add(item.Value, Marked);
+
                 if (_requeueFile != null)
                     _requeueFile(item.Value);
                 else

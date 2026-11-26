@@ -458,6 +458,50 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
+        public void A_data_folder_that_cannot_be_written_makes_large_files_unavailable_said_once()
+        {
+            var (h, requeued, _) = Routing();
+
+            using (h)
+            {
+                // A data folder under a file: it can never be made.
+                var blocker = Path.Combine(h.Root, "blocker");
+
+                File.WriteAllText(blocker, "x");
+
+                var folder = Path.Combine(blocker, "data");
+
+                h.StartWith((s, t) => new LargeFileService(t, null, new LargeFileStateStore(folder, h.Errors.Enqueue), LargeFileHarness.Registration, h.Errors.Enqueue,
+                                                           n => true, null, h.Timings, n => { }, v => { lock (requeued) requeued.Add(v); }));
+
+                var watch = h.Service.Watch("dumps", h.Folder, "*.dmp", null);
+                var again = h.Service.Watch("other", h.Folder, "*.dmp", null);
+                var sent = h.Service.Send("dumps", h.WriteFile("a.dmp", 10), null, CancellationToken.None);
+
+                Assert.Equal(LargeFileWatchState.Unavailable, watch.State);
+                Assert.Contains(folder, watch.StateReason);
+                Assert.Equal(LargeFileWatchState.Unavailable, again.State);
+                Assert.True(sent.Wait(Wait));
+                Assert.Equal(LargeFileOutcome.Unavailable, sent.Result.Outcome);
+                Assert.Single(h.Errors, e => e.Contains("cannot write its data folder"));
+
+                // A routed value goes the ordinary way.
+                Assert.False(h.Service.Route(FileValue(Piece + 1)));
+            }
+        }
+
+        [Fact]
+        public void A_comment_is_cut_on_a_character_boundary()
+        {
+            var comment = new string('c', LargeFileService.MaxBeginComment - 2) + "\U0001F600" + "tail";
+            var cut = LargeFileService.CutComment(comment);
+
+            Assert.True(cut.Length <= LargeFileService.MaxBeginComment);
+            Assert.False(char.IsHighSurrogate(cut[cut.Length - 2]));
+            Assert.EndsWith("\u2026", cut);
+        }
+
+        [Fact]
         public void A_1008_refuses_the_file_and_sends_nothing_more_until_the_next_start()
         {
             using (var h = new LargeFileHarness(Piece))

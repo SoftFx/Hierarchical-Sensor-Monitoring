@@ -123,6 +123,9 @@ namespace HSMDataCollector.LargeFiles
                 return new LargeFileWatch(null, null, sensorPath, full, mask, options, LargeFileWatchState.Unavailable, _unavailable);
             }
 
+            if (!_store.IsUsable(out var folderProblem))
+                return new LargeFileWatch(null, null, sensorPath, full, mask, options, LargeFileWatchState.Unavailable, folderProblem);
+
             lock (_gate)
             {
                 if (_disposed)
@@ -165,6 +168,9 @@ namespace HSMDataCollector.LargeFiles
                 Say("unavailable", $"Large files cannot be sent: {_unavailable}.");
                 return Task.FromResult(new LargeFileResult(LargeFileOutcome.Unavailable, $"large files cannot be sent: {_unavailable}"));
             }
+
+            if (!_store.IsUsable(out var folderProblem))
+                return Task.FromResult(new LargeFileResult(LargeFileOutcome.Unavailable, $"large files cannot be sent: {folderProblem}"));
 
             if (token.IsCancellationRequested)
                 return Task.FromResult(new LargeFileResult(LargeFileOutcome.Cancelled, "the token was cancelled"));

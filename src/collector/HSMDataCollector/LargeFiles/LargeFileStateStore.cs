@@ -94,8 +94,10 @@ namespace HSMDataCollector.LargeFiles
 
         private readonly string _root;
         private readonly object _made = new object();
+        private readonly HashSet<string> _said = new HashSet<string>(StringComparer.Ordinal);
         private bool _tried;
         private string _usable;
+        private string _unusable;
 
         internal LargeFileStateStore(string root, Action<string> report)
         {
@@ -119,16 +121,26 @@ namespace HSMDataCollector.LargeFiles
                     _tried = true;
 
                     if (_root == null)
+                    {
+                        _unusable = "the collector has no data folder for large files (CollectorOptions.DataFolder)";
                         return null;
+                    }
 
+                    // Made and written once: a folder this account cannot write is told apart from a lock another process holds.
                     try
                     {
                         Directory.CreateDirectory(_root);
+
+                        var probe = System.IO.Path.Combine(_root, "probe-" + Guid.NewGuid().ToString("N") + ".tmp");
+
+                        File.WriteAllBytes(probe, new byte[1]);
+                        File.Delete(probe);
                         _usable = _root;
                     }
                     catch (Exception ex)
                     {
-                        Say($"The collector cannot use its data folder {_root} for large files ({ex.Message}): large files are sent without it, and a kept file may be offered again after a restart (the server answers that it has it, as long as it has it).");
+                        _unusable = $"the collector cannot write its data folder {_root} ({ex.Message})";
+                        Say($"Large files are not sent: {_unusable}. Set CollectorOptions.DataFolder to a folder this account can write.");
                     }
 
                     return _usable;
@@ -272,6 +284,28 @@ namespace HSMDataCollector.LargeFiles
         internal UploadRecord ReadUpload(string key) => Read<UploadRecord>(key + ".json", r => r.Version == 1 && r.Upload != null && r.PieceBytes > 0);
 
         internal void WriteUpload(string key, UploadRecord record) => Write(key + ".json", record);
+
+        /// <summary>
+        /// Whether the data folder can be used (made and written); probes it on the first call. False with the reason when it
+        /// cannot: large files of the large-file API are then Unavailable.
+        /// </summary>
+        internal bool IsUsable(out string reason)
+        {
+            var usable = Root != null;
+
+            reason = usable ? null : _unusable;
+            return usable;
+        }
+
+        /// <summary>True once a probe found the data folder unusable (no probe is made here: a routed send never makes it).</summary>
+        internal bool KnownUnusable
+        {
+            get
+            {
+                lock (_made)
+                    return _tried && _usable == null;
+            }
+        }
 
         /// <summary>The keys of every upload record in the data folder, for the sweep of records whose file changed or went.</summary>
         internal IReadOnlyList<string> UploadKeys()
@@ -443,8 +477,13 @@ namespace HSMDataCollector.LargeFiles
             catch (Exception) { }
         }
 
+        // Said once per text: a failure repeated on every try is one report.
         private void Say(string text)
         {
+            lock (_said)
+                if (!_said.Add(text))
+                    return;
+
             try { _report?.Invoke(text); }
             catch (Exception) { }
         }

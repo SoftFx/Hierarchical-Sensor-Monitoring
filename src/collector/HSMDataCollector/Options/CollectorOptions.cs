@@ -101,9 +101,9 @@ namespace HSMDataCollector.Core
         /// executable, hashed), so collectors of other applications or products never share them; a state file in use is
         /// locked against other processes. Null (the default) takes the user's local application data folder
         /// (<c>%LOCALAPPDATA%\HSMDataCollector</c> on Windows, <c>~/.local/share/HSMDataCollector</c> elsewhere), or the
-        /// temporary folder when the user has none (a service without a loaded profile): that is said once, as is a folder
-        /// that cannot be written. Without a writable folder large files are still sent, but a kept file may be offered
-        /// again after a restart (the server answers that it has it, as long as it has it).
+        /// temporary folder when the user has none (a service without a loaded profile): that is said once. A folder this
+        /// account cannot write makes the large file calls Unavailable (said once, naming the folder); file values above a
+        /// quarter of the session frame then go the ordinary way.
         /// </summary>
         public string DataFolder { get; set; }
 

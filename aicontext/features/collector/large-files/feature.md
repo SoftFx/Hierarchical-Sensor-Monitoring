@@ -180,7 +180,9 @@ as soon as it is taken, as a queued value does.
   counted as dropped: Stop over-reports rather than under-reports.
 - No file connection (the upgrade refused with `404`/`400`): the route is missing until the next session; what waits is
   given back to the file queue (`DataProcessor.RequeueFile`) and goes the ordinary way: a `list` frame when it fits, else
-  dropped, said and counted as before. A value whose upload had begun is not given back (it may be stored already): it
+  dropped, said and counted as before. A value given back (the route missing, a registration answered with an error, no
+  acknowledgement within 60 s) is marked and never takes the route again: the file queue sends it the ordinary way exactly
+  once. A value whose upload had begun is not given back (it may be stored already): it
   waits for the next session, whose `begin` says `stored` or where to go on from.
 - A collector that only routes values never makes its data folder: the folder is made on the first use of a state.
 
@@ -195,6 +197,11 @@ is not is the same zip without a password. Routed sends are never secure.
 `CollectorOptions.DataFolder` (null: `%LOCALAPPDATA%` / `~/.local/share`, `HSMDataCollector`; the temporary folder, said
 once, when the user has none) / **identity** / `large-files`. The identity is the first 16 hex digits of the SHA-256 of
 `server|port|access key|computer|module|executable path`: two applications, or two products, never share a state.
+
+The folder is made and written once, at the first watch or hand-over (a probe file): a folder this account cannot write
+is told apart from a lock another process holds. Unwritable: watches are `Unavailable` and hand-overs complete
+`Unavailable`, with a reason that names the folder, said once; routed sends go the ordinary way. A routed-only collector
+never makes or probes the folder.
 
 | File | Holds | Lock |
 |---|---|---|

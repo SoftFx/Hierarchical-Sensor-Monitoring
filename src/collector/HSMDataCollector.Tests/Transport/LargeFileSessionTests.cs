@@ -158,6 +158,80 @@ namespace HSMDataCollector.Tests.Transport
             }
         }
 
+        // A file value above a quarter of the session frame (65536 / 4) that still fits a frame: 20000 bytes of 'a' are 60000
+        // bytes of JSON.
+        private static int ListFramesWithTheValue(ScriptedSessionServer server) =>
+            server.Accepted.Count(r => r.Op == "list" && r.Body.Contains("\"Value\":[97,97,97,97,97,97,97,97"));
+
+        [Fact]
+        public void A_routed_value_whose_registration_came_back_with_an_error_is_sent_in_a_list_frame_once()
+        {
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
+            using (var collector = new DataCollector(OptionsFor(server)))
+            {
+                server.AcceptFileUpgrades();
+                server.RefuseRegistrationOf("host/module/session/quarter", "not this time");
+
+                var file = collector.CreateFileSensor("session/quarter", "report");
+
+                collector.Start().Wait();
+                Assert.True(SpinWait.SpinUntil(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/quarter")), Patience));
+
+                file.AddValue(new string('a', 20000));
+
+                Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) == 1, Patience));
+                Thread.Sleep(1000);
+
+                Assert.Equal(1, ListFramesWithTheValue(server));
+                Assert.Equal(1, collector.LargeFileService.RoutesTaken);
+                Assert.Equal(0, server.Files.BeginCount("report.txt"));
+            }
+        }
+
+        [Fact]
+        public void A_routed_value_whose_registration_is_not_acknowledged_in_60_s_is_sent_in_a_list_frame_once()
+        {
+            var timings = new VirtualTimings();
+
+            using (var server = new ScriptedSessionServer { MaxFrameBytes = 65536 })
+            {
+                var options = OptionsFor(server);
+
+                options.LargeFileTimings = timings;
+
+                using (var collector = new DataCollector(options))
+                {
+                    server.AcceptFileUpgrades();
+
+                    // Every registration faults: it is never acknowledged.
+                    server.AckWith("commands", 500);
+
+                    var file = collector.CreateFileSensor("session/quarter", "report");
+
+                    collector.Start().Wait();
+                    Assert.True(SpinWait.SpinUntil(() => server.Requests.Any(r => r.Op == "commands" && r.Body.Contains("session/quarter")), Patience));
+
+                    file.AddValue(new string('a', 20000));
+
+                    Assert.True(SpinWait.SpinUntil(() => collector.LargeFileService != null && collector.LargeFileService.RoutesTaken == 1, Patience));
+
+                    for (var i = 0; i < 30; i++)
+                        timings.Step(collector.LargeFileService.Wake);
+
+                    Assert.Equal(0, ListFramesWithTheValue(server));
+
+                    for (var i = 0; i < 40 && ListFramesWithTheValue(server) == 0; i++)
+                        timings.Step(collector.LargeFileService.Wake);
+
+                    Assert.True(SpinWait.SpinUntil(() => ListFramesWithTheValue(server) == 1, Patience));
+                    Thread.Sleep(1000);
+
+                    Assert.Equal(1, ListFramesWithTheValue(server));
+                    Assert.Equal(1, collector.LargeFileService.RoutesTaken);
+                }
+            }
+        }
+
         [Fact]
         public void A_collector_on_http_cannot_send_large_files_and_says_so()
         {

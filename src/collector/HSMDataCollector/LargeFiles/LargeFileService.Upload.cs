@@ -789,7 +789,7 @@ namespace HSMDataCollector.LargeFiles
                 if (reply.Status == 409)
                 {
                     if (++job.EndRounds > MaxProtocolCloses * 3)
-                        return ProtocolFault(job, $"the server answered end with missing pieces {job.EndRounds} times");
+                        return ProtocolFault(job, $"the server answered end with a 409 {job.EndRounds} times ({reply})");
 
                     return Next.Begin;
                 }
@@ -1448,10 +1448,24 @@ namespace HSMDataCollector.LargeFiles
                     body["status"] = routed.Status;
 
                 if (!string.IsNullOrEmpty(routed.Comment))
-                    body["comment"] = routed.Comment.Length <= MaxBeginComment ? routed.Comment : routed.Comment.Substring(0, MaxBeginComment - 1) + "\u2026";
+                    body["comment"] = CutComment(routed.Comment);
             }
 
             return JsonSerializer.Serialize(body);
+        }
+
+        // At most MaxBeginComment characters with an ellipsis, never splitting a surrogate pair.
+        internal static string CutComment(string comment)
+        {
+            if (comment.Length <= MaxBeginComment)
+                return comment;
+
+            var keep = MaxBeginComment - 1;
+
+            if (char.IsHighSurrogate(comment[keep - 1]))
+                keep--;
+
+            return comment.Substring(0, keep) + "\u2026";
         }
 
         private static TimeSpan RetryAfter(FileReply reply)
