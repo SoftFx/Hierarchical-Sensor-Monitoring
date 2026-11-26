@@ -1,0 +1,435 @@
+# HSM collector conformance v1 — large file values: the piece protocol on the file connection of the collector session
+# (#1888 managed, #1887 native; ADR-0022; wire contract "File connection").
+#
+# The collector is on a session to the driver's SCRIPTED SESSION SERVER (create_collector_on_session), which also takes
+# the file connection: the upgrade with hsm.files.v1 and X-Hsm-Session, the hello with fileLimits (pieceBytes 65536 unless
+# file_server_limits says otherwise), the probe, `begin`, binary piece frames, `end` and `discard`, one text ack each.
+# Without a script the server answers as the real one does: a part per file (sensor path, name, size, modified, source),
+# pieces checked by CRC-32, zstd frame and length, `end` checked against the SHA-256 of the piece digests, `stored` for a
+# file it stored before. A file of 200000 bytes is four pieces: 0, 1, 2 (65536 each) and 3 (3392).
+#
+# Files are written by the driver into the case's own folder, with content both drivers reproduce from a seed: xorshift32
+# (x ^= x << 13; x ^= x >> 17; x ^= x << 5 on uint32; state = seed, 1 when the seed is 0), one byte per step, the low
+# byte of the new state; modified 2026-11-25T10:00:00Z unless the verb names another time. Each case has its own data
+# folder, so large_file_restart finds that case's state only.
+#
+# Time is the case's, never the wall clock's: the uploader's clock moves only when a verb moves it (a second at a time,
+# a scan of the watched folders after every second) and when the uploader waits a server's retryAfter, which passes at
+# once. The expect_* verbs that wait move the clock a second per poll, so a wait the uploader set (a retry, a file put
+# back) passes however late it was set. A request the script leaves unanswered ends its ack wait when the server decides
+# so (the driver's ack-deadline seam), not by the request timeout.
+#
+# The scripted server offers file connections only after file_server_accept_upgrades (without it, it is a server older
+# than large files, as in every other fixture): each case here says so after create_collector_on_session.
+#
+# The managed collector implements it (4.2.0); the native collector gets large files with #1887: its driver marks every
+# verb below CONFORMANCE-UNSUPPORTED (#1887) and does not register this fixture until then.
+#
+# Verbs (sources and calls):
+# large_file_create|name|size|seed[|modified]      writes a source file into the case's folder
+# large_file_send|sensor|name|keep_or_delete        hands the file over (managed SendLargeFileAsync)
+# large_file_watch|sensor|mask|settle_s|keep_or_delete  watches the case's folder (managed WatchLargeFiles)
+# large_file_send_not_secure|sensor|name|keep_or_delete  hands the file over with the option Secure off
+# large_file_send_without_alert|sensor|name|keep_or_delete  hands the file over with the option NewFileAlert off
+# large_file_change_after_piece|name|piece          once piece `piece` of the file was answered, the file's modification
+#                                                   time is an hour later (a file that changed while it was sent; the
+#                                                   driver may change what the collector reads, since Windows denies
+#                                                   other writers while the collector holds the file)
+# large_file_clock_advance|seconds                  the case's clock, a second at a time, a scan after each
+# large_file_restart                                stop and dispose the collector; a new one on the same server and data folder
+# create_collector_on_http                          a collector on the HTTP transport (nothing listens): large files unavailable
+# Verbs (the server's script):
+# file_server_limits|piece_bytes|max_file_bytes     what the file hello states from now on
+# file_server_refuse_upgrades|status / file_server_accept_upgrades
+# file_server_holds|name|pieces                     the server already has the first `pieces` pieces of that file
+# file_server_answer_begin_next|answer              stored, checking (202, retryAfter 1), no_room (503, retryAfter 1),
+#                                                   busy (409, retryAfter 1), too_large (413), cannot_take (422), invalid (400),
+#                                                   drop, silent, close:<code>
+# file_server_answer_piece_next|answer              real (the server's own answer), checksum_mismatch[:next],
+#                                                   out_of_order:<next>, fault (503, retryAfter 1), discarded (400), drop,
+#                                                   drop_after_store (stored, then the connection cut), silent, close:<code>
+# file_server_answer_end_next|answer                checking, mismatch (400: discarded), missing:<next>, cannot_take, drop,
+#                                                   drop_after_store, silent, close:<code>
+# Verbs (expectations):
+# expect_large_file_result|name|outcome|timeout_s   stored, refused, given_up, missing, unavailable, cancelled
+# expect_large_file_pending|name                    the hand-over has not settled
+# expect_large_file_watch_state|index|state         active, unavailable, refused, disposed (index 0 = the first watch)
+# expect_large_file_source|name|present_or_absent
+# expect_large_files_not_sent|count                 refused, given up or missing, over the case's hand-overs and watches
+# expect_file_stored|name|seed|timeout_s            stored and checked by the server; its bytes are the seeded content
+# expect_file_stored_count|name|count
+# expect_file_begins|name|count|timeout_s           begins of the file the server received
+# expect_file_begin_order|name,name,...             the first begin of each file, in order
+# expect_file_begin_field|index|field|value         a field of begin number `index` (0 = first), as its JSON text
+# expect_file_begin_field_starts|index|field|prefix the same field starts with the prefix
+# expect_file_begin_field_absent|index|field        begin number `index` does not carry the field
+# expect_file_stored_size|name|bytes|timeout_s      stored and checked by the server, with this many bytes
+# expect_file_pieces|n0,n1,...                      the piece number of every piece frame received, in order
+# expect_file_discards|count|timeout_s              `discard` requests the server took
+# expect_file_connections_at_least|count|timeout_s
+# expect_refused_file_upgrades_at_least|count|timeout_s
+
+# --- begin, pieces, end ---
+
+begin_pieces_end_store_and_delete|create_collector_on_session|100|50|10000
+begin_pieces_end_store_and_delete|file_server_accept_upgrades
+begin_pieces_end_store_and_delete|start
+begin_pieces_end_store_and_delete|large_file_create|a.dmp|200000|1
+begin_pieces_end_store_and_delete|large_file_send|dumps|a.dmp|delete
+begin_pieces_end_store_and_delete|expect_large_file_result|a.dmp|stored|30
+begin_pieces_end_store_and_delete|expect_file_stored|a.dmp|1|5
+begin_pieces_end_store_and_delete|expect_file_pieces|0,1,2,3
+begin_pieces_end_store_and_delete|expect_file_begins|a.dmp|1|0
+begin_pieces_end_store_and_delete|expect_file_begin_field|0|path|conformance-host/conformance-module/dumps
+begin_pieces_end_store_and_delete|expect_file_begin_field|0|name|a.dmp
+begin_pieces_end_store_and_delete|expect_file_begin_field|0|size|200000
+begin_pieces_end_store_and_delete|expect_file_begin_field|0|modified|2026-11-25T10:00:00.0000000Z
+begin_pieces_end_store_and_delete|expect_file_begin_field|0|pieceBytes|65536
+begin_pieces_end_store_and_delete|expect_large_file_source|a.dmp|absent
+
+an_empty_file_is_a_begin_and_an_end|create_collector_on_session|100|50|10000
+an_empty_file_is_a_begin_and_an_end|file_server_accept_upgrades
+an_empty_file_is_a_begin_and_an_end|start
+an_empty_file_is_a_begin_and_an_end|large_file_create|empty.dmp|0|1
+an_empty_file_is_a_begin_and_an_end|large_file_send|dumps|empty.dmp|delete
+an_empty_file_is_a_begin_and_an_end|expect_large_file_result|empty.dmp|stored|30
+an_empty_file_is_a_begin_and_an_end|expect_file_stored_count|empty.dmp|1
+
+the_piece_size_is_the_hellos|create_collector_on_session|100|50|10000
+the_piece_size_is_the_hellos|file_server_accept_upgrades
+the_piece_size_is_the_hellos|file_server_limits|131072|68719476736
+the_piece_size_is_the_hellos|start
+the_piece_size_is_the_hellos|large_file_create|a.dmp|200000|2
+the_piece_size_is_the_hellos|large_file_send|dumps|a.dmp|delete
+the_piece_size_is_the_hellos|expect_large_file_result|a.dmp|stored|30
+the_piece_size_is_the_hellos|expect_file_begin_field|0|pieceBytes|131072
+the_piece_size_is_the_hellos|expect_file_pieces|0,1
+the_piece_size_is_the_hellos|expect_file_stored|a.dmp|2|5
+
+keep_is_not_sent_again_after_a_restart|create_collector_on_session|100|50|10000
+keep_is_not_sent_again_after_a_restart|file_server_accept_upgrades
+keep_is_not_sent_again_after_a_restart|start
+keep_is_not_sent_again_after_a_restart|large_file_create|a.dmp|70000|3
+keep_is_not_sent_again_after_a_restart|large_file_send|dumps|a.dmp|keep
+keep_is_not_sent_again_after_a_restart|expect_large_file_result|a.dmp|stored|30
+keep_is_not_sent_again_after_a_restart|expect_large_file_source|a.dmp|present
+keep_is_not_sent_again_after_a_restart|large_file_restart
+keep_is_not_sent_again_after_a_restart|large_file_send|dumps|a.dmp|keep
+keep_is_not_sent_again_after_a_restart|expect_large_file_result|a.dmp|stored|30
+keep_is_not_sent_again_after_a_restart|expect_file_begins|a.dmp|1|0
+keep_is_not_sent_again_after_a_restart|expect_large_file_source|a.dmp|present
+
+# --- a continue ---
+
+continue_from_the_servers_piece|create_collector_on_session|100|50|10000
+continue_from_the_servers_piece|file_server_accept_upgrades
+continue_from_the_servers_piece|start
+continue_from_the_servers_piece|large_file_create|a.dmp|200000|4
+continue_from_the_servers_piece|file_server_holds|a.dmp|2
+continue_from_the_servers_piece|large_file_send|dumps|a.dmp|delete
+continue_from_the_servers_piece|expect_large_file_result|a.dmp|stored|30
+continue_from_the_servers_piece|expect_file_pieces|2,3
+continue_from_the_servers_piece|expect_file_stored|a.dmp|4|5
+
+a_cut_connection_continues_from_the_servers_piece|create_collector_on_session|100|50|10000
+a_cut_connection_continues_from_the_servers_piece|file_server_accept_upgrades
+a_cut_connection_continues_from_the_servers_piece|start
+a_cut_connection_continues_from_the_servers_piece|large_file_create|a.dmp|200000|5
+a_cut_connection_continues_from_the_servers_piece|file_server_answer_piece_next|real
+a_cut_connection_continues_from_the_servers_piece|file_server_answer_piece_next|drop_after_store
+a_cut_connection_continues_from_the_servers_piece|large_file_send|dumps|a.dmp|delete
+a_cut_connection_continues_from_the_servers_piece|expect_large_file_result|a.dmp|stored|30
+a_cut_connection_continues_from_the_servers_piece|expect_file_pieces|0,1,2,3
+a_cut_connection_continues_from_the_servers_piece|expect_file_begins|a.dmp|2|0
+a_cut_connection_continues_from_the_servers_piece|expect_file_connections_at_least|2|5
+a_cut_connection_continues_from_the_servers_piece|expect_file_stored|a.dmp|5|5
+
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|create_collector_on_session|100|50|10000
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|file_server_accept_upgrades
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|start
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|large_file_create|a.dmp|200000|6
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|file_server_answer_piece_next|real
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|file_server_answer_piece_next|silent
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|large_file_send|dumps|a.dmp|delete
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|expect_large_file_result|a.dmp|stored|30
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|expect_file_pieces|0,1,1,2,3
+a_piece_without_an_answer_is_sent_again_on_a_new_connection|expect_file_stored|a.dmp|6|5
+
+a_lost_stored_answer_is_stored_at_the_next_begin|create_collector_on_session|100|50|10000
+a_lost_stored_answer_is_stored_at_the_next_begin|file_server_accept_upgrades
+a_lost_stored_answer_is_stored_at_the_next_begin|start
+a_lost_stored_answer_is_stored_at_the_next_begin|large_file_create|a.dmp|70000|7
+a_lost_stored_answer_is_stored_at_the_next_begin|file_server_answer_end_next|drop_after_store
+a_lost_stored_answer_is_stored_at_the_next_begin|large_file_send|dumps|a.dmp|delete
+a_lost_stored_answer_is_stored_at_the_next_begin|expect_large_file_result|a.dmp|stored|30
+a_lost_stored_answer_is_stored_at_the_next_begin|expect_file_begins|a.dmp|2|0
+a_lost_stored_answer_is_stored_at_the_next_begin|expect_file_stored_count|a.dmp|1
+a_lost_stored_answer_is_stored_at_the_next_begin|expect_large_file_source|a.dmp|absent
+
+# --- answers that are not final ---
+
+no_room_is_tried_again|create_collector_on_session|100|50|10000
+no_room_is_tried_again|file_server_accept_upgrades
+no_room_is_tried_again|start
+no_room_is_tried_again|large_file_create|a.dmp|70000|8
+no_room_is_tried_again|file_server_answer_begin_next|no_room
+no_room_is_tried_again|large_file_send|dumps|a.dmp|delete
+no_room_is_tried_again|expect_large_file_result|a.dmp|stored|30
+no_room_is_tried_again|expect_file_begins|a.dmp|2|0
+no_room_is_tried_again|expect_large_files_not_sent|0
+
+a_busy_part_is_tried_again|create_collector_on_session|100|50|10000
+a_busy_part_is_tried_again|file_server_accept_upgrades
+a_busy_part_is_tried_again|start
+a_busy_part_is_tried_again|large_file_create|a.dmp|70000|9
+a_busy_part_is_tried_again|file_server_answer_begin_next|busy
+a_busy_part_is_tried_again|large_file_send|dumps|a.dmp|delete
+a_busy_part_is_tried_again|expect_large_file_result|a.dmp|stored|30
+a_busy_part_is_tried_again|expect_file_begins|a.dmp|2|0
+
+checking_is_asked_again_at_begin_and_at_end|create_collector_on_session|100|50|10000
+checking_is_asked_again_at_begin_and_at_end|file_server_accept_upgrades
+checking_is_asked_again_at_begin_and_at_end|start
+checking_is_asked_again_at_begin_and_at_end|large_file_create|a.dmp|70000|10
+checking_is_asked_again_at_begin_and_at_end|file_server_answer_begin_next|checking
+checking_is_asked_again_at_begin_and_at_end|file_server_answer_end_next|checking
+checking_is_asked_again_at_begin_and_at_end|large_file_send|dumps|a.dmp|delete
+checking_is_asked_again_at_begin_and_at_end|expect_large_file_result|a.dmp|stored|30
+checking_is_asked_again_at_begin_and_at_end|expect_file_begins|a.dmp|2|0
+checking_is_asked_again_at_begin_and_at_end|expect_file_pieces|0,1
+
+a_fault_of_the_store_sends_the_same_piece_again|create_collector_on_session|100|50|10000
+a_fault_of_the_store_sends_the_same_piece_again|file_server_accept_upgrades
+a_fault_of_the_store_sends_the_same_piece_again|start
+a_fault_of_the_store_sends_the_same_piece_again|large_file_create|a.dmp|200000|11
+a_fault_of_the_store_sends_the_same_piece_again|file_server_answer_piece_next|real
+a_fault_of_the_store_sends_the_same_piece_again|file_server_answer_piece_next|fault
+a_fault_of_the_store_sends_the_same_piece_again|file_server_answer_piece_next|checksum_mismatch:1
+a_fault_of_the_store_sends_the_same_piece_again|large_file_send|dumps|a.dmp|delete
+a_fault_of_the_store_sends_the_same_piece_again|expect_large_file_result|a.dmp|stored|30
+a_fault_of_the_store_sends_the_same_piece_again|expect_file_pieces|0,1,1,1,2,3
+a_fault_of_the_store_sends_the_same_piece_again|expect_file_stored|a.dmp|11|5
+
+# --- refusals ---
+
+too_large_is_final_and_keeps_the_file|create_collector_on_session|100|50|10000
+too_large_is_final_and_keeps_the_file|file_server_accept_upgrades
+too_large_is_final_and_keeps_the_file|start
+too_large_is_final_and_keeps_the_file|large_file_create|a.dmp|70000|12
+too_large_is_final_and_keeps_the_file|file_server_answer_begin_next|too_large
+too_large_is_final_and_keeps_the_file|large_file_send|dumps|a.dmp|delete
+too_large_is_final_and_keeps_the_file|expect_large_file_result|a.dmp|refused|30
+too_large_is_final_and_keeps_the_file|expect_large_file_source|a.dmp|present
+too_large_is_final_and_keeps_the_file|expect_file_begins|a.dmp|1|0
+too_large_is_final_and_keeps_the_file|expect_large_files_not_sent|1
+
+over_the_hellos_limit_is_refused_without_a_begin|create_collector_on_session|100|50|10000
+over_the_hellos_limit_is_refused_without_a_begin|file_server_accept_upgrades
+over_the_hellos_limit_is_refused_without_a_begin|file_server_limits|65536|1000
+over_the_hellos_limit_is_refused_without_a_begin|start
+over_the_hellos_limit_is_refused_without_a_begin|large_file_create|a.dmp|1001|13
+over_the_hellos_limit_is_refused_without_a_begin|large_file_send|dumps|a.dmp|delete
+over_the_hellos_limit_is_refused_without_a_begin|expect_large_file_result|a.dmp|refused|30
+over_the_hellos_limit_is_refused_without_a_begin|expect_file_begins|a.dmp|0|0
+over_the_hellos_limit_is_refused_without_a_begin|expect_large_file_source|a.dmp|present
+
+a_sensor_that_cannot_take_it_is_final|create_collector_on_session|100|50|10000
+a_sensor_that_cannot_take_it_is_final|file_server_accept_upgrades
+a_sensor_that_cannot_take_it_is_final|start
+a_sensor_that_cannot_take_it_is_final|large_file_create|a.dmp|70000|14
+a_sensor_that_cannot_take_it_is_final|file_server_answer_begin_next|cannot_take
+a_sensor_that_cannot_take_it_is_final|large_file_send|dumps|a.dmp|delete
+a_sensor_that_cannot_take_it_is_final|expect_large_file_result|a.dmp|refused|30
+a_sensor_that_cannot_take_it_is_final|expect_large_file_source|a.dmp|present
+
+the_source_is_deleted_only_after_stored|create_collector_on_session|100|50|10000
+the_source_is_deleted_only_after_stored|file_server_accept_upgrades
+the_source_is_deleted_only_after_stored|start
+the_source_is_deleted_only_after_stored|large_file_create|a.dmp|70000|15
+the_source_is_deleted_only_after_stored|file_server_answer_end_next|cannot_take
+the_source_is_deleted_only_after_stored|large_file_send|dumps|a.dmp|delete
+the_source_is_deleted_only_after_stored|expect_large_file_result|a.dmp|refused|30
+the_source_is_deleted_only_after_stored|expect_file_pieces|0,1
+the_source_is_deleted_only_after_stored|expect_large_file_source|a.dmp|present
+
+an_end_mismatch_begins_again_from_zero|create_collector_on_session|100|50|10000
+an_end_mismatch_begins_again_from_zero|file_server_accept_upgrades
+an_end_mismatch_begins_again_from_zero|start
+an_end_mismatch_begins_again_from_zero|large_file_create|a.dmp|200000|16
+an_end_mismatch_begins_again_from_zero|file_server_answer_end_next|mismatch
+an_end_mismatch_begins_again_from_zero|large_file_send|dumps|a.dmp|delete
+an_end_mismatch_begins_again_from_zero|expect_large_file_result|a.dmp|stored|30
+an_end_mismatch_begins_again_from_zero|expect_file_begins|a.dmp|2|0
+an_end_mismatch_begins_again_from_zero|expect_file_pieces|0,1,2,3,0,1,2,3
+an_end_mismatch_begins_again_from_zero|expect_file_stored|a.dmp|16|5
+
+a_third_mismatch_gives_the_file_up|create_collector_on_session|100|50|10000
+a_third_mismatch_gives_the_file_up|file_server_accept_upgrades
+a_third_mismatch_gives_the_file_up|start
+a_third_mismatch_gives_the_file_up|large_file_create|a.dmp|70000|17
+a_third_mismatch_gives_the_file_up|file_server_answer_end_next|mismatch
+a_third_mismatch_gives_the_file_up|file_server_answer_end_next|mismatch
+a_third_mismatch_gives_the_file_up|file_server_answer_end_next|mismatch
+a_third_mismatch_gives_the_file_up|large_file_send|dumps|a.dmp|delete
+a_third_mismatch_gives_the_file_up|expect_large_file_result|a.dmp|given_up|30
+a_third_mismatch_gives_the_file_up|expect_file_begins|a.dmp|3|0
+a_third_mismatch_gives_the_file_up|expect_large_file_source|a.dmp|present
+a_third_mismatch_gives_the_file_up|large_file_restart
+a_third_mismatch_gives_the_file_up|large_file_send|dumps|a.dmp|delete
+a_third_mismatch_gives_the_file_up|expect_large_file_result|a.dmp|given_up|30
+a_third_mismatch_gives_the_file_up|expect_file_begins|a.dmp|3|0
+
+# --- a file that changes ---
+
+a_changed_file_is_discarded_and_sent_again|create_collector_on_session|100|50|10000
+a_changed_file_is_discarded_and_sent_again|file_server_accept_upgrades
+a_changed_file_is_discarded_and_sent_again|start
+a_changed_file_is_discarded_and_sent_again|large_file_create|a.dmp|200000|18
+a_changed_file_is_discarded_and_sent_again|large_file_change_after_piece|a.dmp|1
+a_changed_file_is_discarded_and_sent_again|large_file_send|dumps|a.dmp|delete
+a_changed_file_is_discarded_and_sent_again|expect_file_discards|1|30
+a_changed_file_is_discarded_and_sent_again|expect_large_file_result|a.dmp|stored|30
+a_changed_file_is_discarded_and_sent_again|expect_file_begin_field|1|modified|2026-11-25T11:00:00.0000000Z
+a_changed_file_is_discarded_and_sent_again|expect_large_files_not_sent|0
+
+# --- the connection ---
+
+a_server_without_file_connections_keeps_the_file|create_collector_on_session|100|50|10000
+a_server_without_file_connections_keeps_the_file|file_server_refuse_upgrades|404
+a_server_without_file_connections_keeps_the_file|start
+a_server_without_file_connections_keeps_the_file|large_file_create|a.dmp|70000|19
+a_server_without_file_connections_keeps_the_file|large_file_send|dumps|a.dmp|delete
+a_server_without_file_connections_keeps_the_file|expect_refused_file_upgrades_at_least|1|30
+a_server_without_file_connections_keeps_the_file|expect_large_file_pending|a.dmp
+a_server_without_file_connections_keeps_the_file|expect_large_file_source|a.dmp|present
+a_server_without_file_connections_keeps_the_file|file_server_accept_upgrades
+a_server_without_file_connections_keeps_the_file|session_server_drop_sessions
+a_server_without_file_connections_keeps_the_file|expect_large_file_result|a.dmp|stored|30
+
+the_http_transport_has_no_large_files|create_collector_on_http
+the_http_transport_has_no_large_files|large_file_create|a.dmp|10|20
+the_http_transport_has_no_large_files|large_file_send|dumps|a.dmp|delete
+the_http_transport_has_no_large_files|large_file_watch|dumps|*.dmp|60|delete
+the_http_transport_has_no_large_files|expect_large_file_result|a.dmp|unavailable|5
+the_http_transport_has_no_large_files|expect_large_file_watch_state|0|unavailable
+the_http_transport_has_no_large_files|expect_large_file_source|a.dmp|present
+
+# --- watched folders ---
+
+a_file_is_taken_when_it_settled|create_collector_on_session|100|50|10000
+a_file_is_taken_when_it_settled|file_server_accept_upgrades
+a_file_is_taken_when_it_settled|start
+a_file_is_taken_when_it_settled|large_file_create|a.dmp|1000|21
+a_file_is_taken_when_it_settled|large_file_watch|dumps|*.dmp|60|delete
+a_file_is_taken_when_it_settled|large_file_clock_advance|30
+a_file_is_taken_when_it_settled|large_file_create|a.dmp|2000|21|2026-11-25T10:05:00Z
+a_file_is_taken_when_it_settled|large_file_clock_advance|40
+a_file_is_taken_when_it_settled|expect_file_begins|a.dmp|0|0
+a_file_is_taken_when_it_settled|large_file_clock_advance|30
+a_file_is_taken_when_it_settled|expect_file_stored|a.dmp|21|30
+a_file_is_taken_when_it_settled|expect_file_begin_field|0|size|2000
+
+files_found_at_start_go_oldest_first|create_collector_on_session|100|50|10000
+files_found_at_start_go_oldest_first|file_server_accept_upgrades
+files_found_at_start_go_oldest_first|large_file_create|c.dmp|100|22|2026-11-03T00:00:00Z
+files_found_at_start_go_oldest_first|large_file_create|a.dmp|100|23|2026-11-01T00:00:00Z
+files_found_at_start_go_oldest_first|large_file_create|b.dmp|100|24|2026-11-02T00:00:00Z
+files_found_at_start_go_oldest_first|start
+files_found_at_start_go_oldest_first|large_file_watch|dumps|*.dmp|60|delete
+files_found_at_start_go_oldest_first|large_file_clock_advance|70
+files_found_at_start_go_oldest_first|expect_file_stored|c.dmp|22|30
+files_found_at_start_go_oldest_first|expect_file_begin_order|a.dmp,b.dmp,c.dmp
+
+the_mask_is_the_whole_name|create_collector_on_session|100|50|10000
+the_mask_is_the_whole_name|file_server_accept_upgrades
+the_mask_is_the_whole_name|large_file_create|app_1.dmp|100|25|2026-11-01T00:00:00Z
+the_mask_is_the_whole_name|large_file_create|a.dmp|100|26|2026-11-02T00:00:00Z
+the_mask_is_the_whole_name|large_file_create|a.dmp_old|100|27
+the_mask_is_the_whole_name|large_file_create|b.dmp|100|28
+the_mask_is_the_whole_name|large_file_create|app.txt|100|29
+the_mask_is_the_whole_name|start
+the_mask_is_the_whole_name|large_file_watch|dumps|a*.dmp|60|keep
+the_mask_is_the_whole_name|large_file_clock_advance|70
+the_mask_is_the_whole_name|expect_file_stored|a.dmp|26|30
+the_mask_is_the_whole_name|expect_file_begin_order|app_1.dmp,a.dmp
+the_mask_is_the_whole_name|expect_file_begins|a.dmp_old|0|0
+the_mask_is_the_whole_name|expect_file_begins|b.dmp|0|0
+the_mask_is_the_whole_name|expect_file_begins|app.txt|0|0
+
+# --- secure and not secure (ADR-0022 point 20) ---
+
+a_handed_file_is_secure_unless_told|create_collector_on_session|100|50|10000
+a_handed_file_is_secure_unless_told|file_server_accept_upgrades
+a_handed_file_is_secure_unless_told|start
+a_handed_file_is_secure_unless_told|large_file_create|a.dmp|100|30
+a_handed_file_is_secure_unless_told|large_file_create|b.log|100|31
+a_handed_file_is_secure_unless_told|large_file_send|dumps|a.dmp|delete
+a_handed_file_is_secure_unless_told|expect_large_file_result|a.dmp|stored|30
+a_handed_file_is_secure_unless_told|large_file_send_not_secure|dumps|b.log|delete
+a_handed_file_is_secure_unless_told|expect_large_file_result|b.log|stored|30
+a_handed_file_is_secure_unless_told|expect_file_begin_field|0|secure|true
+a_handed_file_is_secure_unless_told|expect_file_begin_field|1|secure|false
+a_handed_file_is_secure_unless_told|expect_file_begin_field_absent|0|status
+a_handed_file_is_secure_unless_told|expect_file_begin_field_absent|0|comment
+
+# --- an ordinary file value above a quarter of the session frame (ADR-0022 point 21) ---
+
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|session_server_hello|65536|30
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|create_collector_on_session|50|20|5000
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|file_server_accept_upgrades
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|create_file_sensor|contract/session/big-file|report|txt
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|start
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_session_accepted_contains|commands|contract/session/big-file"|15
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|add_file_value|0|repeat:x:20000|Warning|big
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|add_file_value|0|small|Ok|small
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_session_accepted_contains|list|"Value":[115,109,97,108,108]|20
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_stored_size|report.txt|20000|30
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_begin_field|0|path|conformance-host/conformance-module/contract/session/big-file
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_begin_field|0|secure|false
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_begin_field|0|size|20000
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_begin_field|0|status|2
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_begin_field|0|comment|big
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_file_begin_field_starts|0|source|send:
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_session_no_request_contains|120,120,120,120,120,120,120,120
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|stop
+a_file_value_above_a_quarter_frame_goes_on_the_file_connection|expect_no_http_requests
+
+# --- the access key can no longer send ---
+
+a_1008_is_final_until_the_next_start|create_collector_on_session|100|50|10000
+a_1008_is_final_until_the_next_start|file_server_accept_upgrades
+a_1008_is_final_until_the_next_start|start
+a_1008_is_final_until_the_next_start|large_file_create|a.dmp|70000|32
+a_1008_is_final_until_the_next_start|large_file_create|b.dmp|70000|33
+a_1008_is_final_until_the_next_start|file_server_answer_piece_next|close:1008
+a_1008_is_final_until_the_next_start|large_file_send|dumps|a.dmp|delete
+a_1008_is_final_until_the_next_start|expect_large_file_result|a.dmp|refused|30
+a_1008_is_final_until_the_next_start|large_file_send|dumps|b.dmp|delete
+a_1008_is_final_until_the_next_start|expect_large_file_pending|b.dmp
+a_1008_is_final_until_the_next_start|expect_file_begins|b.dmp|0|0
+a_1008_is_final_until_the_next_start|stop
+a_1008_is_final_until_the_next_start|start
+a_1008_is_final_until_the_next_start|expect_large_file_result|b.dmp|stored|30
+a_1008_is_final_until_the_next_start|expect_large_file_source|a.dmp|present
+
+# --- the registration of a large-file sensor: the default alert (DefaultAlertsOptions.LargeFiles = 4) ---
+
+the_registration_asks_for_the_default_alert|create_collector_on_session|100|50|10000
+the_registration_asks_for_the_default_alert|file_server_accept_upgrades
+the_registration_asks_for_the_default_alert|start
+the_registration_asks_for_the_default_alert|large_file_create|a.dmp|100|34
+the_registration_asks_for_the_default_alert|large_file_send|dumps|a.dmp|delete
+the_registration_asks_for_the_default_alert|expect_large_file_result|a.dmp|stored|30
+the_registration_asks_for_the_default_alert|expect_session_accepted_contains|commands|"Path":"conformance-host/conformance-module/dumps"|5
+the_registration_asks_for_the_default_alert|expect_session_accepted_contains|commands|"SensorType":6|5
+the_registration_asks_for_the_default_alert|expect_session_accepted_contains|commands|"DefaultAlertsOptions":4|5
+
+the_registration_without_the_alert_does_not_ask|create_collector_on_session|100|50|10000
+the_registration_without_the_alert_does_not_ask|file_server_accept_upgrades
+the_registration_without_the_alert_does_not_ask|start
+the_registration_without_the_alert_does_not_ask|large_file_create|a.dmp|100|35
+the_registration_without_the_alert_does_not_ask|large_file_send_without_alert|dumps|a.dmp|delete
+the_registration_without_the_alert_does_not_ask|expect_large_file_result|a.dmp|stored|30
+the_registration_without_the_alert_does_not_ask|expect_session_accepted_contains|commands|"Path":"conformance-host/conformance-module/dumps"|5
+the_registration_without_the_alert_does_not_ask|expect_session_accepted_contains|commands|"DefaultAlertsOptions":0|5
+the_registration_without_the_alert_does_not_ask|expect_session_no_request_contains|"DefaultAlertsOptions":4

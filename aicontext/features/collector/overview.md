@@ -258,6 +258,7 @@ Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms 
 | Scheduling | [`scheduling/`](./scheduling/feature.md) | Per-collector timer wheel, ScheduledTaskHandle |
 | Error Handling | [`error-handling/`](./error-handling/feature.md) | Exception isolation, MessageDeduplicator, diagnostic sensors |
 | Table Sensors | [`table-sensors/`](./table-sensors/feature.md) | Table sensors (#1846, ADR-0021): API, row buffer, table tick, registration, blocks, backlog, the table connection of the session, stop |
+| Large Files | [`large-files/`](./large-files/feature.md) | Large file values (#1888, ADR-0022): watched folders and handed-over files, the upload in pieces on the file connection of the session, the state in the data folder |
 
 Wire contract (shared with server/wrapper/ports): [`../api/wire-contract/feature.md`](../api/wire-contract/feature.md).
 C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inventory.md`](../../../docs/initiatives/cpp-collector-port-functional-inventory.md) — **frozen index** as of #1101; the conformance corpus (`tests/conformance/collector/*.hsmtest`) is the source of truth, and the CI `checklist-gate` job enforces it. Add a scenario, don't reopen a box.
@@ -285,6 +286,7 @@ C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inve
 - `Transport` (`Session` since 4.0.0, ADR-0019) — `Session` (a collector session over one WebSocket, no fallback to HTTP) or `Http`; see `http-client/feature.md`
 - `ExtraRequestHeaders` (empty) — headers added to value requests (e.g. `X-Agent-Version`); see `http-client/feature.md`, directive channel
 - `TableTickPeriod` (10 s), `MaxTableBufferBytes` (64 MiB), `MaxTableBacklogBytes` (64 MiB) — table sensors; see `table-sensors/feature.md`
+- `DataFolder` (null: the user's local application data) — the state of large files; see `large-files/feature.md`
 
 ## Known Issues
 
