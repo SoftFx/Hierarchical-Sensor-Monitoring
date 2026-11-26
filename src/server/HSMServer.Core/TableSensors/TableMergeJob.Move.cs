@@ -53,6 +53,7 @@ namespace HSMServer.Core.TableSensors
         // The hour of the pass's clock in which a product's move fault, and its refused step, were last logged.
         private readonly Dictionary<Guid, long> _moveFaultHour = [];
         private readonly Dictionary<Guid, long> _moveRefusedHour = [];
+        private readonly Dictionary<Guid, long> _moveHeldHour = [];
 
         // The sensors whose move was logged as started and not yet as ended (this process).
         private readonly HashSet<(Guid Product, Guid Sensor)> _movesStarted = [];
@@ -61,6 +62,10 @@ namespace HSMServer.Core.TableSensors
         // a fault after the compaction): the deleted bytes then. Not compacted again in this process until a tenth of the
         // database more has been deleted since, so a counter that does not go down never makes every pass compact.
         private readonly Dictionary<(Guid Product, TableBatchWeek Week), long> _notShrinking = [];
+
+        // Week databases whose compaction failed and whose share could not be read then: the hour of the pass's clock of it.
+        // Not compacted again in that hour.
+        private readonly Dictionary<(Guid Product, TableBatchWeek Week), long> _compactFailedHour = [];
 
 
         private sealed record MoveStep(Guid Product, TableSensorModel Sensor, TableBatchWeek From, int ToClass, long FirstHour, long EndHour, bool Expired);
@@ -97,6 +102,9 @@ namespace HSMServer.Core.TableSensors
             // Products whose steps cannot run in this pass: not reconciled, or faulted (below). A product whose merge lags runs
             // its expired steps, not its copy steps.
             var faulted = new HashSet<Guid>(unreconciled.Products);
+            // Products whose steps are held at an arrival hour whose batches did not verify (not committed until the next
+            // start): the hour, from which on nothing of the product is moved.
+            var held = new Dictionary<Guid, long>();
 
             try
             {
@@ -136,7 +144,7 @@ namespace HSMServer.Core.TableSensors
 
                 // 3. The steps. A step the store refused, or whose target retention dropped, is not tried again in this
                 //    process while it stays the same step: a change of the placement or of the period makes another step.
-                var steps = SelectSteps(products, unreconciled, faulted, utcNow);
+                var steps = SelectSteps(products, unreconciled, faulted, utcNow, held);
                 _refusedSteps.IntersectWith(steps.Select(KeyOf));
                 var diskShort = false;
 
@@ -177,7 +185,7 @@ namespace HSMServer.Core.TableSensors
             {
                 var blocked = new HashSet<Guid>(faulted);
                 blocked.UnionWith(lagging);
-                CountPending(unreconciled.All ? null : blocked);
+                CountPending(unreconciled.All ? null : blocked, held);
             }
         }
 
@@ -194,8 +202,9 @@ namespace HSMServer.Core.TableSensors
         // in the tree still in a segment of an old class, every product of the store. Move steps blocked: those of the
         // products whose steps could not run in the pass (placements not reconciled, a fault, a merge that lags, which holds
         // the copy steps; every product when the products could not be reconciled at all). Move steps refused now: the steps
-        // not tried again (_refusedSteps).
-        private void CountPending(HashSet<Guid> blocked)
+        // not tried again (_refusedSteps). Of a product held at an hour whose batches did not verify, the sensor-weeks of the
+        // segments' hours at and after that hour count as blocked as well: no step passes it until the next start.
+        private void CountPending(HashSet<Guid> blocked, Dictionary<Guid, long> held)
         {
             long pending = 0, stuck = 0;
 
@@ -204,16 +213,20 @@ namespace HSMServer.Core.TableSensors
                 foreach (var product in Batches.GetProducts())
                 {
                     var inTree = TableSensorsOf(product).Select(s => s.Id).ToHashSet();
-                    long weeks = 0;
+                    long weeks = 0, heldWeeks = 0;
+                    long? from = held.TryGetValue(product, out var hour) ? hour : null;
 
                     foreach (var (sensor, placement) in Batches.GetPlacements(product))
                         if (inTree.Contains(sensor))
                             foreach (var segment in placement.Segments)
+                            {
                                 weeks += WeeksOf(segment.FirstHour, segment.EndHour).Count();
+                                if (from is long h && segment.EndHour > h)
+                                    heldWeeks += WeeksOf(Math.Max(segment.FirstHour, h), segment.EndHour).Count();
+                            }
 
                     pending += weeks;
-                    if (blocked is null || blocked.Contains(product))
-                        stuck += weeks;
+                    stuck += blocked is null || blocked.Contains(product) ? weeks : heldWeeks;
                 }
             }
             catch (Exception ex)
@@ -231,7 +244,7 @@ namespace HSMServer.Core.TableSensors
         // equal to its placement's target), per segment and week, the hours before the product's oldest arrival hour with
         // blocks that is not committed and before the current hour of the pass's clock: so no hour of a step can be written
         // by a run of the merge any more.
-        private List<MoveStep> SelectSteps(IReadOnlyList<Guid> products, Unreconciled unreconciled, HashSet<Guid> faulted, DateTime utcNow)
+        private List<MoveStep> SelectSteps(IReadOnlyList<Guid> products, Unreconciled unreconciled, HashSet<Guid> faulted, DateTime utcNow, Dictionary<Guid, long> held)
         {
             var steps = new List<MoveStep>();
             long now = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
@@ -247,7 +260,18 @@ namespace HSMServer.Core.TableSensors
                     if (placements.Values.All(p => p.Segments.Count == 0))
                         continue;
 
+                    // Copy steps and expired steps alike never pass this hour: a step must not take an hour that is not
+                    // committed. An hour whose batches did not verify stays so until the next start (it is not due in this
+                    // process, so the product does not count as lagging): its stall is counted as blocked and logged.
                     long limit = FirstUncommittedHour(product, now);
+                    if (limit < now && _failedVerification.Contains((product, limit)) &&
+                        placements.Values.Any(p => p.Segments.Any(seg => seg.EndHour > limit)))
+                    {
+                        held[product] = limit;
+                        if (FirstInHour(_moveHeldHour, product, utcNow))
+                            _logger.Warn($"Table move: the move of product {product} is held at the arrival hour {Hour(limit)}: its batches did not verify, " +
+                                         "so it is not committed until the next start, and no step takes an hour at or after it (logged once an hour)");
+                    }
 
                     foreach (var sensor in TableSensorsOf(product))
                     {
@@ -337,6 +361,12 @@ namespace HSMServer.Core.TableSensors
             }
 
             Batches.SetMoveInFlight(product, null);
+
+            // What a refusal may have met is gone now (rows of the sensor in the target): its steps of those hours are tried
+            // again. A cheap safety: the job deletes those rows before the record of a copy, so a copy is not refused for them.
+            if (deleted > 0)
+                _refusedSteps.RemoveWhere(k => k.Product == product && k.Sensor == record.SensorId && k.From.WeekStartTicks == record.WeekStartTicks &&
+                                               k.FirstHour < record.EndHour && record.FirstHour < k.EndHour);
 
             var aborted = placement.Target != record.ToClass;
             var what = $"Table move: the step in flight of sensor {record.SensorId} of product {product} ({Name(new TableBatchWeek(record.WeekStartTicks, record.FromClass))} -> " +
@@ -647,6 +677,9 @@ namespace HSMServer.Core.TableSensors
                         if (_notShrinking.TryGetValue((product, week), out var stuck) && share.DeletedBytes - stuck < CompactShare * share.FolderBytes)
                             continue;
 
+                        if (_compactFailedHour.TryGetValue((product, week), out var failedHour) && failedHour == utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour)
+                            continue;
+
                         Compact(product, week, share, run, utcNow);
                         break;
                     }
@@ -665,16 +698,34 @@ namespace HSMServer.Core.TableSensors
             var watch = Stopwatch.StartNew();
             run.Compactions++;
 
+            TableBatchDeletedShare after;
+            var failed = false;
+
             try
             {
                 Batches.CompactWeek(product, week);
             }
             catch (Exception ex)
             {
+                failed = true;
                 MoveFault(product, utcNow, ex, $"the week database {Name(week)} of product {product} was not compacted");
             }
 
-            var after = Batches.GetDeletedShare(product, week);
+            try
+            {
+                // Read also after a fault: the compaction may have been made before it (the counter's write failed).
+                after = Batches.GetDeletedShare(product, week);
+            }
+            catch (Exception ex)
+            {
+                // One failure, one count. The store still failing: the database is not compacted again in this hour of the
+                // pass's clock, and its entry stays.
+                if (!failed)
+                    MoveFault(product, utcNow, ex, $"the deleted share of the week database {Name(week)} of product {product} could not be read after its compaction");
+
+                _compactFailedHour[(product, week)] = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
+                return;
+            }
 
             if (after.Share >= CompactShare)
             {

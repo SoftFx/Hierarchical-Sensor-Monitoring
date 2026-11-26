@@ -417,11 +417,20 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal((1, 1), (Bytes(s, 5), Bytes(s, 52)));
             Assert.Equal(before, All(s, r));
 
+            // The stall is visible: the sensor-week held at hour 1 counts as blocked, and stays so in the next passes.
+            var stats = _server.Batches.MergeStatistics;
+            for (int i = 1; i <= 2; i++)
+            {
+                Assert.Equal(0, Pass(MoveAt.AddMinutes(i)).MoveSteps);
+                Assert.Equal((1L, 1L, 0L), (stats.MoveStepsPending, stats.MoveStepsBlocked, stats.LagHours));
+            }
+
             // After a restart hour 1 is merged into the class that holds it, and the move goes on.
             await RestartAsync(crash: false);
             Assert.Null(Pass(MoveAt.AddMinutes(10)).Fault);
             Assert.True(_server.Batches.IsHourMerged(_product, Hour0.AddHours(1).Ticks));
             Assert.Empty(_server.Batches.GetPlacement(_product, s.Id).Segments);
+            Assert.Equal((0, 0), (_server.Batches.MergeStatistics.MoveStepsPending, _server.Batches.MergeStatistics.MoveStepsBlocked));
             Assert.Equal((3, 0), (Bytes(s, 5), Bytes(s, 52)));
             Assert.Equal(before, All(s, r));
         }
