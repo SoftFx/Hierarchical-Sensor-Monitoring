@@ -538,6 +538,92 @@ namespace HSMServer.Core.Tests.LargeFiles
             }
         }
 
+
+        // #1886: the default alert of a sensor registered for large files, on the real upload path: one message per
+        // verified file with its name, size and page; nothing for a half-uploaded file or a file whose check failed.
+        [Fact]
+        public async Task A_sensor_registered_for_large_files_sends_one_message_per_verified_file_and_none_for_the_others()
+        {
+            var sensor = await CreateFileSensorAsync("registered", DefaultAlertsOptions.LargeFiles);
+            var policy = Assert.Single(sensor.Policies);
+            Assert.Equal(SensorPolicyCollection.LargeFileAlertTemplate, policy.Template);
+
+            // An alert message leaves the cache only for a product in a folder.
+            var folder = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = _product, FolderId = Guid.NewGuid() }, default);
+            Assert.True(folder.IsOk, folder.Error);
+
+            var alerts = new ConcurrentQueue<AlertMessage>();
+            void Record(AlertMessage message)
+            {
+                if (message.SensorId == sensor.Id)
+                    alerts.Enqueue(message);
+            }
+
+            _valuesCache.NewAlertMessageEvent += Record;
+
+            try
+            {
+                // Half uploaded: one piece of two, then the connection is gone.
+                var half = await BeginAsync(sensor.Path, 2 * Piece, raw: true, name: "half.dmp");
+                Assert.Equal(LargeFileBeginOutcome.Started, half.Outcome);
+                await AppendAllAsync(half.Lease, Content(2 * Piece), count: 1);
+                _service.Release(half.Lease);
+
+                // Every piece in, but the check fails: discarded, no value.
+                var bad = await BeginAsync(sensor.Path, Piece, raw: true, name: "bad.dmp");
+                await AppendAllAsync(bad.Lease, Content(Piece));
+                var mismatch = await _service.FinishAsync(bad.Lease, SHA256.HashData(Content(Piece)),
+                    new FixedChecker(new LargeFilePartCheck(false, null, 0, "test")), default);
+                Assert.Equal(LargeFileFinishOutcome.Mismatch, mismatch.Outcome);
+
+                Assert.Empty(alerts);
+
+                await UploadAsync(sensor, Content(Piece), name: "first.dmp");
+                await UploadAsync(sensor, Content(Piece + 1), name: "second.dmp");
+
+                var texts = alerts.SelectMany(message => message).Select(alert => alert.LastComment).ToList();
+
+                Assert.Equal(2, alerts.Count);
+                Assert.Equal(2, texts.Count);
+                Assert.Contains(texts, text => text.Contains("new file first.dmp (") && text.Contains($"/Home/{sensor.Id}"));
+                Assert.Contains(texts, text => text.Contains("new file second.dmp (") && text.Contains($"/Home/{sensor.Id}"));
+            }
+            finally
+            {
+                _valuesCache.NewAlertMessageEvent -= Record;
+            }
+        }
+
+        [Fact]
+        public async Task A_file_sensor_without_the_flag_gets_no_alert_and_sends_nothing_for_its_large_files()
+        {
+            var sensor = await CreateFileSensorAsync("plain");
+            Assert.Empty(sensor.Policies);
+
+            var folder = await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = _product, FolderId = Guid.NewGuid() }, default);
+            Assert.True(folder.IsOk, folder.Error);
+
+            var alerts = 0;
+            void Record(AlertMessage message)
+            {
+                if (message.SensorId == sensor.Id)
+                    Interlocked.Increment(ref alerts);
+            }
+
+            _valuesCache.NewAlertMessageEvent += Record;
+
+            try
+            {
+                await UploadAsync(sensor, Content(Piece), name: "routed.bin");
+
+                Assert.Equal(0, alerts);
+            }
+            finally
+            {
+                _valuesCache.NewAlertMessageEvent -= Record;
+            }
+        }
+
         [Fact]
         public async Task A_clock_stepped_back_below_a_clear_still_gets_the_file_a_row_above_the_floor_and_the_file_stays()
         {
@@ -964,12 +1050,12 @@ namespace HSMServer.Core.Tests.LargeFiles
                 Initiator = InitiatorInfo.System,
             })).IsOk);
 
-        private async Task<BaseSensorModel> CreateFileSensorAsync(string name)
+        private async Task<BaseSensorModel> CreateFileSensorAsync(string name, DefaultAlertsOptions defaultAlerts = DefaultAlertsOptions.None)
         {
             var path = $"{_root}/{name}";
             var result = await _valuesCache.AddOrUpdateSensorAsync(new SensorAddOrUpdateRequest(_product, path)
             {
-                Update = new SensorUpdate { Id = Guid.Empty },
+                Update = new SensorUpdate { Id = Guid.Empty, DefaultAlertsOptions = defaultAlerts },
                 Type = SensorType.File,
                 TypeIsExplicit = true,
             });

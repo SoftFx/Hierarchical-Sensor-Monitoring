@@ -322,6 +322,89 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(300 - FileSensorPageService.PageSize, page.MoreUploads);
         }
 
+
+        [Fact]
+        public async Task ALargeLastValue_IsDescribed_NeverServedAsAFile_AndStaysInTheList()
+        {
+            AddValues(_sensor, 2);
+            var large = AddLarge(_sensor, "app.dmp", 8L << 30);
+
+            var controller = Controller(Admin());
+            var id = Encode(_sensor);
+
+            Assert.IsType<NotFoundResult>(await controller.GetFile(id, 0));
+            Assert.IsType<NotFoundResult>(await controller.GetFileStream(id, 0));
+            Assert.IsType<NotFoundResult>(await controller.GetFile(id, large.Time.Ticks));
+
+            var info = Assert.IsType<FileInfoDto>(controller.GetFileInfo(id).Value);
+            Assert.True(info.IsLarge);
+            Assert.Equal("app.dmp", info.Name);
+            Assert.Equal(8L << 30, info.OriginalSize);
+
+            // Not taken out of the list as an ordinary last value is: the list shows its state and its download.
+            var page = PageOf(await controller.GetRecentFilesView(id));
+            Assert.Equal(large.Time.Ticks, page.Rows[0].TimeTicks);
+            Assert.True(page.Rows[0].IsLarge);
+            Assert.False(page.Rows[0].IsPreviewEnabled);
+        }
+
+        [Fact]
+        public async Task ALargeRow_ShowsItsKind_State_Origin_AndDownload_AndItsDownloadsToManagersOnly()
+        {
+            var ready = AddLarge(_sensor, "ready.dmp", 100);
+            var waiting = AddLarge(_sensor, "waiting.dmp", 100);
+            var routed = AddLarge(_sensor, "big.csv", 100);
+            var missing = AddLarge(_sensor, "gone.dmp", 100);
+            AddValues(_sensor, 1);
+
+            _largeFiles.HasPassword = false;
+            _largeFiles.Files[ready.FileId] = new LargeFileStoredFacts
+            {
+                FileId = ready.FileId, State = "packed", BuildState = "none", DownloadUrl = "/LargeFiles/Download/r/a",
+                Application = "TTS", Host = "10.0.0.7",
+            };
+            _largeFiles.Files[waiting.FileId] = new LargeFileStoredFacts
+            {
+                FileId = waiting.FileId, State = "verified", BuildState = "none", NotReadyReason = "no password",
+            };
+            _largeFiles.Files[routed.FileId] = new LargeFileStoredFacts
+            {
+                FileId = routed.FileId, State = "verified", BuildState = "queued", IsSecure = false,
+            };
+            _largeFiles.Downloads[ready.FileId] = [new LargeFileDownloadFacts(DateTime.UtcNow, "viewer", "web")];
+
+            var viewer = PageOf(await Controller(Viewer()).GetRecentFilesView(Encode(_sensor)));
+            var manager = PageOf(await Controller(Manager()).GetRecentFilesView(Encode(_sensor)));
+
+            FileValueRowViewModel Row(FileValuesPageViewModel page, LargeFileValue value) => page.Rows.Single(r => r.TimeTicks == value.Time.Ticks);
+
+            var readyRow = Row(viewer, ready);
+            Assert.Equal((LargeFileRowState.Ready, FileSensorPageService.SecureKind), (readyRow.LargeState, readyRow.Kind));
+            Assert.Equal("/LargeFiles/Download/r/a", readyRow.DownloadUrl);
+            Assert.Equal(("TTS", "10.0.0.7"), (readyRow.Application, readyRow.Host));
+            Assert.Equal(ready.SourceModified, readyRow.SourceModified);
+            Assert.Null(readyRow.Downloads);
+            Assert.Single(Row(manager, ready).Downloads);
+
+            var waitingRow = Row(viewer, waiting);
+            Assert.Equal(LargeFileRowState.WaitingForPassword, waitingRow.LargeState);
+            Assert.Null(waitingRow.DownloadUrl);
+            Assert.Equal("no password", waitingRow.Reason);
+            Assert.Equal((FileValueRowViewModel.Unknown, FileValueRowViewModel.Unknown), (waitingRow.Application, waitingRow.Host));
+
+            var routedRow = Row(viewer, routed);
+            Assert.Equal((LargeFileRowState.Packing, FileSensorPageService.NotSecureKind), (routedRow.LargeState, routedRow.Kind));
+
+            var missingRow = Row(viewer, missing);
+            Assert.Equal(LargeFileRowState.Missing, missingRow.LargeState);
+            Assert.Null(missingRow.DownloadUrl);
+            Assert.Empty(Row(manager, missing).Downloads);
+
+            // The page lists a secure file without a password: the notice, with the settings for the Manager.
+            Assert.True(viewer.ShowPasswordMissing);
+            Assert.NotNull(manager.PasswordSettingsUrl);
+        }
+
         private static FileValuesPageViewModel PageOf(IActionResult result) =>
             Assert.IsType<FileValuesPageViewModel>(Assert.IsType<PartialViewResult>(result).Model);
 
@@ -345,6 +428,30 @@ namespace HSMServer.Core.Tests.Controllers
                 rows.Add(value);
                 sensor.TryAddValue(value);
             }
+        }
+
+        // A large value, newer than every value the sensor holds.
+        private LargeFileValue AddLarge(BaseSensorModel sensor, string name, long size)
+        {
+            var rows = _rows[sensor.Id];
+            var value = new LargeFileValue
+            {
+                Time = Start.AddMinutes(rows.Count),
+                ReceivingTime = Start.AddMinutes(rows.Count),
+                Name = name,
+                Extension = System.IO.Path.GetExtension(name).TrimStart('.'),
+                OriginalSize = size,
+                Value = [],
+                Status = SensorStatus.Ok,
+                FileId = Guid.NewGuid(),
+                Hash = new byte[32],
+                SourceModified = Start.AddDays(-1),
+            };
+
+            rows.Add(value);
+            sensor.TryAddValue(value);
+
+            return value;
         }
 
         // Uncompressed content of the announced size (a value whose content is as long as its size is not inflated).

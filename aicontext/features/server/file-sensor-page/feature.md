@@ -72,6 +72,7 @@ There is no "removed by retention" state: retention removes a value's row by its
 - Large file store (#1883): uploads of a sensor, the record of a file.
 - Archive builder, dump passwords, download and download log (#1885).
 - Alerts: the same name rule prints `$fileName` (`alerts/feature.md`).
+- Self-monitoring of large files: the gauges and the refusal alert are in `storage/large-files/feature.md`, "Self-monitoring".
 
 ## Tests
 

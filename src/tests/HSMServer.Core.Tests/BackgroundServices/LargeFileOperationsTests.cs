@@ -19,6 +19,8 @@ namespace HSMServer.Core.Tests.BackgroundServices;
 public sealed class LargeFileOperationsTests : IDisposable
 {
     private readonly Dictionary<string, Recording> _sensors = [];
+    private readonly Dictionary<string, List<double>> _doubles = [];
+    private readonly Dictionary<string, InstantSensorOptions> _options = [];
     private readonly Mock<IDataCollector> _collector = new(MockBehavior.Strict);
     private readonly string _folder = Path.Combine(Path.GetTempPath(), $"hsm-large-ops-{Guid.NewGuid():N}");
     private readonly LargeFileStore _store;
@@ -27,7 +29,21 @@ public sealed class LargeFileOperationsTests : IDisposable
     public LargeFileOperationsTests()
     {
         _collector.Setup(c => c.CreateIntSensor(It.IsAny<string>(), It.IsAny<InstantSensorOptions>()))
-                  .Returns((string path, InstantSensorOptions _) => _sensors[path] = new Recording());
+                  .Returns((string path, InstantSensorOptions options) =>
+                  {
+                      _options[path] = options;
+                      return _sensors[path] = new Recording();
+                  });
+
+        _collector.Setup(c => c.CreateDoubleSensor(It.IsAny<string>(), It.IsAny<InstantSensorOptions>()))
+                  .Returns((string path, InstantSensorOptions options) =>
+                  {
+                      _options[path] = options;
+                      var values = _doubles[path] = [];
+                      var sensor = new Mock<IInstantValueSensor<double>>();
+                      sensor.Setup(x => x.AddValue(It.IsAny<double>())).Callback((double v) => values.Add(v));
+                      return sensor.Object;
+                  });
 
         _store = new LargeFileStore(_folder) { FreeBytes = () => long.MaxValue / 2 };
     }
@@ -111,8 +127,9 @@ public sealed class LargeFileOperationsTests : IDisposable
         sensors.SendInfo();
 
         Assert.True(sensors.IsCreated);
-        Assert.Equal(9, _sensors.Count);
-        Assert.All(_sensors.Keys, k => Assert.StartsWith("Large files/", k));
+        Assert.Equal(12, _sensors.Count);
+        Assert.Single(_doubles);
+        Assert.All(_sensors.Keys.Concat(_doubles.Keys), k => Assert.StartsWith("Large files/", k));
         Assert.Equal((0, SensorStatus.Ok), Single("Refused for space"));
 
         _store.Statistics.Add(ref _store.Statistics.RefusedForSpace);
@@ -123,6 +140,113 @@ public sealed class LargeFileOperationsTests : IDisposable
         Assert.Equal([(0, SensorStatus.Ok), (1, SensorStatus.Error), (1, SensorStatus.Ok)], Values("Refused for space"));
         Assert.Equal([(0, SensorStatus.Ok), (2, SensorStatus.Ok)], Values("Files removed"));
     }
+
+
+    // #1886: the gauges after a refusal and after a removal, on the real store.
+    [Fact]
+    public void After_a_refusal_the_counter_warns_with_its_alert_and_the_gauges_show_what_is_stored()
+    {
+        var sensors = new LargeFileSensors(_collector.Object, _store);
+        var product = Guid.NewGuid();
+
+        var started = _store.Begin(new LargeFileUploadKey(product, Guid.NewGuid(), "a.dmp", 10, DateTime.UtcNow, null), null, 65_536, 65_536);
+        Assert.Equal(LargeFileBeginOutcome.Started, started.Outcome);
+        Append(started.Lease, 0, 7);
+
+        sensors.SendInfo();
+
+        Assert.Equal((1, SensorStatus.Ok), Single("Uploads in progress"));
+        Assert.Equal((0, SensorStatus.Ok), Single("Files stored"));
+        Assert.Equal((0, SensorStatus.Ok), Single("Refused for space"));
+
+        _store.FreeBytes = () => 0;
+        Assert.Equal(LargeFileBeginOutcome.NoRoom,
+            _store.Begin(new LargeFileUploadKey(product, Guid.NewGuid(), "b.dmp", 1L << 30, DateTime.UtcNow, null), null, 65_536, 65_536).Outcome);
+
+        sensors.SendInfo();
+
+        Assert.Equal([(0, SensorStatus.Ok), (1, SensorStatus.Error)], Values("Refused for space"));
+        Assert.Equal((1, SensorStatus.Ok), Single("Uploads in progress"));
+
+        // The one counter that warns: an alert when it turns Error, whose text never prints an empty comment.
+        var alert = Assert.Single(_options[$"{LargeFileSensors.NodeName}/{LargeFileSensors.RefusedForSpaceName}"].Alerts);
+        Assert.Equal(LargeFileSensors.RefusedForSpaceAlert, alert.Template);
+        Assert.DoesNotContain("$comment", alert.Template);
+        Assert.Empty(_options[$"{LargeFileSensors.NodeName}/Files removed"].Alerts);
+    }
+
+    [Fact]
+    public void After_a_removal_the_counter_grows_and_the_gauges_drop()
+    {
+        var sensors = new LargeFileSensors(_collector.Object, _store);
+
+        var started = _store.Begin(new LargeFileUploadKey(Guid.NewGuid(), Guid.NewGuid(), "a.dmp", 10, DateTime.UtcNow, null), null, 65_536, 65_536);
+        Append(started.Lease, 0, 65_536);
+        sensors.SendInfo();
+
+        Assert.Equal(0.06, Last("Bytes stored"));
+
+        _store.Discard(started.Lease, "test");
+        sensors.SendInfo();
+
+        Assert.Equal([(0, SensorStatus.Ok), (1, SensorStatus.Ok)], Values("Parts removed"));
+        Assert.Equal([(1, SensorStatus.Ok), (0, SensorStatus.Ok)], Values("Uploads in progress"));
+        Assert.Equal(0, Last("Bytes stored"));
+    }
+
+    [Fact]
+    public void Only_a_secure_verified_file_of_a_product_without_a_password_waits_and_a_packed_file_counts_its_archive()
+    {
+        var withPassword = Guid.NewGuid();
+        var without = Guid.NewGuid();
+
+        LargeFileRecord Record(LargeFileState state, Guid product, bool secure = true) => new()
+        {
+            FileId = Guid.NewGuid(),
+            ProductId = product,
+            State = state,
+            Secure = secure,
+            PartLength = 100,
+            ArchiveLength = state == LargeFileState.Packed ? 1000 : null,
+        };
+
+        var gauges = LargeFileSensors.Measure(
+        [
+            Record(LargeFileState.Uploading, without),
+            Record(LargeFileState.Verified, without),
+            Record(LargeFileState.Verified, without, secure: false),
+            Record(LargeFileState.Verified, withPassword),
+            Record(LargeFileState.Packed, without, secure: false),
+        ], product => product == withPassword);
+
+        Assert.Equal(new LargeFileSensors.Gauges(UploadsInProgress: 1, FilesStored: 4, BytesStored: 100 * 4 + 1000, WaitingForPassword: 1), gauges);
+    }
+
+    [Fact]
+    public void A_store_that_cannot_read_its_records_skips_the_gauges_but_not_the_counters()
+    {
+        var store = new Mock<ILargeFileStore>();
+        store.SetupGet(s => s.HasContent).Returns(true);
+        store.SetupGet(s => s.Statistics).Returns(new LargeFileStoreStatistics());
+        store.Setup(s => s.GetFiles()).Throws(new LargeFileStoreException("disk gone"));
+
+        var sensors = new LargeFileSensors(_collector.Object, store.Object);
+
+        sensors.SendInfo();
+
+        Assert.Equal((0, SensorStatus.Ok), Single("Refused for space"));
+        Assert.Empty(Values("Uploads in progress"));
+        Assert.Empty(_doubles[$"{LargeFileSensors.NodeName}/Bytes stored"]);
+    }
+
+
+    private void Append(UploadLease lease, long piece, int length)
+    {
+        var bytes = new byte[length];
+        Assert.Equal(LargeFileAppendOutcome.Stored, _store.Append(lease, piece, bytes, new byte[32]).Outcome);
+    }
+
+    private double Last(string name) => _doubles[$"{LargeFileSensors.NodeName}/{name}"][^1];
 
 
     private List<(int Value, SensorStatus Status)> Values(string name) => _sensors[$"{LargeFileSensors.NodeName}/{name}"].Values;

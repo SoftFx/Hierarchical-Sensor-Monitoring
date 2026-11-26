@@ -190,7 +190,7 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<PolicyAdministrationService>();
 
             // The file values of a File sensor for its page (#1886); stateless over the cache.
-            services.AddSingleton<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.NoLargeFilePageSource>();
+            services.AddSingleton<HSMServer.Model.FileSensors.ILargeFilePageSource, HSMServer.Model.FileSensors.StoreLargeFilePageSource>();
             services.AddSingleton<HSMServer.Model.FileSensors.FileSensorPageService>();
 
             // The alert variables of File sensors (#1886): the link to the sensor page and whether a product's large
