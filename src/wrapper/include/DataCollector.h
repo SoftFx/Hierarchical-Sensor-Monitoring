@@ -92,10 +92,13 @@ namespace hsm_wrapper
 	// differ behind it — see docs/native-collector-migration.md. The surprising ones for a relinking consumer:
 	//   * The transport is the collector session (WebSocket) unless UseHttpTransport() is called before
 	//     Start; a server without sessions (before 3.43.0) receives nothing until that call is made.
-	//   * On the session a file from SendFileAsync must fit one frame of the server as JSON (each file
-	//     byte is written as a decimal number, up to 4 bytes): with the server's default 4 MiB frame that
-	//     is about 1 MiB. A larger file is dropped, logged (.module/Collector errors) and counted in
-	//     Queue overflow; over HTTP files up to the 10 MiB cap are sent.
+	//   * On the session a file from SendFileAsync of up to a quarter of the server's frame (1 MiB with its
+	//     default 4 MiB) goes as one value of a list frame. A larger one, up to the 10 MiB cap, goes on the
+	//     session's file connection as a large file value that is not secure (since 2.1.0, ADR-0022 points
+	//     20 and 21), when the server has file connections. Against a server without them a file that does
+	//     not fit a frame as JSON (each file byte is a decimal number, up to 4 bytes) is dropped, logged
+	//     (.module/Collector errors) and counted in Queue overflow. Over HTTP files up to the 10 MiB cap
+	//     are sent.
 	//   * Initialize(config_path, write_debug) is a no-op (the collector is configured via the ctor).
 	//   * Initialize*Monitoring boolean sub-flags are ignored — the whole native group is registered;
 	//     InitializeDiskMonitoring's `target` is ignored, so it is equivalent to InitializeAllDisksMonitoring.
@@ -125,7 +128,8 @@ namespace hsm_wrapper
 		// it: either may come first, so do not change the transport while another thread starts the
 		// collector. There is no way back to the session on this proxy, and no automatic switch
 		// either way: a collector on the session never falls back to HTTP. On the session a file
-		// larger than about 1 MiB is dropped (see the note above).
+		// larger than about 1 MiB goes on the file connection, or is dropped by a server without
+		// file connections (see the note above).
 		void UseHttpTransport();
 
 		// Escape hatch for incremental migration off the wrapper: returns the underlying native
