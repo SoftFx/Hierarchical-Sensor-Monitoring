@@ -62,7 +62,7 @@ placed as `CreateFileSensor` places it (under the computer and module by default
 | `ILargeFileWatch.Dispose` | removes the watch | removes it; its upload is cut (the part stays for a continue) | as Running | no-op |
 
 Stop and Dispose do not wait for an upload: they cut it (the socket is aborted, the file handle closed) and wait for the
-thread at most a second. The file connection is closed (1000) before the session. Final refusals are forgotten at Start.
+thread at most a second. An idle file connection is closed (1000) before the session; one that carries an upload is aborted with it (the server logs a connection ended without a close handshake), and a routed upload first discards its part. Final refusals are forgotten at Start.
 
 Duplicates: two calls for one sensor path with different options — the first registration stands, the second is said
 once. A path also created by `CreateFileSensor` — allowed; the last registration sent sets the sensor (give both the same
