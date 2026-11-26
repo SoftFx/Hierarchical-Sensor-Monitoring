@@ -16,8 +16,9 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.LargeFiles.Downloads
 {
-    // The registration of the archive side (#1885): the dump password service allocates a version past the highest one an
-    // archive of the product carries, read from the store (the builder depends on the service, never the other way round).
+    // The registration of the archive side (#1885): the store is the adapter over the database's large file store (#1883),
+    // and the dump password service allocates a version past the highest one an archive of the product carries, read from
+    // the store (the builder depends on the service, never the other way round).
     public sealed class LargeFileArchivesRegistrationTests : IDisposable
     {
         private readonly FakeLargeFileArchiveStore _store = new();
@@ -60,11 +61,28 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
         }
 
 
-        private ServiceProvider BuildProvider()
+        [Fact]
+        public void TheRegisteredStore_IsTheAdapterOverTheDatabasesLargeFileStore()
+        {
+            using var real = new RealLargeFileStore();
+            var product = Guid.NewGuid();
+            var id = real.Verify(product, Guid.NewGuid(), RealLargeFileStore.Content(300), secure: false);
+
+            using var provider = BuildProvider(real.Store, replaceStore: false);
+            var store = provider.GetRequiredService<ILargeFileArchiveStore>();
+
+            Assert.IsType<LargeFileStoreArchiveAdapter>(store);
+            Assert.Equal(product, store.TryGetFile(id).ProductId);
+            Assert.False(store.TryGetFile(id).IsSecure);
+        }
+
+
+        private ServiceProvider BuildProvider(HSMDatabase.AccessManager.LargeFiles.ILargeFileStore largeFiles = null, bool replaceStore = true)
         {
             var database = new Mock<IDatabaseCore>();
             database.Setup(d => d.GetAllDumpPasswords()).Returns([]);
             database.Setup(d => d.PutDumpPasswords(It.IsAny<ProductDumpPasswordsEntity>())).Callback<ProductDumpPasswordsEntity>(_rows.Add);
+            database.Setup(d => d.LargeFiles).Returns(largeFiles);
 
             var cache = new Mock<ITreeValuesCache>();
             cache.Setup(c => c.GetProduct(_product.Id)).Returns(_product);
@@ -78,8 +96,9 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
             services.AddSingleton(cache.Object);
             services.AddLargeFileArchives(config.Object);
 
-            // The test store in place of the placeholder the registration adds.
-            services.AddSingleton<ILargeFileArchiveStore>(_store);
+            // The test store in place of the adapter over the database's store.
+            if (replaceStore)
+                services.AddSingleton<ILargeFileArchiveStore>(_store);
 
             return services.BuildServiceProvider();
         }

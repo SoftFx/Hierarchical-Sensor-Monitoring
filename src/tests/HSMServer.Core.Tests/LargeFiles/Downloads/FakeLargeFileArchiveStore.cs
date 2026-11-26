@@ -24,6 +24,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
 
         public string Root { get; }
 
+        public string ArchivesFolder => Root;
+
         /// <summary>An exception the open of an archive throws instead of opening it; null: none.</summary>
         public Func<Guid, Exception> OpenFault { get; set; }
 

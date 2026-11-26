@@ -103,8 +103,9 @@ namespace HSMServer.Core.LargeFiles.Archives
 
 
     /// <summary>
-    /// The seam between the archive side (#1885) and the large file store (#1883). The production implementation adapts
-    /// the store; tests use a fake over a temporary folder. Faults throw; nothing here retries.
+    /// The seam between the archive side (#1885) and the large file store (#1883). The production implementation is
+    /// <see cref="LargeFileStoreArchiveAdapter"/> over the store; tests use fakes over a temporary folder. Faults throw;
+    /// nothing here retries.
     /// </summary>
     public interface ILargeFileArchiveStore
     {
@@ -125,7 +126,10 @@ namespace HSMServer.Core.LargeFiles.Archives
         /// <summary>A read-only stream of the current archive of a packed file (FileShare.Read | FileShare.Delete).</summary>
         Stream OpenArchive(Guid fileId);
 
-        /// <summary>The absolute path of the file's current archive.</summary>
+        /// <summary>The absolute folder of the finished archives: the subtree the bundled Caddy mounts read-only.</summary>
+        string ArchivesFolder { get; }
+
+        /// <summary>The absolute path of the archive the description names, under <see cref="ArchivesFolder"/>.</summary>
         string ArchivePath(LargeArchiveFile file);
 
         /// <summary>

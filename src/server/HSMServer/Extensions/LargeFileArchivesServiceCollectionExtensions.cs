@@ -19,8 +19,9 @@ namespace HSMServer.ServiceExtensions
         {
             services.AddSingleton(config.LargeFileArchives ?? new LargeFileArchivesConfig());
 
-            // PLACEHOLDER until #1883 lands: a store with no files. Replaced by the adapter over the real store then.
-            services.AddSingleton<ILargeFileArchiveStore, UnavailableLargeFileArchiveStore>();
+            // The archive side reads and writes the large file store of #1883 through its own seam; the container disposes
+            // the adapter, which unsubscribes from the store's verified event.
+            services.AddSingleton<ILargeFileArchiveStore>(provider => new LargeFileStoreArchiveAdapter(provider.GetRequiredService<IDatabaseCore>().LargeFiles));
 
             // The self-monitoring sensors live inside the server's collector wrapper, like the other self-monitoring nodes.
             services.AddSingleton<ILargeFilesMonitor>(provider => provider.GetRequiredService<DataCollectorWrapper>().LargeFileSensors);

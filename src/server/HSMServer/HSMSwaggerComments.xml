@@ -3704,13 +3704,6 @@
         <member name="M:HSMServer.Model.ManagementApi.LargeFiles.LargeFileNames.ContentDisposition(System.String)">
             <summary>attachment; filename="&lt;ASCII fallback&gt;"; filename*=UTF-8''&lt;the full name&gt;.</summary>
         </member>
-        <member name="T:HSMServer.Model.ManagementApi.LargeFiles.UnavailableLargeFileArchiveStore">
-            <summary>
-            PLACEHOLDER until the large file store of #1883 lands: a store that holds no files. Every lookup answers "unknown",
-            every open throws, <see cref="E:HSMServer.Model.ManagementApi.LargeFiles.UnavailableLargeFileArchiveStore.FileVerified"/> is never raised and a build never begins. REPLACED by the adapter over
-            the real store when #1883 is merged; nothing else depends on it being empty.
-            </summary>
-        </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
             <summary>
             The uniform error body of the management API: every error response of every
