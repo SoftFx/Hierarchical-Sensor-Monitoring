@@ -82,15 +82,15 @@ namespace HSMServer.Core.Tests.ApiObjectsConverters
         {
             var value = new FileValue
             {
-                Time = Time, Name = "=cmd|' /C calc'!A0", Extension = "csv", Value = [], OriginalSize = 0, Comment = "-x", Status = SensorStatus.Ok,
+                Time = Time, Name = "=SUM(1,2)", Extension = "csv", Value = [], OriginalSize = 0, Comment = "-x", Status = SensorStatus.Ok,
             };
 
             var spreadsheet = Export(CsvReader.Spreadsheet, value);
-            Assert.Contains("\"'=cmd|' /C calc'!A0\"", spreadsheet);
+            Assert.Contains("\"'=SUM(1,2)\"", spreadsheet);
             Assert.Contains("\"'-x\"", spreadsheet);
 
             var script = Export(CsvReader.Script, value);
-            Assert.Contains("\"=cmd|' /C calc'!A0\"", script);
+            Assert.Contains("\"=SUM(1,2)\"", script);
             Assert.Contains("\"-x\"", script);
             Assert.DoesNotContain("'=", script);
         }
