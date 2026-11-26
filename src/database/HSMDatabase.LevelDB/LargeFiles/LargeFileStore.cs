@@ -502,8 +502,9 @@ namespace HSMDatabase.LevelDB.LargeFiles
             if (!HoldsLease(entry, lease, Mono(), Limits) || entry.Checking || record.State != LargeFileState.Uploading)
                 return new LargeFileAppendResult(LargeFileAppendOutcome.LeaseLost, record.PieceCount);
 
-            if (storedLength <= 0 || storedLength > MaxStoredPieceBytes(entry.MaxPieceSize))
-                throw new ArgumentException($"A stored piece has 1..{MaxStoredPieceBytes(entry.MaxPieceSize)} bytes, not {storedLength}.", "storedBytes");
+            // The bound of this upload's own piece size (at most the caller's maximum), the one the reader checks too.
+            if (storedLength <= 0 || storedLength > MaxStoredPieceBytes(record.PieceSize))
+                throw new ArgumentException($"A stored piece has 1..{MaxStoredPieceBytes(record.PieceSize)} bytes, not {storedLength}.", "storedBytes");
 
             if (pieceNumber < record.PieceCount)
                 return new LargeFileAppendResult(LargeFileAppendOutcome.AlreadyHave, record.PieceCount);

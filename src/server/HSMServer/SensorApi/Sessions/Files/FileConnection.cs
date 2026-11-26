@@ -245,6 +245,9 @@ namespace HSMServer.SensorApi.Sessions.Files
             var digest = frame.Slice(56, FilePiece.DigestLength);
             FileAppendResult result;
 
+            // Taken before the call: the store renews the lease before its write, so this is never later than its renewal.
+            var asked = _time.GetTimestamp();
+
             try
             {
                 // Off the loop's thread: the store makes a synced write.
@@ -254,7 +257,7 @@ namespace HSMServer.SensorApi.Sessions.Files
             {
                 // Nothing was acknowledged: the collector sends the same piece again. The store renewed the lease before
                 // its write failed, so a collector that retries a full disk on this connection keeps its upload.
-                upload.Touched = _time.GetTimestamp();
+                upload.Touched = asked;
                 _logger.Debug($"Collector file connection {_session.ShortId}: the store could not write piece {header.Number} of upload {FormatId(upload.FileId)}: {ex.Message}");
                 _session.CountPieceRefused();
                 Refuse(output, id, SessionProtocol.StatusUnavailable, "the large file store could not write the piece", FaultRetryAfterSeconds);
@@ -273,7 +276,7 @@ namespace HSMServer.SensorApi.Sessions.Files
                 case FileAppendOutcome.Stored:
                     _session.CountPieceStored(payload.Length);
                     upload.Next = result.NextPiece;
-                    upload.Touched = _time.GetTimestamp();
+                    upload.Touched = asked;
                     Next(output, id, SessionProtocol.StatusOk, result.NextPiece, reason: null);
                     return;
 

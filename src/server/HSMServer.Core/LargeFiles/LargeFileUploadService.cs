@@ -88,8 +88,8 @@ namespace HSMServer.Core.LargeFiles
 
         /// <summary>
         /// Appends a piece; returns once it is on the disk (the call blocks for the durable write). The digest has 32 bytes
-        /// and the stored bytes 1 .. <c>LargeFileStore.MaxStoredPieceBytes(MaxPieceSize)</c> (the zstd bound of the maximum
-        /// piece size); <see cref="ArgumentException"/> otherwise.
+        /// and the stored bytes 1 .. <c>LargeFileStore.MaxStoredPieceBytes(PieceSize)</c> (the zstd bound of the upload's piece
+        /// size, at most its maximum); <see cref="ArgumentException"/> otherwise.
         /// </summary>
         Task<LargeFileAppendResult> AppendAsync(UploadLease lease, long pieceNumber, ReadOnlyMemory<byte> storedBytes, ReadOnlyMemory<byte> digest, CancellationToken ct);
 
