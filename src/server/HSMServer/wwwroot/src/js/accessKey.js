@@ -72,8 +72,8 @@ window.changeAccessKey = function(url, id, name) {
 
 window.deleteAccessKey = function(url, id, name) {
     showConfirmationModal(
-        `Removing ${name} access key`,
-        `Do you really want to remove selected access key <strong>${name}</strong>?`,
+        `Removing ${escapeHtml(name)} access key`,
+        `Do you really want to remove selected access key <strong>${escapeHtml(name)}</strong>?`,
         function () {
             $.ajax({
                 type: 'POST',
@@ -120,6 +120,6 @@ function showMiddleModal() {
 }
 
 function setModalTitle(title) {
-    $('#accessKeys_modalTitle').empty();
-    $('#accessKeys_modalTitle').append(title);
+    // The title names a key or a product: text.
+    $('#accessKeys_modalTitle').text(title);
 }

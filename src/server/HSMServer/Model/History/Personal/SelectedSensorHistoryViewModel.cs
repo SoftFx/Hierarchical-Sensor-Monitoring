@@ -23,13 +23,21 @@ namespace HSMServer.Model.History
         public int NewValuesCnt { get; private set; }
 
 
+        // One user may have several requests in flight (two browser tabs), and table, export and file
+        // requests connect the sensor they name: the switch from one sensor to another is one step, so
+        // two of them cannot both unsubscribe the old sensor and leave two subscriptions behind.
+        private readonly object _connection = new();
+
         public void ConnectSensor(BaseSensorModel newSensor)
         {
-            if (_sensor?.Id == newSensor.Id)
-                return;
+            lock (_connection)
+            {
+                if (_sensor?.Id == newSensor.Id)
+                    return;
 
-            Unsubscribe(_sensor);
-            Subscribe(newSensor);
+                Unsubscribe(_sensor);
+                Subscribe(newSensor);
+            }
         }
 
 

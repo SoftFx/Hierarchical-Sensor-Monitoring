@@ -188,7 +188,7 @@ function saveMetaData(selectedId) {
                 {
                     showConfirmationModal(
                         `Saving changes`,
-                        `Do you want to save '${path}' changes?`,
+                        `Do you want to save '${escapeHtml(path)}' changes?`,
                         () => {
                             $.ajax({
                                 url: form.action,

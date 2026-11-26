@@ -51,7 +51,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override string ToJSTree() =>
         $$"""
         {
-            "title": "{{Data.Title}}",
+            "title": {{System.Text.Json.JsonSerializer.Serialize(Data.Title)}},
             "icon": "fa-regular fa-folder",
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",

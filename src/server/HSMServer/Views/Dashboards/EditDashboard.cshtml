@@ -246,8 +246,8 @@
         let id = this.id.substring("remove_".length, this.id.length);
         let name = $(`#${id}`).find('#panel_name').text();
         showConfirmationModal(
-            `Removing '${name}' panel`,
-            `Do you really want to remove selected panel <strong>${name}</strong>?`,
+            `Removing '${escapeHtml(name)}' panel`,
+            `Do you really want to remove selected panel <strong>${escapeHtml(name)}</strong>?`,
             function () {
                 $.ajax({
                     type: 'DELETE',

@@ -31,6 +31,11 @@ namespace HSMServer.Notifications.Chats
 
         string GetChatGroupInvitation(Guid chatId, User user);
 
+        // The management-surface issuer (#1826): the same links with the longer relay lifetime.
+        string GetChatInvitationLink(Guid chatId, User user, TimeSpan invitationLifetime);
+
+        string GetChatGroupInvitation(Guid chatId, User user, TimeSpan invitationLifetime);
+
         Task<ChatConnectResult> TryConnect(Message message, InvitationToken token);
 
         void AddFolderToChats(Guid folderId, List<Guid> chats);
