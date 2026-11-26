@@ -54,6 +54,29 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
+        public void A_removal_is_found_by_its_sensor_or_its_product_as_it_is_now()
+        {
+            var (sensor, root) = (Guid.NewGuid(), Guid.NewGuid());
+            var store = Open();
+
+            Assert.Null(store.FindRemoval(new TableRemoval(_product, sensor, false)));
+
+            store.MarkRemoved([(_product, sensor)], [root]);
+            var mark = new TableRemoval(_product, sensor, false);
+            Assert.Equal(mark, store.FindRemoval(mark));
+            Assert.Equal(new TableRemoval(root, null, false), store.FindRemoval(new TableRemoval(root, null, true)));
+
+            // The mark as it is now: confirmed since, it is no longer the mark read before.
+            store.ConfirmRemoved([sensor], []);
+            Assert.NotEqual(mark, store.FindRemoval(mark));
+            Assert.Equal(mark with { Confirmed = true }, store.FindRemoval(mark));
+
+            store.ClearRemovals([mark with { Confirmed = true }]);
+            Assert.Null(store.FindRemoval(mark));
+            store.Dispose();
+        }
+
+        [Fact]
         public void A_record_of_removals_that_cannot_be_read_is_a_fault_at_every_call_until_it_reads_and_is_never_written_over()
         {
             var sensor = Guid.NewGuid();

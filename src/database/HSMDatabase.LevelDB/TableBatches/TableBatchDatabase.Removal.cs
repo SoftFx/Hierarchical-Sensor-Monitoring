@@ -90,6 +90,19 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
+        public TableRemoval FindRemoval(TableRemoval removal)
+        {
+            ArgumentNullException.ThrowIfNull(removal);
+
+            lock (_removalsLock)
+            {
+                ThrowIfClosed();
+                LoadRemovals();
+
+                return removal.SensorId is Guid sensor ? _sensorMarks.GetValueOrDefault(sensor) : _productMarks.GetValueOrDefault(removal.ProductId);
+            }
+        }
+
         public void ConfirmRemoved(IReadOnlyCollection<Guid> sensors, IReadOnlyCollection<Guid> products)
         {
             ArgumentNullException.ThrowIfNull(sensors);
