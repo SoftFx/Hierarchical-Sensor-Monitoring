@@ -1,7 +1,7 @@
 {
   "default": {
     "hsm-collector": {
-      "baseline": "0.11.1",
+      "baseline": "0.15.2",
       "port-version": 0
     }
   }
