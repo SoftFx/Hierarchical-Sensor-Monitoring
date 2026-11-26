@@ -117,6 +117,8 @@ namespace HSMServer.Core.Tests.Controllers
             ["GetFile"] = new(FileSensor, async (home, _, id) => await home.GetFile(id.ToString())),
             ["GetFileStream"] = new(FileSensor, async (home, _, id) => await home.GetFileStream(id.ToString())),
             ["GetFileInfo"] = new(FileSensor, (home, _, id) => Sync(home.GetFileInfo(id.ToString()))),
+            ["GetRecentFilesView"] = new(FileSensor, async (home, _, id) => await home.GetRecentFilesView(id.ToString())),
+            ["GetFilesPage"] = new(FileSensor, async (home, _, id) => await home.GetFilesPage(id.ToString(), long.MaxValue)),
 
             // ---- a node id
             ["SelectNode(node)"] = new(Node, async (home, _, id) => await home.SelectNode(id.ToString())),
@@ -510,21 +512,21 @@ namespace HSMServer.Core.Tests.Controllers
             await home.SelectNode(tree.Cpu.Id.ToString());
 
             var recent = Assert.IsType<PartialViewResult>(await home.GetRecentFilesView(tree.Report.Id.ToString()));
-            var table = Assert.IsType<HistoryTableViewModel>(recent.Model);
+            var page = Assert.IsType<HSMServer.Model.FileSensors.FileValuesPageViewModel>(recent.Model);
 
-            Assert.Equal(tree.Report.Id.ToString(), table.SensorId);
+            Assert.Equal(tree.Report.Id.ToString(), page.EncodedId);
 
-            // One of the listed files, by its receiving time, is downloadable.
-            var ticks = table.Pages[0].Cast<FileValue>().First().ReceivingTime.Ticks;
+            // One of the listed files, by the time of its row, is downloadable.
+            var ticks = page.Rows.First().TimeTicks;
 
             Assert.IsType<FileContentResult>(await home.GetFile(tree.Report.Id.ToString(), ticks));
 
             // A sensor that is not a file sensor has no files.
-            Assert.IsType<EmptyResult>(await home.GetRecentFilesView(tree.Cpu.Id.ToString()));
+            Assert.IsType<NotFoundResult>(await home.GetRecentFilesView(tree.Cpu.Id.ToString()));
 
             tree.Member.ProductsRoles.Clear();
 
-            Assert.IsType<EmptyResult>(await home.GetRecentFilesView(tree.Report.Id.ToString()));
+            Assert.IsType<NotFoundResult>(await home.GetRecentFilesView(tree.Report.Id.ToString()));
             Assert.IsType<NotFoundResult>(await home.GetFile(tree.Report.Id.ToString(), ticks));
         }
 

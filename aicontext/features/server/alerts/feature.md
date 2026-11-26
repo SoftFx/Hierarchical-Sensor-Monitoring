@@ -255,6 +255,34 @@ Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionVie
 - `PropertiesItems_IncludesTimeToLive` — every condition type offers Inactivity Period in the dropdown.
 - `DefaultProperty_IsNotTimeToLive` — a freshly-created alert never defaults to TTL; the user must explicitly pick Inactivity Period. Guards against a `Properties` list reorder silently routing every new row to `TTLPolicy`.
 
+## File sensor variables and the default alert of large files (#1886)
+
+ADR-0022 points 17, 18. Code: `AlertState` (the variables), `FilePolicy.GetState`, `FileAlertContext` / `FileAlertVariables` (`HSMServer.Core/Model/Policies/Alerts/FileAlertContext.cs`), `ServerFileAlertContext` (`HSMServer/Model/FileSensors/`), `SensorPolicyCollection.AddLargeFileAlert`, `TreeValuesCache.TryAddSensorUnderLock`.
+
+**Variables.** Four variables are filled for the data alerts of File sensors only (`FilePolicy`); on any other sensor, and in the inactivity (TTL) alert of a File sensor, they print nothing.
+
+| Variable | Prints | Ordinary file value |
+|---|---|---|
+| `$fileName` | the name the value is shown under (below), made safe for a message and cut to 200 characters with `…` | the same |
+| `$fileSize` | the size, as the page shows it (`2.00 KB`, `12.40 GB`) | the same |
+| `$link` | the address of the sensor page, `<base>/Home/<sensorId>` | the same |
+| `$fileNote` | `waits for the product's dump password` for a secure large value of a product without a dump password; empty otherwise (a not secure file never waits) | empty |
+
+- **The name rule** (`FileValueNameExtensions.GetDisplayName`, also the page): every file value carries its name without the extension and the extension apart, a large one too (the server splits the original name at its last dot, `StemOf`), so the shown name is the two joined: `dump` + `dmp`, `backup.tar` + `gz`, `` + `env` (a dotfile), `core` with no extension.
+- **A file name is neutralized for the message's markup** before it is substituted: `<`, `>` and `&` become look-alikes (`‹ › ＆`); line breaks, control and format characters become a space. `$value` and `$prevValue` of a file print the type name of its byte array, as before; the content never reaches a message.
+- **The link base:** `HSM_DOMAIN` (the bundled compose passes it to the app container), else `Agent.ExternalConnectionUrl`, else none: `$link` is then the path `/Home/<sensorId>` alone, which a chat does not make clickable. The server sets the process-wide `FileAlertContext` before the tree loads, so every File policy prints the link whatever created it (a registration, a load, a template, the management API, a move).
+- **Compatibility.** Templates are stored as raw text and parsed when a policy is loaded, so new variables need no migration. They are appended after `$target`, in the order of the `AlertState` properties and in the positional list of `BuildComment`; no variable name contains another (a template is substituted by substring), which a test guards. A stored template that happened to contain the literal text `$link`, `$fileName`, `$fileSize` or `$fileNote` now has it substituted. `AlertVariablesDocs` lists them for the management API and MCP schemas.
+
+**The default alert of a sensor registered for large files.** A registration (`AddOrUpdateSensor`, HTTP or session) carrying `DefaultAlertsOptions.LargeFiles = 4` that CREATES a File sensor gives it one policy: "new data has been received" (`NewSensorData` / `ReceivedNewValue`), status Ok, destination `FromParent` (where the product's other alerts go), template `[$product]$path new file $fileName ($fileSize) $link $fileNote`. The collectors send the flag for a sensor of `WatchLargeFiles` / `SendLargeFile` unless the application asked for the sensor without it (#1887, #1888).
+
+- It is an ordinary policy: stored with the sensor, journaled as a change of the sensor's alerts by the system (or by the registration's initiator), editable and removable; nothing adds it again. It is the server's, not the collector's: the alert list a registration carries (the creating registration too, and every later one) reconciles the collector's own alerts and neither removes it nor is blocked by it, as long as nobody changed it (its owner in the sensor's change table is the system, marked `default alert of large files`; an edit makes it the editor's). A user may remove it, and so may a forced registration, as for any alert.
+- Only at creation. A sensor that already exists gets nothing from a later registration with the flag: one registered by an older collector, one created by an ordinary value, one a registration reaches through an alias. Other sensor types ignore the flag.
+- The old default status-change alert (`AddDefault`) stays switched off; this is a separate call for this flag only.
+- A server older than this step ignores the flag: the cast keeps the bit and nothing reads it.
+- An ordinary `SendFile` whose content travels on the file connection (above about 1 MiB) becomes a not secure large value of an ordinary File sensor: the flag is not involved and no default alert is added for it; the sensor's own alerts see it as a new value when the file is verified.
+- **When it is sent.** A large value exists only once its file is verified: the store writes the record as verified, then the value is added on the product's queue like any value, through the sensor's policies and the ordinary notify path (`TreeValuesCache.AddLargeFileValue`). So "new data has been received" fires once per verified file, never when an upload begins, for a half-uploaded file or for a file whose check failed; packing and re-encryption never add a value. Delivery is AT MOST once: the notification is registered in memory after the row, so a crash between the verified mark and the notify loses it, and a row written again from its record after such a crash (roll-forward) is shown and not alerted.
+- No message, as for any value: a muted sensor; a blocked or singleton sensor whose value bypasses the policies (the row is written directly); an alert schedule outside its working time; a product without chats (as for any `FromParent` policy); a product not in a folder. Telegram cuts a message at 1,000 characters; the name is cut to 200 so a single message keeps its link, while in a group of alerts aggregated in one message the later lines may lose theirs.
+
 ## Notes
 
 - Issue #1141 (parent epic) established that node-level alerts are replaced by global alerts.

@@ -75,11 +75,12 @@ namespace HSMServer.Core.Tests.LargeFiles
 
             var largeValue = values.Single(v => v.TryGetProperty("LargeFile", out _));
             Assert.Equal(string.Empty, largeValue.GetProperty("Value").GetString());
-            Assert.Equal("core.dmp", largeValue.GetProperty("FileName").GetString());
+            // The name without its extension, as for every file value (#1886).
+            Assert.Equal("core", largeValue.GetProperty("FileName").GetString());
 
             var description = largeValue.GetProperty("LargeFile");
             Assert.Equal(fileId, description.GetProperty("FileId").GetGuid());
-            Assert.Equal("core.dmp", description.GetProperty("Name").GetString());
+            Assert.Equal("core", description.GetProperty("Name").GetString());
             Assert.Equal("dmp", description.GetProperty("Extension").GetString());
             Assert.Equal(large.Length, description.GetProperty("Size").GetInt64());
             Assert.Equal(secure, description.GetProperty("Secure").GetBoolean());
@@ -141,7 +142,7 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.EndsWith($"{separator}Large file", lines[0]);
 
             var largeRow = lines.Single(line => line.Contains(fileId.ToString()));
-            Assert.Contains($"{separator}\"\"{separator}\"core.dmp\"{separator}\"dmp\"", largeRow);
+            Assert.Contains($"{separator}\"\"{separator}\"core\"{separator}\"dmp\"", largeRow);
             Assert.EndsWith($"{separator}\"Large file {fileId}; {large.Length} bytes; not secure; verified\"", largeRow);
             Assert.DoesNotContain(Convert.ToBase64String(large[..64]), csv);
 

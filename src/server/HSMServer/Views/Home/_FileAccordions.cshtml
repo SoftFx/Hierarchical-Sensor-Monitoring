@@ -1,78 +1,153 @@
-﻿@using HSMCommon.Model
-@using HSMServer.Core.Model
-@using HSMServer.Extensions
-@using HSMServer.Model.History
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.FileSensors
 
-@model HistoryTableViewModel
+@model FileValuesPageViewModel
 
-@{
-    var isIndexExist = Model.Pages.Count > 0 && Model.Pages[0].Count > 0;
+@*
+    One page of the file values of a File sensor (#1886), newest first; the first page starts with the uploads that are not
+    values yet. Nothing a client sent (a name, an extension, a comment, an application, a host) goes into a script or an
+    event attribute: it is HTML-encoded into text and data-* attributes, and the handlers in _SensorFileContent read the
+    attributes. Element ids are made of the value's time only.
+*@
+
+@if (Model.ShowPasswordMissing)
+{
+    <div class="alert alert-warning py-2 my-2 large-file-password-missing" role="alert">
+        Secure large files of this product are kept and cannot be downloaded: the product has no dump password yet.
+        A Manager of the product or an admin sets it in the product settings.
+        @if (Model.PasswordSettingsUrl is not null)
+        {
+            <a class="alert-link ms-1" href="@Model.PasswordSettingsUrl">Set the dump password</a>
+        }
+    </div>
 }
 
-@if (isIndexExist)
+@foreach (var upload in Model.Uploads)
 {
-    @for (var i = 1; i < Model.Pages[0].Count; i++)
-    {
-        var value = (FileValue)Model.Pages[0][i];
+    <div class="card my-1 large-file-upload" data-state="@upload.State"
+         data-live="@(upload.State is LargeFileRowState.Uploading or LargeFileRowState.Checking ? "true" : "false")">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between flex-wrap">
+                <div class="text-break">
+                    <i class="fas fa-cloud-upload-alt me-1"></i>
+                    <span class="large-file-name">@upload.Name</span>
+                    <span class="badge bg-light text-dark ms-2 large-file-kind">@upload.Kind</span>
+                    <span class="badge bg-secondary ms-2 large-file-state">@upload.StateText</span>
+                </div>
+                <div class="d-flex flex-md-column align-items-end" style="font-size: smaller">
+                    <span>Size: @upload.Size</span>
+                    <span>Started: @upload.StartedUtc.ToDefaultFormat()</span>
+                    @if (upload.State == LargeFileRowState.WaitingForCollector)
+                    {
+                        <span class="large-file-stalled">Last piece: @upload.LastPieceUtc.ToDefaultFormat(); removed on @upload.ExpiresUtc.ToDefaultFormat() unless the collector continues</span>
+                    }
+                </div>
+            </div>
+            <div class="progress mt-1" style="height: 4px">
+                <div class="progress-bar" role="progressbar" style="width: @(upload.Percent)%" aria-valuenow="@upload.Percent" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="text-muted mt-1" style="font-size: smaller">
+                File time: @upload.SourceModified.ToDefaultFormat() · Application: <span class="large-file-application">@upload.Application</span> · Host: <span class="large-file-host">@upload.Host</span>
+            </div>
+        </div>
+    </div>
+}
 
-        bool isEnabledPreview = (value.Extension == "csv" && value.OriginalSize < 5 * 1024 * 1024) ||
-                                (value.Extension == "txt" && value.OriginalSize < 1024 * 1024);
-
-        <div class='accordion my-1' id='sensorData_@i'>
-            <div class='accordion-item'>
-                <h2 class='accordion-header' id='heading_@i'>
-                    <button id='file_accordion_' class='accordion-button collapsed pt-2 pb-1' type='button' data-bs-toggle='collapse'
-                            data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' data-extension="@value.Extension" onclick="previewButtonClick('@value.ReceivingTime.Ticks', @i, this.dataset.extension, '@isEnabledPreview')">
-                        <div class="w-100">
-                            <div class='row justify-content-between'>
-                                <div class='row col-md-auto align-items-center align-self-baseline'>
-                                    <div class='col-md-auto sensor-icon-without-padding'>
-                                        <li id='status_@i' class='@value.Status.ToClient().ToIcon() sensor-icon-with-margin'
-                                            title='Status: @value.Status'>
-                                        </li>
-                                        @value.Name.@value.Extension
-                                        <div class="d-flex text-break pt-2">
-                                            @if (!string.IsNullOrEmpty(value.Comment))
-                                            {
-                                                <span class="d-flex text-break">Comment: @value.Comment</span>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class='col-md-auto time-ago-div me-3 align-self-end' id='update_@i'>
-                                    <div id="side_info_@i" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
-                                        <span>
-                                            Size: @value.FileSizeToNormalString()
-                                        </span>
-                                        <span>
-                                            @value.Time.ToDefaultFormat()
-                                        </span>
+@foreach (var row in Model.Rows)
+{
+    <div class='accordion my-1 file-row' id='@row.RowId' data-time='@row.TimeTicks' data-extension='@row.Extension'
+         data-preview='@(row.IsPreviewEnabled ? "true" : "false")' data-large='@(row.IsLarge ? "true" : "false")'
+         data-state='@(row.IsLarge ? row.LargeState.ToString() : string.Empty)'
+         data-live='@(row.IsLarge && row.LargeState == LargeFileRowState.Packing ? "true" : "false")'>
+        <div class='accordion-item'>
+            <h2 class='accordion-header'>
+                <button class='accordion-button collapsed pt-2 pb-1 file-row-toggle' type='button' data-bs-toggle='collapse'
+                        data-bs-target='#@(row.RowId)_collapse' aria-expanded='false' aria-controls='@(row.RowId)_collapse'>
+                    <div class="w-100">
+                        <div class='row justify-content-between'>
+                            <div class='row col-md-auto align-items-center align-self-baseline'>
+                                <div class='col-md-auto sensor-icon-without-padding'>
+                                    <li class='@row.Status.ToClient().ToIcon() sensor-icon-with-margin' title='Status: @row.Status'></li>
+                                    <span class="file-row-name">@row.Name</span>
+                                    @if (row.IsLarge)
+                                    {
+                                        @if (row.Kind is not null)
+                                        {
+                                            <span class="badge bg-light text-dark ms-2 large-file-kind">@row.Kind</span>
+                                        }
+                                        <span class="badge bg-secondary ms-2 large-file-state">@row.StateText</span>
+                                    }
+                                    <div class="d-flex text-break pt-2">
+                                        @if (!string.IsNullOrEmpty(row.Comment))
+                                        {
+                                            <span class="d-flex text-break">Comment: @row.Comment</span>
+                                        }
                                     </div>
                                 </div>
                             </div>
+                            <div class='col-md-auto time-ago-div me-3 align-self-end'>
+                                <div class="d-flex flex-md-column align-items-end" style="font-size: smaller">
+                                    <span>Size: @row.Size</span>
+                                    <span>@row.Time.ToDefaultFormat()</span>
+                                </div>
+                            </div>
                         </div>
-                    </button>
-                </h2>
-                <div id='collapse_@i' class='accordion-collapse collapse text-break' aria-labelledby='heading_@i' data-bs-parent='#sensorData_@i'>
-                    <div class='accordion-body p-3'>
+                    </div>
+                </button>
+            </h2>
+            <div id='@(row.RowId)_collapse' class='accordion-collapse collapse text-break'>
+                <div class='accordion-body p-3'>
+                    @if (row.IsLarge)
+                    {
+                        <div class="row">
+                            <div class="col-md-8" style="font-size: smaller">
+                                <div>File time: @(row.SourceModified?.ToDefaultFormat() ?? FileValueRowViewModel.Unknown)</div>
+                                <div>Accepted: @row.Time.ToDefaultFormat()</div>
+                                <div>Application: <span class="large-file-application">@row.Application</span></div>
+                                <div>Host: <span class="large-file-host">@row.Host</span></div>
+                                @if (row.Reason is not null)
+                                {
+                                    <div class="text-muted pt-1 large-file-reason">@row.Reason</div>
+                                }
+                            </div>
+                            <div class="col-md-4 d-flex justify-content-end align-items-start">
+                                @if (row.DownloadUrl is not null)
+                                {
+                                    <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static large-file-download'
+                                       href='@row.DownloadUrl' title='Download the archive'>
+                                        <i class='fas fa-file-download small-icon pe-1'></i>
+                                        <span style="font-size: smaller">Download</span>
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                        @if (row.ShowsDownloads)
+                        {
+                            <div class="pt-2 large-file-downloads" style="font-size: smaller" data-file="@row.FileId">
+                                <button type="button" class="btn btn-link btn-sm p-0 large-file-downloads-show">Who downloaded it</button>
+                                <div class="large-file-downloads-list"></div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
                         <div class="row">
                             <div class="d-flex col-6">
                                 <div class="align-self-center text-end">
-                                    @if (isEnabledPreview)
+                                    @if (row.IsPreviewEnabled)
                                     {
-                                        <h5 class="mb-0" id="preview-header">Content:</h5>
+                                        <h5 class="mb-0">Content:</h5>
                                     }
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="row justify-content-end">
                                     <div class="d-flex flex-row-reverse">
-                                        <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
-                                        <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static ms-1' title='Download'>
+                                        <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static ms-1 file-row-download' title='Download'>
                                             <i class='fas fa-file-download small-icon pe-1'></i>
                                             <span style="font-size: smaller">Download</span>
                                         </a>
-                                        <a id='button_view_@i' data-extension="@value.Extension" onclick="fileNewTabView('@value.ReceivingTime.Ticks', this.dataset.extension)" class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static me-1' title='Preview'>
+                                        <a class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static me-1 file-row-view' title='Preview'>
                                             <i class='fas fa-eye small-icon pe-1'></i>
                                             <span style="font-size: smaller"> Preview</span>
                                         </a>
@@ -80,39 +155,24 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="d-grid d-none pt-3" id="preview_@i">
-                            <div style="overflow-x: auto" id="preview-content_@i"></div>
+                        <div class="d-grid d-none pt-3" id="preview_@row.RowId">
+                            <div style="overflow-x: auto" id="preview-content_@row.RowId"></div>
                         </div>
-                    </div>
+                    }
                 </div>
             </div>
         </div>
-    }
+    </div>
 }
 
+@if (Model.MoreUploads > 0)
+{
+    <div class="text-muted my-1" style="font-size: smaller">and @Model.MoreUploads more uploads in progress</div>
+}
 
-<script>
-    function fileNewTabView(time, fileType){
-        let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
-
-        openFileInBrowser(encodedId, fileType, viewFileAction, time);
-    }
-    
-    function fileDownload(time){
-        let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
-
-        window.location.href = getFileAction + "?Selected=" + encodedId + "&dateTime=" + time;
-    }
-
-    function previewButtonClick(time, currentId, extension, isEnabled){
-        if (isEnabled === 'False')
-            return;
-
-        let fileNumber = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
-        
-        if ($(`#preview-content_${currentId}`)[0].innerHTML !== '')
-            return;
-
-        previewFile(viewFileAction, currentId, extension, time, fileNumber)
-    }
-</script>
+@if (Model.OlderThanTicks is { } olderThan)
+{
+    <div class="d-flex justify-content-center my-2 file-page-more">
+        <button type="button" class="btn btn-outline-secondary btn-sm file-page-older" data-older='@olderThan'>Older files</button>
+    </div>
+}

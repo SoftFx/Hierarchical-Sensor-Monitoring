@@ -21,6 +21,8 @@ namespace HSMServer.Core.Tests.LargeFiles.Downloads
     // through the store's own upload path, packed by the real ArchiveBuilder with the real SharpZipLib writer, described
     // and downloaded through the real LargeFileDownloadService and the API controller in a TestServer, and recorded in
     // the real download log. Only the dump passwords (in memory), the tree and the tokens are the world's.
+    // One test opens the archive in 7-Zip, so the class runs alone (SevenZipAloneCollection).
+    [Collection(HSMServer.Core.Tests.LargeFiles.Archives.SevenZipAloneCollection.Name)]
     public sealed class LargeFileEndToEndTests : IDisposable
     {
         private const string FirstPassword = "End-To-End-Pass-One-2026";

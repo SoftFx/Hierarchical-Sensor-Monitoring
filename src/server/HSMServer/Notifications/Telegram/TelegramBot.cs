@@ -619,6 +619,12 @@ namespace HSMServer.Notifications
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
         //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 
+        // A message of the limit or longer is cut so that it ends with the trim marker within the limit.
+        internal static string TrimToLimit(string message) =>
+            message is not null && message.Length >= MaxMessageLength
+                ? message[..(MaxMessageLength - TrimmedMessage.Length)] + TrimmedMessage
+                : message;
+
         private async ValueTask SendMessageAsync(Chat chat, string message)
         {
             if (string.IsNullOrEmpty(message) || chat.TelegramChatId is null)
@@ -626,8 +632,7 @@ namespace HSMServer.Notifications
 
             int retry = 1;
 
-            if (message.Length >= MaxMessageLength)
-                message = message[..(MaxMessageLength - TrimmedMessage.Length)] + TrimmedMessage;
+            message = TrimToLimit(message);
 
             while (true)
             {
