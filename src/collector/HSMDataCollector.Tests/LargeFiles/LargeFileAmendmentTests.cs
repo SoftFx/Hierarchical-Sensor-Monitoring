@@ -485,8 +485,54 @@ namespace HSMDataCollector.Tests.LargeFiles
                 Assert.Equal(LargeFileOutcome.Unavailable, sent.Result.Outcome);
                 Assert.Single(h.Errors, e => e.Contains("cannot write its data folder"));
 
-                // A routed value goes the ordinary way.
-                Assert.False(h.Service.Route(FileValue(Piece + 1)));
+                // A routed value keeps no state in the data folder: it still goes on the file connection.
+                var value = FileValue(Piece + 1);
+
+                Assert.True(h.Service.Route(value));
+                Assert.True(h.AdvanceUntil(() => h.Store.StoredCount("report.txt") == 1));
+                Assert.Equal(value.Value.ToArray(), h.Store.StoredFile("report.txt"));
+                Assert.Empty(requeued);
+                Assert.False(Directory.Exists(folder));
+            }
+        }
+
+        [Fact]
+        public void A_routed_value_after_a_start_goes_on_the_file_connection_whatever_the_data_folder()
+        {
+            var (h, requeued, _) = Routing();
+
+            using (h)
+            {
+                var blocker = Path.Combine(h.Root, "blocker");
+
+                File.WriteAllText(blocker, "x");
+
+                var folder = Path.Combine(blocker, "data");
+
+                h.StartWith((s, t) => new LargeFileService(t, null, new LargeFileStateStore(folder, h.Errors.Enqueue), LargeFileHarness.Registration, h.Errors.Enqueue,
+                                                           n => true, null, h.Timings, n => { }, v => { lock (requeued) requeued.Add(v); }));
+
+                // The probe found the folder unwritable; a Start takes it again (it is not probed before the next watch or
+                // hand-over). Neither decides a routed value.
+                Assert.Equal(LargeFileWatchState.Unavailable, h.Service.Watch("dumps", h.Folder, "*.dmp", null).State);
+                h.Service.Stop();
+                h.Service.Start();
+
+                var first = FileValue(Piece + 1);
+
+                Assert.True(h.Service.Route(first));
+                Assert.True(h.AdvanceUntil(() => h.Store.StoredCount("report.txt") == 1));
+
+                // Probed again and still unwritable: the next routed value goes the same way.
+                Assert.Equal(LargeFileWatchState.Unavailable, h.Service.Watch("other", h.Folder, "*.dmp", null).State);
+
+                var second = FileValue(Piece + 2);
+
+                Assert.True(h.Service.Route(second));
+                Assert.True(h.AdvanceUntil(() => h.Store.StoredCount("report.txt") == 2));
+                Assert.Equal(second.Value.ToArray(), h.Store.StoredFile("report.txt"));
+                Assert.Empty(requeued);
+                Assert.False(Directory.Exists(folder));
             }
         }
 

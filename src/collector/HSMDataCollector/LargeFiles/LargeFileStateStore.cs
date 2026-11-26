@@ -312,16 +312,6 @@ namespace HSMDataCollector.LargeFiles
             return usable;
         }
 
-        /// <summary>True once a probe found the data folder unusable (no probe is made here: a routed send never makes it).</summary>
-        internal bool KnownUnusable
-        {
-            get
-            {
-                lock (_made)
-                    return _tried && _usable == null;
-            }
-        }
-
         /// <summary>The keys of every upload record in the data folder, for the sweep of records whose file changed or went.</summary>
         internal IReadOnlyList<string> UploadKeys()
         {

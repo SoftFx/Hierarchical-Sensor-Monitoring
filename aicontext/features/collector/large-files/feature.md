@@ -200,8 +200,9 @@ once, when the user has none) / **identity** / `large-files`. The identity is th
 
 The folder is made and written (a probe file) at the first watch or hand-over after each Start, so a folder fixed between a Stop and a Start is noticed; a probe that was written but cannot be deleted leaves the folder usable (said once): a folder this account cannot write
 is told apart from a lock another process holds. Unwritable: watches are `Unavailable` and hand-overs complete
-`Unavailable`, with a reason that names the folder, said once; routed sends go the ordinary way. A routed-only collector
-never makes or probes the folder.
+`Unavailable`, with a reason that names the folder, said once. Only watched and handed-over files use the folder: routed
+sends keep no state file and no record, so they go on the file connection whether the folder can be written or not (as in
+the native collector). A routed-only collector never makes or probes the folder.
 
 | File | Holds | Lock |
 |---|---|---|
