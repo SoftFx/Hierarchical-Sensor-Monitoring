@@ -139,7 +139,15 @@ namespace HSMServer.Core.TableSensors
                 //    flight (a removed sensor's step in flight is recovered like any other first), before the steps, within
                 //    the same budget. Whatever the lag: it frees disk.
                 if (removals is not null)
-                    RunRemovals(removals, products, run, faulted, utcNow, token);
+                    try
+                    {
+                        RunRemovals(removals, products, run, faulted, utcNow, token);
+                    }
+                    catch (Exception ex)
+                    {
+                        // RunRemovals catches per mark; this is the guard of the pass.
+                        MoveFault(Guid.Empty, utcNow, ex, "the removals of table sensors and products did not complete");
+                    }
 
                 // 3. The steps. A step the store refused, or whose target retention dropped, is not tried again in this
                 //    process while it stays the same step: a change of the placement or of the period makes another step.

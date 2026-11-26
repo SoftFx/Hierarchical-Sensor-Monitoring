@@ -20,6 +20,11 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
             var expected = new List<TableRemoval> { new(root, null, false) };
             expected.AddRange(new[] { new TableRemoval(_product, s1, false), new TableRemoval(Guid.Empty, s2, false) }.OrderBy(m => m.SensorId));
             Assert.Equal(expected, store.GetRemovals());
+
+            // Confirmed in memory only: Ready from then on; an id without a mark is skipped.
+            store.ConfirmRemoved([s1, Guid.NewGuid()], []);
+            Assert.Equal([true, false, false], new[] { store.GetRemovals().Single(m => m.SensorId == s1), store.GetRemovals().Single(m => m.SensorId == s2),
+                store.GetRemovals().Single(m => m.SensorId is null) }.Select(m => m.Ready));
             store.Dispose();
 
             // Read back as marks of an earlier run.

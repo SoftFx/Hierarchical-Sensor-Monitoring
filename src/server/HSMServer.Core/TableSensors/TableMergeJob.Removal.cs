@@ -28,7 +28,9 @@ namespace HSMServer.Core.TableSensors
     /// Each write is idempotent: a crash after any of them is completed by a later pass, which writes nothing more once it
     /// is complete. A mark for a sensor or product that is in the tree deletes nothing: one written by an earlier run (a
     /// crash between the mark and the removal of the entity) is cleared with a warning; one written in this run is a
-    /// removal the tree is still making, and waits.
+    /// removal the tree is still making, and waits. A mark of this run is acted on only once the tree confirmed that the
+    /// entity left its database (<see cref="TableRemoval.Ready"/>): before, a crash would bring the sensor back without
+    /// its rows.
     /// </para>
     /// </summary>
     public sealed partial class TableMergeJob
@@ -86,6 +88,10 @@ namespace HSMServer.Core.TableSensors
                     continue;
                 }
 
+                // Out of the tree, its entity not yet out of the database (a removal the tree is making): it waits.
+                if (!mark.Ready)
+                    continue;
+
                 going.Add(mark.ProductId);
 
                 try
@@ -119,17 +125,39 @@ namespace HSMServer.Core.TableSensors
                     continue;
                 }
 
+                if (!mark.Ready)
+                    continue;
+
                 try
                 {
                     RemoveSensorRows(mark, products, going, run, token);
                 }
                 catch (Exception ex)
                 {
-                    var holders = products.Where(p => Batches.GetPlacement(p, id) is not null).ToList();
+                    var holders = Holders(products, id);
                     faulted.UnionWith(holders);
                     MoveFault(holders.FirstOrDefault(), utcNow, ex, $"the removal of table sensor {id} (product {mark.ProductId}) did not complete");
                 }
             }
+        }
+
+        // The products that hold a placement of a sensor, as far as they can be read now.
+        private List<Guid> Holders(IReadOnlyList<Guid> products, Guid sensor)
+        {
+            var holders = new List<Guid>();
+
+            foreach (var product in products)
+                try
+                {
+                    if (Batches.GetPlacement(product, sensor) is not null)
+                        holders.Add(product);
+                }
+                catch (Exception)
+                {
+                    holders.Add(product);
+                }
+
+            return holders;
         }
 
         // A mark of a sensor or product that is in the tree: nothing is deleted. One written by an earlier run (a crash between

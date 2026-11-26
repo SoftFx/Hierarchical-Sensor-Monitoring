@@ -97,8 +97,16 @@ namespace HSMDatabase.AccessManager.TableBatches
     /// (<see cref="SensorId"/> null), whose stored rows the merge job deletes once it is gone from the tree.
     /// <see cref="Earlier"/>: read from the store's record at its load, so written by an earlier run of the server; false for
     /// a mark written in this run (a removal the tree may still be making: the mark is written before the entity goes).
+    /// <see cref="Confirmed"/>: a mark of this run whose entity the tree has removed from its database since
+    /// (<see cref="ITableBatchStore.ConfirmRemoved"/>, in memory only). A mark is acted on only when <see cref="Ready"/>: one
+    /// of this run that is not confirmed may still be undone by a crash before the entity leaves the database, after which
+    /// the sensor or product would come back.
     /// </summary>
-    public sealed record TableRemoval(Guid ProductId, Guid? SensorId, bool Earlier);
+    public sealed record TableRemoval(Guid ProductId, Guid? SensorId, bool Earlier, bool Confirmed = false)
+    {
+        /// <summary>The entity is gone from the database: the mark was read at the store's load, or confirmed in this run.</summary>
+        public bool Ready => Earlier || Confirmed;
+    }
 
 
     /// <summary>A fault of the batch store (disk, LevelDB): a repeat can cure it. A write that throws it is not committed.</summary>
@@ -515,6 +523,13 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// skipped.
         /// </summary>
         IReadOnlyList<TableRemoval> GetRemovals();
+
+        /// <summary>
+        /// Confirms marks of this run once the tree has removed their entities from its database (in memory only: after a
+        /// restart every mark read from the file is <see cref="TableRemoval.Earlier"/>, and the tree loaded from the database
+        /// says whether its entity is gone). A sensor or product without a mark of this run is skipped.
+        /// </summary>
+        void ConfirmRemoved(IReadOnlyCollection<Guid> sensors, IReadOnlyCollection<Guid> products);
 
         /// <summary>
         /// Clears removals, durably, then in memory: each one only while it is the same mark (a sensor marked again since,

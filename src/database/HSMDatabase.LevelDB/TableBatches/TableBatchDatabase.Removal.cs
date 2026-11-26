@@ -90,6 +90,32 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
         }
 
+        public void ConfirmRemoved(IReadOnlyCollection<Guid> sensors, IReadOnlyCollection<Guid> products)
+        {
+            ArgumentNullException.ThrowIfNull(sensors);
+            ArgumentNullException.ThrowIfNull(products);
+
+            lock (_removalsLock)
+            {
+                // Nothing to confirm while the record was never read (a mark that could not be written is not there).
+                if (_sensorMarks is null)
+                    return;
+
+                var sensorMarks = new Dictionary<Guid, TableRemoval>(_sensorMarks);
+                var productMarks = new Dictionary<Guid, TableRemoval>(_productMarks);
+
+                foreach (var sensor in sensors)
+                    if (sensorMarks.TryGetValue(sensor, out var mark) && !mark.Earlier)
+                        sensorMarks[sensor] = mark with { Confirmed = true };
+
+                foreach (var product in products)
+                    if (productMarks.TryGetValue(product, out var mark) && !mark.Earlier)
+                        productMarks[product] = mark with { Confirmed = true };
+
+                (_sensorMarks, _productMarks) = (sensorMarks, productMarks);
+            }
+        }
+
         public void ClearRemovals(IReadOnlyCollection<TableRemoval> removals)
         {
             ArgumentNullException.ThrowIfNull(removals);

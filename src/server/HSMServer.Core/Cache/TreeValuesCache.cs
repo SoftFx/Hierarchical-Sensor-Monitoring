@@ -432,6 +432,23 @@ namespace HSMServer.Core.Cache
             return tables;
         }
 
+        // Tells the batch store (#1850 part 4d) that the entities of marked table sensors and root products left the database:
+        // the merge job acts on a mark of this run only then (a crash in between would bring the entity back). In memory.
+        private void ConfirmTableRemoval(IReadOnlyCollection<Guid> sensors, IReadOnlyCollection<Guid> products)
+        {
+            if ((sensors.Count == 0 && products.Count == 0) || _database.TableBatches is not { } batches)
+                return;
+
+            try
+            {
+                batches.ConfirmRemoved(sensors, products);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"The removal of the stored rows of table sensors and products could not be confirmed; it is made after the next restart: {ex.Message}");
+            }
+        }
+
         // Records in the batch store (#1850 part 4d) that the stored rows of table sensors (with their root products,
         // Guid.Empty when not known) and of root products are to be deleted, before the tree removes them. A record that
         // cannot be written is logged and the removal goes on (it must not make anything come back): the rows are then
@@ -472,6 +489,8 @@ namespace HSMServer.Core.Cache
             // purge would rescan and deserialize every change set once
             // per sensor of the deleted tree, under the journal-wide lock.
             List<Guid> purgedEntityIds = [];
+            // The sensors whose entities left the database (#1850 part 4d: their table removals are confirmed).
+            List<Guid> removedSensors = [];
 
             void RemoveProduct(Guid productId, InitiatorInfo initiator)
             {
@@ -482,7 +501,8 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(subProductId, initiator);
 
                 foreach (var (sensorId, _) in product.Sensors)
-                    RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds, tableMarked: true);
+                    if (RemoveSensor(sensorId, initiator, product.Parent?.Id, purgeIds: purgedEntityIds, tableMarked: true))
+                        removedSensors.Add(sensorId);
 
                 RemoveBaseNodeSubscription(product);
 
@@ -518,6 +538,13 @@ namespace HSMServer.Core.Cache
                         MarkTableRemoval(TableSensorsIn(product).Select(t => (product.Root?.Id ?? Guid.Empty, t.Id)).ToList(), []);
 
                     RemoveProduct(request.Id, request.InitiatorInfo);
+
+                    // Gone from the database (a removal that threw stays unconfirmed: the merge job deletes nothing for it
+                    // in this run, and after a restart it acts by whether the entity loaded).
+                    if (product.IsRoot)
+                        ConfirmTableRemoval([], [product.Id]);
+                    else
+                        ConfirmTableRemoval(removedSensors, []);
 
                     RemoveProductFromCache(product);
 
@@ -1439,6 +1466,9 @@ namespace HSMServer.Core.Cache
 
                 _database.RemoveSensorWithMetadata(sensorId);
                 removedFromDatabase = true;
+
+                if (sensor is TableSensorModel && !tableMarked)
+                    ConfirmTableRemoval([sensor.Id], []);
 
                 // Inside a product deletion the sensor's id joins the
                 // subtree's single batch purge; a standalone sensor removal
@@ -4144,6 +4174,9 @@ namespace HSMServer.Core.Cache
                             MarkTableRemoval([(Guid.Empty, sensor.Id)], []);
 
                         _database.RemoveSensorWithMetadata(Guid.Parse(entity.Id));
+
+                        if (sensor is TableSensorModel)
+                            ConfirmTableRemoval([sensor.Id], []);
 
                         ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
                     }

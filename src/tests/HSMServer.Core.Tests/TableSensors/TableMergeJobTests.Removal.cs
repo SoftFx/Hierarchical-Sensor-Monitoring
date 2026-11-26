@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var before = await DumpWeeksAsync();
 
             await _server.Cache.RemoveSensorAsync(s.Id);
-            Assert.Equal([new TableRemoval(_product, s.Id, false)], _server.Batches.GetRemovals());
+            Assert.Equal([new TableRemoval(_product, s.Id, false, Confirmed: true)], _server.Batches.GetRemovals());
 
             // One write a pass: the P5 database first (the week, then the class), then P52, the placement and the mark.
             ReleaseMoves(steps: 1);
@@ -198,6 +198,34 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Contains(_product, _server.Batches.GetProducts());
         }
 
+        [Fact]
+        public async Task A_mark_of_this_run_is_acted_on_only_once_the_tree_confirms_its_entity_left_the_database()
+        {
+            var s = await RegisterAsync("s", keep: KeepP52);
+            var r = await RegisterAsync("r", keep: KeepP52);
+            PutHours(2, "s", "r");
+
+            // s out of the tree with its mark written and not confirmed: what a pass sees between the tree's removal of the
+            // sensor from its cache and of its entity from the database (a crash there brings the sensor back at the restart).
+            // Made here by a removal whose mark could not be written, then the mark written alone.
+            _server.Batches.Checkpoint = p => { if (p == "removals-writing") throw new IOException("disk full"); };
+            await _server.Cache.RemoveSensorAsync(s.Id);
+            _server.Batches.Checkpoint = null;
+            _server.Batches.MarkRemoved([(_product, s.Id)], []);
+            Assert.False(_server.Batches.GetRemovals().Single().Ready);
+
+            var report = Pass(RemoveAt);
+            Assert.Equal((0, null), (report.RemovalsDone, report.Fault));
+            Assert.Equal(2, Bytes(s, 52));
+            Assert.NotNull(_server.Batches.GetPlacement(_product, s.Id));
+            Assert.Equal(0, _server.Batches.MergeStatistics.OrphanPlacements);
+
+            _server.Batches.ConfirmRemoved([s.Id], []);
+            Assert.Equal(1, Pass(RemoveAt.AddMinutes(1)).RemovalsDone);
+            Assert.Equal((0, 2), (Bytes(s, 52), Bytes(r, 52)));
+            Assert.Empty(_server.Batches.GetRemovals());
+        }
+
 
         // === A removal during a move (design test 23) ===
 
@@ -252,7 +280,7 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.True(Directory.Exists(folder));
 
             await _server.Cache.RemoveProductAsync(victim);
-            Assert.Equal([new TableRemoval(victim, null, false)], _server.Batches.GetRemovals());
+            Assert.Equal([new TableRemoval(victim, null, false, Confirmed: true)], _server.Batches.GetRemovals());
 
             // Hour 1 is merged for r alone (the victim's not merged), the victim's blocks of hours 0 and 1 are deleted and
             // r's kept; the open hour 2 waits, so the product's folder and its mark stay for now.
@@ -408,7 +436,7 @@ namespace HSMServer.Core.Tests.TableSensors
             await RestartAsync(crash: false);
 
             Assert.Null(_server.Cache.GetSensor(lost.Id));
-            Assert.Equal([new TableRemoval(Guid.Empty, lost.Id, false)], _server.Batches.GetRemovals());
+            Assert.Equal([new TableRemoval(Guid.Empty, lost.Id, false, Confirmed: true)], _server.Batches.GetRemovals());
 
             var report = Pass(RemoveAt);
             Assert.Equal(1, report.RemovalsDone);
