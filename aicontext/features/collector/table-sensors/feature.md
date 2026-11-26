@@ -697,7 +697,7 @@ runs that one on the machine instead (a Windows build with Schannel, say). The l
 `src/native/collector/**` too. Run by hand on 2026-11-26 against a server of the branch, on Windows (Schannel) and in
 Debian 13: the same, a server stopped (`docker stop`, close `1001`) and killed (`docker kill`) with rows added while it
 was down (650 and 2,000 rows, each stored once), 99,000 rows, and the two samples of the user page
-(`wiki-draft/DataCollector-Table-Sensors.md`, C and C++: 600 rows each, the empty `ask` of row 300).
+(`wiki-git/DataCollector-Table-Sensors.md`, C and C++: 600 rows each, the empty `ask` of row 300).
 
 **Known limits of the table connection (0.15.2).**
 
