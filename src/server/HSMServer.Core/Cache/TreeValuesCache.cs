@@ -667,15 +667,20 @@ namespace HSMServer.Core.Cache
                     // The stored table rows of the subtree (#1850 part 4d), recorded in one write before anything leaves the
                     // tree: its table sensors, and a root product itself (its folder of batches and its blocks go whole; its
                     // sensors' marks then go with it, and they stand alone when the product's own removal did not complete).
+                    // A root product is marked only when it has table sensors or the table store exists on disk (it may hold
+                    // rows of its table sensors removed before): a server that never had a table sensor writes no record, so
+                    // a product removal does not create the table store and the merge job does not open it.
                     var root = product.IsRoot ? product.Id : product.Root?.Id ?? Guid.Empty;
-                    MarkTableRemoval(TableSensorsIn(product).Select(t => (root, t.Id)).ToList(), product.IsRoot ? [product.Id] : []);
+                    var tables = TableSensorsIn(product);
+                    Guid[] tableProducts = product.IsRoot && (tables.Count > 0 || _database.TableBlocks?.Exists == true) ? [product.Id] : [];
+                    MarkTableRemoval(tables.Select(t => (root, t.Id)).ToList(), tableProducts);
 
                     RemoveProduct(request.Id, request.InitiatorInfo);
 
                     // Confirmed only for an entity the database no longer holds (a removal that failed stays unconfirmed:
                     // the merge job deletes nothing for it in this run, and after a restart it acts by whether the entity
                     // loaded).
-                    ConfirmTableRemoval(removedSensors, product.IsRoot ? [product.Id] : []);
+                    ConfirmTableRemoval(tables.Select(t => t.Id).Where(removedSensors.Contains).ToList(), tableProducts);
 
                     RemoveProductFromCache(product);
 
