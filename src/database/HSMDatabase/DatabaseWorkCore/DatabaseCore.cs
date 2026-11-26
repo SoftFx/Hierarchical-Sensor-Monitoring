@@ -38,9 +38,12 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase _tableBlocks;
         private readonly HSMDatabase.LevelDB.TableBatches.TableBatchDatabase _tableBatches;
 
-        public IDashboardCollection Dashboards { get; }
+        private readonly DashboardCollection _dashboards;
+        private readonly ChangeSetCollection _changeSets;
 
-        public IChangeSetCollection ChangeSets { get; }
+        public IDashboardCollection Dashboards => _dashboards;
+
+        public IChangeSetCollection ChangeSets => _changeSets;
 
         public ISnapshotDatabase Snapshots { get; }
 
@@ -137,8 +140,8 @@ namespace HSMDatabase.DatabaseWorkCore
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings, utcNow: () => Clock());
             _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings, utcNow: () => Clock());
 
-            Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
-            ChangeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
+            _dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
+            _changeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
 
             // No IO here: the store opens on its first use (#1844).
             _tableBlocks = new HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase(_settings.PathToTableBlocks);
@@ -1755,22 +1758,39 @@ namespace HSMDatabase.DatabaseWorkCore
             _logger.Info($"Starting disposing {nameof(DatabaseCore)}...");
 
             CloseCompaction();
-            _environmentDatabase.Dispose();
+
+            // Every database this core opened is closed, each on its own: one that fails to
+            // close is logged and the rest are still closed, so their files are released.
+            // Snapshots hold no open handle (plain files written and closed per save).
+            Close(_settings.PathToEnvironmentDb, _environmentDatabase);
+
             foreach (var item in _sensorValuesDatabases)
-            {
-                item?.Dispose();
-            }
-            
+                Close(item?.Name, item);
+
             foreach (var item in _journalValuesDatabases)
-            {
-                item?.Dispose();
-            }
+                Close(item?.Name, item);
 
             // Waits for a put in flight, then closes the block store (#1844).
-            _tableBlocks.Dispose();
-            _tableBatches.Dispose();
-            
-            _logger.Info($"{nameof(DatabaseCore)} dispposed");
+            Close(_settings.PathToTableBlocks, _tableBlocks);
+            Close(_settings.PathToTableBlocks, _tableBatches);
+
+            // Left open before #1943 found it: their folders stayed locked until the process exited.
+            Close(_settings.PathToServerLayoutDb, _dashboards);
+            Close(_settings.PathToChangeSetsDb, _changeSets);
+
+            _logger.Info($"{nameof(DatabaseCore)} disposed");
+        }
+
+        private static void Close(string name, IDisposable database)
+        {
+            try
+            {
+                database?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Closing database {name} failed: {ex}");
+            }
         }
     }
 }
