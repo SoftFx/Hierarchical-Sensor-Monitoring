@@ -1,6 +1,6 @@
 {
   "name": "hsm-collector",
-  "version": "0.11.1",
+  "version": "0.15.2",
   "description": "Native C++ HSM DataCollector — stable C ABI core + header-only RAII C++ wrapper.",
   "homepage": "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring",
   "supports": "!uwp",
@@ -16,13 +16,27 @@
   ],
   "features": {
     "http": {
-      "description": "libcurl HTTP transport (Schannel on Windows, OpenSSL elsewhere)",
+      "description": "libcurl HTTP transport and WebSocket connection (Schannel on Windows, OpenSSL elsewhere)",
       "dependencies": [
         {
           "name": "curl",
           "default-features": false,
-          "features": ["ssl"]
-        }
+          "features": ["ssl", "websockets"],
+          "version>=": "8.14.0"
+        },
+        "nlohmann-json"
+      ]
+    },
+    "tables": {
+      "description": "Table sensors: the table block writer (zstd, zlib CRC-32); delivery travels on the collector session of feature http",
+      "dependencies": [
+        {
+          "name": "hsm-collector",
+          "default-features": false,
+          "features": ["http"]
+        },
+        "zstd",
+        "zlib"
       ]
     }
   }

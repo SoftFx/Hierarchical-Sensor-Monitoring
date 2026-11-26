@@ -1188,4 +1188,15 @@ add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
 add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)
 add_meta_conformance_test(meta_value_sequence_wrong_start.hsmtest)
 
+# The driver of the table sensors' run against a real server (#1848 step 6). Built in the build with
+# the session transport and table sensors, so the warnings gates compile it; not a ctest (it needs a
+# server): NativeTableSensorEndToEndTests in the managed integration suite runs it.
+if(HSM_COLLECTOR_HTTP AND HSM_COLLECTOR_TABLES)
+    add_executable(hsm_table_e2e tests/server_e2e/hsm_table_e2e.cpp)
+    target_link_libraries(hsm_table_e2e PRIVATE hsm_collector_cpp)
+    target_compile_features(hsm_table_e2e PRIVATE cxx_std_17)
+    hsm_collector_set_warnings(hsm_table_e2e)
+    hsm_collector_apply_sanitizer(hsm_table_e2e)
+endif()
+
 endif() # HSM_COLLECTOR_BUILD_TESTS

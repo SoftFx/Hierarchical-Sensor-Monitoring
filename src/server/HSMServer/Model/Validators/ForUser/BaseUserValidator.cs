@@ -12,7 +12,7 @@ namespace HSMServer.Model.Validators
         protected const string UsernameRegexTemplate = @"[a-zA-Z0-9._@+-]";
 
         protected const string UsernameNotNullMessage = "Username must be not null.";
-        protected const string UsernameUniqueMessage = "Username must be unique.";
+        public const string UsernameUniqueMessage = "Username must be unique.";
         
         protected const string PasswordsEqualsMessage = "Password and second password must be equals.";
         protected const string PasswordNotNullMessage = "Password must be not null.";

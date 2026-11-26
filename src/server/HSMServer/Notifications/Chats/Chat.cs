@@ -11,6 +11,20 @@ namespace HSMServer.Notifications.Chats
         internal const bool DefaultSendMessages = true;
         internal const int DefaultMessagesAggregationTimeSec = 60;
 
+        // The aggregation delay is 0 (every alert goes out at once) or a positive number
+        // of seconds: the channels send at once only for 0, and an accumulator flushes only
+        // for a positive delay — a negative value never flushes, so a chat holding one
+        // would drop its alerts in silence. A day is the ceiling. The message is a
+        // DataAnnotations template ({1} the minimum, {2} the maximum): the web form's Range
+        // attribute formats it, and AggregationTimeRangeText is the same text for the
+        // places that hold no attribute — the write engine.
+        internal const int MinMessagesAggregationTimeSec = 0;
+        internal const int MaxMessagesAggregationTimeSec = 86_400;
+        internal const string MessagesAggregationTimeRangeMessage = "Messages delay must be between {1} and {2} seconds.";
+
+        internal static string AggregationTimeRangeText { get; } = string.Format(MessagesAggregationTimeRangeMessage,
+            string.Empty, MinMessagesAggregationTimeSec, MaxMessagesAggregationTimeSec);
+
         private readonly ChannelAccumulator _telegramAccumulator = new();
         private readonly ChannelAccumulator _slackAccumulator = new();
         private readonly ChannelAccumulator _mattermostAccumulator = new();

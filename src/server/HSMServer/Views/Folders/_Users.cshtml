@@ -132,8 +132,8 @@
         let userName = $(`#userName_${userId}`).val();
 
         showConfirmationModal(
-            `Removing user '${userName}' role`,
-            `Do you really want to remove user '${userName}' role?`,
+            `Removing user '${escapeHtml(userName)}' role`,
+            `Do you really want to remove user '${escapeHtml(userName)}' role?`,
             function() {
                 changeUsers('@Url.Action(nameof(FoldersController.RemoveUserRole), ViewConstants.FoldersController)', createUserRightData(userId, 0));
             }

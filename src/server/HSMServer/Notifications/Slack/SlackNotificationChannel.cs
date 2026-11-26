@@ -112,20 +112,27 @@ namespace HSMServer.Notifications
         }
 
 
-        public async Task SendTestAsync(Chat chat)
+        public async Task<ChatDeliveryResult> SendTestAsync(Chat chat)
         {
             if (string.IsNullOrEmpty(chat.SlackWebhookUrl))
-                return;
+                return ChatDeliveryResult.Fail("The chat has no Slack webhook.");
 
             var payload = SlackMessageBuilder.BuildPayload("Test message from HSM");
 
-            await PostWithRetryAsync(chat.SlackWebhookUrl, payload, chat.Name);
+            // The channel never throws on a test send (#1826): the outcome carries the error.
+            var error = await PostWithRetryAsync(chat.SlackWebhookUrl, payload, chat.Name);
+
+            return error is null ? ChatDeliveryResult.Ok() : ChatDeliveryResult.Fail(error);
         }
 
 
-        private async Task PostWithRetryAsync(string webhookUrl, string payload, string destinationName)
+        // Returns null on success, the terminal error text otherwise — the retry exhaustions
+        // included (#1826; the last attempt's transient failure no longer escapes as an
+        // exception, the callers used to catch-or-500 it).
+        private async Task<string> PostWithRetryAsync(string webhookUrl, string payload, string destinationName)
         {
             var backoff = _initialBackoff;
+            string lastError = null;
 
             for (var attempt = 1; attempt <= _maxRetryAttempts; attempt++)
             {
@@ -139,38 +146,53 @@ namespace HSMServer.Notifications
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
                         MessageSended?.Invoke(destinationName, payload);
-                        return;
+                        return null;
                     }
 
                     if (IsTransient(response.StatusCode) && attempt < _maxRetryAttempts)
                     {
-                        OnError($"Slack POST to {destinationName} returned {response.StatusCode}; retrying (attempt {attempt}/{_maxRetryAttempts})");
+                        lastError = $"Slack POST to {destinationName} returned {response.StatusCode}; retrying (attempt {attempt}/{_maxRetryAttempts})";
+                        OnError(lastError);
                         await Task.Delay(backoff);
                         backoff *= 2;
                         continue;
                     }
 
-                    OnError($"Slack POST to {destinationName} returned terminal status {response.StatusCode}; giving up");
-                    return;
+                    lastError = $"Slack POST to {destinationName} returned terminal status {response.StatusCode}; giving up";
+                    OnError(lastError);
+                    return lastError;
                 }
-                catch (HttpRequestException ex) when (attempt < _maxRetryAttempts)
+                catch (HttpRequestException ex)
                 {
-                    OnError($"Slack POST to {destinationName} failed (attempt {attempt}/{_maxRetryAttempts}): {ex.Message}");
+                    lastError = $"Slack POST to {destinationName} failed (attempt {attempt}/{_maxRetryAttempts}): {ex.Message}";
+                    OnError(lastError);
+
+                    if (attempt >= _maxRetryAttempts)
+                        return lastError;
+
                     await Task.Delay(backoff);
                     backoff *= 2;
                 }
-                catch (TaskCanceledException) when (attempt < _maxRetryAttempts)
+                catch (TaskCanceledException)
                 {
-                    OnError($"Slack POST to {destinationName} timed out (attempt {attempt}/{_maxRetryAttempts})");
+                    lastError = $"Slack POST to {destinationName} timed out (attempt {attempt}/{_maxRetryAttempts})";
+                    OnError(lastError);
+
+                    if (attempt >= _maxRetryAttempts)
+                        return lastError;
+
                     await Task.Delay(backoff);
                     backoff *= 2;
                 }
                 catch (Exception ex)
                 {
-                    OnError($"Slack POST to {destinationName} failed terminally: {ex.Message}");
-                    return;
+                    lastError = $"Slack POST to {destinationName} failed terminally: {ex.Message}";
+                    OnError(lastError);
+                    return lastError;
                 }
             }
+
+            return lastError;
         }
 
         private static bool IsTransient(HttpStatusCode statusCode) =>

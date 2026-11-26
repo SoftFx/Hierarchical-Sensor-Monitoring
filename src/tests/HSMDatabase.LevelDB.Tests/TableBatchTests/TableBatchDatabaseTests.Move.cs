@@ -63,6 +63,37 @@ namespace HSMDatabase.LevelDB.Tests.TableBatchTests
         }
 
         [Fact]
+        public void After_a_reopen_the_primitives_of_a_quiet_product_pin_only_its_newest_week_and_the_open_databases_stay_within_the_bound()
+        {
+            // Six weeks of a product, then a restart; the product writes nothing more (quiet), and its sensor's hours are moved
+            // week by week. Pinned handles are never closed: before the fix every database a primitive touched was pinned
+            // (the pinned week was unknown until the product wrote an hour), and all of them stayed open.
+            var store = Open();
+            const int weeks = 6;
+            for (int w = 0; w < weeks; w++)
+                store.WriteHour(_product, Commit(Week0 + w * Week + Hour, w + 1), [Part(1, (_sensorA, w * Week + Hour, 2), (_sensorB, w * Week + Hour, 1))]);
+            store.Dispose();
+
+            store = Open();
+            store.MaxOpenDatabases = 2;
+
+            for (int w = 0; w < weeks; w++)
+            {
+                long hour = Week0 + w * Week + Hour;
+                var from = new TableBatchWeek(Week0 + w * Week, 1);
+                Assert.Equal(2, store.CopySensorHours(_product, _sensorA, from, 5, hour, hour + Hour).Batches);
+                Assert.Equal(2, store.DeleteSensorHours(_product, _sensorA, from, hour, hour + Hour).Batches);
+                Assert.Equal(2, store.GetSensorHourBytes(_product, _sensorA, new TableBatchWeek(from.WeekStartTicks, 5), hour, hour + Hour).Batches);
+                store.CompactWeek(_product, from);
+            }
+
+            // Within the bound plus the newest week's two databases, which are pinned as a part write would pin them.
+            Assert.True(store.OpenDatabases <= store.MaxOpenDatabases + 2, $"{store.OpenDatabases} databases open");
+            Assert.Equal(weeks * 2, store.GetWeeks(_product).Count);
+            Assert.Equal(1, store.ReadSensor(_product, _sensorB, 1, [Week0 + Hour]).Count);
+        }
+
+        [Fact]
         public void A_copy_with_nothing_of_the_sensor_in_the_source_writes_nothing_creates_no_database_and_changes_no_generation()
         {
             var store = Open();

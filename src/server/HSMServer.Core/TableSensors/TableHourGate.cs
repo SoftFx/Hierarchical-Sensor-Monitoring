@@ -24,6 +24,9 @@ namespace HSMServer.Core.TableSensors
         // Reads waiting for the gate now. For tests.
         internal int WaitingReads => _lock.WaitingReadCount;
 
+        // Deletions waiting for the gate now. For tests.
+        internal int WaitingDeletes => _lock.WaitingWriteCount;
+
         public IDisposable Delete()
         {
             _lock.EnterWriteLock();
