@@ -37,7 +37,6 @@ namespace HSMServer.Core.Tests.LargeFiles
     /// verified finish, its unique time, the removal of files whose values are gone, the roll-forward of a missing row,
     /// the check of the rows at start, the move and merge refusal and the UI's new value. Every test has its own database.
     /// </summary>
-    [Collection("Database collection")]
     public class LargeFileUploadServiceTests : MonitoringCoreTestsBase<LargeFileUploadServiceFixture>
     {
         private const int Piece = 65_536;

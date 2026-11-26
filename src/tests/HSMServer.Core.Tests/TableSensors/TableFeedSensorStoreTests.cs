@@ -23,7 +23,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// The keyless value path of the feed sensors (#1847) against a store that loses a sensor's row, and a caller that
     /// stops waiting: the sensor is created only when its row was written, and a cancelled caller gets its own answer.
     /// </summary>
-    [Collection("Database collection")]
     public class TableFeedSensorStoreTests : MonitoringCoreTestsBase<TableFeedSensorStoreFixture>
     {
         private static readonly DateTime T0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);

@@ -26,7 +26,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     //  - an apply-time DB failure was swallowed (save reported success while
     //    the alert lived only in memory) and orphan-only TTL removals were not
     //    persisted (the alert resurrected after a restart).
-    [Collection("Database collection")]
     public class TemplateAlertJournalTests : TemplateFailureTestsBase
     {
         private readonly TemplateConcurrencyFixture _fixture;

@@ -21,7 +21,6 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
-    [Collection("Database collection")]
     public class TemplateApplicationTests : MonitoringCoreTestsBase<TemplateApplicationFixture>
     {
         private readonly TemplateApplicationFixture _fixture;

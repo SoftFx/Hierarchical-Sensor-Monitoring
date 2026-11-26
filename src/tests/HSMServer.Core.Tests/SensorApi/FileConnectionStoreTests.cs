@@ -31,7 +31,6 @@ namespace HSMServer.Core.Tests.SensorApi
     // its original bytes, its mark, status, comment and origin in the record and the value, a continue on a new
     // connection and after a restart of the host, a wrong hash and a bad piece found by the end check, a discard, the
     // other mark as another upload, an unknown sensor.
-    [Collection("Database collection")]
     public class FileConnectionStoreTests : MonitoringCoreTestsBase<FileConnectionStoreFixture>
     {
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);

@@ -125,6 +125,14 @@ namespace HSMDataCollector.Tests.Transport
         /// </summary>
         public Task WhenTableFrameUnanswered(long id) => Unanswered(id).Task;
 
+        private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _tableClosesHeard = new ConcurrentDictionary<int, TaskCompletionSource<bool>>();
+
+        /// <summary>Completes once this server has read a close frame with <paramref name="code"/> on a table connection.</summary>
+        public Task WhenTableCloseHeard(int code) => TableCloseHeard(code).Task;
+
+        private TaskCompletionSource<bool> TableCloseHeard(int code) =>
+            _tableClosesHeard.GetOrAdd(code, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
+
         private TaskCompletionSource<bool> Unanswered(long id) =>
             _unanswered.GetOrAdd(id, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
 
@@ -231,6 +239,7 @@ namespace HSMDataCollector.Tests.Transport
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             _tableCloses.Enqueue((int)(result.CloseStatus ?? 0));
+                            TableCloseHeard((int)(result.CloseStatus ?? 0)).TrySetResult(true);
 
                             if (socket.State == WebSocketState.CloseReceived)
                                 await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None).ConfigureAwait(false);
@@ -321,7 +330,14 @@ namespace HSMDataCollector.Tests.Transport
 
                 case TableAnswerKind.Text:
                     received.Outcome = answer.Text;
-                    await table.SendTextAsync(answer.Text.Replace("{id}", id.ToString())).ConfigureAwait(false);
+
+                    // Written beside this loop, which goes on reading (#1925). A collector that refuses the text (one
+                    // larger than it takes) stops reading it, closes and aborts. Awaited here, a text larger than the
+                    // socket buffers hold would keep this loop in a write the collector never takes in, and the
+                    // collector's close would be lost with the abort, unread. The writes of the connection stay in
+                    // order: they share one lock.
+                    var text = table.SendTextAsync(answer.Text.Replace("{id}", id.ToString()));
+                    _ = text.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                     return true;
 
                 case TableAnswerKind.Status:

@@ -286,6 +286,9 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Link.AckDeadlineForTests = _ => Interlocked.Increment(ref waits) == 1 ? noAckInTime.Task : new TaskCompletionSource<bool>().Task;
 
+                // The abort after the close waits until the server has read the close (see A_broken_server_frame_...).
+                rig.Link.CloseHeardForTests = status => rig.Server.WhenTableCloseHeard((int)status);
+
                 // Stored, and the ack is lost.
                 rig.Server.AnswerTableNext(TableAnswer.StoreSilently());
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
@@ -646,6 +649,11 @@ namespace HSMDataCollector.Tests.Transport
                 // ends on its own: only the stop and its budget end it.
                 rig.Link.AckDeadlineForTests = _ => new TaskCompletionSource<bool>().Task;
 
+                // The close frame of the stop may take 250 ms to write, then the connection is aborted without it. On a
+                // busy machine (net48, 1 of 50) the 250 ms ran out and the server saw no close (#1925): the write of
+                // the close is not bounded here, so the test sees whether the close is written, not how fast.
+                rig.Link.CloseFrameBoundForTests = Timeout.InfiniteTimeSpan;
+
                 // Neither the delivery nor the drain's resend is answered.
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
@@ -687,6 +695,12 @@ namespace HSMDataCollector.Tests.Transport
             {
                 await rig.StartAsync();
 
+                // The collector aborts the connection right after its close frame; a server that is not reading at that
+                // moment loses the close with the connection (#1925: net48, where a close not read before the abort is
+                // gone, 1 run of 30). The abort waits here until the server has read the close: the test checks that
+                // the close was sent with its code, not that the server was quick.
+                rig.Link.CloseHeardForTests = status => rig.Server.WhenTableCloseHeard((int)status);
+
                 rig.Server.AnswerTableNext(Broken(broken));
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
                 await rig.Collector.TickTablesAsync();
@@ -707,7 +721,9 @@ namespace HSMDataCollector.Tests.Transport
             switch (broken)
             {
                 case "binary": return TableAnswer.BinaryFrame();
-                case "oversized": return TableAnswer.WithText("{\"op\":\"x\",\"body\":\"" + new string('x', 2 * 1024 * 1024) + "\"}");
+                // Far more than the socket buffers between the two hold (#1925): the collector stops reading after its
+                // 1 MB and closes while the server is still writing, every time, not only when the machine is busy.
+                case "oversized": return TableAnswer.WithText("{\"op\":\"x\",\"body\":\"" + new string('x', 16 * 1024 * 1024) + "\"}");
                 case "not-json": return TableAnswer.WithText("this is not json");
                 default: return TableAnswer.WithText("{\"ack\":987654321,\"status\":200,\"body\":{}}");
             }

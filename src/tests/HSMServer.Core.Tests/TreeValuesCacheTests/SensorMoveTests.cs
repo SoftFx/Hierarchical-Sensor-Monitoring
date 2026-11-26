@@ -30,7 +30,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// </summary>
     // The fixture database is shared by every test in the class, so each test
     // works under its own unique node name.
-    [Collection("Database collection")]
     public class SensorMoveTests : MonitoringCoreTestsBase<SensorMoveFixture>
     {
         private readonly SensorMoveFixture _fixture;
