@@ -526,7 +526,7 @@ quotes.AddRow(std::chrono::system_clock::now(), { 1.0841, 1.0843 });
 ```
 
 - The wrapper uses the **collector session by default** (chosen when the proxy is constructed), so a table sensor made through `Native()` before or after `Start` registers and sends like any native one. Before `Start` its state is `Pending`.
-- `proxy.UseHttpTransport()` (new in 2.0.0, for a server without sessions, before 3.43.0) switches the whole wrapper to HTTP. Every table sensor is then `Unavailable` with the reason "table sensors need the collector session transport (hsm_collector_use_session_transport)", and its rows are dropped and counted.
+- `proxy.UseHttpTransport()` (new in 2.0.0, for a server without sessions, before 3.43.0) switches the whole wrapper to HTTP. Call it before `Start` (or after `Stop`): while the collector runs, or while a `StartAsync` or `StopAsync` has not finished, it throws `hsm::collector::Error` and the transport stays as it is. There is no way back to the session on that proxy. Every table sensor is then `Unavailable` with the reason "table sensors need the collector session transport (hsm_collector_use_session_transport)", and its rows are dropped and counted.
 - The wrapper's bundle ships `zstd.dll` beside `libcurl.dll` and `z.dll`.
 
 ---
