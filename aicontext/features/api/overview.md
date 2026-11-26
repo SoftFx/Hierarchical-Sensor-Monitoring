@@ -71,7 +71,7 @@ All DTOs live in `HSMSensorDataObjects` (shared library):
 - `SensorValueBase` — base class with `Path`, `Time`, `Status`, `Comment`
 - Typed descendants add the `Value` field of the appropriate type
 - `BarSensorValueBase` adds `Min`, `Max`, `Mean`, `Count`, `OpenTime`, `CloseTime`; the concrete `IntBarSensorValue` / `DoubleBarSensorValue` add `StdDev?` (#1509, optional, `null`/absent = unknown — sent by the native collector only, #1529)
-- `FileSensorValue` adds `Value` (bytes), `Name`, `Extension`
+- `FileSensorValue` adds `Value` (bytes), `Name`, `Extension`. A File sensor may also hold **large file values** (ADR-0022, #1883): uploaded in pieces over the file connection (#1884), never through this DTO. Stored as `LargeFileValue` rows (the description and the file id, no content; MemoryPack union tag 12, so ordinary file rows keep their bytes, and a server without the type loads the tree and skips only those rows): `aicontext/features/storage/large-files/feature.md`
 - `CommandRequestBase` — collector-to-server command (registration etc.)
 
 Full wire contract (enum numeric values, JSON conventions, every DTO property): [`wire-contract/feature.md`](./wire-contract/feature.md).

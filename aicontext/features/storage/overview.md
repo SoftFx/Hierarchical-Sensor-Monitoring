@@ -11,6 +11,11 @@ recovery behavior.
 - [`sealed-history/`](sealed-history/feature.md) - chunk format of sealed sensor
   history (ADR-0020): byte layout, fidelity rules, versioning, encoder refusals.
 - [`restore/`](restore/feature.md) - restore flow.
+- [`table-blocks/`](table-blocks/feature.md) and [`table-batches/`](table-batches/feature.md) - the
+  stores of table sensors (ADR-0021).
+- [`large-files/`](large-files/feature.md) - the large file store and the large
+  value of a File sensor (ADR-0022, #1883): files in a folder of their own, not
+  a database.
 
 ## Feature Folders To Add Here
 
