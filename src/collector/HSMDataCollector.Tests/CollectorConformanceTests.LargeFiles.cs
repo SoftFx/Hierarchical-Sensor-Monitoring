@@ -379,7 +379,7 @@ namespace HSMDataCollector.Tests
                 {
                     // count|timeout_s: file values the route took that wait for the file connection (polled until equal).
                     var expected = int.Parse(step.Arg(0), CultureInfo.InvariantCulture);
-                    Func<int> waiting = () => state.Collector.LargeFileService?.RoutedValuesWaiting ?? 0;
+                    Func<int> waiting = () => state.Collector.LargeFileService?.RoutedCount ?? 0;
 
                     await PollAdvancingAsync(state, () => waiting() == expected, step.Arg(1)).ConfigureAwait(false);
                     Assert.True(waiting() == expected, $"expect_routed_file_values_waiting: {waiting()}, expected {expected}.");

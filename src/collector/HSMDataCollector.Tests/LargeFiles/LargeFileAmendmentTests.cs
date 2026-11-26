@@ -154,7 +154,13 @@ namespace HSMDataCollector.Tests.LargeFiles
                 Assert.Same(value, requeued.Single());
                 Assert.Empty(dropped);
                 Assert.DoesNotContain(h.Errors, e => e.Contains("dropped"));
-                Assert.False(h.Service.Route(value));
+
+                if (!dispose)
+                {
+                    h.Service.Start();
+                    Assert.False(h.Service.Route(value));
+                    Assert.True(h.Service.Route(FileValue(Piece + 1)));
+                }
             }
         }
 
@@ -261,9 +267,9 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
-        public void Routed_values_waiting_at_stop_are_dropped_and_counted()
+        public void Routed_values_waiting_at_stop_are_released_the_begun_one_dropped_and_counted_the_other_given_back()
         {
-            var (h, _, dropped) = Routing();
+            var (h, requeued, dropped) = Routing();
 
             using (h)
             {
@@ -271,15 +277,19 @@ namespace HSMDataCollector.Tests.LargeFiles
 
                 h.Transport.FakeChannel.HoldPieces = hold;
                 Assert.True(h.Service.Route(FileValue(Piece * 3)));
-                Assert.True(h.Service.Route(FileValue(Piece * 3)));
+
+                var behind = FileValue(Piece * 3);
+
+                Assert.True(h.Service.Route(behind));
                 Assert.True(h.Transport.FakeChannel.PieceArrived.Wait(Wait));
 
                 h.Service.Stop();
                 hold.Set();
 
-                Assert.Equal(2, dropped.Sum());
+                Assert.Equal(1, dropped.Sum());
+                Assert.Same(behind, requeued.Single());
                 Assert.Equal(0, h.Service.RoutedCount);
-                Assert.Contains(h.Errors, e => e.Contains("2 file value(s)"));
+                Assert.Contains(h.Errors, e => e.Contains("1 file value(s)"));
             }
         }
 

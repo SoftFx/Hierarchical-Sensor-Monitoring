@@ -33,7 +33,13 @@ namespace HSMDataCollector.LargeFiles
         internal long Size => Content.Count;
 
         /// <summary>The upload began on the server (a begin was answered): it is not given back to the ordinary path.</summary>
-        internal bool Began { get; set; }
+        internal bool Began
+        {
+            get => Volatile.Read(ref _began);
+            set => Volatile.Write(ref _began, value);
+        }
+
+        private bool _began;
 
         internal string Name { get; }
 
@@ -75,16 +81,6 @@ namespace HSMDataCollector.LargeFiles
             new System.Runtime.CompilerServices.ConditionalWeakTable<FileSensorValue, object>();
 
         private static readonly object Marked = new object();
-
-        /// <summary>For tests: the routed values waiting for the file connection (taken, not yet stored, given back or dropped).</summary>
-        internal int RoutedValuesWaiting
-        {
-            get
-            {
-                lock (_gate)
-                    return _routed.Count;
-            }
-        }
 
         /// <summary>For tests: how many values the route took.</summary>
         internal long RoutesTaken => Interlocked.Read(ref _routesTaken);

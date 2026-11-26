@@ -34,8 +34,10 @@ memory (past it a value is not taken and goes the ordinary way). A value the upl
 store is said and counted under the file queue (`DataProcessor.ReportDroppedFileValues`); one it cannot send because the
 server has no file connection is given back to the file queue (`DataProcessor.RequeueFile`) and goes the ordinary way.
 So is one a stop or dispose finds without an answered `begin`: the file queue takes a given-back value whatever the
-collector's state (`QueueProcessorBase.EnqueueGivenBack`, as a retry), and the stop drains the file queue only after the
-uploader's stop, so the drain sends it.
+collector's state (`QueueProcessorBase.EnqueueGivenBack`, as a retry: on a full queue the given-back value is the one
+dropped, and counted), and the stop drains the file queue only once the uploader's stop has given its values back (not
+after the close of the file connection, which runs beside the drains), so the drain sends it. A start rollback clears the
+queues first: a value given back after it waits in the file queue for the next Start.
 
 ## Enqueue results
 

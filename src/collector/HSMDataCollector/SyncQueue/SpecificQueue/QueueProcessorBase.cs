@@ -808,17 +808,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 _logger.Error(DataProcessor.BuildRejectionMessage(QueueName, items, sendingInfo));
         }
 
+        /// <summary>
+        /// An item taken from this queue earlier and given back (a file value the large file uploader did not begin): it is
+        /// taken whatever the collector's state, as a retry is, so a stop gives it back before its drain sends it. On a full
+        /// queue it is the one dropped (#1088, as a retry). Drops are reported here.
+        /// </summary>
+        internal EnqueueResult EnqueueGivenBack(T item) => ReEnqueueItem(new QueueItem<T>(item));
+
         // Self-reports retry-path evictions to the queue manager so every caller — including
         // FileQueueProcessor, which only re-enqueues single items — surfaces the drop count to
         // QueueOverflowSensor. Previously the reporting lived in ReEnqueueItems, which meant
         // file-queue retry drops were silent (issue #1088 review).
-        /// <summary>
-        /// An item taken from this queue earlier and given back (a file value the large file uploader did not begin): it is
-        /// taken whatever the collector's state, as a retry is, so a stop gives it back before its drain sends it. Drops are
-        /// reported here.
-        /// </summary>
-        internal EnqueueResult EnqueueGivenBack(T item) => ReEnqueueItem(new QueueItem<T>(item));
-
         protected EnqueueResult ReEnqueueItem(QueueItem<T> item)
         {
             var result = EnqueueCore(item, isRetry: true);

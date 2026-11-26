@@ -170,21 +170,27 @@ namespace HSMDataCollector.Core
             // An upload of a large file is cut, not waited for (ADR-0022): it continues after the next Start. The cut runs
             // beside the value drain and is over (bounded, a few seconds at most) before this stop returns, so the file
             // connection is closed before the session.
+            // The file queue's drain waits only until the routed values no begin was answered for are back in it (as in the
+            // native collector, whose stop gives them back before its drain), not for the close of the file connection.
             var largeFiles = LargeFiles;
-            var largeFilesStop = largeFiles != null ? Task.Run(() => largeFiles.Stop()) : Task.CompletedTask;
+            var routedReleased = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var largeFilesStop = largeFiles != null
+                ? Task.Run(() => largeFiles.Stop(() => routedReleased.TrySetResult(true)))
+                : Task.CompletedTask;
+
+            if (largeFiles == null)
+                routedReleased.TrySetResult(true);
 
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
 
+            // A start rollback clears the queues without counting; values given back after it stay for the next Start.
             if (mode.FlushAcceptedWork())
-            {
-                await StopWithFlushAsync(mode, largeFilesStop, failures).ConfigureAwait(false);
-            }
+                await StopWithFlushAsync(mode, Task.WhenAny(routedReleased.Task, largeFilesStop), failures).ConfigureAwait(false);
             else
-            {
-                await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
-            }
+
+            await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
 
             ReportUnreportedOverflow();
 
@@ -192,7 +198,7 @@ namespace HSMDataCollector.Core
                 throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
         }
 
-        private async Task StopWithFlushAsync(ShutdownMode mode, Task largeFilesStop, List<Exception> failures)
+        private async Task StopWithFlushAsync(ShutdownMode mode, Task routedReleased, List<Exception> failures)
         {
             // Stop all queues so their processing loops exit; items remain in each queue's buffer
             // ready for a bounded flush. Each StopAsync returns whether the loop actually exited
@@ -266,9 +272,10 @@ namespace HSMDataCollector.Core
                 Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
 
                 // The large files' stop gives the routed values no begin was answered for back to the file queue (as in the
-                // native collector, whose stop does it before its drain): its drain waits for that. Bounded, and it ran beside
-                // the drains above.
-                await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
+                // native collector, whose stop does it before its drain): its drain waits for that (the uploader's bounded
+                // join), not for the close of the file connection. It ran beside the drains above; its failures are collected
+                // where StopAsync awaits it.
+                await routedReleased.ConfigureAwait(false);
 
                 if (fileStopped)
                     await FlushAndLogAsync(_fileQueue, drainBudget.Token, failures, valuesFailed).ConfigureAwait(false);

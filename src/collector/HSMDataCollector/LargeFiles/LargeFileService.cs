@@ -368,14 +368,23 @@ namespace HSMDataCollector.LargeFiles
         }
 
         /// <summary>Cuts the upload in progress and waits for the thread at most a short bound. Never throws.</summary>
-        internal void Stop()
+        internal void Stop() => Stop(null);
+
+        /// <summary>
+        /// The same; <paramref name="released"/> is called once the routed values were given back or dropped (before the
+        /// file connection's close), or at once when there was nothing to stop.
+        /// </summary>
+        internal void Stop(Action released)
         {
             Thread thread;
 
             lock (_gate)
             {
                 if (!_running)
+                {
+                    Released(released);
                     return;
+                }
 
                 _running = false;
                 Interlocked.Increment(ref _generation);
@@ -391,8 +400,15 @@ namespace HSMDataCollector.LargeFiles
             WaitForThread(thread);
 
             ReleaseAllRouted("the collector stopped");
+            Released(released);
 
             try { _transport?.Channel.Close("the collector stopped"); }
+            catch (Exception) { }
+        }
+
+        private static void Released(Action released)
+        {
+            try { released?.Invoke(); }
             catch (Exception) { }
         }
 
