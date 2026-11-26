@@ -90,8 +90,8 @@
         let id = this.id.substring("remove_".length, this.id.length);
         let name = this.name;
         showConfirmationModal(
-            `Removing '${name}' dashboard`,
-            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
+            `Removing '${escapeHtml(name)}' dashboard`,
+            `Do you really want to remove selected dashboard <strong>${escapeHtml(name)}</strong>?`,
             function () {
                 $.ajax({
                 type: 'DELETE',

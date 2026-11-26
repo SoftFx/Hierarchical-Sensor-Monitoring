@@ -336,6 +336,25 @@
             <summary>Get one chat by id; its folders list is what policy writes validate against.</summary>
             <param name="id">Chat id.</param>
         </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.PostTestMessage(System.Guid,HSMServer.Model.ManagementApi.Chats.ChatTestMessageRequestDto)">
+            <summary>
+            Send a test message to one of the chat's channels and answer the delivery outcome
+            (#1826) — the web test actions answer OK regardless; here the caller learns whether
+            the message arrived. Same gate as the web editor: the chat's detail rule.
+            </summary>
+            <param name="id">Chat id.</param>
+            <param name="request">The channel to test (telegram / slack / mattermost).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.PostTelegramInvitation(System.Guid,HSMServer.Model.ManagementApi.Chats.ChatInvitationRequestDto)">
+            <summary>
+            Issue a ONE-SHOT Telegram invitation for the chat (#1826): the link (direct) or the
+            group command, its expiry (+10 minutes — the relay through an orchestrator is slower
+            than the web UI's issue-at-the-moment-of-use) and the human steps. The binding lands
+            when a person completes /start in Telegram; read the chat's telegramChatId afterwards.
+            </summary>
+            <param name="id">Chat id.</param>
+            <param name="request">The invitation kind (direct / group).</param>
+        </member>
         <member name="T:HSMServer.Controllers.DownloadsController">
             <summary>
             The Downloads page (#1550): pick a product, then take its Windows agent or Linux probe bundle from
@@ -402,7 +421,7 @@
             <param name="author">Author substring filter (case-insensitive).</param>
             <param name="fromUtc">Recorded at or after (UTC ISO 8601; default now - 30 days).</param>
             <param name="toUtc">Recorded at or before (UTC ISO 8601).</param>
-            <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder or other.</param>
+            <param name="kind">Entity kind: sensorDataPolicies, sensorTtlPolicies, productTtlPolicies, alertTemplate, alertSchedule, nodeSettings, treeCrud, folder, chat, serverSettings or other.</param>
             <param name="productId">Only records of this root product.</param>
             <param name="entityId">Only records keyed by this entity id.</param>
             <param name="limit">Page size, 1..200 (default 100).</param>
@@ -1117,10 +1136,12 @@
         </member>
         <member name="T:HSMServer.Mcp.ChatsMcpTools">
             <summary>
-            The two chat tools of the MCP surface: the id source an agent needs to
+            The chat tools of the MCP surface: the id source an agent needs to
             compose destination.chats when creating or editing alert policies and
-            alert templates — a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>
-            (the #1393 pattern: one visibility rule behind both transports).
+            alert templates (a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>,
+            the #1393 pattern: one visibility rule behind both transports), plus
+            the verification pair of #1826 — a test message that answers its
+            delivery outcome and the one-shot Telegram invitation issuer.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.FoldersMcpTools">
@@ -1888,6 +1909,50 @@
             bundled default; it is only evaluated when the server terminates TLS.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges">
+            <summary>
+            One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
+            of the save and its journal records. The bot token is a secret: the log and the
+            journal say THAT it changed, never the old or the new value.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges.Change">
+            <summary>
+            One changed setting: the journal record of the change and the save's log line
+            for it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Change.#ctor(HSMServer.Core.Journal.JournalAppender.Change,System.String)">
+            <summary>
+            One changed setting: the journal record of the change and the save's log line
+            for it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Save(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel,System.String,HSMServer.Core.Journal.JournalAppender)">
+            <summary>
+            The save of the settings page: the changes of the posted form, applied to the
+            configuration and persisted, then journaled — the journal never precedes the
+            write it records. Nothing is applied and nothing is journaled when nothing
+            changed.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.ServerConfiguration.TelegramConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel)">
+            <summary>
+            The changed settings of the save, in the order the log always listed them. An
+            absent and an empty value are the same setting: a server that was never
+            configured holds nulls, and the form posts an empty field as an empty string.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
+        </member>
+        <member name="M:HSMServer.Model.Folders.ViewModels.FolderInfoViewModel.#ctor(HSMServer.Model.Folders.FolderModel,System.Collections.Generic.IEnumerable{HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
+            <param name="folder">The folder.</param>
+            <param name="visibleProducts">
+            The products of the folder the panel is rendered over: the ones its reader sees
+            (<see cref="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)"/>), so the statistics say nothing about the others.
+            </param>
+        </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
             <summary>
             Request for the node-level overlay chart (issue #1235): one node id plus the operator-chosen
@@ -1927,6 +1992,24 @@
         </member>
         <member name="P:HSMServer.Model.History.Personal.Journal.JournalRecordViewModel.Operation">
             <summary>The record's operation tag (create/update/delete/rollback, #1638); null when not derivable.</summary>
+        </member>
+        <member name="P:HSMServer.Model.History.Personal.Journal.SelectedJournalViewModel.ConnectedId">
+            <summary>Id of the sensor, node or folder whose journal is loaded; null before the first selection.</summary>
+        </member>
+        <member name="M:HSMServer.Model.History.Personal.Journal.SelectedJournalViewModel.ConnectJournal(HSMServer.Model.TreeViewModel.BaseNodeViewModel,HSMServer.Core.Journal.IJournalService,System.Func{HSMServer.Model.TreeViewModel.ProductNodeViewModel,System.Boolean})">
+            <param name="baseNode">The selected sensor, node or folder.</param>
+            <param name="journal">The journal to read from.</param>
+            <param name="isProductVisible">
+            For a folder: which of its products the user can see. Records of the other products are not loaded
+            (a folder role does not imply a role on every product in it). Null loads every product.
+            </param>
+        </member>
+        <member name="M:HSMServer.Model.History.Personal.Journal.SelectedJournalViewModel.GetPage(HSMServer.Controllers.DataTables.DataTableParameters,System.Func{System.Guid,System.Boolean})">
+            <param name="filter">Paging, order and search of the table.</param>
+            <param name="isVisible">
+            Which of the loaded sensors and nodes (by id) the user sees now; records of the others are left
+            out of the page and of both counts. Null: everything loaded.
+            </param>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AccessKeys.AccessKeyDto">
             <summary>
@@ -3107,6 +3190,67 @@
             preview into the real, irreversible write.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService">
+            <summary>
+            The write engine behind the chat web flows (#1825): create (idempotent towards a row
+            pre-created by the Telegram /start flow), partial update with the explicit channel-clear
+            flags, webhook URL-shape validation in one place, and the chat-folder binding under the
+            "only folders the caller manages" rule. The web controller delegates here; the
+            /api/v1 + MCP surface (#1829) will call the same engine. Transport-agnostic: it answers
+            the area's write envelope (<see cref="T:HSMServer.Model.ManagementApi.Alerts.PolicyWriteResult"/>), never an IActionResult.
+            The NAME rule (required, at most 100 characters) is not here yet — it lives in the
+            view model's DataAnnotations, so the web flow enforces it but a non-MVC caller does
+            not; #1829 moves it behind the shared name validator of the chat-setup initiative
+            (docs/initiatives/chat-setup-via-mcp.md) before the API/MCP write surface ships.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.CreateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,System.Guid,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            The AddChat POST flow: when the row already exists (created by /start against the
+            pre-allocated guid), the save becomes an update so it is idempotent w.r.t. the order
+            of "fill the name" and "click setup help". A fresh row carries the creating user as
+            its author; an empty id (a crafted post — the honest form pre-allocates) gets a
+            server-generated one, as the old flow did.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.UpdateChatAsync(HSMServer.Notifications.Chats.ChatUpdate,HSMServer.Model.ManagementApi.Chats.ChatFolderBinding,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            The EditChat POST flow: a partial update (an omitted field does not change; a channel
+            is removed only by its explicit clear flag), then the folder binding.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatAdministrationService.ClearChannelAsync(System.Guid,HSMServer.Model.ManagementApi.Chats.ChatChannel,HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            The per-channel Remove buttons of the edit form: one clear flag, nothing else.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatChannel">
+            <summary>The delivery channel of a chat the clear action targets.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding">
+            <summary>
+            The folder binding of a chat write. Keep: the bindings the caller still wants (the edit
+            form's kept rows) — they decide only removals. Add: the folders to bind (the form's
+            SelectedFolders half) — the only source of new bindings. Managed: the folders the
+            caller manages. Adds touch Add ∩ Managed; removals touch (the chat's current folders
+            minus Keep) ∩ Managed — folders the caller cannot manage are never touched. A caller
+            holding one desired list passes it as both Keep and Add. Managed is the scope the
+            engine applies, not something it derives: it must be built from the authenticated
+            caller's own folders, never taken from request data.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatFolderBinding.#ctor(System.Collections.Generic.IReadOnlyCollection{System.Guid},System.Collections.Generic.IReadOnlyCollection{System.Guid},System.Collections.Generic.IReadOnlyCollection{System.Guid})">
+            <summary>
+            The folder binding of a chat write. Keep: the bindings the caller still wants (the edit
+            form's kept rows) — they decide only removals. Add: the folders to bind (the form's
+            SelectedFolders half) — the only source of new bindings. Managed: the folders the
+            caller manages. Adds touch Add ∩ Managed; removals touch (the chat's current folders
+            minus Keep) ∩ Managed — folders the caller cannot manage are never touched. A caller
+            holding one desired list passes it as both Keep and Add. Managed is the scope the
+            engine applies, not something it derives: it must be built from the authenticated
+            caller's own folders, never taken from request data.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDto">
             <summary>
             A notification chat — the destination alert policies and alert templates
@@ -3195,6 +3339,56 @@
             invisible ids answer the SAME NotFound — the area's
             anti-enumeration rule.
             </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatVerificationService">
+            <summary>
+            The chat verification surface (#1826): a test message that answers its delivery
+            outcome, and the Telegram invitation issuer for the management surface. Transport-
+            agnostic — the REST controller and the MCP tools both call it; the caller supplies
+            the token principal and gets the area's write envelope back, never an IActionResult.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.IChatDelivery">
+            <summary>
+            The delivery half the verification service needs: the channels and the bot behind
+            NotificationsCenter (their concrete types are sealed, so the seam is this adapter).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto">
+            <summary>The outcome of a chat test message: delivered, or the delivery error text.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto.Delivered">
+            <summary>Whether the message reached the channel.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto.Error">
+            <summary>The delivery error text when not delivered; null otherwise.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto">
+            <summary>A one-shot Telegram invitation for a chat, issued to an orchestrator (#1826).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.Kind">
+            <summary>The invitation kind — "direct" or "group".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.Value">
+            <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post in the group.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.ExpiresAt">
+            <summary>When the invitation expires (one-shot; a second /start with it is rejected).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.NextSteps">
+            <summary>The steps a PERSON does inside Telegram — the orchestrator cannot press Start.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatTestMessageRequestDto">
+            <summary>The channel a test message targets.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageRequestDto.Channel">
+            <summary>The delivery channel to test — one the chat carries.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatInvitationRequestDto">
+            <summary>The kind of a Telegram invitation.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationRequestDto.Kind">
+            <summary>"direct" (a link) or "group" (a command to post into the group).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDto">
             <summary>
@@ -4074,10 +4268,103 @@
             <see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetComparableChildGroups(System.Guid)"/>.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.TreeViewModel.UserTreeAccess">
+            <summary>
+            The sensor tree as one web user may address it by id.
+            <para>
+            <see cref="T:HSMServer.Model.TreeViewModel.TreeViewModel"/> and the folder manager are process-wide singletons: an id resolved from
+            them proves nothing about the caller. Controllers that take a sensor, node or folder id from the
+            client hold this class INSTEAD of the tree, so every lookup answers "not found" for an entity the
+            user cannot see and a new action has no unchecked lookup to reach for.
+            </para>
+            <para>
+            The rule is the one the tree itself is built by (<see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetUserProducts(HSMServer.Model.Authentication.User)"/>): a
+            sensor or node is visible when the user is an admin or holds any role on its ROOT product; a folder
+            is visible when the user is an admin, holds a role on the folder, or sees one of its products.
+            </para>
+            <para>
+            Whether the user may CHANGE what they see is the second rule, answered by the <c>Managed</c>
+            lookups: a sensor or node is managed by an admin and by a Manager of its ROOT product, a folder by
+            an admin and by a Manager of the folder. An entity the user sees but does not manage is "not
+            found" for these lookups, like an unknown id.
+            </para>
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsVisible(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>True when <paramref name="id"/> is a sensor, node or folder the user can see.</summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.IsVisibleTo(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.NodeViewModel)">
+            <summary>
+            The visibility rule for a node or sensor the caller already holds. Static for a controller
+            outside the tree page that keeps the tree itself (the key list of the access key page).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)">
+            <summary>
+            The products of a folder the user can see. A folder role does not imply a role on every product
+            in it (a per-product role removal narrows the folder role), so the folder's own list is not it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetManagedProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)">
+            <summary>
+            The products of a folder the user manages. The folder Manager role does not imply the Manager
+            role on every product in it: a user who already held a role on a product keeps that role when
+            the product enters the folder, and a product role can be changed afterwards.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetManagedSensorIds(HSMServer.Model.Authentication.User,System.Guid)">
+            <summary>
+            Ids of the sensors under <paramref name="id"/> that the user may change: a managed sensor
+            itself, the subtree of a managed node, or the managed products of a managed folder. Empty for
+            an unknown id and for one the user does not manage.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.UserTreeAccess.TryGetBackgroundSensor(HSMServer.Model.Authentication.User,HSMServer.Model.TreeViewModel.SensorNodeViewModel,System.Boolean,HSMServer.Model.TreeViewModel.SensorNodeViewModel@)">
+            <summary>
+            The "Service alive" / "Service status" sensor drawn behind <paramref name="sensor"/>'s chart. It
+            is searched in the sensor's own root product, so it is visible whenever the sensor is; the lookup
+            goes through the same check all the same.
+            </summary>
+        </member>
         <member name="P:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.ShowChartTab">
             <summary>
             True when the selected node has at least one group of >= 2 comparable child sensors to overlay
             on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.ConnectFolder(HSMServer.Model.Folders.FolderModel,System.Collections.Generic.IDictionary{System.Guid,HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
+            <param name="newFolder">The selected folder.</param>
+            <param name="visibleProducts">
+            The products of the folder to page through: the ones the user can see, which is not always the whole
+            folder (<see cref="M:HSMServer.Model.TreeViewModel.UserTreeAccess.GetVisibleProducts(HSMServer.Model.Authentication.User,HSMServer.Model.Folders.FolderModel)"/>).
+            </param>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.RefreshFolderProducts(System.Guid,System.Collections.Generic.IDictionary{System.Guid,HSMServer.Model.TreeViewModel.ProductNodeViewModel})">
+            <summary>
+            Replaces the product list of the selected folder with the products the user sees now. Does nothing
+            when another entity has been selected in the meantime: a page request never changes the selection.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.ChatDeliveryResult">
+            <summary>
+            The outcome of a chat test message (#1826): delivered, or the same error text the
+            channel logs. The web test actions ignore it (they answer OK as before); the
+            management surface renders it to the caller.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.ChatDeliveryResult.#ctor(System.Boolean,System.String)">
+            <summary>
+            The outcome of a chat test message (#1826): delivered, or the same error text the
+            channel logs. The web test actions ignore it (they answer OK as before); the
+            management surface renders it to the caller.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatJournal">
+            <summary>
+            The journal's view of a chat (#1828): the state of its journaled settings at one
+            moment, and the records one write leaves between two such states. A record carries
+            a setting's old and new value — except where the value is a secret: a webhook reads
+            as the state of its channel, and the Telegram binding as not bound, bound or removed.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

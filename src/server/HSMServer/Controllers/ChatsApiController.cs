@@ -1,6 +1,8 @@
 using System;
+using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -32,8 +34,13 @@ namespace HSMServer.Controllers
     public sealed class ChatsApiController : ControllerBase
     {
         private readonly ChatsReadService _reader;
+        private readonly ChatVerificationService _verification;
 
-        public ChatsApiController(ChatsReadService reader) => _reader = reader;
+        public ChatsApiController(ChatsReadService reader, ChatVerificationService verification)
+        {
+            _reader = reader;
+            _verification = verification;
+        }
 
 
         /// <summary>
@@ -64,5 +71,42 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetChat(Guid id) =>
             _reader.GetChat(id, User).ToActionResult();
+
+        /// <summary>
+        /// Send a test message to one of the chat's channels and answer the delivery outcome
+        /// (#1826) — the web test actions answer OK regardless; here the caller learns whether
+        /// the message arrived. Same gate as the web editor: the chat's detail rule.
+        /// </summary>
+        /// <param name="id">Chat id.</param>
+        /// <param name="request">The channel to test (telegram / slack / mattermost).</param>
+        [HttpPost("{id:guid}/test-message")]
+        [ProducesResponseType(typeof(ChatTestMessageResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostTestMessage(Guid id, [FromBody] ChatTestMessageRequestDto request) =>
+            (await _verification.SendTestMessageAsync(id, request?.Channel, User)).ToActionResult();
+
+        /// <summary>
+        /// Issue a ONE-SHOT Telegram invitation for the chat (#1826): the link (direct) or the
+        /// group command, its expiry (+10 minutes — the relay through an orchestrator is slower
+        /// than the web UI's issue-at-the-moment-of-use) and the human steps. The binding lands
+        /// when a person completes /start in Telegram; read the chat's telegramChatId afterwards.
+        /// </summary>
+        /// <param name="id">Chat id.</param>
+        /// <param name="request">The invitation kind (direct / group).</param>
+        [HttpPost("{id:guid}/telegram-invitations")]
+        [ProducesResponseType(typeof(ChatInvitationDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostTelegramInvitation(Guid id, [FromBody] ChatInvitationRequestDto request) =>
+            (await _verification.CreateInvitationAsync(id, request?.Kind, User)).ToActionResult();
     }
 }

@@ -2,6 +2,7 @@
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Folders;
@@ -121,10 +122,28 @@ namespace HSMServer.Controllers
         }
 
 
-        public async ValueTask MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        // The RemoveProduct shape below, for the same reason: "Move to ..." is offered to the product's
+        // Managers only, but the action checked no role and answered GET. A move is a change of roles —
+        // FolderManager takes from the users of the folder the product leaves the folder role they
+        // hold on it, and gives the users of the folder it enters, those who hold no role on the
+        // product yet, their folder role on it — so anyone who held a role in a folder could move a
+        // product they had no role on there and receive that role on it.
+        public async Task<IActionResult> MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
+            if (DenyUnlessManager(productId, out var node) is { } denied)
+                return denied;
+
+            // A folder holds root products, which is all the page offers to move. A node below the root
+            // keeps its place in its product: roles and the tree are read from the root it belongs to.
+            if (!node.IsRoot)
+                return BadRequest();
+
             if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
                 await _folderManager.MoveProduct(product, fromFolderId, toFolderId, CurrentInitiator);
+
+            return Ok();
         }
 
 
@@ -138,11 +157,8 @@ namespace HSMServer.Controllers
         // HomeController.RemoveNode and AlertTemplatesController.Remove shapes.
         public async Task<IActionResult> RemoveProduct(Guid product)
         {
-            if (!_treeValuesCache.TryGetProduct(product, out var model))
-                return NotFound();
-
-            if (!CurrentUser.IsManager(model.Root.Id))
-                return StatusCode(StatusCodes.Status403Forbidden);
+            if (DenyUnlessManager(product, out var model) is { } denied)
+                return denied;
 
             await _treeValuesCache.RemoveProductAsync(model.Id, CurrentInitiator);
             _logger.LogInformation("Product '{Path}' ({Id}) removed by '{User}'", model.FullPath, model.Id, CurrentUser.Name);
@@ -175,9 +191,19 @@ namespace HSMServer.Controllers
             return View(new EditProductViewModel(productNode, pairs, notAdminUsers));
         }
 
+        // The edit page (the GET above) is open to Managers only, but the four actions it posts to
+        // checked no role: any signed-in user, a Viewer included, could post them for any product id
+        // and rename the product, change its description and default chats, or hand out, change and
+        // take away product roles (their own included). Now each of them is judged as RemoveProduct
+        // is: Manager of the id's root product, or admin.
+
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async ValueTask<IActionResult> EditProduct(ProductGeneralInfoViewModel viewModel)
         {
+            if (DenyUnlessManager(viewModel.Id, out _) is { } denied)
+                return denied;
+
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
             {
                 var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _chatsManager, CurrentInitiator));
@@ -194,17 +220,23 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void AddUserRight([FromBody] UserRightViewModel model)
+        public IActionResult AddUserRight([FromBody] UserRightViewModel model)
         {
+            if (DenyUnlessManager(model) is { } denied)
+                return denied;
+
             var validator = new UserRightValidator();
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataUserErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return;
+                return Ok();
             }
 
             var user = _userManager[model.UserId];
+            if (user is null)
+                return NotFound();
+
             var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
@@ -213,29 +245,44 @@ namespace HSMServer.Controllers
                 user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
+
+            return Ok();
         }
 
         [HttpPost]
-        public void RemoveUserRole([FromBody] UserRightViewModel model)
+        public IActionResult RemoveUserRole([FromBody] UserRightViewModel model)
         {
+            if (DenyUnlessManager(model) is { } denied)
+                return denied;
+
             var user = _userManager[model.UserId];
+            if (user is null)
+                return NotFound();
 
             var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.EntityId));
             user.ProductsRoles.Remove(role);
 
             _userManager.UpdateUser(user);
+
+            return Ok();
         }
 
         [HttpPost]
-        public void EditUserRole([FromBody] UserRightViewModel model)
+        public IActionResult EditUserRole([FromBody] UserRightViewModel model)
         {
+            if (DenyUnlessManager(model) is { } denied)
+                return denied;
+
             var user = _userManager[model.UserId];
+            if (user is null)
+                return NotFound();
+
             var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
             var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.EntityId));
             //Skip empty corresponding pair
             if (role.Item1 == Guid.Empty && role.Item2 == 0)
-                return;
+                return Ok();
 
             user.ProductsRoles ??= [];
 
@@ -246,6 +293,8 @@ namespace HSMServer.Controllers
             user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
+
+            return Ok();
         }
 
         //[HttpPost]
@@ -291,6 +340,23 @@ namespace HSMServer.Controllers
         }
 
         #endregion
+
+        // The gate of the edit, role, move and remove actions: null when the caller is an admin or a
+        // Manager of the root product of nodeId, otherwise the answer to return: 404 for an id that is
+        // not in the tree, 403 for everyone else. Roles are held per root product, so a node below the
+        // root is judged by its root and a role entry on the node's own id counts for nothing.
+        private IActionResult DenyUnlessManager(Guid nodeId, out ProductModel node)
+        {
+            if (!_treeValuesCache.TryGetProduct(nodeId, out node))
+                return NotFound();
+
+            return CurrentUser.IsManager(node.Root.Id) ? null : StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        // The same gate for the role actions, whose product id arrives in a JSON body. It runs before
+        // the user is looked up, so a caller without the role learns nothing about which user ids exist.
+        private IActionResult DenyUnlessManager(UserRightViewModel model) =>
+            model is null ? BadRequest() : DenyUnlessManager(model.EntityId, out _);
 
         private Dictionary<string, string> GetUserFolders()
         {

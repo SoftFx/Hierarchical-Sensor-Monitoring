@@ -33,8 +33,11 @@ public static class JournalOperations
     /// property (template, schedule and rollback rows), the record's undo
     /// group entry (policy rows — the group resolver is optional and null
     /// on surfaces that stream records without group access, e.g. the
-    /// per-node journal tab), then the legacy enviroment wording (tree CRUD
-    /// and node settings rows). Null when nothing says — legacy rows.
+    /// per-node journal tab), then the enviroment wording — the pre-unification
+    /// one of tree CRUD and node settings rows, and since #1828 the one of
+    /// chat and server-settings rows ("Create chat", "Remove chat", "Chat
+    /// update", "Telegram bot settings update"). Null when nothing says —
+    /// legacy rows.
     /// </summary>
     public static string Of(JournalRecordModel record,
         Func<string, ChangeSetModel> groupResolver = null)
@@ -110,7 +113,8 @@ public static class JournalOperations
 
     // The pre-unification wording of tree CRUD and node settings rows
     // ("Create product", "Remove node", "Move product", "General info
-    // update"); a wording that names no operation answers null. A move is
+    // update"); since #1828 the chat and server-settings rows ride the same
+    // wording. A wording that names no operation answers null. A move is
     // an update of the node's position, not a fourth operation.
     private static string FromEnviroment(string enviroment)
     {
