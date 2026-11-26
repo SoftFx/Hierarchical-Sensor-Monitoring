@@ -219,13 +219,16 @@ namespace HSMServer.Core.TableSensors
         private readonly Dictionary<Guid, long> _notReconciledHour = [];
 
         // Whether this is the first failed reconciliation of the product in this hour of the pass's clock (and notes it).
-        private bool FirstInHour(Guid product, DateTime utcNow)
+        private bool FirstInHour(Guid product, DateTime utcNow) => FirstInHour(_notReconciledHour, product, utcNow);
+
+        // Whether this is the first time in this hour of the pass's clock that the product is noted in the map (and notes it).
+        private static bool FirstInHour(Dictionary<Guid, long> noted, Guid product, DateTime utcNow)
         {
             long hour = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
-            if (_notReconciledHour.TryGetValue(product, out var last) && last == hour)
+            if (noted.TryGetValue(product, out var last) && last == hour)
                 return false;
 
-            _notReconciledHour[product] = hour;
+            noted[product] = hour;
             return true;
         }
 

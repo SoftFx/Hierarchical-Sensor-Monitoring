@@ -148,6 +148,28 @@ namespace HSMServer.BackgroundServices
             Add("Move weeks pending", () => Interlocked.Read(ref merge.MoveWeeksPending), false,
                 "Week databases whose period has passed that retention keeps at its last run because they hold rows of a table sensor whose period changed since and has not passed: they wait for the move of those rows to the new period.", _batchCounters);
 
+            // The move between period classes (#1850 part 4c).
+            Add("Move steps pending", () => Interlocked.Read(ref merge.MoveStepsPending), false,
+                "Sensor-weeks of table sensors whose period changed that are still in the databases of the old period at the end of the last merge pass, every product: the move brings them over within TableSensors.MoveSecondsPerPass and MoveMegabytesPerPass a pass (a product's copy steps only while its merge has no lag).", _batchCounters);
+            Add("Move steps blocked", () => Interlocked.Read(ref merge.MoveStepsBlocked), false,
+                "Of the move steps pending, the sensor-weeks of products whose steps could not run in the last merge pass: placements not brought up to the periods, a fault of the move (Move faults, the log), or a merge that lags (it holds their copy steps).", _batchCounters);
+            Add("Move steps refused now", () => Interlocked.Read(ref merge.MoveStepsRefusedNow), false,
+                "Steps of the move the store refused (a damaged source hour, rows in the target's hour region, a target dropped by retention) that are not tried again until the sensor's placement or period changes or the server restarts; the log has each one.", _batchCounters);
+            Add("Moved rows", () => Interlocked.Read(ref merge.RowsMoved), false,
+                "Rows the move copied into the databases of their sensor's new period since the server started.", _batchCounters);
+            AddMb("Moved batches size", () => Interlocked.Read(ref merge.MovedBytes),
+                "Size of the batches the move copied into the databases of their sensor's new period since the server started (MB).", _batchCounters);
+            Add("Rows expired by the move", () => Interlocked.Read(ref merge.RowsExpiredByMove), false,
+                "Rows the move deleted instead of copying since the server started, because their sensor's new (shorter) period had passed for their week.", _batchCounters);
+            Add("Move faults", () => Interlocked.Read(ref merge.MoveFaults), true,
+                "Faults of the move since the server started: a step that did not complete, a step in flight not recovered, a compaction that failed. Tried again by a later pass; the log has the reason. Error in the sample in which it grew.", _batchCounters);
+            Add("Move steps refused", () => Interlocked.Read(ref merge.MoveStepsRefused), false,
+                "Steps of the move that could not run since the server started: a copy into a week database retention dropped (a clock set back), less free disk than TableSensors.MinFreeDiskMb plus the step, a copy the store refused. The rows stay where they are and are read there.", _batchCounters);
+            Add("Move leftovers cleaned", () => Interlocked.Read(ref merge.MoveLeftoversCleaned), false,
+                "Copy steps that first deleted rows a move had left in their target since the server started (a move whose in-flight record was lost). Each is logged as a warning.", _batchCounters);
+            Add("Batch databases compacted", () => Interlocked.Read(ref merge.DatabasesCompacted), false,
+                "Week databases compacted since the server started because a tenth of them had been deleted by the move.", _batchCounters);
+
             _batchesCreated = true;
         }
 
