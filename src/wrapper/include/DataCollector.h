@@ -97,8 +97,8 @@ namespace hsm_wrapper
 	//     session's file connection as a large file value that is not secure (since 2.1.0, ADR-0022 points
 	//     20 and 21), when the server has file connections. Against a server without them a file that does
 	//     not fit a frame as JSON (each file byte is a decimal number, up to 4 bytes) is dropped, logged
-	//     (.module/Collector errors) and counted in Queue overflow. Over HTTP files up to the 10 MiB cap
-	//     are sent.
+	//     (.module/Collector errors) and counted in Queue overflow, and so is a large value refused for
+	//     good or cut by a stop. Over HTTP files up to the 10 MiB cap are sent.
 	//   * Initialize(config_path, write_debug) is a no-op (the collector is configured via the ctor).
 	//   * Initialize*Monitoring boolean sub-flags are ignored — the whole native group is registered;
 	//     InitializeDiskMonitoring's `target` is ignored, so it is equivalent to InitializeAllDisksMonitoring.
@@ -128,8 +128,8 @@ namespace hsm_wrapper
 		// it: either may come first, so do not change the transport while another thread starts the
 		// collector. There is no way back to the session on this proxy, and no automatic switch
 		// either way: a collector on the session never falls back to HTTP. On the session a file
-		// larger than about 1 MiB goes on the file connection, or is dropped by a server without
-		// file connections (see the note above).
+		// larger than about 1 MiB goes on the file connection; against a server without file
+		// connections the collector drops it when it does not fit a frame (see the note above).
 		void UseHttpTransport();
 
 		// Escape hatch for incremental migration off the wrapper: returns the underlying native

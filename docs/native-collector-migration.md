@@ -107,7 +107,7 @@ no source edits.
 
 From wrapper 2.0.0 the proxy talks to the server over the **collector session**: one WebSocket to
 `/api/sensors/session` carries registrations, values and files; a file above about 1 MiB with a default
-server goes on the session's file connection since 2.1.0 (see below) (ADR-0019, point 5 as amended on
+server goes on the session's file connection since 2.1.0, when the server has file connections (see below) (ADR-0019, point 5 as amended on
 2026-11-25). Until 2.0.0 the wrapper forced
 HTTP.
 
@@ -142,9 +142,10 @@ HTTP.
   1.1 MiB for random binary). The wrapper still accepts files up to its 10 MiB cap (`SendFile` refuses a
   larger one); over HTTP (1.x, or after `UseHttpTransport()`) such files are posted, the server taking a
   request body up to 50 MiB (Kestrel `MaxRequestBodySize` 52,428,800), which a 10 MiB file (at most
-  40 MiB of JSON) fits. Ways out against such a server: turn its file connections on, raise its
-  `CollectorSessions.MaxFrameBytes` (allowed up to 64 MiB; 42 MiB covers every file of the 10 MiB cap),
-  or call `UseHttpTransport()` on a host that sends large files. Large files as a feature are epic
+  40 MiB of JSON) fits. Ways out against such a server: turn its file connections on, or call
+  `UseHttpTransport()` on a host that sends large files. Raising its `CollectorSessions.MaxFrameBytes`
+  helps little: the native collector uses at most 8 MiB of a frame, which carries a file of about 2 MiB
+  in the worst case, not the 10 MiB cap. Large files as a feature are epic
   [#1882](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/issues/1882).
 - **A proxy behind a proxy:** whatever sits between host and server must pass WebSocket upgrades (the
   shipped Caddy does).

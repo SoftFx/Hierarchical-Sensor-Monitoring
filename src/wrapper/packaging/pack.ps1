@@ -185,8 +185,8 @@ written as a decimal number and a comma (2 to 4 JSON bytes per byte). With the s
 although the wrapper accepts up to 10 MiB. A larger file is dropped: logged as "Dropped a value of N
 bytes: it is larger than a collector session frame (M bytes)." (in `.module/Collector errors`) and
 counted in `Queue overflow`. Over HTTP files up to 10 MiB are posted. If your host sends larger files,
-turn the server's file connections on, raise its `CollectorSessions.MaxFrameBytes` (up to 64 MiB; 42 MiB
-covers 10 MiB files) or call `proxy.UseHttpTransport()`. Large files as a feature: HSM epic #1882.
+turn the server's file connections on or call `proxy.UseHttpTransport()` (raising `MaxFrameBytes` helps
+little: the collector uses at most 8 MiB of a frame, about 2 MiB of file in the worst case). Large files as a feature: HSM epic #1882.
 
 **Table sensors** come through `proxy.Native()`: `#include <hsm_collector/tables.hpp>` and call
 `proxy.Native().CreateTableSensor(path, options)`. They need the session and a server with the table
