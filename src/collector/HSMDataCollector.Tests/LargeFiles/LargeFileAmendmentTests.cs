@@ -317,6 +317,30 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
+        public void Faults_of_the_end_check_are_bounded_then_the_file_waits_long()
+        {
+            using (var h = new LargeFileHarness(Piece))
+            {
+                for (var i = 0; i < 10; i++)
+                    h.Store.AnswerEndNext(FileAnswer.With(503, null, 1));
+
+                h.Start();
+
+                var task = h.Service.Send("dumps", h.WriteFile("a.dmp", 10), null, CancellationToken.None);
+
+                Assert.True(h.AdvanceUntil(() => h.Store.LogSnapshot().Count(l => l == "end") == 10));
+                h.Steps(5);
+                Assert.False(task.IsCompleted);
+                Assert.Single(h.Errors, e => e.Contains("could not check the large file") && e.Contains("30 minutes"));
+
+                // After the long wait it is offered again, and stored.
+                h.Timings.Advance(TimeSpan.FromMinutes(31));
+                Assert.True(h.AdvanceUntil(() => task.IsCompleted));
+                Assert.Equal(LargeFileOutcome.Stored, task.Result.Outcome);
+            }
+        }
+
+        [Fact]
         public void An_answer_that_asks_for_a_wait_without_retry_after_waits_30_s()
         {
             using (var h = new LargeFileHarness(Piece))

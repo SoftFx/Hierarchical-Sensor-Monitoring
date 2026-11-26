@@ -87,6 +87,7 @@ namespace HSMDataCollector.LargeFiles
             internal bool AskedSmallerPieces;
             internal int EndRounds;
             internal int NotHeld;
+            internal int EndFaults;
 
             internal LargeFileWatch Watch => Work.Watch;
             internal bool IsHanded => Work.Handed != null;
@@ -799,20 +800,15 @@ namespace HSMDataCollector.LargeFiles
                 if (reply.Status == 404)
                     return NotHeld(job, reply);
 
-                if (reply.Status == 503 && reply.RetryAfter.HasValue)
-                {
-                    Sleep(RetryAfter(reply), WaitKind.Retry, job);
-                    return Next.Begin;
-                }
-
                 if (reply.Status >= 400 && reply.Status < 500)
                 {
                     Final(job, $"the server refused the end of the large file {job.Path} ({reply})");
                     return Next.Done;
                 }
 
-                Sleep(RetryAfter(reply), WaitKind.Retry, job);
-                return Next.Begin;
+                // 503 (the check could not read the part) and any other fault: begin again after the wait, then end. Not for
+                // ever within one attempt: past a bound the file waits long and is offered again later, said once.
+                return EndFault(job, reply);
             }
         }
 
@@ -914,6 +910,22 @@ namespace HSMDataCollector.LargeFiles
 
             Sleep(_transport.Backoff(_connectAttempts++), WaitKind.Retry, job);
             return Next.Reconnect;
+        }
+
+        /// <summary>The longest wait after the end of a file faulted again and again within one attempt.</summary>
+        internal static readonly TimeSpan EndFaultsWait = TimeSpan.FromMinutes(30);
+
+        private Next EndFault(Job job, FileReply reply)
+        {
+            if (++job.EndFaults > MaxProtocolCloses * 3)
+            {
+                Say($"endfaults:{job.Key}", $"The server could not check the large file {job.Path} {job.EndFaults - 1} times in a row ({reply}); it is offered again in {EndFaultsWait.TotalMinutes:0} minutes.");
+                Later(job, EndFaultsWait);
+                return Next.Later;
+            }
+
+            Sleep(RetryAfter(reply), WaitKind.Retry, job);
+            return Next.Begin;
         }
 
         // 404: the connection holds no such upload (a lease lost, a check that lost it): begin again after a backoff, and not
