@@ -122,7 +122,7 @@ namespace HSMServer.Model.FileSensors
 
             var page = files.Take(PageSize).ToList();
             var productId = sensor.Root?.Id ?? Guid.Empty;
-            var canManage = user is not null && user.IsManager(productId);
+            var canManage = HSMServer.Model.TreeViewModel.UserTreeAccess.CanManageRootProduct(user, productId);
             var allUploads = firstPage ? _largeFiles.GetUploads(sensorId) : [];
             var now = Clock();
             var uploads = allUploads.Take(PageSize).Select(upload => ToUploadRow(upload, now)).ToList();
@@ -159,7 +159,7 @@ namespace HSMServer.Model.FileSensors
             var sensor = _cache.GetSensor(sensorId);
             var productId = sensor?.Root?.Id ?? Guid.Empty;
 
-            if (sensor is null || user is null || !user.IsManager(productId) || _largeFiles.Describe(fileId)?.SensorId != sensorId)
+            if (sensor is null || !HSMServer.Model.TreeViewModel.UserTreeAccess.CanManageRootProduct(user, productId) || _largeFiles.Describe(fileId)?.SensorId != sensorId)
                 return null;
 
             IReadOnlyList<LargeFileDownloadFacts> downloads;
