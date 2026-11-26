@@ -166,9 +166,9 @@ namespace HSMServer.Controllers
 
         /// <summary>
         /// Remove a notification chat (#1829): the same removal the web UI's list runs. Its
-        /// folder bindings are pruned, and with them its references from the alert policies
-        /// of those folders' products; a global chat's id is left in the alert policies that
-        /// referenced it. Every write leaves a journal record. Admin, or the manager of a
+        /// id is pruned from every folder it was bound to, and through them from the alert
+        /// policies of those folders' products; references elsewhere are left in place.
+        /// Every write leaves a journal record. Admin, or the manager of a
         /// folder the chat is bound to. With the
         /// <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
         /// preview: how many sensors' alerts reference the chat, and the folder bindings the

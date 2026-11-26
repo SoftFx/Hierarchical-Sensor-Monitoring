@@ -1,6 +1,6 @@
 # Feature: Journal (unified configuration journal with rollback)
 
-> Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 > Scope: the single journal of every monitoring-tree configuration change (#1588) — the global Journal page, the per-node Journal tabs, the `/api/v1/journal` surface, the `list/get/rollback_journal_record` MCP tools, the entity-kind/product/undo-group tags on journal records, the admin-only rollback by record, and the journal-visible-only records of chats and server settings (#1828). The undo mechanics of #1570 (before/after images, compensating writes, conflict detection) live on as internal machinery of this feature, addressed through journal records. Decision record: ADR-0013 (supersedes the surface decisions of ADR-0010).
 
 ---

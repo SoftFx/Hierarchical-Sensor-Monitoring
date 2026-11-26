@@ -896,6 +896,26 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void ChatWrite_GlobalChat_OwnerWhoSeesNoBoundary_IsNotFound_LikeAnUnknownChat_AndRecordedAsNotFound()
+        {
+            // The read surface's caller-wide gate, in the write's terms. An owner who sees
+            // no boundary sees no chat at all, a global one included, and could never pass
+            // the change gate. Answering Forbidden for a global chat would tell it apart
+            // from an unknown id, which the write answers 404 before asking the evaluator.
+            _owner.IsAdmin = false;
+            _owner.FoldersRoles.Clear();
+            _owner.ProductsRoles.Clear();
+            _info = BuildInfo(readOnly: false);
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.Equal(ApiTokenAuthorization.NotFound, service.AuthorizeChatWrite(Principal(), Guid.NewGuid(), []));
+
+            var denial = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationNotFound, denial.Kind);
+        }
+
+        [Fact]
         public void ChatWrite_VisibleChatTheOwnerCannotChange_IsForbidden_AndRecordedAsDenied()
         {
             // The owner sees the folder the chat is bound to (a Viewer role on it) but

@@ -438,7 +438,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             // detail either — they manage none of the chat's folders any more. Both of the
             // evaluator's decisions follow the bindings they are given, as the real ones do,
             // so an echo judged on the chat BEFORE the write would still name the caller's
-            // own folder and carry the detail.
+            // own folder and carry the detail. The caller is a folder manager, not an admin:
+            // the real detail rule answers an admin yes whatever the bindings say.
+            _world.Owner.IsAdmin = false;
             var chat = AddChat("Ops alerts", description: "on-call");
             var ownFolder = AddFolder(chat.Id);
             var unseenFolder = AddFolder(chat.Id);

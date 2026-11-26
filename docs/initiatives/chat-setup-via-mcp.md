@@ -74,8 +74,9 @@ engine and gates). What remains of the problem above is the bot credential (#183
   enforced the uniqueness the
   `ChatDto` doc promises and alert import relies on (it resolves chats by name). A webhook must be an
   absolute http/https URL (the same `Validate`, #1825); on the API/MCP paths #1829 adds the folder scope
-  (every listed folder must exist and be managed by the token's owner) and #1705's character rule on the
-  name; the web form checks nothing else. The aggregation delay is 0 to 86 400 seconds — a negative delay never flushes a channel's accumulator, so it is refused by the engine and by the web form's `Range` attribute alike. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
+  (every listed folder must exist and be managed by the token's owner — except a folder the chat is bound
+  to already, which may be listed whatever the owner's role there is: that binding stays) and #1705's
+  character rule on the name; the web form checks nothing else. The aggregation delay is 0 to 86 400 seconds — a negative delay never flushes a channel's accumulator, so it is refused by the engine and by the web form's `Range` attribute alike. Clearing a channel is an explicit flag (`ClearSlackWebhook`, `ClearMattermostWebhook`,
   `ClearTelegramBinding`): at the model an
   empty value means "no change", and the web form refuses an empty field for a stored webhook, pointing
   at the per-channel Remove button.

@@ -186,6 +186,17 @@ namespace HSMServer.Authentication
 
             var folders = chatFolderIds ?? [];
 
+            // The read surface's caller-wide gate, in the write's terms. An owner who sees
+            // no boundary sees no chat at all, a global one included, and can never pass the
+            // change gate below. Forbidden for a global chat would tell it apart from an
+            // unknown id, which the write answers 404 before asking here: for such an owner
+            // every chat is the same NotFound.
+            if (!OwnerSeesAnyBoundary(owner))
+            {
+                Record(principal, write: true, resource, ApiTokenAuthorization.NotFound);
+                return ApiTokenAuthorization.NotFound;
+            }
+
             // The chat sight rule (ChatsReadService): global, or bound to at least one
             // folder the owner can see. IsVisible is the silent sight half — only the
             // decision below is recorded.

@@ -29,12 +29,12 @@ namespace HSMServer.Notifications.Chats
         // could both pass the check. The rule's rename check is repeated here, under the
         // gate and in front of the write, so the second of them is refused — TryAdd and
         // TryUpdate answer false, which the engine tells apart from a storage failure.
-        // The gate is not reentrant, and it is held for the storage's write alone: the
-        // journal record (its "before" state is read under the gate, with the write it
-        // describes) and the Telegram chat-id index are handled outside it. The Added and
-        // Updated events of the storage ARE raised inside it — ConcurrentStorage raises them
-        // with the write. Neither has a subscriber today; one added later must not write
-        // back into this storage from the handler, or it waits on the gate forever.
+        // The gate is not reentrant, and it is held for no I/O beyond the storage's own
+        // write: a journal record is written after it, from the state read under it. The
+        // Added and Updated events of the storage ARE raised inside it —
+        // ConcurrentStorage raises them with the write. Neither has a subscriber today;
+        // one added later must not write back into this storage from the handler, or it
+        // waits on the gate forever.
         private readonly SemaphoreSlim _nameWrites = new(1, 1);
 
         private readonly TelegramConfig _config;

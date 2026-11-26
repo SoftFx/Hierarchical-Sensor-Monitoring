@@ -1,6 +1,6 @@
 # Feature tests: MCP server (AI-agent tools)
 
-> Owner: server | Last reviewed: 2026-11-25 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
 
 ## Unit — `src/tests/HSMServer.Core.Tests/Mcp/`
 

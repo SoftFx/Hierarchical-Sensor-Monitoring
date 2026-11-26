@@ -63,7 +63,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             if (existing is not null)
             {
                 if (!await _chats.TryUpdate(withId))
-                    return RefusedWrite(withId, existing.Name);
+                    return RefusedWrite(withId, nameRequired: true, existing.Name);
 
                 chat = existing;
             }
@@ -72,7 +72,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 chat = BuildChat(withId, authorId);
 
                 if (!await _chats.TryAdd(chat))
-                    return RefusedWrite(withId, currentName: null);
+                    return RefusedWrite(withId, nameRequired: true);
             }
 
             await BindFoldersAsync(chat, binding, initiator);
@@ -97,7 +97,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 return invalid;
 
             if (!await _chats.TryUpdate(stamped))
-                return RefusedWrite(stamped, chat.Name);
+                return RefusedWrite(stamped, currentName: chat.Name);
 
             await BindFoldersAsync(chat, binding, initiator);
 
@@ -189,15 +189,15 @@ namespace HSMServer.Model.ManagementApi.Chats
                 : update;
 
         // A write the store refused. The store repeats the name rule in front of its own
-        // write (ChatsManager), so this is where two creates of one name end: the loser's
-        // write is refused there and, back here, the winner is in the store — the answer is
-        // then the same 422 as up front, naming the field. A refusal whose name is still
-        // free is the store's own failure: the fixed-message conflict.
-        private PolicyWriteResult RefusedWrite(ChatUpdate update, string currentName) =>
-            ChatNameValidator.RenamesOntoATakenName(update.Name, update.Id, _chats.GetValues() ?? [], currentName)
-                ? PolicyWriteResult.Fail(PolicyWriteOutcome.Invalid,
-                    new Dictionary<string, string[]> { [nameof(ChatUpdate.Name)] = [ChatNameValidator.NameDuplicateMessage] })
-                : PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
+        // write (ChatsManager), so this is where two writes of one name end: the loser's
+        // write is refused there and, back here, the winner is in the store. The rules are
+        // run once more against the store as it is NOW: a name that is taken answers the
+        // same 422 as up front, naming the field. Nothing else can have changed since the
+        // write passed the same rules a moment ago, so a refusal that still breaks none of
+        // them is the store's own failure — the fixed-message conflict.
+        private PolicyWriteResult RefusedWrite(ChatUpdate update, bool nameRequired = false, string currentName = null) =>
+            Validate(update, nameRequired, currentName)
+            ?? PolicyWriteResult.Fail(PolicyWriteOutcome.Conflict, message: ChatNotSavedMessage);
 
         // A brand-new chat is built from the update the same way the web form built it
         // (ChatViewModel.ToNewChat): defaults for the omitted settings, author + creation time
