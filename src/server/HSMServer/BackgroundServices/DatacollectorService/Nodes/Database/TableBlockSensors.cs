@@ -150,7 +150,11 @@ namespace HSMServer.BackgroundServices
 
             // The move between period classes (#1850 part 4c).
             Add("Move steps pending", () => Interlocked.Read(ref merge.MoveStepsPending), false,
-                "Sensor-weeks of table sensors whose period changed that are still in the databases of the old period at the end of the last merge pass: the move brings them over within TableSensors.MoveSecondsPerPass and MoveMegabytesPerPass a pass (copy steps only while the merge has no lag).", _batchCounters);
+                "Sensor-weeks of table sensors whose period changed that are still in the databases of the old period at the end of the last merge pass, every product: the move brings them over within TableSensors.MoveSecondsPerPass and MoveMegabytesPerPass a pass (a product's copy steps only while its merge has no lag).", _batchCounters);
+            Add("Move steps blocked", () => Interlocked.Read(ref merge.MoveStepsBlocked), false,
+                "Of the move steps pending, the sensor-weeks of products whose steps could not run in the last merge pass: placements not brought up to the periods, a fault of the move (Move faults, the log), or a merge that lags (it holds their copy steps).", _batchCounters);
+            Add("Move steps refused now", () => Interlocked.Read(ref merge.MoveStepsRefusedNow), false,
+                "Steps of the move the store refused (a damaged source hour, rows in the target's hour region, a target dropped by retention) that are not tried again until the sensor's placement or period changes or the server restarts; the log has each one.", _batchCounters);
             Add("Moved rows", () => Interlocked.Read(ref merge.RowsMoved), false,
                 "Rows the move copied into the databases of their sensor's new period since the server started.", _batchCounters);
             AddMb("Moved batches size", () => Interlocked.Read(ref merge.MovedBytes),

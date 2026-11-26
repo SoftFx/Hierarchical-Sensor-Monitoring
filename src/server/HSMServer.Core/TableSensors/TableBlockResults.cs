@@ -63,7 +63,10 @@ namespace HSMServer.Core.TableSensors
         /// </summary>
         public int MoveSecondsPerPass { get; init; } = DefaultMoveSecondsPerPass;
 
-        /// <summary>The bytes of batches the move may copy in one merge pass, plus those of the week database it compacts.</summary>
+        /// <summary>
+        /// The bytes of batches the move may copy in one merge pass (at least one step a pass with work). The compaction of
+        /// at most one week database a pass runs after retention and is not bounded by it.
+        /// </summary>
         public int MoveMegabytesPerPass { get; init; } = DefaultMoveMegabytesPerPass;
     }
 

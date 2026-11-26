@@ -181,8 +181,15 @@ namespace HSMDatabase.AccessManager.TableBatches
 
         // The move between period classes (#1850 part 4c).
 
-        /// <summary>Gauge: sensor-weeks of eligible sensors still in segments of an old class at the end of the last pass.</summary>
+        /// <summary>Gauge: sensor-weeks of table sensors in the tree still in a segment of an old class, at the end of the last pass.</summary>
         public long MoveStepsPending;
+        /// <summary>
+        /// Gauge: of those, the sensor-weeks of products whose steps could not run in the last pass (placements not reconciled,
+        /// a fault of the move, a merge that lags, which holds their copy steps).
+        /// </summary>
+        public long MoveStepsBlocked;
+        /// <summary>Gauge: steps the store refused (or whose target was dropped) that are not tried again in this process while they stay the same.</summary>
+        public long MoveStepsRefusedNow;
         /// <summary>Rows the move copied into their new class.</summary>
         public long RowsMoved;
         /// <summary>Bytes of batches the move copied into their new class.</summary>

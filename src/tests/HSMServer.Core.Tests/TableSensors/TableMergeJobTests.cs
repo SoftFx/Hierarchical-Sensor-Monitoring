@@ -1468,8 +1468,10 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
-        public async Task A_period_shortened_deletes_nothing_before_the_class_that_holds_the_rows_has_passed()
+        public async Task A_period_shortened_deletes_nothing_before_the_class_that_holds_the_rows_has_passed_while_the_move_has_not_run()
         {
+            // Retention and the rule of expiry on their own, before any move: once the move runs, its expired step deletes
+            // rows whose new class has passed before the old one has (TableBatchRetention.IsExpired, "The move").
             // What holds while the rows wait for the move (#1850 part 4c): the move held off.
             HoldMoves();
 
@@ -1814,8 +1816,10 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
-        public async Task A_shortened_period_frees_nothing_until_the_class_that_holds_the_rows_has_passed()
+        public async Task A_shortened_period_frees_nothing_until_the_class_that_holds_the_rows_has_passed_while_the_move_has_not_run()
         {
+            // Retention and the rule of expiry on their own, before any move: once the move runs, its expired step deletes
+            // rows whose new class has passed before the old one has (TableBatchRetention.IsExpired, "The move").
             // What holds while the rows wait for the move (#1850 part 4c): the move held off.
             HoldMoves();
 
@@ -1909,8 +1913,10 @@ namespace HSMServer.Core.Tests.TableSensors
         }
 
         [Fact]
-        public async Task Retention_drops_a_week_by_its_class_when_the_period_was_shortened()
+        public async Task Retention_drops_a_week_by_its_class_when_the_period_was_shortened_while_the_move_has_not_run()
         {
+            // Retention and the rule of expiry on their own, before any move: once the move runs, its expired step deletes
+            // rows whose new class has passed before the old one has (TableBatchRetention.IsExpired, "The move").
             // What holds while the rows wait for the move (#1850 part 4c): the move held off.
             HoldMoves();
 

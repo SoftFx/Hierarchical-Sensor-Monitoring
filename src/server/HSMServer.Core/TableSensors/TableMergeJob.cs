@@ -214,19 +214,20 @@ namespace HSMServer.Core.TableSensors
                         merged++;
                 }
 
-                int lag = DueHours(utcNow).Count;
-                Stats.Set(ref Stats.LagHours, lag);
+                var due = DueHours(utcNow, out var lagging);
+                Stats.Set(ref Stats.LagHours, due.Count);
 
                 // The move between period classes (#1850 part 4c): after the merge, so that no placement is written and no hour
-                // merged while a step runs, and before retention, which then sees the week databases the steps released. Copy
-                // steps only while the merge has no lag; the recovery of a step in flight and expired steps always.
-                var moves = RunMoves(utcNow, unreconciled, lag == 0, token, ref fault);
+                // merged while a step runs, and before retention, which then sees the week databases the steps released. A
+                // product's copy steps only while its own merge has no lag (one product that keeps faulting holds off no
+                // other's); the recovery of a step in flight and expired steps always.
+                var moves = RunMoves(utcNow, unreconciled, lagging, token);
 
                 // After the merge, so that a catch-up merges what it can before retention judges what is left.
                 var (weeks, expired) = RunRetention(utcNow, token, ref fault);
 
                 // After retention, on this thread: a compaction never runs beside the drop of its database.
-                RunCompactions(utcNow, moves, token, ref fault);
+                RunCompactions(utcNow, moves, token);
 
                 return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
                     WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count,
@@ -284,17 +285,25 @@ namespace HSMServer.Core.TableSensors
         }
 
         // Closed hours with a product not committed (and not failed verification in this process), oldest first.
-        private List<long> DueHours(DateTime utcNow)
+        private List<long> DueHours(DateTime utcNow) => DueHours(utcNow, out _);
+
+        // The same, and the products with such an hour (their merge lags).
+        private List<long> DueHours(DateTime utcNow, out HashSet<Guid> lagging)
         {
             var due = new List<long>();
+            lagging = [];
 
             foreach (var (hour, products) in BlocksByHour())
             {
                 if (hour + TimeSpan.TicksPerHour + _options.MergeGrace.Ticks > utcNow.Ticks)
                     break;
 
-                if (products.Keys.Any(p => !IsMerged(p, hour) && !_failedVerification.Contains((p, hour))))
+                var behind = products.Keys.Where(p => !IsMerged(p, hour) && !_failedVerification.Contains((p, hour))).ToList();
+                if (behind.Count > 0)
+                {
                     due.Add(hour);
+                    lagging.UnionWith(behind);
+                }
             }
 
             return due;

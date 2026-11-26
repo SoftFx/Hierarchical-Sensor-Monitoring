@@ -238,7 +238,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var after = expired ? new List<(long, double?, long?)> { (-1L, null, null) }.Concat(Rows(r)).Append((-1L, null, null)).ToList() : before;
 
             Crash(point);
-            Assert.NotNull(Pass(at).Fault);
+            CrashedPass(at);
             await RestartAsync(crash: true);
 
             Assert.Equal(expired ? after : before, All(s, r));
@@ -279,7 +279,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var path = MovePath();
 
             Crash(point);
-            Assert.NotNull(Pass(MoveAt).Fault);
+            CrashedPass(MoveAt);
             await RestartAsync(crash: true, beforeOpen: _ =>
             {
                 if (unreadable)
@@ -349,7 +349,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var before = All(s, r);
 
             Crash("move-copied");
-            Assert.NotNull(Pass(MoveAt).Fault);
+            CrashedPass(MoveAt);
             await RestartAsync(crash: true);
 
             // P52 -> P5 copied, not switched; then P5 -> P1.
@@ -369,7 +369,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var before = All(s, r);
 
             Crash("move-switched");
-            Assert.NotNull(Pass(MoveAt).Fault);
+            CrashedPass(MoveAt);
             await RestartAsync(crash: true);
 
             // P52 -> P5 switched, the source not deleted; then back to P52.
@@ -448,6 +448,61 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(1, Bytes(s, 5));
             Assert.Contains(new TableBatchWeek(WeekStart, 5), _server.Batches.GetWeeks(_product));
             Assert.Equal(rows, Rows(s));
+
+            // Known before the copy: no record was written. Not tried again by the next passes (counted once), and shown in
+            // the gauge of steps refused now.
+            Assert.Null(_server.Batches.GetMoveInFlight(_product));
+            Assert.Equal(1, _server.Batches.MergeStatistics.MoveStepsRefusedNow);
+            Pass(back.AddMinutes(1));
+            Pass(back.AddMinutes(2));
+            Assert.Equal(1, _server.Batches.MergeStatistics.MoveStepsRefused);
+            Assert.Equal(1, _server.Batches.MergeStatistics.MoveStepsRefusedNow);
+
+            // A change of the period makes another step: the sensor kept for 52 weeks moves its rows there.
+            await KeepAsync(s, KeepP52);
+            Assert.Null(Pass(back.AddMinutes(3)).Fault);
+            Assert.Equal(0, _server.Batches.MergeStatistics.MoveStepsRefusedNow);
+            Assert.Equal((1, 0), (Bytes(s, 52), Bytes(s, 5)));
+            Assert.Equal(rows, Rows(s));
+        }
+
+        [Fact]
+        public async Task A_copy_the_store_refuses_is_counted_once_left_as_it_is_and_not_tried_again_until_the_step_changes()
+        {
+            var (s, r) = await CopySetupAsync();
+            var before = All(s, r);
+
+            // Hour 1's mark is gone from the source: the copy of the week is refused (TableBatchRefusedException), after the
+            // record was written (the job cannot know it without the copy's reading).
+            var week52 = _server.Batches.WeekPath(_product, WeekStart, 52);
+            await RestartAsync(crash: false, beforeOpen: _ =>
+            {
+                using var db = new global::LevelDB.DB(week52, new global::LevelDB.Options());
+                db.Delete(TableBatchDatabase.HourKey(Hour0.AddHours(1).Ticks, TableBatchDatabase.TagMark), new global::LevelDB.WriteOptions { Sync = true });
+            });
+
+            var stats = _server.Batches.MergeStatistics;
+            var report = Pass(MoveAt);
+            Assert.Null(report.Fault);
+            Assert.Equal((1, 0, 1), (stats.MoveStepsRefused, stats.MoveFaults, stats.MoveStepsRefusedNow));
+            Assert.Equal(52, _server.Batches.GetPlacement(_product, s.Id).ClassOf(Hour0.Ticks));
+            Assert.Equal(before, All(s, r));
+
+            // The next passes: the record is cleared by the recovery (it deleted nothing), the step is not tried again (no
+            // record written, nothing read, nothing counted again).
+            var recorded = 0;
+            _server.Job.Checkpoint = p =>
+            {
+                if (p == "move-recorded")
+                    recorded++;
+            };
+            Pass(MoveAt.AddMinutes(1));
+            Pass(MoveAt.AddMinutes(2));
+            _server.Job.Checkpoint = null;
+            Assert.Equal(0, recorded);
+            Assert.Null(_server.Batches.GetMoveInFlight(_product));
+            Assert.Equal((1, 0, 1), (stats.MoveStepsRefused, stats.MoveFaults, stats.MoveStepsRefusedNow));
+            Assert.Equal(before, All(s, r));
         }
 
         [Fact]
@@ -621,53 +676,76 @@ namespace HSMServer.Core.Tests.TableSensors
         // === The budget ===
 
         [Fact]
-        public async Task One_step_a_pass_goes_over_the_products_in_turn()
+        public async Task Steps_go_oldest_week_first_then_by_product_one_a_pass_with_a_budget_of_one_step()
         {
+            // Three products; the one with the highest id has its rows a week earlier. The order is the oldest week first
+            // (the work goes one source database at a time, which bounds the tombstones held before its compaction), then the
+            // product's id within a week; not a turn per product.
             var products = new List<Guid> { _product };
             for (int i = 0; i < 2; i++)
                 products.Add((await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id);
+            products.Sort();
+            var older = products[^1];
 
             var sensors = new Dictionary<Guid, BaseSensorModel>();
             foreach (var product in products)
                 sensors[product] = await RegisterAsync("s", product, keep: KeepP52);
 
-            _now = Hour0.AddMinutes(10);
-            foreach (var product in products)
-                AssertStored(_server.Service.Put(product, _producer, ++_producerSequence, Block(("s", [(Hour0.AddMinutes(1), 1.0, 1)]))));
-            Pass(Hour0.AddHours(1).AddMinutes(3));
+            DateTime HourOf(Guid product) => product == older ? Hour0.AddDays(-7) : Hour0;
+
+            // The older hour first (the clock never goes back), then this hour of the two others, each hour merged by one pass.
+            foreach (var group in products.GroupBy(HourOf).OrderBy(g => g.Key))
+            {
+                _now = group.Key.AddMinutes(10);
+                foreach (var product in group)
+                    AssertStored(_server.Service.Put(product, _producer, ++_producerSequence, Block(("s", [(group.Key.AddMinutes(1), 1.0, 1)]))));
+                Assert.Equal(1, Pass(group.Key.AddHours(1).AddMinutes(3)).HoursMerged);
+            }
 
             foreach (var sensor in sensors.Values)
                 await KeepAsync(sensor, KeepP5);
 
             _server.Job.MoveStepsPerPass = 1;
-            var order = products.OrderBy(p => p).ToList();
+            bool Moved(Guid product) => _server.Batches.GetPlacement(product, sensors[product].Id).ClassOf(HourOf(product).Ticks) == 5;
 
-            for (int i = 0; i < order.Count; i++)
+            // Pass 1: the older week, although its product has the highest id.
+            Assert.Equal(1, Pass(Hour0.AddHours(2)).MoveSteps);
+            Assert.Equal([false, false, true], products.Select(Moved));
+
+            // Then this week's steps by product id (the older product's step of this week holds no rows).
+            for (int i = 0; i < products.Count; i++)
             {
-                var report = Pass(Hour0.AddHours(2).AddMinutes(i));
-                Assert.Equal(1, report.MoveSteps);
-                Assert.Equal(order.Count - i - 1, _server.Batches.MergeStatistics.MoveStepsPending);
-
-                for (int j = 0; j < order.Count; j++)
-                    Assert.Equal(j <= i, _server.Batches.GetPlacement(order[j], sensors[order[j]].Id).Segments.Count == 0);
+                Assert.Equal(1, Pass(Hour0.AddHours(2).AddMinutes(1 + i)).MoveSteps);
+                Assert.Equal(_server.Batches.GetPlacement(products[i], sensors[products[i]].Id).Segments.Count == 0, true);
+                for (int j = i + 1; j < products.Count; j++)
+                    Assert.NotEmpty(_server.Batches.GetPlacement(products[j], sensors[products[j]].Id).Segments);
             }
 
-            Assert.Equal(0, Pass(Hour0.AddHours(2).AddMinutes(5)).MoveSteps);
+            Assert.Equal(0, Pass(Hour0.AddHours(2).AddMinutes(10)).MoveSteps);
+            Assert.Equal(0, _server.Batches.MergeStatistics.MoveStepsPending);
             foreach (var (product, sensor) in sensors)
-                Assert.Single(_server.Service.Read(sensor.Id, From, To).Value.Time);
+                Assert.Single(_server.Service.Read(sensor.Id, HourOf(product).AddHours(-1), HourOf(product).AddHours(1)).Value.Time);
         }
 
         [Fact]
-        public async Task Copy_steps_wait_while_the_merge_lags_and_expired_steps_do_not()
+        public async Task A_products_copy_steps_wait_while_its_own_merge_lags_and_another_products_do_not()
         {
+            // Product A (s, a copy step; e, an expired step) and product B (b, a copy step).
+            var other = (await _server.Cache.AddProductAsync($"p{Guid.NewGuid():N}"[..10], Guid.Empty)).Id;
             var s = await RegisterAsync("s", keep: KeepP52);
             var e = await RegisterAsync("e", keep: TimeIntervalModel.None);
-            PutHours(1, "s", "e");
+            var b = await RegisterAsync("b", other, keep: KeepP52);
+
+            _now = Hour0.AddMinutes(10);
+            AssertStored(Put(Block(("s", [(Hour0.AddMinutes(1), 1.0, 1)]), ("e", [(Hour0.AddMinutes(2), 2.0, 2)]))));
+            AssertStored(_server.Service.Put(other, _producer, ++_producerSequence, Block(("b", [(Hour0.AddMinutes(1), 3.0, 3)]))));
+            Assert.Equal(1, Pass(Hour0.AddHours(1).AddMinutes(3)).HoursMerged);
 
             await KeepAsync(s, KeepP5);
             await KeepAsync(e, KeepP1);
+            await KeepAsync(b, KeepP5);
 
-            // An hour due for the merge keeps faulting: the merge lags.
+            // An hour of product A due for the merge keeps faulting: A's merge lags, B's does not.
             var at = new DateTime(WeekStart + 3 * Week, DateTimeKind.Utc);
             _now = at.AddMinutes(-50);
             AssertStored(Put(Block(("s", [(at.AddMinutes(-55), 9.0, 9)]))));
@@ -678,20 +756,53 @@ namespace HSMServer.Core.Tests.TableSensors
             };
 
             var report = Pass(at.AddMinutes(3));
-            Assert.Equal(1, _server.Batches.MergeStatistics.LagHours);
+            var stats = _server.Batches.MergeStatistics;
+            Assert.Equal(1, stats.LagHours);
             Assert.Equal(1, report.MoveExpiredRows);
             Assert.Empty(Rows(e));
             Assert.Equal(52, _server.Batches.GetPlacement(_product, s.Id).ClassOf(Hour0.Ticks));
+            Assert.Empty(_server.Batches.GetPlacement(other, b.Id).Segments);
+            Assert.True(stats.MoveStepsBlocked > 0);
+            Assert.Equal(stats.MoveStepsBlocked, stats.MoveStepsPending);
 
-            // Caught up: the copy steps run, the late hour too (merged into the class that holds it, then moved).
+            // Caught up: A's copy steps run, the late hour too (merged into the class that holds it, then moved).
             _server.Job.Checkpoint = null;
             report = Pass(at.AddMinutes(4));
             Assert.Equal(1, report.HoursMerged);
-            Assert.Equal(0, _server.Batches.MergeStatistics.LagHours);
+            Assert.Equal(0, stats.LagHours);
             Assert.Empty(_server.Batches.GetPlacement(_product, s.Id).Segments);
             Assert.Equal((1, 0), (Bytes(s, 5), Bytes(s, 52)));
+            Assert.Equal((0, 0), (stats.MoveStepsPending, stats.MoveStepsBlocked));
         }
 
+        [Fact]
+        public async Task The_steps_of_a_product_whose_recovery_faults_every_pass_count_as_pending_and_blocked()
+        {
+            var (s, r) = await CopySetupAsync();
+            var before = All(s, r);
+
+            CrashedPass(MoveAt, "move-recorded");
+            await RestartAsync(crash: true);
+
+            // The record cannot be cleared: the recovery faults in every pass, and no step of the product runs.
+            _server.Batches.Checkpoint = p =>
+            {
+                if (p == "move-writing")
+                    throw new IOException("the disk refused the write");
+            };
+
+            var stats = _server.Batches.MergeStatistics;
+            for (int i = 1; i <= 2; i++)
+            {
+                Assert.Null(Pass(MoveAt.AddMinutes(i)).Fault);
+                Assert.Equal((i, 1L, 1L), ((int)stats.MoveFaults, stats.MoveStepsPending, stats.MoveStepsBlocked));
+            }
+
+            _server.Batches.Checkpoint = null;
+            Pass(MoveAt.AddMinutes(3));
+            Assert.Equal((0, 0), (stats.MoveStepsPending, stats.MoveStepsBlocked));
+            Assert.Equal(before, All(s, r));
+        }
 
         // === Compaction ===
 
@@ -734,7 +845,7 @@ namespace HSMServer.Core.Tests.TableSensors
             };
 
             var report = CommitNextWeek(next);
-            Assert.NotNull(report.Fault);
+            Assert.Null(report.Fault);
             Assert.Equal(1, compactions);
             Assert.Equal(1, _server.Batches.MergeStatistics.MoveFaults);
             Assert.Contains(week, _server.Batches.GetCompactList(_product));
@@ -825,6 +936,18 @@ namespace HSMServer.Core.Tests.TableSensors
                 AssertStored(Put(Block(names.Select((name, i) => (name, new[] { (hour.AddMinutes(1 + i), (double?)(h * 10 + i), (long?)h) })).ToArray())));
                 Assert.Equal(1, Pass(hour.AddHours(1).AddMinutes(3)).HoursMerged);
             }
+        }
+
+        // A pass in which the move faulted (a crash at the point, when given): counted in Move faults, not the pass's fault.
+        private void CrashedPass(DateTime at, string point = null)
+        {
+            if (point is not null)
+                Crash(point);
+
+            var faults = _server.Batches.MergeStatistics.MoveFaults;
+            var report = Pass(at);
+            Assert.Null(report.Fault);
+            Assert.True(_server.Batches.MergeStatistics.MoveFaults > faults);
         }
 
         private async Task KeepAsync(BaseSensorModel sensor, TimeIntervalModel keep) =>

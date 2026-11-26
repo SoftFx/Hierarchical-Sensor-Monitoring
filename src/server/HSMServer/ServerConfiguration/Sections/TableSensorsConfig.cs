@@ -83,7 +83,8 @@ namespace HSMServer.ServerConfiguration
         public bool FeedTableSensors { get; set; } = true;
 
         // The move of a table sensor's rows into the class of its new period (#1850 part 4c): the time and the bytes copied
-        // (plus the database compacted) one merge pass may spend on it. At least one step runs in a pass with work.
+        // one merge pass may spend on its steps. At least one step runs in a pass with work; the compaction of at most one
+        // week database a pass runs after retention, outside these bounds.
         public int MoveSecondsPerPass { get; set; } = TableBlockOptions.DefaultMoveSecondsPerPass;
 
         public int MoveMegabytesPerPass { get; set; } = TableBlockOptions.DefaultMoveMegabytesPerPass;

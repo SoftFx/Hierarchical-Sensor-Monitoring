@@ -87,94 +87,151 @@ namespace HSMServer.Core.TableSensors
 
         // === The pass's part ===
 
-        // In flight first (every product), then the expired steps, then (only while the merge has no lag) the copy steps,
-        // store-wide, oldest week first, then product, then sensor. Never throws: a fault of a product is counted, logged
-        // once per product and hour of the pass's clock, and stops that product's steps for this pass; its record stays.
-        private MoveRun RunMoves(DateTime utcNow, Unreconciled unreconciled, bool mergeCaughtUp, CancellationToken token, ref string fault)
+        // In flight first (every product), then the expired steps, then the copy steps of each product whose merge has no
+        // lag, store-wide, oldest week first, then product, then sensor. Never throws: a fault of a product is counted, logged
+        // once per product and hour of the pass's clock, and stops that product's steps for this pass; its record stays. A
+        // fault of the move does not set the pass's fault (the pass did not stop): it is in Move faults and the log.
+        private MoveRun RunMoves(DateTime utcNow, Unreconciled unreconciled, HashSet<Guid> lagging, CancellationToken token)
         {
             var run = new MoveRun(MoveStepsPerPass, _options.MoveSecondsPerPass * 1000L, _options.MoveMegabytesPerPass * 1024L * 1024);
+            // Products whose steps cannot run in this pass: not reconciled, or faulted (below). A product whose merge lags runs
+            // its expired steps, not its copy steps.
+            var faulted = new HashSet<Guid>(unreconciled.Products);
 
-            if (unreconciled.All || token.IsCancellationRequested)
-                return run;
-
-            IReadOnlyList<Guid> products;
             try
             {
-                products = Batches.GetProducts();
+                if (unreconciled.All || token.IsCancellationRequested)
+                    return run;
+
+                IReadOnlyList<Guid> products;
+                try
+                {
+                    products = Batches.GetProducts();
+                }
+                catch (Exception ex)
+                {
+                    MoveFault(Guid.Empty, utcNow, ex, "the products of the batch store could not be listed");
+                    return run;
+                }
+
+                // 1. The step each product has in flight.
+                foreach (var product in products)
+                {
+                    if (token.IsCancellationRequested)
+                        return run;
+
+                    try
+                    {
+                        RecoverMove(product);
+                    }
+                    catch (Exception ex)
+                    {
+                        faulted.Add(product);
+                        MoveFault(product, utcNow, ex, $"the move in flight of product {product} was not recovered");
+                    }
+                }
+
+                // 2. The removal of table sensors and products (#1850 part 4d, the next pull request) goes here: after the
+                //    recovery of the moves in flight, before the steps.
+
+                // 3. The steps. A step the store refused, or whose target retention dropped, is not tried again in this
+                //    process while it stays the same step: a change of the placement or of the period makes another step.
+                var steps = SelectSteps(products, unreconciled, faulted, utcNow);
+                _refusedSteps.IntersectWith(steps.Select(KeyOf));
+                var diskShort = false;
+
+                foreach (var step in steps.Where(s => s.Expired).Concat(steps.Where(s => !s.Expired && !lagging.Contains(s.Product))))
+                {
+                    if (faulted.Contains(step.Product) || (diskShort && !step.Expired) || _refusedSteps.Contains(KeyOf(step)))
+                        continue;
+
+                    if (token.IsCancellationRequested || !run.CanStart)
+                        break;
+
+                    try
+                    {
+                        var outcome = step.Expired ? ExpireStep(step, run, utcNow, token) : CopyStep(step, run, utcNow, token);
+
+                        if (outcome == StepOutcome.Stopped)
+                            break;
+
+                        if (outcome == StepOutcome.DiskShort)
+                            diskShort = true;
+                        else if (outcome == StepOutcome.Refused)
+                            _refusedSteps.Add(KeyOf(step));
+
+                        if (outcome is StepOutcome.Done or StepOutcome.Skipped)
+                            LogMoveEnd(step);
+                    }
+                    catch (Exception ex)
+                    {
+                        faulted.Add(step.Product);
+                        MoveFault(step.Product, utcNow, ex, $"a step of the move of sensor [{step.Sensor.Id}][{step.Sensor.FullPath}] " +
+                                                            $"({Name(step.From)} -> P{step.ToClass}, {Hour(step.FirstHour)} to {Hour(step.EndHour)}) did not complete");
+                    }
+                }
+
+                return run;
+            }
+            finally
+            {
+                var blocked = new HashSet<Guid>(faulted);
+                blocked.UnionWith(lagging);
+                CountPending(unreconciled.All ? null : blocked);
+            }
+        }
+
+        // A step as the memory of refused steps knows it.
+        private readonly record struct StepKey(Guid Product, Guid Sensor, TableBatchWeek From, int ToClass, long FirstHour, long EndHour);
+
+        private static StepKey KeyOf(MoveStep step) => new(step.Product, step.Sensor.Id, step.From, step.ToClass, step.FirstHour, step.EndHour);
+
+        // The steps the store refused (or whose target retention dropped) in this process: not tried again while they stay
+        // the same step. Kept only while the step is still selected, so one that goes away and comes back is tried again.
+        private readonly HashSet<StepKey> _refusedSteps = [];
+
+        // The gauges, set at the end of every RunMoves, whatever it did. Move steps pending: the sensor-weeks of table sensors
+        // in the tree still in a segment of an old class, every product of the store. Move steps blocked: those of the
+        // products whose steps could not run in the pass (placements not reconciled, a fault, a merge that lags, which holds
+        // the copy steps; every product when the products could not be reconciled at all). Move steps refused now: the steps
+        // not tried again (_refusedSteps).
+        private void CountPending(HashSet<Guid> blocked)
+        {
+            long pending = 0, stuck = 0;
+
+            try
+            {
+                foreach (var product in Batches.GetProducts())
+                {
+                    var inTree = TableSensorsOf(product).Select(s => s.Id).ToHashSet();
+                    long weeks = 0;
+
+                    foreach (var (sensor, placement) in Batches.GetPlacements(product))
+                        if (inTree.Contains(sensor))
+                            foreach (var segment in placement.Segments)
+                                weeks += WeeksOf(segment.FirstHour, segment.EndHour).Count();
+
+                    pending += weeks;
+                    if (blocked is null || blocked.Contains(product))
+                        stuck += weeks;
+                }
             }
             catch (Exception ex)
             {
-                MoveFault(Guid.Empty, utcNow, ex, "the products of the batch store could not be listed", ref fault);
-                return run;
+                // The store cannot be read now: what the products read so far say (a fault is counted where it stops a step).
+                _logger.Debug($"Table move: the steps pending could not be counted: {ex.Message}");
             }
 
-            var faulted = new HashSet<Guid>();
-
-            // 1. The step each product has in flight.
-            foreach (var product in products)
-            {
-                if (token.IsCancellationRequested)
-                    return run;
-
-                try
-                {
-                    RecoverMove(product);
-                }
-                catch (Exception ex)
-                {
-                    faulted.Add(product);
-                    MoveFault(product, utcNow, ex, $"the move in flight of product {product} was not recovered", ref fault);
-                }
-            }
-
-            // 2. The removal of table sensors and products (#1850 part 4d, the next pull request) goes here: after the
-            //    recovery of the moves in flight, before the steps.
-
-            // 3. The steps.
-            var steps = SelectSteps(products, unreconciled, faulted, utcNow, ref fault);
-            int done = 0;
-            var diskShort = false;
-
-            foreach (var step in steps.Where(s => s.Expired).Concat(mergeCaughtUp ? steps.Where(s => !s.Expired) : []))
-            {
-                if (faulted.Contains(step.Product) || (diskShort && !step.Expired))
-                    continue;
-
-                if (token.IsCancellationRequested || !run.CanStart)
-                    break;
-
-                try
-                {
-                    var outcome = step.Expired ? ExpireStep(step, run, utcNow, token) : CopyStep(step, run, utcNow, token);
-
-                    if (outcome == StepOutcome.Stopped)
-                        break;
-
-                    if (outcome == StepOutcome.Done)
-                        done++;
-                    else if (outcome == StepOutcome.DiskShort)
-                        diskShort = true;
-
-                    if (outcome is StepOutcome.Done or StepOutcome.Skipped)
-                        LogMoveEnd(step);
-                }
-                catch (Exception ex)
-                {
-                    faulted.Add(step.Product);
-                    MoveFault(step.Product, utcNow, ex, $"a step of the move of sensor [{step.Sensor.Id}][{step.Sensor.FullPath}] " +
-                                                        $"({Name(step.From)} -> P{step.ToClass}, {Hour(step.FirstHour)} to {Hour(step.EndHour)}) did not complete", ref fault);
-                }
-            }
-
-            Stats.Set(ref Stats.MoveStepsPending, Math.Max(0, steps.Count - done));
-            return run;
+            Stats.Set(ref Stats.MoveStepsPending, pending);
+            Stats.Set(ref Stats.MoveStepsBlocked, stuck);
+            Stats.Set(ref Stats.MoveStepsRefusedNow, _refusedSteps.Count);
         }
 
         // The sensor-weeks to move: per eligible sensor (in the tree, its product reconciled in this pass, its setting's class
         // equal to its placement's target), per segment and week, the hours before the product's oldest arrival hour with
         // blocks that is not committed and before the current hour of the pass's clock: so no hour of a step can be written
         // by a run of the merge any more.
-        private List<MoveStep> SelectSteps(IReadOnlyList<Guid> products, Unreconciled unreconciled, HashSet<Guid> faulted, DateTime utcNow, ref string fault)
+        private List<MoveStep> SelectSteps(IReadOnlyList<Guid> products, Unreconciled unreconciled, HashSet<Guid> faulted, DateTime utcNow)
         {
             var steps = new List<MoveStep>();
             long now = utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerHour;
@@ -217,7 +274,7 @@ namespace HSMServer.Core.TableSensors
                 catch (Exception ex)
                 {
                     faulted.Add(product);
-                    MoveFault(product, utcNow, ex, $"the steps of the move of product {product} could not be listed", ref fault);
+                    MoveFault(product, utcNow, ex, $"the steps of the move of product {product} could not be listed");
                 }
             }
 
@@ -286,10 +343,9 @@ namespace HSMServer.Core.TableSensors
                        $"P{record.ToClass}, {Hour(record.FirstHour)} to {Hour(record.EndHour)}) recovered: {deleted} batches deleted in the class its placement does not name" +
                        (aborted ? $"; the period changed again (target P{placement.Target}), the step is aborted" : string.Empty);
 
+            // A recovery that deleted nothing is not logged (a refused step leaves its record, which the next pass clears).
             if (aborted || deleted > 0)
                 _logger.Warn(what);
-            else
-                _logger.Info(what);
         }
 
 
@@ -534,7 +590,7 @@ namespace HSMServer.Core.TableSensors
         // compaction list whose deleted share is still at least a tenth, not of the newest week (pinned: its flush would wait
         // for the compaction), not due to be dropped by its own class (retention removes it whole). An entry whose database
         // is gone or dropped, or whose share fell below the threshold, is removed. Never throws.
-        private int RunCompactions(DateTime utcNow, MoveRun run, CancellationToken token, ref string fault)
+        private int RunCompactions(DateTime utcNow, MoveRun run, CancellationToken token)
         {
             if (token.IsCancellationRequested)
                 return 0;
@@ -546,7 +602,7 @@ namespace HSMServer.Core.TableSensors
             }
             catch (Exception ex)
             {
-                MoveFault(Guid.Empty, utcNow, ex, "the products of the batch store could not be listed for compaction", ref fault);
+                MoveFault(Guid.Empty, utcNow, ex, "the products of the batch store could not be listed for compaction");
                 return 0;
             }
 
@@ -591,24 +647,23 @@ namespace HSMServer.Core.TableSensors
                         if (_notShrinking.TryGetValue((product, week), out var stuck) && share.DeletedBytes - stuck < CompactShare * share.FolderBytes)
                             continue;
 
-                        Compact(product, week, share, run, utcNow, ref fault);
+                        Compact(product, week, share, run, utcNow);
                         break;
                     }
                 }
                 catch (Exception ex)
                 {
-                    MoveFault(product, utcNow, ex, $"the compaction list of product {product} could not be handled ({Name(week)})", ref fault);
+                    MoveFault(product, utcNow, ex, $"the compaction list of product {product} could not be handled ({Name(week)})");
                 }
             }
 
             return run.Compactions;
         }
 
-        private void Compact(Guid product, TableBatchWeek week, TableBatchDeletedShare before, MoveRun run, DateTime utcNow, ref string fault)
+        private void Compact(Guid product, TableBatchWeek week, TableBatchDeletedShare before, MoveRun run, DateTime utcNow)
         {
             var watch = Stopwatch.StartNew();
             run.Compactions++;
-            run.Bytes += before.FolderBytes;
 
             try
             {
@@ -616,7 +671,7 @@ namespace HSMServer.Core.TableSensors
             }
             catch (Exception ex)
             {
-                MoveFault(product, utcNow, ex, $"the week database {Name(week)} of product {product} was not compacted", ref fault);
+                MoveFault(product, utcNow, ex, $"the week database {Name(week)} of product {product} was not compacted");
             }
 
             var after = Batches.GetDeletedShare(product, week);
@@ -693,9 +748,10 @@ namespace HSMServer.Core.TableSensors
             return outcome;
         }
 
-        private void MoveFault(Guid product, DateTime utcNow, Exception ex, string what, ref string fault)
+        // A fault of the move or of a compaction: counted, logged once per product and hour of the pass's clock. Not the
+        // pass's fault: the pass did not stop.
+        private void MoveFault(Guid product, DateTime utcNow, Exception ex, string what)
         {
-            fault = ex.Message;
             Stats.Add(ref Stats.MoveFaults);
 
             if (FirstInHour(_moveFaultHour, product, utcNow))
