@@ -1149,6 +1149,35 @@
         <member name="M:HSMServer.Controllers.TableSensorsController.Download(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime})">
             <summary>GET /TableSensors/Download?id=&amp;from=&amp;to=: the rows of a range as CSV.</summary>
         </member>
+        <member name="T:HSMServer.Controllers.TelegramBotApiController">
+            <summary>
+            The Telegram bot credential of the management API (#1830) — the first server-settings
+            surface of the area: the status of the bot, and the update that saves and applies a
+            change in one call. Bearer-token authenticated only (the HsmApiToken scheme).
+            Administrators only, on both actions — the web Configuration page's rule. The token
+            itself is write-only and never part of an answer.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.TelegramBotApiController.GetTelegramBot">
+            <summary>
+            The status of the Telegram bot credential (#1830): the bot name, whether Telegram
+            delivery is enabled, whether a token is stored and whether the bot is running.
+            The token itself is write-only and never returned. Administrators only — a
+            read-only token of an administrator may call it.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.TelegramBotApiController.UpdateTelegramBot(HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto)">
+            <summary>
+            Change the Telegram bot credential (#1830) — a partial update: an omitted field
+            does not change. A new botToken is checked with Telegram BEFORE anything is saved
+            (a rejected token changes nothing and the running bot keeps running); a passed
+            botName must be the bot Telegram reports for the effective token; only a token
+            change restarts the bot. The 200 body is the resulting status — read its
+            isRunning after a token change. The token is write-only and never echoed.
+            Administrators only.
+            </summary>
+            <param name="request">The changes: botName, botToken, isEnabled — every field optional.</param>
+        </member>
         <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TtlAlert">
             <summary>Backward compat: maps single TtlAlert to TtlAlerts list.</summary>
         </member>
@@ -1660,6 +1689,13 @@
             the calling agent to self-correct, never as protocol-level crashes.
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.TelegramBotMcpTools">
+            <summary>
+            The Telegram bot credential tools of the MCP surface (#1830) — the first
+            server-settings tools: a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService"/>,
+            the engine the REST controller runs. Administrators only.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Agent.AgentConnectionResolver">
             <summary>
             Resolves the (address, port) the agent bundle's config.json points at. Prefers the admin-set
@@ -2090,11 +2126,42 @@
             bundled default; it is only evaluated when the server terminates TLS.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramBotSettings">
+            <summary>
+            The three bot settings as one value (#1830): what a save compares, applies and
+            journals. The web form posts all three; the management surface fills the omitted
+            ones from the stored settings.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramBotSettings.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            The three bot settings as one value (#1830): what a save compares, applies and
+            journals. The web form posts all three; the management surface fills the omitted
+            ones from the stored settings.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Configuration.TelegramBotSettingsDiff">
+            <summary>
+            Which of the three bot settings a save changes — the one definition of it, so what is
+            journaled and what is applied cannot drift apart. An absent and an empty token or name
+            are the same value: a server that was never configured holds nulls, and the web form
+            posts an empty field as an empty string.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramBotSettingsDiff.#ctor(System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Which of the three bot settings a save changes — the one definition of it, so what is
+            journaled and what is applied cannot drift apart. An absent and an empty token or name
+            are the same value: a server that was never configured holds nulls, and the web form
+            posts an empty field as an empty string.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges">
             <summary>
             One save of the Telegram bot settings (#1824, #1828): what it changes, the log line
             of the save and its journal records. The bot token is a secret: the log and the
-            journal say THAT it changed, never the old or the new value.
+            journal say THAT it changed, never the old or the new value. Shared by the settings
+            page and the management surface (#1830).
             </summary>
         </member>
         <member name="T:HSMServer.Model.Configuration.TelegramSettingsChanges.Change">
@@ -2122,6 +2189,16 @@
             The changed settings of the save, in the order the log always listed them. An
             absent and an empty value are the same setting: a server that was never
             configured holds nulls, and the form posts an empty field as an empty string.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.Model.Configuration.TelegramBotSettingsDiff,HSMServer.Model.Configuration.TelegramBotSettings,HSMServer.Model.Configuration.TelegramBotSettings)">
+            <inheritdoc cref="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Between(HSMServer.ServerConfiguration.TelegramConfig,HSMServer.Model.Configuration.TelegramSettingsViewModel)"/>
+        </member>
+        <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Apply(HSMServer.ServerConfiguration.IServerConfig,HSMServer.Model.Configuration.TelegramBotSettingsDiff,HSMServer.Model.Configuration.TelegramBotSettings)">
+            <summary>
+            Applies a save to the configuration and persists it. Only a setting that changes
+            is written: one that keeps its value is not saved over, so a writer of another
+            setting racing this one is not overwritten.
             </summary>
         </member>
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
@@ -4747,6 +4824,88 @@
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.LargeFileValueDto.Archive">
             <summary>The current archive (id, size, sha256, passwordVersion, downloadUrl); null until the file is packed.</summary>
         </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService">
+            <summary>
+            The bot-credential surface of the management API (#1830) — the first server-settings
+            surface of the area: the status of the Telegram bot, and the update that saves and
+            applies a change in one call. Transport-agnostic: the REST controller and the MCP
+            tools both call it and get the area's envelopes back, never an IActionResult.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService.GetStatus(System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            The status of the bot credential: the name, the switch, whether a token is stored
+            (never the token) and whether the bot is up. Administrators only.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotAdministrationService.UpdateAsync(HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            Change the bot credential: a partial update, administrators only. A new token is
+            asked of Telegram BEFORE anything is saved; the save is journaled; only a token
+            change restarts the bot. The echo is the resulting status.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime">
+            <summary>
+            The Telegram side the bot-credential surface needs from the running bot (#1830):
+            whether it is up, the username it remembers from its start, the answer to "who owns
+            this token?" and the restart. The bot behind NotificationsCenter is a sealed concrete
+            type, so the seam is this adapter (the IChatDelivery pattern).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime.UsernameOfRunningBot(System.String)">
+            <summary>
+            The username Telegram reported when the running bot started, when it runs on
+            exactly this token; null otherwise — the caller asks Telegram itself.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime.GetBotUsernameAsync(System.String)">
+            <summary>
+            Asks Telegram who owns a token. Nothing of the running bot is touched; the
+            outcome is answered, never thrown.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime.RestartAsync">
+            <summary>
+            Stops the running bot, if any, and starts it on the stored credential. Answers an
+            empty string when the bot is running afterwards, the bot's own error text (the
+            token wiped) when it is not.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto">
+            <summary>
+            The Telegram bot credential as the management surface shows and changes it (#1830) —
+            the first server-settings surface of the area. The token itself is never part of the
+            answer: hasBotToken says whether one is stored.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.BotName">
+            <summary>The bot's username as stored; invitation links are built from it. Null when none is stored.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.IsEnabled">
+            <summary>Whether Telegram delivery is switched on.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.HasBotToken">
+            <summary>Whether a bot token is stored; its value is write-only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.IsRunning">
+            <summary>Whether the bot is up and talking to Telegram.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto">
+            <summary>
+            The changes to the Telegram bot credential (#1830): a partial update — every field is
+            optional and an omitted one stays unchanged.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto.BotName">
+            <summary>The new bot username; must match the bot of the effective token.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto.BotToken">
+            <summary>The new bot token from BotFather — write-only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto.IsEnabled">
+            <summary>Whether the bot may send messages.</summary>
+        </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).
         </member>
@@ -4992,6 +5151,25 @@
             the maximum, so the name never breaks the length rule. A blank proposal — a
             Telegram user without a username — is left as it is: the row then has no name
             until one is given to it in the web form, which asks for it.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.TelegramTokenVerdict">
+            <summary>
+            What Telegram answered when the server asked who owns a bot token (#1830): the bot's
+            username, a refusal (the token is not valid), or no answer at all (Telegram could not
+            be reached).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.TelegramTokenProbe">
+            <summary>
+            The answer to one token probe. <see cref="P:HSMServer.Notifications.TelegramTokenProbe.Reason"/> is the text of a refusal or of a
+            failure, with the token wiped — never the token itself.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.TelegramTokenProbe.#ctor(HSMServer.Notifications.TelegramTokenVerdict,System.String,System.String)">
+            <summary>
+            The answer to one token probe. <see cref="P:HSMServer.Notifications.TelegramTokenProbe.Reason"/> is the text of a refusal or of a
+            failure, with the token wiped — never the token itself.
             </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">

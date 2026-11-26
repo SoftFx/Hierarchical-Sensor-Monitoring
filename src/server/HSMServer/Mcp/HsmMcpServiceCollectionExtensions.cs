@@ -50,6 +50,7 @@ namespace HSMServer.Mcp
                 .WithTools<SensorDeletionMcpTools>()
                 .WithTools<SensorMoveMcpTools>()
                 .WithTools<LargeFilesMcpTools>()
+                .WithTools<TelegramBotMcpTools>()
                 .Services;
         }
     }

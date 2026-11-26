@@ -206,8 +206,9 @@ namespace HSMServer.SensorApi.Sessions
         // hour the batch store has merged, #1850): the list is then left out and
         // "refusedKnown":false says so.
         // At most the first MaxAckedRefusals refused tables, each identifier cut for printing, and the exact count in
-        // refusedCount: a block of tens of thousands of refused tables must not make an ack of tens of megabytes.
-        public const int MaxAckedRefusals = 100;
+        // refusedCount: a block of tens of thousands of refused tables must not make an ack of tens of megabytes. The
+        // same cap as the put result's list (one definition: the ack lists what the result carries).
+        public const int MaxAckedRefusals = TableBlockPutResult.MaxDetailedRefusals;
         public const int MaxAckedTableIdLength = 256;
 
         public static void WriteBlockAck(IBufferWriter<byte> output, long id, string outcome, int tables, IReadOnlyList<TableRefusalInfo> refused, int refusedCount)

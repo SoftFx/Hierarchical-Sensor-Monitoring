@@ -20,7 +20,7 @@ namespace HSMDatabase.DatabaseWorkCore
     // table exists to guarantee. WRITE failures propagate to the caller (the
     // ChangeSetJournal decides how to surface them); a READ of one corrupt row
     // is skipped so one damaged entry cannot take the whole list surface down.
-    internal sealed class ChangeSetCollection : IChangeSetCollection
+    internal sealed class ChangeSetCollection : IChangeSetCollection, IDisposable
     {
         private static readonly JsonSerializerOptions _options = new()
         {
@@ -138,6 +138,16 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public TaskResult<string> Backup(string backupPath) => _database.Backup(backupPath);
+
+        // Closes the database (DatabaseCore.Dispose). Under the lock, so a write in flight
+        // finishes before the close; a later write gets the library's ObjectDisposedException.
+        public void Dispose()
+        {
+            lock (_sync)
+            {
+                _database.Dispose();
+            }
+        }
 
 
         private void ResaveIdSet() => _database.Put(_tableId, JsonSerializer.SerializeToUtf8Bytes(_ids, _options));
