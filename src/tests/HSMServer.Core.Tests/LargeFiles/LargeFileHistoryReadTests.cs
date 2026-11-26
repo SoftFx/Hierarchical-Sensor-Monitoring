@@ -33,7 +33,6 @@ namespace HSMServer.Core.Tests.LargeFiles
     /// history and historyFile routes, the large value is described (file id, name, extension, size, secure, state from
     /// the store's record) and its content is never part of the answer; an ordinary file value keeps its content.
     /// </summary>
-    [Collection("Database collection")]
     public class LargeFileHistoryReadTests : MonitoringCoreTestsBase<LargeFileHistoryReadFixture>
     {
         private const int Piece = 65_536;

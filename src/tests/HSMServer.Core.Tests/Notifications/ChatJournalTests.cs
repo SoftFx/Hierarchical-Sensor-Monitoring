@@ -30,7 +30,6 @@ namespace HSMServer.Core.Tests.Notifications
     // binding, the bot's own cleanup — goes through ChatsManager, and each leaves `chat` records
     // in the journal, one per changed setting, readable through the journal service. The kind is
     // journal-visible only: a chat holds webhooks, and no secret may sit in a record.
-    [Collection("Database collection")]
     public class ChatJournalTests : MonitoringCoreTestsBase<ChatJournalFixture>
     {
         private const string SlackUrl = "https://hooks.slack.com/services/T000/B000/XXXXXXXXXXXXXXXXXXXXXXXX";

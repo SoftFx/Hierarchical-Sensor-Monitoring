@@ -31,7 +31,6 @@ namespace HSMServer.Core.Tests.TableSensors
     /// rows of one table sensor. Every test works on its own database (each test gets its own DatabaseCore) and its own
     /// node and producer.
     /// </summary>
-    [Collection("Database collection")]
     public class TableBlockServiceTests : MonitoringCoreTestsBase<TableBlockServiceFixture>
     {
         private static readonly DateTime T0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);

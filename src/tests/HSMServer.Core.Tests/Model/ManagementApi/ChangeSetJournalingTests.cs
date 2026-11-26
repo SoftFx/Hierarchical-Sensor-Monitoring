@@ -35,7 +35,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
     // LevelDB) with before/after images, grouped under the client-supplied
     // changeSetId or standing alone. Dry-run writes apply nothing. The
     // rollback semantics live in the change-set administration suite.
-    [Collection("Database collection")]
     public class ChangeSetJournalingTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private static readonly ClaimsPrincipal User = BuildPrincipal();

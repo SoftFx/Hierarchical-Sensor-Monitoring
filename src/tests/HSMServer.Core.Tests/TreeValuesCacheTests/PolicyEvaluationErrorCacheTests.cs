@@ -35,7 +35,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     //    "partially applied" at Error and the caller heard nothing;
     //  - after a history clear (no last value), applying a HEALTHY template
     //    carries no stale evaluation warning from an earlier pass.
-    [Collection("Database collection")]
     public class PolicyEvaluationErrorCacheTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private readonly TemplateConcurrencyFixture _fixture;

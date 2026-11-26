@@ -13,7 +13,6 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
-    [Collection("Database collection")]
     public class AlertTemplatePartialFailureTests : TemplateFailureTestsBase
     {
         private readonly TemplateConcurrencyFixture _fixture;

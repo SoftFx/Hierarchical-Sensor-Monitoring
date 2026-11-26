@@ -27,7 +27,6 @@ namespace HSMServer.Core.Tests.LargeFiles
     /// The large file store over a database whose reads and deletes are made to fail or leave rows in place (#1883): the
     /// files are removed only on evidence.
     /// </summary>
-    [Collection("Database collection")]
     public class LargeFileDatabaseSeamTests : MonitoringCoreTestsBase<LargeFileDatabaseSeamFixture>
     {
         private const int Piece = 65_536;

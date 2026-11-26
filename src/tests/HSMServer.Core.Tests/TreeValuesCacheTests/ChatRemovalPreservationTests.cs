@@ -26,7 +26,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     // duplicates) — for EVERY policy of the entity, not just the one losing
     // the chat. Chat removal must be content-preserving: only
     // Destination.Chats may change, in memory and in the persisted entities.
-    [Collection("Database collection")]
     public class ChatRemovalPreservationTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private readonly TemplateConcurrencyFixture _fixture;

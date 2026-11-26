@@ -32,7 +32,6 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
     // resetting sibling TTL intervals (a null TTL is an explicit reset-to-parent,
     // the #1409/#1451 lesson), plus the product aggregate's routing and the
     // template-ownership guards.
-    [Collection("Database collection")]
     public class PolicyAdministrationServiceTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private static readonly ClaimsPrincipal User = BuildPrincipal();

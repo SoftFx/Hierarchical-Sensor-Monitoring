@@ -48,7 +48,6 @@ namespace HSMServer.Core.Tests.Controllers
     /// the shared read gate freed by a client that goes away; the CSV paging, its limits and the abort past the first byte.
     /// No timing: cancellation is driven through the read's seams.
     /// </summary>
-    [Collection("Database collection")]
     public class TableSensorsControllerTests : MonitoringCoreTestsBase<TableSensorsControllerFixture>
     {
         private static readonly DateTime Hour0 = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);

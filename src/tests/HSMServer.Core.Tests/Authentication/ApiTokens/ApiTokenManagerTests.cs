@@ -16,7 +16,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
     // persist-first publication, one-time secret disclosure, rename-only mutation,
     // flag-preserving rotation, idempotent revocation, durable revocation generations,
     // quota counting semantics, and the fail-closed load of pre-simplification rows.
-    [Collection("Database collection")]
     public class ApiTokenManagerTests : DatabaseCoreTestsBase<ApiTokenManagerFixture>, IClassFixture<DatabaseRegisterFixture>
     {
         private static readonly Guid OwnerId = Guid.NewGuid();
