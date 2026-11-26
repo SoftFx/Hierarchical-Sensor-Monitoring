@@ -30,6 +30,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public IChangeSetCollection ChangeSets => _inner.ChangeSets;
 
+        public IDownloadLogStore DownloadLog => _inner.DownloadLog;
+
         public ISnapshotDatabase Snapshots => _inner.Snapshots;
 
         public bool IsCompactRunning => _inner.IsCompactRunning;
@@ -202,6 +204,28 @@ namespace HSMServer.Core.Tests.Infrastructure
                 throw new InvalidOperationException("Simulated DB failure for a security event retention removal");
 
             return _inner.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
+        }
+
+        // Optional injection point for dump password write failures (operation name keyed): a failed write must leave the
+        // service's memory, the journal and its event untouched.
+        internal Func<string, bool> ShouldFailDumpPasswordOp { get; set; }
+
+        public List<ProductDumpPasswordsEntity> GetAllDumpPasswords() => _inner.GetAllDumpPasswords();
+
+        public void PutDumpPasswords(ProductDumpPasswordsEntity entity)
+        {
+            if (ShouldFailDumpPasswordOp?.Invoke(nameof(PutDumpPasswords)) == true)
+                throw new InvalidOperationException("Simulated DB failure for a dump password write");
+
+            _inner.PutDumpPasswords(entity);
+        }
+
+        public void RemoveDumpPasswords(Guid productId)
+        {
+            if (ShouldFailDumpPasswordOp?.Invoke(nameof(RemoveDumpPasswords)) == true)
+                throw new InvalidOperationException("Simulated DB failure for a dump password removal");
+
+            _inner.RemoveDumpPasswords(productId);
         }
 
         // Optional injection point for sensor entity update failures, used to

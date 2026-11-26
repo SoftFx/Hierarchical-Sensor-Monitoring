@@ -81,6 +81,7 @@ Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for pro
 - Data cleanup/retention
 - Notification delivery (Telegram, email)
 - Database backups (local + SFTP), self-monitored — see `database-backup-monitoring/`
+- Large file archives: packing, re-encryption and the download log's retention — see `large-file-download/`
 
 ## Web Frontend
 
@@ -124,6 +125,8 @@ TypeScript 5.3 + Webpack 5:
 - `token-usage-monitoring/` - per-token self-monitoring of `/api/v1` + `/mcp` access (#1402): request rate and duration per API token, plus the aggregate auth-failure counter.
 - `agent-download/` - admin-only per-product HSM Agent (Windows) bundle download and its `agent-release.txt` staging; also the admin **Downloads** page (#1550, Configuration menu) that offers both bundles for a chosen product.
 - `linux-probe-download/` - its Linux sibling (#1424): per-product probe `.tar.gz` with `install.sh`, staged from `probe-release.txt`.
+- `large-file-download/` - how a large file value leaves the server (#1885, ADR-0022): the AES-256 zip built once and re-encrypted per password version, the web and `/api/v1` download with its order of checks, the hand-over to the bundled Caddy, the download log and their self-monitoring.
+- `dump-password/` - the password of a root product under which its large file values are given out (#1885): set and seen by a Manager of the product or an admin on the settings page, generated or typed, versioned, never in an API answer, a log or a journal value.
 - `background-services/` - hosted services, queue workers, startup/shutdown.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.

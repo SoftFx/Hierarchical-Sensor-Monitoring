@@ -88,11 +88,17 @@ namespace HSMServer.ServiceExtensions
 
             services.AddTableFeedSensors();
 
+            // The archive side of large files (#1885): archives, dump passwords, the download log and its routes.
+            services.AddLargeFileArchives(config);
             // The uploads of large files (#1883), for the file connection of step 2 (#1884), and the store's pass
             // (LargeFileMaintenanceService). The constructor opens and creates nothing.
             services.AddSingleton(provider => new HSMServer.Core.LargeFiles.LargeFileUploadService(
                 provider.GetRequiredService<IDatabaseCore>(), provider.GetRequiredService<ITreeValuesCache>(), (config.LargeFiles ?? new LargeFilesConfig()).ToOptions()));
             services.AddSingleton<HSMServer.Core.LargeFiles.ILargeFileUploads>(provider => provider.GetRequiredService<HSMServer.Core.LargeFiles.LargeFileUploadService>());
+
+            // The store the file connection (#1884) uploads into; without it file connections answer 404.
+            services.AddSingleton<SensorApi.Sessions.Files.IFileUploadStore>(provider => new SensorApi.Sessions.Files.LargeFileUploadStore(
+                provider.GetRequiredService<HSMServer.Core.LargeFiles.ILargeFileUploads>(), (config.LargeFiles ?? new LargeFilesConfig()).ToOptions().MaxFileSizeBytes));
 
             // The undo journal of change sets (#1570): durable LevelDB table
             // behind every REST/MCP configuration write, powering rollback.

@@ -1278,6 +1278,59 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
+        #region Dump passwords
+
+        // Key layout: "DumpPasswords_<productId>" rows hold a ProductDumpPasswordsEntity (ADR-0022 point 13). No other key of
+        // this database starts with the prefix: ids are lowercase guid strings and the other list keys are distinct words.
+        // Unlike PutProduct, the writes propagate storage failures: a password change that did not land must fail the action,
+        // not be logged and forgotten. Both are synced writes: a version answered as saved is on the disk, so a power loss
+        // cannot take back a version an archive may already carry. Neither a log line nor an exception text here carries the entity or its value: the
+        // product id names the row.
+        //
+        // Serialized with the parameterless JsonSerializer overload, as token rows are: the shared _options would omit
+        // fields that carry their type's default value (a version's RetiredTicks, say).
+        private const string DumpPasswordsPrefix = "DumpPasswords_";
+
+
+        private static byte[] GetDumpPasswordsKey(Guid productId) => Encoding.UTF8.GetBytes(DumpPasswordsPrefix + productId.ToString());
+
+
+        // A scan failure throws (the caller cannot tell an unreadable table from an empty one otherwise); a row that cannot be
+        // parsed is skipped and logged by its key, which names the product only.
+        public List<ProductDumpPasswordsEntity> ReadAllDumpPasswords()
+        {
+            var entities = new List<ProductDumpPasswordsEntity>();
+
+            foreach (var (key, value) in _database.GetAllKeyValuePairsStartingWith(Encoding.UTF8.GetBytes(DumpPasswordsPrefix)))
+            {
+                try
+                {
+                    var entity = JsonSerializer.Deserialize<ProductDumpPasswordsEntity>(value);
+
+                    if (entity is not null)
+                        entities.Add(entity);
+                }
+                catch (Exception)
+                {
+                    // The exception itself is not logged: a parser message may quote a part of the row.
+                    _logger.Error($"Failed to read the dump passwords row {Encoding.UTF8.GetString(key)}, row skipped");
+                }
+            }
+
+            return entities;
+        }
+
+        public void PutDumpPasswords(ProductDumpPasswordsEntity entity)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+
+            _database.PutSynced(GetDumpPasswordsKey(entity.ProductId), JsonSerializer.SerializeToUtf8Bytes(entity));
+        }
+
+        public void RemoveDumpPasswords(Guid productId) => _database.DeleteSynced(GetDumpPasswordsKey(productId));
+
+        #endregion
+
         public void Compact()
         {
             _database.Compact();

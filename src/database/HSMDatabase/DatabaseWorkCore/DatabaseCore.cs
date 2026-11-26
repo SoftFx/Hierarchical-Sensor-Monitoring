@@ -43,6 +43,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IChangeSetCollection ChangeSets { get; }
 
+        private readonly DownloadLogCollection _downloadLog;
+
+        public IDownloadLogStore DownloadLog => _downloadLog;
+
         public ISnapshotDatabase Snapshots { get; }
 
         // Compaction state (#1801), changed with CompareExchange only. Idle to Busy while a
@@ -142,6 +146,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
             Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
             ChangeSets = new ChangeSetCollection(_settings.PathToChangeSetsDb);
+
+            // No IO here: the download log opens on its first use (ADR-0022 point 15).
+            _downloadLog = new DownloadLogCollection(_settings.PathToDownloadLogDb);
 
             // No IO here: the store opens on its first use (#1844).
             _tableBlocks = new HSMDatabase.LevelDB.TableBlocks.TableBlockDatabase(_settings.PathToTableBlocks);
@@ -703,6 +710,16 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit) =>
             _environmentDatabase.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
+
+        #endregion
+
+        #region Dump passwords
+
+        public List<ProductDumpPasswordsEntity> GetAllDumpPasswords() => _environmentDatabase.ReadAllDumpPasswords();
+
+        public void PutDumpPasswords(ProductDumpPasswordsEntity entity) => _environmentDatabase.PutDumpPasswords(entity);
+
+        public void RemoveDumpPasswords(Guid productId) => _environmentDatabase.RemoveDumpPasswords(productId);
 
         #endregion
 
@@ -1787,6 +1804,7 @@ namespace HSMDatabase.DatabaseWorkCore
             // Waits for a put in flight, then closes the block store (#1844).
             _tableBlocks.Dispose();
             _tableBatches.Dispose();
+            _downloadLog.Dispose();
             _largeFiles.Dispose();
             
             _logger.Info($"{nameof(DatabaseCore)} dispposed");

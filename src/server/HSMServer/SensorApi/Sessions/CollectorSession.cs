@@ -59,6 +59,16 @@ namespace HSMServer.SensorApi.Sessions
     }
 
 
+    // What a WebSocket of a collector is: its ordinary session, or one of the two connections paired
+    // with it (#1845 tables, #1884 files).
+    internal enum SessionKind : byte
+    {
+        Session,
+        Table,
+        File,
+    }
+
+
     // One collector's WebSocket and who is on the other end of it. The receive side belongs
     // to the handler loop alone; sends may come from any thread (acks from the loop, a
     // close at shutdown, pushes later) and are serialized here.
@@ -75,6 +85,7 @@ namespace HSMServer.SensorApi.Sessions
         // Cancelled when the server ends the session (a close it starts, an abort): what the loop
         // waits for besides the socket (the table frame budget) stops waiting then.
         private readonly CancellationTokenSource _ending = new();
+        private readonly TaskCompletionSource _ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly byte[] _receiveBuffer = new byte[IdleBufferBytes];
         private readonly WebSocket _socket;
 
@@ -105,6 +116,15 @@ namespace HSMServer.SensorApi.Sessions
         private long _blockFaults;
         private long _tablesRefused;
 
+        // A file connection's pieces and uploads (#1884), for its close line.
+        private long _piecesStored;
+        private long _pieceBytesStored;
+        private long _piecesRepeated;
+        private long _piecesRefused;
+        private long _uploadsBegun;
+        private long _uploadsStored;
+        private long _uploadsDiscarded;
+
         // Guards the three fields below: which of the two, the handler loop or a close
         // asked for from outside, gets to the socket first.
         private readonly object _gate = new();
@@ -132,9 +152,22 @@ namespace HSMServer.SensorApi.Sessions
 
         public DateTime ConnectedAtUtc { get; }
 
-        // A table connection (#1845) carries blocks only; it belongs to the ordinary session
-        // `PairedSessionId` of the same collector.
-        public bool IsTable { get; }
+        // A table connection (#1845) carries blocks only, a file connection (#1884) the pieces of large
+        // files; each belongs to the ordinary session `PairedSessionId` of the same collector.
+        public SessionKind Kind { get; }
+
+        public bool IsTable => Kind == SessionKind.Table;
+
+        public bool IsFile => Kind == SessionKind.File;
+
+        public bool IsPaired => Kind != SessionKind.Session;
+
+        // Completed when the connection's handler is done with it, its cleanup included: a file
+        // connection that replaces another waits for this before its hello (#1884).
+        public Task Ended => _ended.Task;
+
+        // The uploads of a file connection; null for the other kinds.
+        internal Files.FileConnection Files { get; set; }
 
         public Guid PairedSessionId { get; }
 
@@ -191,15 +224,29 @@ namespace HSMServer.SensorApi.Sessions
 
         public long TablesRefused => Interlocked.Read(ref _tablesRefused);
 
+        public long PiecesStored => Interlocked.Read(ref _piecesStored);
+
+        public long PieceBytesStored => Interlocked.Read(ref _pieceBytesStored);
+
+        public long PiecesRepeated => Interlocked.Read(ref _piecesRepeated);
+
+        public long PiecesRefused => Interlocked.Read(ref _piecesRefused);
+
+        public long UploadsBegun => Interlocked.Read(ref _uploadsBegun);
+
+        public long UploadsStored => Interlocked.Read(ref _uploadsStored);
+
+        public long UploadsDiscarded => Interlocked.Read(ref _uploadsDiscarded);
+
         // Short ids: what the log lines of the connection and of its session share.
         public string PairedShortId => PairedSessionId.ToString("N")[..8];
 
 
         public CollectorSession(WebSocket socket, PublicApiRequestInfo caller, string collectorKind, string collectorVersion, string agentVersion, DateTime utcNow,
-            Guid? pairedSessionId = null)
+            Guid? pairedSessionId = null, SessionKind kind = SessionKind.Session)
         {
             _socket = socket;
-            IsTable = pairedSessionId is not null;
+            Kind = pairedSessionId is null ? SessionKind.Session : kind == SessionKind.Session ? SessionKind.Table : kind;
             PairedSessionId = pairedSessionId ?? Guid.Empty;
 
             SetCaller(caller);
@@ -256,6 +303,25 @@ namespace HSMServer.SensorApi.Sessions
         public void CountBlockInvalid() => Interlocked.Increment(ref _blocksInvalid);
 
         public void CountBlockFault() => Interlocked.Increment(ref _blockFaults);
+
+        public void CountPieceStored(long bytes)
+        {
+            Interlocked.Increment(ref _piecesStored);
+            Interlocked.Add(ref _pieceBytesStored, bytes);
+        }
+
+        public void CountPieceRepeated() => Interlocked.Increment(ref _piecesRepeated);
+
+        public void CountPieceRefused() => Interlocked.Increment(ref _piecesRefused);
+
+        public void CountUploadBegun() => Interlocked.Increment(ref _uploadsBegun);
+
+        public void CountUploadStored() => Interlocked.Increment(ref _uploadsStored);
+
+        public void CountUploadDiscarded() => Interlocked.Increment(ref _uploadsDiscarded);
+
+        // The handler is done with the connection.
+        public void MarkEnded() => _ended.TrySetResult();
 
         public void NoteEnd(string text, bool abnormal)
         {

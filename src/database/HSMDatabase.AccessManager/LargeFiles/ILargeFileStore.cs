@@ -421,8 +421,8 @@ namespace HSMDatabase.AccessManager.LargeFiles
         bool Exists { get; }
 
         /// <summary>
-        /// True when <c>uploads/</c> or <c>archives/</c> exists: the store took a file at some time. The folder itself may
-        /// exist on every server (a bind mount creates it).
+        /// True when <c>uploads/</c> exists or <c>archives/</c> holds an entry: the store took a file at some time. The
+        /// folder and an empty <c>archives/</c> may exist on every server (the bundled compose bind-mounts them).
         /// </summary>
         bool HasContent { get; }
 
