@@ -2,11 +2,11 @@ using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
+using HSMServer.Middleware;
 using HSMServer.Model.Agent;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Connections.Features;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -142,8 +142,7 @@ namespace HSMServer.Controllers
             // its loading sets: a certificate saved in settings but not yet applied by a restart is ignored.
             var serverTerminatesTls = LinuxProbeServerCa.ServerTerminatesClientTls(
                 HttpContext.Features.Get<ITlsHandshakeFeature>() is not null,
-                _config.Kestrel.TrustedProxies.Length > 0,
-                Request.Headers.ContainsKey(ForwardedHeadersDefaults.XOriginalForHeaderName));
+                ConnectionPeerMiddleware.CameThroughTrustedProxy(HttpContext));
 
             var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(
                 serverTerminatesTls,
