@@ -197,6 +197,11 @@ namespace HSMServer.Core.LargeFiles.Archives
 
                 _products.TryAdd(file.ProductId, 0);
 
+                // A product whose stored passwords cannot be read: its archives stay as they are, nothing is reported per
+                // archive (the settings page and the log say the row cannot be read).
+                if (_passwords.IsUnreadable(file.ProductId))
+                    continue;
+
                 var current = _passwords.GetCurrent(file.ProductId);
 
                 if (CarriedVersion(file) is int carried && UnusableVersionError(file.ProductId, carried, current) is { } error)

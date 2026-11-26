@@ -316,16 +316,19 @@ namespace HSMServer.Core.LargeFiles.DumpPasswords
             }
         }
 
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(Guid, int), byte> _carriedLogged = new();
+
         private bool IsExpired(DumpPasswordVersion version, DateTime nowUtc) =>
             version.RetiredUtc is { } retired && retired + _retention < nowUtc;
 
-        // Logs the product and the version number only.
-        private static bool IsCarried(Guid productId, DumpPasswordVersion version, IReadOnlySet<(Guid, int)> carried)
+        // Logs the product and the version number only, once per version in this process.
+        private bool IsCarried(Guid productId, DumpPasswordVersion version, IReadOnlySet<(Guid, int)> carried)
         {
             if (!carried.Contains((productId, version.Version)))
                 return false;
 
-            _logger.Warn($"Dump password version {version.Version} of product {productId} is retired and expired, " +
+            if (_carriedLogged.TryAdd((productId, version.Version), 0))
+                _logger.Warn($"Dump password version {version.Version} of product {productId} is retired and expired, " +
                          "but an archive still carries it: it is kept");
             return true;
         }

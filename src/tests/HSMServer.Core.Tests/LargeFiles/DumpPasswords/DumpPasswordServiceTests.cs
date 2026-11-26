@@ -504,7 +504,7 @@ namespace HSMServer.Core.Tests.LargeFiles.DumpPasswords
         }
 
         [Fact]
-        public void A_Product_Whose_Row_Cannot_Be_Read_Is_Readable_No_More_Once_It_Is_Removed()
+        public void A_Product_Whose_Row_Cannot_Be_Read_Is_Unreadable_No_More_Once_It_Is_Removed()
         {
             var id = _context.Product.Id;
             _context.Database.UnreadableDumpPasswordRows.Add(id);

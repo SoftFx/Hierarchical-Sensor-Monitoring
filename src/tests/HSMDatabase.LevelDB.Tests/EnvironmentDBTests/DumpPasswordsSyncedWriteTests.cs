@@ -84,6 +84,23 @@ namespace HSMDatabase.LevelDB.Tests.EnvironmentDBTests
         }
 
 
+        [Fact]
+        public void ARowThatParsesButIsNotAUsableRowOfItsKey_IsReportedAsUnreadable()
+        {
+            var empty = Guid.NewGuid();
+            var other = Guid.NewGuid();
+            var noVersions = Guid.NewGuid();
+            _adapter.Put(Encoding.UTF8.GetBytes(Key(empty)), Encoding.UTF8.GetBytes("{}"));
+            _adapter.Put(Encoding.UTF8.GetBytes(Key(other)), System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(Row(Guid.NewGuid(), 1)));
+            _adapter.Put(Encoding.UTF8.GetBytes(Key(noVersions)), System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new ProductDumpPasswordsEntity { ProductId = noVersions }));
+
+            var read = _worker.ReadAllDumpPasswords();
+
+            Assert.Empty(read.Rows);
+            Assert.Equal(new[] { empty, other, noVersions }.OrderBy(g => g), read.UnreadableProductIds.OrderBy(g => g));
+        }
+
+
         private static string Key(Guid productId) => $"DumpPasswords_{productId}";
 
         private static ProductDumpPasswordsEntity Row(Guid productId, int version) => new()

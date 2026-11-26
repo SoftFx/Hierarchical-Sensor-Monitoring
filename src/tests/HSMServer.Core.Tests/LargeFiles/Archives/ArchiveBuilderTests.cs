@@ -487,6 +487,26 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
         }
 
         [Fact]
+        public async Task PackedArchiveOfAProductWhosePasswordsCannotBeRead_IsLeftAlone_WithoutAReport()
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var file = _h.Store.AddVerified(_h.Product, TestContent.Compressible(50_000));
+            await _h.Run();
+            var packed = _h.Store.TryGetFile(file.FileId);
+            _h.Finished.Clear();
+
+            // The stored row of the product cannot be read: the service keeps no version of it.
+            _h.Passwords.Lose(_h.Product, 1);
+            _h.Passwords.Unreadable.Add(_h.Product);
+            await _h.Run();
+            await _h.Run();
+
+            Assert.Equal(ArchiveBuildState.None, _h.Builder.GetStatus(file.FileId).State);
+            Assert.Empty(_h.Finished);
+            Assert.Equal(packed, _h.Store.TryGetFile(file.FileId));
+        }
+
+        [Fact]
         public async Task PackedArchiveWhoseVersionIsNotKept_FailsVisiblyOnce_AndIsNeverRetriedByItself()
         {
             _h.Passwords.Set(_h.Product, Password1);

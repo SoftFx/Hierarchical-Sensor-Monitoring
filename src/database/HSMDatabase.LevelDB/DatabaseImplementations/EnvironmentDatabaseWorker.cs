@@ -1306,12 +1306,16 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             foreach (var (key, value) in _database.GetAllKeyValuePairsStartingWith(Encoding.UTF8.GetBytes(DumpPasswordsPrefix)))
             {
                 var keyText = Encoding.UTF8.GetString(key);
+                var keyProductId = Guid.TryParse(keyText.AsSpan(DumpPasswordsPrefix.Length), out var parsedId) ? parsedId : Guid.Empty;
 
                 try
                 {
                     var entity = JsonSerializer.Deserialize<ProductDumpPasswordsEntity>(value);
 
-                    if (entity is not null)
+                    // A row that parses but is not a row of its key's product, or holds no usable version, is unreadable
+                    // as well: taking it for "no password" would let the next change overwrite it.
+                    if (entity is not null && entity.ProductId == keyProductId && keyProductId != Guid.Empty &&
+                        entity.Versions is { Count: > 0 } && entity.Versions.TrueForAll(v => v is not null && v.Version > 0 && !string.IsNullOrEmpty(v.Password)))
                     {
                         entities.Add(entity);
                         continue;
@@ -1324,8 +1328,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                 _logger.Error($"Failed to read the dump passwords row {keyText}: the row is kept as it is and the product's passwords are unavailable");
 
-                if (Guid.TryParse(keyText.AsSpan(DumpPasswordsPrefix.Length), out var productId))
-                    unreadable.Add(productId);
+                if (keyProductId != Guid.Empty)
+                    unreadable.Add(keyProductId);
             }
 
             return new DumpPasswordRows(entities, unreadable);
