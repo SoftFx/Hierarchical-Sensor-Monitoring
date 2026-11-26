@@ -133,6 +133,7 @@ What deliberately stays: the startup warning for `Kestrel.SensorPort`/`Kestrel.S
 | `Config` | Server configuration (TLS, Telegram, backup settings); since #1633 also the Data Protection key ring (`DataProtection-Keys/`) |
 | `Databases` | LevelDB data files (sensor history, metadata) |
 | `DatabasesBackups` | Automated SFTP backup snapshots |
+| `LargeFiles` | The large file store (#1883): parts of uploads in progress and checked files, later the archives (`aicontext/features/storage/large-files/feature.md`). Created by the first upload; not a database and not in the backups. `LargeFiles.Folder` may point elsewhere (another volume): mount that path instead |
 | `CaddyData` | Caddy certificates and ACME account (compose) |
 | `CaddyCertificates` | Optional custom certificate chain and key, mounted read-only at `/certs` |
 

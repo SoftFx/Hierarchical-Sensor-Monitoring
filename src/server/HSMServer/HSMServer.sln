@@ -47,6 +47,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMTableBlocks.Tests", "..\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMTableBlocks", "..\..\api\HSMTableBlocks\HSMTableBlocks.csproj", "{331E7C3A-B98C-4CE8-8522-25087978CE2A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDatabase.LargeFiles.CrashHost", "..\..\tests\HSMDatabase.LargeFiles.CrashHost\HSMDatabase.LargeFiles.CrashHost.csproj", "{12C27BC1-7B61-4BAD-9479-F881CCA86EB6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -121,6 +123,10 @@ Global
 		{331E7C3A-B98C-4CE8-8522-25087978CE2A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{331E7C3A-B98C-4CE8-8522-25087978CE2A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{331E7C3A-B98C-4CE8-8522-25087978CE2A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12C27BC1-7B61-4BAD-9479-F881CCA86EB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12C27BC1-7B61-4BAD-9479-F881CCA86EB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12C27BC1-7B61-4BAD-9479-F881CCA86EB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12C27BC1-7B61-4BAD-9479-F881CCA86EB6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -141,6 +147,7 @@ Global
 		{9320940B-8516-4436-9DD2-83BFD2B2E347} = {0D98972E-B032-414E-A1E3-597465A8A49C}
 		{5A1A9426-6EBC-4568-A8AF-073A5198B210} = {48F09664-95D0-4ED9-BA1C-50E638429732}
 		{22C2AD99-70D1-4CC8-A23F-82BCBD05DC15} = {0D98972E-B032-414E-A1E3-597465A8A49C}
+		{12C27BC1-7B61-4BAD-9479-F881CCA86EB6} = {0D98972E-B032-414E-A1E3-597465A8A49C}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {87147EF6-89C6-4B9D-B8E2-DB28679905BD}

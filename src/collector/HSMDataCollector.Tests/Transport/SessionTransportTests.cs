@@ -638,16 +638,37 @@ namespace HSMDataCollector.Tests.Transport
         [Fact]
         public async Task Idle_session_sends_heartbeats_and_stays_up()
         {
-            // Two seconds, not one: the session is given up after two and a half heartbeats
-            // without a frame, and a pong that is a second late must not look like that.
-            using (var server = new ScriptedSessionServer { HeartbeatSeconds = 2 })
+            // The session's clock is the test's: it moves one heartbeat at a time, and only once the
+            // pong of the ping that heartbeat called for has arrived. However late a pong is in real
+            // time, the server is never silent for two and a half heartbeats on that clock, so a
+            // second session means the pongs did not count, not that the machine was slow.
+            using (var server = new ScriptedSessionServer { HeartbeatSeconds = 1 })
             using (var sender = new SessionDataSender(OptionsFor(server), new LoggerManager()))
             {
+                var connection = sender.Connection;
+                var heartbeat = System.Diagnostics.Stopwatch.Frequency * server.HeartbeatSeconds;
+                long now = 0;
+
+                connection.ClockForTests = () => Interlocked.Read(ref now);
+
                 sender.Start();
 
-                Assert.True(await WaitForAsync(() => server.Pings >= 3), "An idle session sent no heartbeats.");
+                Assert.True(await WaitForAsync(() => connection.IsUp), "The session never came up.");
+
+                // Three heartbeats in all: more than the two and a half after which a server that sent
+                // nothing since the session came up is given up. Only the pongs keep it up.
+                for (var ping = 1; ping <= 3; ping++)
+                {
+                    var due = Interlocked.Add(ref now, heartbeat);
+
+                    Assert.True(await WaitForAsync(() => server.Pings >= ping), $"An idle session sent no heartbeat #{ping}.");
+                    Assert.True(await WaitForAsync(() => connection.LastReceivedForTests == due), $"The pong of heartbeat #{ping} did not count as a frame from the server.");
+                }
+
+                Assert.Equal(3, server.Pings);
                 Assert.Equal(1, server.Sessions);
-                Assert.True(sender.Connection.IsUp);
+                Assert.Equal(1, connection.SessionsOpened);
+                Assert.True(connection.IsUp);
 
                 await sender.StopAsync(terminal: false);
             }

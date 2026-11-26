@@ -188,6 +188,18 @@ namespace HSMDataCollector.Client.Session
         internal Task ResetOfCurrentSession => _session?.Reset;
 
         /// <summary>
+        /// For tests: the clock of the heartbeat and of the silence rule, in <see cref="Stopwatch"/> ticks, read in
+        /// place of <see cref="Stopwatch.GetTimestamp"/> when the last frame was sent or received and when the loop
+        /// asks how long ago that was. A test that moves it decides when a ping is due and when a server counts as
+        /// silent, and no machine's speed does. Null, as it always is outside tests: the session reads the stopwatch.
+        /// Set before <see cref="Start"/>.
+        /// </summary>
+        internal Func<long> ClockForTests { get; set; }
+
+        /// <summary>For tests: when, on the session's clock, the last frame from the server arrived.</summary>
+        internal long LastReceivedForTests => Volatile.Read(ref _lastReceivedTicks);
+
+        /// <summary>
         /// The session that is up now, in one read: its <c>sessionId</c> (null from a server that states none) and a task
         /// that completes when that very session is over. False while no session is up.
         /// </summary>
@@ -596,7 +608,7 @@ namespace HSMDataCollector.Client.Session
 
         private Session MarkUp(ClientWebSocket socket)
         {
-            var now = Stopwatch.GetTimestamp();
+            var now = Now();
 
             Volatile.Write(ref _lastSentTicks, now);
             Volatile.Write(ref _lastReceivedTicks, now);
@@ -690,7 +702,7 @@ namespace HSMDataCollector.Client.Session
                     return why;
                 }
 
-                Volatile.Write(ref _lastReceivedTicks, Stopwatch.GetTimestamp());
+                Volatile.Write(ref _lastReceivedTicks, Now());
 
                 if (!SessionFrame.TryParse(text, out var frame))
                     return "the server sent a frame that is not a JSON object";
@@ -798,7 +810,7 @@ namespace HSMDataCollector.Client.Session
                     }
                 }
 
-                Volatile.Write(ref _lastSentTicks, Stopwatch.GetTimestamp());
+                Volatile.Write(ref _lastSentTicks, Now());
             }
             finally
             {
@@ -870,8 +882,15 @@ namespace HSMDataCollector.Client.Session
             return TimeSpan.FromMilliseconds(Math.Max(1, step * share));
         }
 
-        private static TimeSpan Elapsed(ref long sinceTicks) =>
-            TimeSpan.FromSeconds((Stopwatch.GetTimestamp() - Volatile.Read(ref sinceTicks)) / (double)Stopwatch.Frequency);
+        private long Now()
+        {
+            var clock = ClockForTests;
+
+            return clock == null ? Stopwatch.GetTimestamp() : clock();
+        }
+
+        private TimeSpan Elapsed(ref long sinceTicks) =>
+            TimeSpan.FromSeconds((Now() - Volatile.Read(ref sinceTicks)) / (double)Stopwatch.Frequency);
 
         internal static string DescribeClose(ClientWebSocket socket)
         {

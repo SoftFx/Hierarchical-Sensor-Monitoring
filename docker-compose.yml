@@ -92,6 +92,7 @@ services:
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
+      - ./LargeFiles:/app/LargeFiles
 
   caddy:
     image: 'hsmonitoring/hsm-caddy:2.11.4-8'
