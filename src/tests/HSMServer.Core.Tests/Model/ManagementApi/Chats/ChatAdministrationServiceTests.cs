@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.TableOfChanges;
@@ -8,6 +10,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications.Chats;
 using Moq;
 using Xunit;
@@ -339,13 +342,436 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         }
 
 
-        private static ChatEntity BuildChatEntity(Guid id, bool telegramBound = false) =>
+        // #1829: chat names are unique per server — one rule for the web form and the API,
+        // ignoring case and excluding the chat itself.
+        [Fact]
+        public async Task CreateChat_NameHeldByAnotherChat_IgnoringCase_AnswersInvalid_AndStoresNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, chat: null);
+            _chats.Setup(m => m.GetValues()).Returns([new Chat(BuildChatEntity(Guid.NewGuid(), name: "Ops alerts"))]);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "OPS ALERTS" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.False(result.Success);
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Chat with the same name already exists."], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        // A creation carries no name at all: the name is required there, while a partial
+        // update may omit it.
+        [Fact]
+        public async Task CreateChat_NoName_AnswersInvalid_AndStoresNothing()
+        {
+            SetupNoChatAnywhere();
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Name is required"], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData("   ", "Name is required")]
+        [InlineData("", "Name is required")]
+        [InlineData("The name of this chat is far too long for a chat name because it has more than one hundred characters in it, which the form forbids!",
+            "Name length should be less than 100.")]
+        public async Task CreateChat_NameBreakingARule_AnswersInvalid_AndStoresNothing(string name, string message)
+        {
+            SetupNoChatAnywhere();
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = name },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([message], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CreateChat_NameWithSurroundingSpaces_IsStoredTrimmed()
+        {
+            SetupNoChatAnywhere();
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "  Ops  " },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.True(result.Success);
+            _chats.Verify(m => m.TryAdd(It.Is<Chat>(c => c.Name == "Ops")), Times.Once);
+        }
+
+        // The uniqueness check excludes the chat itself: keeping a chat's own name in
+        // another letter case is no clash with it.
+        [Fact]
+        public async Task UpdateChat_RenameToItsOwnNameInAnotherCase_IsAccepted()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns([new Chat(BuildChatEntity(chatId, name: "Ops"))]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "OPS" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+        [Fact]
+        public async Task UpdateChat_RenameToAnotherChatsName_AnswersInvalid_AndChangesNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Ops")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "On-call")),
+            ]);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "ON-CALL" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Chat with the same name already exists."], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+        // A partial update that omits the name leaves the name rule alone — an update may
+        // rename nothing.
+        [Fact]
+        public async Task UpdateChat_WithoutName_IsNotCheckedAgainstTheNameRule()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+
+        // The rule guards changes, not history: chats duplicated before names were unique
+        // (two Telegram groups under one title, say) keep their other settings editable
+        // while they keep their names — the web form always posts the name, even unchanged.
+        [Fact]
+        public async Task UpdateChat_KeepingANameAnotherChatAlsoHolds_IsAccepted()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops alerts")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Ops alerts")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "OPS ALERTS")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Ops alerts", Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+        [Fact]
+        public async Task CreateChat_OnAPreCreatedRowThatKeepsANameAnotherChatHolds_IsAccepted()
+        {
+            // The Add-chat form saving a row the /start flow pre-created.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Dev team")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "Dev team")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.True(result.Success);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        // A row stored with a padded name, from before the name was held trimmed, is the
+        // same name once trimmed. The web form shows it trimmed and posts it back on an
+        // unchanged save: that is no change. The row then keeps its name as it is stored —
+        // it is neither refused as a clash with another chat's name nor renamed behind the
+        // user's back (and journaled as a rename).
+        [Fact]
+        public async Task UpdateChat_PaddedNameKeptOnAnUnchangedSave_WhileAnotherChatHoldsItTrimmed_IsAccepted_AndNotRenamed()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team ")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Dev team ")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "dev team")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team", Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Dev team " && u.Description == "on-call")),
+                Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateChat_PaddedNameKeptOnAnUnchangedSave_IsNotSilentlyRenamed()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team ")));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Dev team ")), Times.Once);
+        }
+
+        [Fact]
+        public async Task CreateChat_OnAPreCreatedRowWithAPaddedName_KeptOnSave_IsNotRenamed()
+        {
+            // The Add-chat form saving a row the /start flow pre-created before names were trimmed.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Dev team ")));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            _chats.Verify(m => m.TryUpdate(It.Is<ChatUpdate>(u => u.Id == chatId && u.Name == "Dev team ")), Times.Once);
+        }
+
+        // The other side of the trim: another chat's padded name is that name, so a rename
+        // onto it is the clash it looks like.
+        [Fact]
+        public async Task UpdateChat_RenameOntoAnotherChatsNamePaddedWithSpaces_IsRefused_AndChangesNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns(
+            [
+                new Chat(BuildChatEntity(chatId, name: "Ops")),
+                new Chat(BuildChatEntity(Guid.NewGuid(), name: "Dev team ")),
+            ]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "Dev team" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameDuplicateMessage], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+
+        // The engine checks a name against a snapshot and writes after, so two creates of
+        // one name can both pass the check. The store repeats the rule in front of its write
+        // and refuses the loser; by then the winner is in the store, and the loser gets the
+        // same 422 as up front — the field and the rule, not an opaque conflict.
+        [Fact]
+        public async Task CreateChat_NameTakenBetweenTheCheckAndTheWrite_AnswersInvalid_UnderName()
+        {
+            var stored = new List<Chat>();
+            _chats.Setup(m => m.GetValues()).Returns(stored);
+            SetupNoChatAnywhere();
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>()))
+                // The other create lands as this write is refused.
+                .Callback<Chat>(_ => stored.Add(new Chat(BuildChatEntity(Guid.NewGuid(), name: "Ops"))))
+                .ReturnsAsync(false);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "Ops" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameDuplicateMessage], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        [Fact]
+        public async Task UpdateChat_NameTakenBetweenTheCheckAndTheWrite_AnswersInvalid_UnderName()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            var stored = new List<Chat> { new(BuildChatEntity(chatId, name: "Ops")) };
+            _chats.Setup(m => m.GetValues()).Returns(stored);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>()))
+                .Callback<ChatUpdate>(_ => stored.Add(new Chat(BuildChatEntity(Guid.NewGuid(), name: "New"))))
+                .ReturnsAsync(false);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "New" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameDuplicateMessage], result.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        // A refused write whose name is still free is not a lost race: the store's own
+        // failure stays the fixed-message conflict.
+        [Fact]
+        public async Task UpdateChat_FailedWrite_WithTheNameStillFree_AnswersConflict()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: "Ops")));
+            _chats.Setup(m => m.GetValues()).Returns([new Chat(BuildChatEntity(chatId, name: "Ops"))]);
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(false);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = "New" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Conflict, result.Failure.Outcome);
+            Assert.Equal("The chat could not be saved.", result.Failure.Message);
+        }
+
+        [Fact]
+        public async Task UpdateChat_OverlongNameOfAnOldRow_IsEditableThroughTheEngineUntilRenamed()
+        {
+            // Telegram allows group titles far beyond 100 characters: a row named after
+            // one before the /start flow cut them keeps working through the engine — the
+            // management API — while it keeps its name, and meets the length rule only
+            // when someone renames it. (The web form asks for a shorter name first: its
+            // own length check runs before the engine, as it always did.)
+            var chatId = Guid.NewGuid();
+            var longTitle = new string('t', 120);
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId, name: longTitle)));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var kept = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = longTitle, Description = "on-call" },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+            var renamed = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, Name = new string('u', 120) },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(kept.Success);
+            Assert.Equal(PolicyWriteOutcome.Invalid, renamed.Failure.Outcome);
+            Assert.Equal([ChatNameValidator.NameLengthMessage], renamed.Failure.Errors[nameof(ChatUpdate.Name)]);
+        }
+
+        // A negative aggregation delay never flushes a channel's accumulator (the channels
+        // send at once only for 0): stored, it would drop the chat's alerts in silence. The
+        // rule is the engine's, so the web form and the management API share it.
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(86_401)]
+        public async Task CreateChat_DelayOutsideTheRange_AnswersInvalid_AndStoresNothing(int delay)
+        {
+            SetupNoChatAnywhere();
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = "Ops", MessagesAggregationTimeSec = delay },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            Assert.Equal(["Messages delay must be between 0 and 86400 seconds."],
+                result.Failure.Errors[nameof(ChatUpdate.MessagesAggregationTimeSec)]);
+            _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UpdateChat_NegativeDelay_AnswersInvalid_AndChangesNothing()
+        {
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId)));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, MessagesAggregationTimeSec = -1 },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
+            _chats.Verify(m => m.TryUpdate(It.IsAny<ChatUpdate>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(86_400)]
+        public async Task UpdateChat_DelayAtTheEdgesOfTheRange_IsAccepted(int delay)
+        {
+            // 0 sends every alert at once; a day is the ceiling.
+            var chatId = Guid.NewGuid();
+            SetupChat(chatId, new Chat(BuildChatEntity(chatId)));
+            _chats.Setup(m => m.TryUpdate(It.IsAny<ChatUpdate>())).ReturnsAsync(true);
+
+            var result = await Engine.UpdateChatAsync(new ChatUpdate { Id = chatId, MessagesAggregationTimeSec = delay },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), _initiator);
+
+            Assert.True(result.Success);
+        }
+
+        // One rule, one text, for the delay too: the form's Range attribute formats the
+        // engine's message template from the same bounds.
+        [Fact]
+        public void TheWebFormAndTheEngine_SayTheSameAboutTheDelay()
+        {
+            var range = typeof(ChatViewModel).GetProperty(nameof(ChatViewModel.MessagesDelay))?.GetCustomAttribute<RangeAttribute>();
+
+            Assert.Equal(Chat.MinMessagesAggregationTimeSec, Convert.ToInt32(range.Minimum));
+            Assert.Equal(Chat.MaxMessagesAggregationTimeSec, Convert.ToInt32(range.Maximum));
+            Assert.Equal(Chat.AggregationTimeRangeText, range.FormatErrorMessage("Messages delay"));
+        }
+
+        // The form's own validation, run the way MVC runs it (NotificationsController has
+        // no harness of its own): an out-of-range delay is refused before the engine, with
+        // the engine's text; a delay at the edges passes; the name is held trimmed.
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(86_401)]
+        public void TheWebForm_RefusesAnOutOfRangeDelay_WithTheEnginesText(int delay)
+        {
+            var model = new ChatViewModel { Name = "Ops alerts", MessagesDelay = delay };
+            var results = new List<ValidationResult>();
+
+            var isValid = Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
+
+            Assert.False(isValid);
+            var refusal = Assert.Single(results);
+            Assert.Equal([nameof(ChatViewModel.MessagesDelay)], refusal.MemberNames);
+            Assert.Equal(Chat.AggregationTimeRangeText, refusal.ErrorMessage);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(86_400)]
+        public void TheWebForm_AcceptsADelayAtTheEdges_OfTheRange(int delay)
+        {
+            var model = new ChatViewModel { Name = "  Ops alerts  ", MessagesDelay = delay };
+            var results = new List<ValidationResult>();
+
+            var isValid = Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
+
+            Assert.True(isValid);
+            Assert.Empty(results);
+            Assert.Equal("Ops alerts", model.Name);
+        }
+
+        // One rule, one text: the form formats its length message from the attribute's
+        // arguments and holds the name trimmed (the length rule measures the same value
+        // the engine measures); the engine carries the text as a constant.
+        [Fact]
+        public void TheWebFormAndTheEngine_SayTheSameAboutTheName()
+        {
+            var formName = typeof(ChatViewModel).GetProperty(nameof(ChatViewModel.Name));
+            var length = formName.GetCustomAttribute<StringLengthAttribute>();
+
+            Assert.Equal(ChatNameValidator.NameMaxLength, length.MaximumLength);
+            Assert.Equal(ChatNameValidator.NameLengthMessage, length.FormatErrorMessage("Name"));
+            Assert.Equal(ChatNameValidator.NameRequiredMessage, formName.GetCustomAttribute<RequiredAttribute>().ErrorMessage);
+            Assert.Equal("Ops alerts", new ChatViewModel { Name = "  Ops alerts  " }.Name);
+        }
+
+
+        private static ChatEntity BuildChatEntity(Guid id, bool telegramBound = false, string name = "pre-created") =>
             new()
             {
                 Id = id.ToByteArray(),
                 Author = AuthorId.ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                Name = "pre-created",
+                Name = name,
                 SendMessages = Chat.DefaultSendMessages,
                 MessagesAggregationTimeSec = Chat.DefaultMessagesAggregationTimeSec,
                 TelegramChatId = telegramBound ? 12345L : null,

@@ -145,8 +145,14 @@ namespace HSMServer.ServiceExtensions
             services.AddScoped<ChatsReadService>();
 
             // The chat write engine (#1825): behind the web controller's chat
-            // flows now, behind the /api/v1 + MCP write surface (#1829) later.
+            // flows and the management surface's write service (#1829).
             services.AddScoped<ChatAdministrationService>();
+
+            // The chat write surface (#1829): create, update and delete behind
+            // the REST actions and the MCP tools, on the engine above. Its
+            // delete preview reads the usage count through IChatSensorUsageCalculator
+            // (the calculator itself is registered with the singletons below).
+            services.AddScoped<ChatWriteService>();
 
             // The chat verification surface (#1826): the result-carrying test
             // message and the Telegram invitation issuer, behind both the REST
@@ -271,6 +277,10 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<BackupDatabaseService>()
                     .AddSingleton<NotificationsCenter>()
                     .AddSingleton<ChatSensorUsageCalculator>();
+
+            // The same calculator under the seam the chat delete preview reads it
+            // through (#1829) — one instance, two registrations.
+            services.AddSingleton<IChatSensorUsageCalculator>(sp => sp.GetRequiredService<ChatSensorUsageCalculator>());
 
             services.AddHttpClient<SlackNotificationChannel>();
             services.AddHttpClient<MattermostNotificationChannel>();

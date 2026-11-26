@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -228,9 +229,108 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
 
-        private static ChatsManager BuildManager()
+        // #1829: chat names are unique per server. The engine checks a name against a
+        // snapshot and writes after, so two creates of one name could both pass the check
+        // and both land. The store repeats the rule in front of its write, under one gate:
+        // the second of two adds is refused, whether or not its caller checked first.
+        [Fact]
+        public async Task TryAdd_NameAnotherChatTookAfterTheCallersCheck_IsRefused_AndNeverReachesTheDatabase()
         {
-            var db = new Mock<IDatabaseCore>(MockBehavior.Loose);
+            var db = new Mock<IDatabaseCore>();
+            var manager = BuildManager(db);
+            var first = BuildNamedChat("Ops");
+            var second = BuildNamedChat("Ops");
+
+            // Both callers' checks pass: the name is free.
+            Assert.False(ChatNameValidator.IsTaken("Ops", first.Id, manager.GetValues()));
+            Assert.False(ChatNameValidator.IsTaken("Ops", second.Id, manager.GetValues()));
+
+            Assert.True(await manager.TryAdd(first));
+            Assert.False(await manager.TryAdd(second));
+
+            Assert.Single(manager.GetValues());
+            Assert.Same(first, manager[first.Id]);
+            db.Verify(d => d.AddChat(It.Is<ChatEntity>(entity => entity.Name == "Ops")), Times.Once);
+        }
+
+        [Fact]
+        public async Task TryAdd_ConcurrentCreatesOfOneName_StoreExactlyOne()
+        {
+            var manager = BuildManager();
+            var contenders = Enumerable.Range(0, 8).Select(_ => BuildNamedChat("Ops")).ToList();
+
+            var results = await Task.WhenAll(contenders.Select(chat => Task.Run(() => manager.TryAdd(chat))));
+
+            Assert.Single(results.Where(added => added));
+            Assert.Single(manager.GetValues());
+        }
+
+        // A rename is checked the same way: the name was free when the caller looked, and
+        // another create took it before the write. The refused update changes nothing.
+        [Fact]
+        public async Task TryUpdate_RenameOntoANameAnotherChatTookAfterTheCallersCheck_IsRefused_AndWritesNothing()
+        {
+            var db = new Mock<IDatabaseCore>();
+            var manager = BuildManager(db);
+            var renamed = BuildNamedChat("Ops");
+            Assert.True(await manager.TryAdd(renamed));
+
+            Assert.False(ChatNameValidator.IsTaken("New", renamed.Id, manager.GetValues())); // the caller's check: the name is free
+            Assert.True(await manager.TryAdd(BuildNamedChat("New"))); // another create takes it first
+
+            db.Invocations.Clear();
+            Assert.False(await manager.TryUpdate(new ChatUpdate { Id = renamed.Id, Name = "New" }));
+
+            Assert.Equal("Ops", manager[renamed.Id].Name);
+            db.Verify(d => d.UpdateChat(It.IsAny<ChatEntity>()), Times.Never);
+        }
+
+        // The rule guards changes, not history: a chat keeping a name another chat also
+        // holds — a duplicate from before the rule — stays editable. The store's own check
+        // is no stricter than the engine's. (The duplicate is seeded straight into the
+        // storage: the gate exists to keep such a pair from being created now.)
+        [Fact]
+        public async Task TryUpdate_KeepingANameAnotherChatAlsoHolds_IsAccepted()
+        {
+            var manager = BuildManager();
+            var legacy = BuildNamedChat("Ops alerts");
+            manager.TryAdd(legacy.Id, legacy);
+            manager.TryAdd(Guid.NewGuid(), BuildNamedChat("OPS ALERTS"));
+
+            Assert.True(await manager.TryUpdate(new ChatUpdate { Id = legacy.Id, Name = "Ops alerts", Description = "on-call" }));
+
+            Assert.Equal("on-call", manager[legacy.Id].Description);
+        }
+
+        // A stored name is compared trimmed, like a posted one: a row padded with spaces,
+        // from before the name was held trimmed, holds the name.
+        [Fact]
+        public async Task TryAdd_NameAnotherChatHoldsWithSurroundingSpaces_IsRefused()
+        {
+            var manager = BuildManager();
+            manager.TryAdd(Guid.NewGuid(), BuildNamedChat("Dev team "));
+
+            Assert.False(await manager.TryAdd(BuildNamedChat("Dev team")));
+            Assert.Single(manager.GetValues());
+        }
+
+        // Rows without a name — a Telegram user that has no username — are not each other's
+        // duplicates: a blank name is held by no one.
+        [Fact]
+        public async Task TryAdd_NamelessChats_AreNotEachOthersDuplicates()
+        {
+            var manager = BuildManager();
+
+            Assert.True(await manager.TryAdd(BuildSlackOnlyChat()));
+            Assert.True(await manager.TryAdd(BuildSlackOnlyChat()));
+
+            Assert.Equal(2, manager.GetValues().Count);
+        }
+
+
+        private static ChatsManager BuildManager(Mock<IDatabaseCore> database = null)
+        {
+            var db = database ?? new Mock<IDatabaseCore>(MockBehavior.Loose);
             db.Setup(d => d.GetChats()).Returns(new List<ChatEntity>());
 
             var users = new Mock<IUserManager>(MockBehavior.Loose);
@@ -245,6 +345,14 @@ namespace HSMServer.Core.Tests.Notifications
         {
             // Slack-only chat: no TelegramChatId/TelegramType set
         };
+
+        private static Chat BuildNamedChat(string name) => new(new ChatEntity
+        {
+            Id = Guid.NewGuid().ToByteArray(),
+            Author = Guid.NewGuid().ToByteArray(),
+            CreationDate = DateTime.UtcNow.Ticks,
+            Name = name,
+        });
 
         private static Chat BuildTelegramChat(long chatId) => new(new Telegram.Bot.Types.ChatId(chatId))
         {

@@ -38,6 +38,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "create_access_key",
                 "create_alert_schedule",
                 "create_alert_template",
+                "create_chat",
                 "create_chat_telegram_invitation",
                 "create_product",
                 "create_sensor_policy",
@@ -45,6 +46,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "delete_access_key",
                 "delete_alert_schedule",
                 "delete_alert_template",
+                "delete_chat",
                 "delete_sensor",
                 "delete_sensor_policy",
                 "delete_sensor_ttl_policy",
@@ -76,6 +78,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "update_access_key",
                 "update_alert_schedule",
                 "update_alert_template",
+                "update_chat",
                 "update_sensor_policy",
                 "update_sensor_ttl_policy",
             ], names);
@@ -141,7 +144,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(43, tools.Count);
+            Assert.Equal(46, tools.Count);
             Assert.All(tools, tool =>
             {
                 var schema = tool.ProtocolTool.OutputSchema;

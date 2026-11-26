@@ -16,9 +16,20 @@ namespace HSMServer.Model.Notifications
         // bot-invite path can build an invitation token against it before any row is in storage.
         public bool IsNewChat { get; set; }
 
-        [Required(ErrorMessage = "Name is required")]
-        [StringLength(100, ErrorMessage = "{0} length should be less than {1}.")]
-        public string Name { get; set; }
+        private string _name;
+
+        // The messages are the write engine's own (ChatNameValidator): the form enforces the
+        // two rules client- and server-side before the engine runs, and the engine — the one
+        // rule behind this form and the management API (#1829) — repeats them for every other
+        // caller and adds the uniqueness check. The name is held TRIMMED, so the length rule
+        // measures the same value on both surfaces.
+        [Required(ErrorMessage = ChatNameValidator.NameRequiredMessage)]
+        [StringLength(ChatNameValidator.NameMaxLength, ErrorMessage = "{0} length should be less than {1}.")]
+        public string Name
+        {
+            get => _name;
+            set => _name = value?.Trim();
+        }
 
         public string Description { get; set; }
 
@@ -50,8 +61,13 @@ namespace HSMServer.Model.Notifications
         public string MattermostWebhookUrl { get; set; }
 
 
+        // The range rule is the write engine's too (Chat.MinMessagesAggregationTimeSec):
+        // the form carries it so the error renders at the field, the engine enforces it for
+        // the management API — a negative delay would never flush a channel's accumulator.
         [Display(Name = "Messages delay")]
-        public int MessagesDelay { get; set; } = 60;
+        [Range(Chat.MinMessagesAggregationTimeSec, Chat.MaxMessagesAggregationTimeSec,
+            ErrorMessage = Chat.MessagesAggregationTimeRangeMessage)]
+        public int MessagesDelay { get; set; } = Chat.DefaultMessagesAggregationTimeSec;
 
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; } = true;
