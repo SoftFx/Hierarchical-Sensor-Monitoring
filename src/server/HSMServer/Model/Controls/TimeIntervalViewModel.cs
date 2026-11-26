@@ -141,8 +141,14 @@ namespace HSMServer.Model
                 return new TimeIntervalModel(TimeInterval.ToDynamicCore());
 
             // for saving view with TimeInterval = FromFolder
-            var ticks = (current?.Parent ?? Parent)?.CustomSpan.Ticks ?? 0L;
+            var parent = current?.Parent ?? Parent;
             var hasFolder = current?.HasFolder ?? HasFolder;
+
+            // A folder's calendar preset is inherited as itself, not as its nominal length in ticks (#1864).
+            if (hasFolder && parent is not null && parent.TimeInterval.IsDynamic())
+                return new TimeIntervalModel(parent.TimeInterval.ToDynamicCore()).ToFromFolderModel();
+
+            var ticks = parent?.CustomSpan.Ticks ?? 0L;
 
             return new TimeIntervalModel(hasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
         }

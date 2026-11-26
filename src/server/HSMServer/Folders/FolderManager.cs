@@ -8,6 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Extensions;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -282,6 +283,7 @@ namespace HSMServer.Folders
             }
 
             await ResetServerPolicyForFolderProducts();
+            await ResolveInheritedCalendarPresets();
         }
 
 
@@ -592,6 +594,46 @@ namespace HSMServer.Folders
 
                     if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                         await _cache.UpdateProductAsync(update);
+                }
+        }
+
+        // #1864: a product stored by an earlier build inherits a folder's calendar preset (a month to a year) without
+        // it: as FromFolder with 0 ticks after a change of the folder, which never expires, or with the preset's
+        // nominal length in ticks when saved as "from folder". Both are re-derived here from the folder's present
+        // setting and stored with the product, so the inherited preset applies as the same preset set on the product.
+        private async Task ResolveInheritedCalendarPresets()
+        {
+            static TimeIntervalModel Resolve(TimeIntervalModel current, TimeIntervalViewModel folderSetting)
+            {
+                if (current is null || !current.IsFromFolder || !folderSetting.TimeInterval.IsDynamic())
+                    return null;
+
+                var inherited = folderSetting.ToModel().ToFromFolderModel();
+
+                return inherited.FolderPreset == current.FolderPreset ? null : inherited;
+            }
+
+            foreach (var product in _cache.GetProducts())
+                if (product.FolderId.HasValue && TryGetValueById(product.FolderId, out var folder))
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        TTL = Resolve(product.Settings.TTL.CurValue, folder.TTL),
+                        KeepHistory = Resolve(product.Settings.KeepHistory.CurValue, folder.KeepHistory),
+                        SelfDestroy = Resolve(product.Settings.SelfDestroy.CurValue, folder.SelfDestroy),
+                        Initiator = InitiatorInfo.AsSystemMigrator(),
+                    };
+
+                    if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
+                    {
+                        _logger.Info($"Product '{product.DisplayName}' [{product.Id}] inherits a calendar preset from folder '{folder.Name}' that was not applied, resolved (#1864):" +
+                                     $"{(update.KeepHistory != null ? $" keep history {update.KeepHistory}" : string.Empty)}" +
+                                     $"{(update.SelfDestroy != null ? $" remove after inactivity {update.SelfDestroy}" : string.Empty)}" +
+                                     $"{(update.TTL != null ? $" TTL {update.TTL}" : string.Empty)}");
+
+                        await _cache.UpdateProductAsync(update);
+                    }
                 }
         }
 

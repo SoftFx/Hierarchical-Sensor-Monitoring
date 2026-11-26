@@ -980,11 +980,15 @@ namespace HSMServer.Core.Tests.TableSensors
             { new TimeIntervalModel(TimeSpan.FromDays(400).Ticks), 58 },
             { new TimeIntervalModel(long.MaxValue), 0 },
             { new TimeIntervalModel(TimeInterval.Ticks, 0), 0 },
-            // Inherited from a folder: a custom period keeps its ticks, a dynamic preset arrives with 0 ticks and is kept for
-            // ever, as the cleanup of ordinary history treats it; Forever is long.MaxValue.
+            // Inherited from a folder: a custom period keeps its ticks, a calendar preset is inherited as itself and counts
+            // as the preset does (#1864); one stored by an earlier build without its preset (0 ticks) is kept for ever, as
+            // the cleanup of ordinary history keeps it; Forever is long.MaxValue.
             { new TimeIntervalModel(TimeSpan.FromDays(30).Ticks).ToFromFolderModel(), 5 },
-            { new TimeIntervalModel(TimeInterval.Month).ToFromFolderModel(), 0 },
-            { new TimeIntervalModel(TimeInterval.Year).ToFromFolderModel(), 0 },
+            { new TimeIntervalModel(TimeInterval.Month).ToFromFolderModel(), 5 },
+            { new TimeIntervalModel(TimeInterval.ThreeMonths).ToFromFolderModel(), 14 },
+            { new TimeIntervalModel(TimeInterval.SixMonths).ToFromFolderModel(), 27 },
+            { new TimeIntervalModel(TimeInterval.Year).ToFromFolderModel(), 53 },
+            { new TimeIntervalModel(TimeInterval.FromFolder, 0L), 0 },
             { TimeIntervalModel.None.ToFromFolderModel(), 0 },
             { new TimeIntervalModel(TimeInterval.FromParent), 0 },
         };
