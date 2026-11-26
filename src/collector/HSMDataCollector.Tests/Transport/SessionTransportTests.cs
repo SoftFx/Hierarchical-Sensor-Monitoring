@@ -136,7 +136,10 @@ namespace HSMDataCollector.Tests.Transport
             {
                 server.RefuseUpgrades(503);
 
-                using (var collector = new DataCollector(OptionsFor(server)))
+                var options = OptionsFor(server);
+                options.RequestTimeout = TimeSpan.FromMinutes(10); // a late ack is not read as no ack (#1925)
+
+                using (var collector = new DataCollector(options))
                 {
                     var sensor = collector.CreateIntSensor("session/queued");
                     await collector.Start();
@@ -155,10 +158,12 @@ namespace HSMDataCollector.Tests.Transport
 
                     Assert.True(await WaitForAsync(() => DeliveredInts(server).Count >= 5), "The queued values never arrived.");
 
+                    // Before the stop, which may send the last frame again (#1925, A_stop_that_ends_the_wait_for_an_ack_sends_the_frame_again).
+                    Assert.Equal(new[] { 100, 101, 102, 103, 104 }, DeliveredInts(server).OrderBy(v => v).ToArray());
+
                     await collector.Stop();
                 }
 
-                Assert.Equal(new[] { 100, 101, 102, 103, 104 }, DeliveredInts(server).OrderBy(v => v).ToArray());
                 Assert.Empty(server.HttpRequests);
             }
         }
@@ -274,7 +279,14 @@ namespace HSMDataCollector.Tests.Transport
                 // it is settled by nothing but its own drop.
                 server.RefuseUpgrades(503);
 
-                using (var collector = new DataCollector(OptionsFor(server)))
+                var options = OptionsFor(server);
+
+                // No ack may come too late to count: a frame whose ack is not read within the
+                // request timeout is sent again (at least once), which says nothing about the
+                // failed frame. On a busy machine 10 s were not always enough.
+                options.RequestTimeout = TimeSpan.FromMinutes(10);
+
+                using (var collector = new DataCollector(options))
                 {
                     collector.AddCustomLogger(logger);
                     var number = collector.CreateIntSensor("session/partial");
@@ -301,17 +313,56 @@ namespace HSMDataCollector.Tests.Transport
 
                     Assert.True(await WaitForAsync(() => DeliveredInts(server).Count >= 30), "The rest of the package never arrived.");
 
+                    // Every value once: the frame that was accepted before the failure did not go
+                    // again. Read before the stop (#1925): the server writes the ack of the last
+                    // frame before it counts that frame, and a stop that comes before the collector
+                    // has read that ack ends the wait for it and sends the frame again in its drain,
+                    // at least once (A_stop_that_ends_the_wait_for_an_ack_sends_the_frame_again).
+                    Assert.Equal(Enumerable.Range(0, 30).ToArray(), DeliveredInts(server).OrderBy(v => v).ToArray());
+
                     await collector.Stop();
                 }
-
-                // Every value once: the frame that was accepted before the failure did not go again.
-                Assert.Equal(Enumerable.Range(0, 30).ToArray(), DeliveredInts(server).OrderBy(v => v).ToArray());
             }
 
             // The value that cannot be sent was dropped, and counted, once, not once per attempt:
             // it was settled by the pass that failed and did not come back with the rest.
             Assert.Single(logger.Errors.Where(e => e.Contains("session/partial-huge") && e.Contains("larger than a collector session frame")));
             Assert.Contains(logger.Errors, e => e.Contains("1 value(s) dropped from the full send queue"));
+        }
+
+        // At least once (#1925): the server stores a frame and then writes its ack; a stop that
+        // comes in between ends the collector's wait for that ack, the frame goes back to the
+        // queue, and the stop drain sends it again. Nothing is lost, and the server gets the
+        // values twice. The collector cannot tell a frame the server stored from one it did not
+        // (no ack is no answer), and a wait for the ack would make the stop wait for a server
+        // that may never answer. The server stores a value under its sensor and its time, so the
+        // repeat replaces the first copy instead of adding a row.
+        [Fact]
+        public async Task A_stop_that_ends_the_wait_for_an_ack_sends_the_frame_again()
+        {
+            const string path = "session/at-least-once";
+
+            using (var server = new ScriptedSessionServer())
+            {
+                using (var collector = new DataCollector(OptionsFor(server)))
+                {
+                    var sensor = collector.CreateIntSensor(path);
+                    await collector.Start();
+
+                    Assert.True(await RegisteredAsync(server, path), "The session never came up.");
+
+                    // The frame of the value is stored, its ack is held back: the collector waits for it.
+                    server.HoldAcksOfListFramesCarrying(path, 1);
+                    sensor.AddValue(7);
+
+                    Assert.True(await WaitForAsync(() => server.HeldAcks == 1), "The value never arrived.");
+                    Assert.Equal(new[] { 7 }, DeliveredInts(server));
+
+                    await collector.Stop();
+                }
+
+                Assert.Equal(new[] { 7, 7 }, DeliveredInts(server));
+            }
         }
 
         [Fact]

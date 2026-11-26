@@ -5,11 +5,16 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Client.HttpsClient;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.Tables;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
+using HSMSensorDataObjects.SensorValueRequests;
 using Xunit;
 
 #if NET5_0_OR_GREATER
@@ -621,6 +626,79 @@ namespace HSMDataCollector.Tests.Tables
         // every writer was refused by the stopped collector. Each accepted call records the run that accepted it, and a
         // delivered row must come in a block of that run's producer: a row of one run sent under the producer of the
         // next is caught, which uniqueness, totals and order would not catch.
+        // #1925: a Start right after a stop that left a queue stopping (its send outlived the stop's wait: a sender that
+        // ignores the cancellation, or a thread pool too busy to run the end of the loop in time) starts nothing. The
+        // collector says so and stays Stopped, and no table run exists: TablePipeline.CurrentRun is null, legitimately,
+        // and nothing in the collector reads it without a check.
+        [Fact]
+        public async Task A_start_refused_while_a_queue_is_still_stopping_starts_no_table_run()
+        {
+            var logger = new CapturingLogger();
+            var sender = new StuckDataSender();
+
+            using (var collector = new DataCollector(Options(sender, o =>
+            {
+                o.PackageCollectPeriod = TimeSpan.FromMilliseconds(20);
+                o.RequestTimeout = TimeSpan.FromMilliseconds(200); // the stop's wait for a queue: its send never returns
+            })))
+            {
+                collector.AddCustomLogger(logger);
+                collector.CreateTableSensor("quotes", Quotes());
+                var value = collector.CreateIntSensor("value");
+
+                await collector.Start();
+
+                Assert.NotNull(collector.TablePipeline.CurrentRun);
+
+                value.AddValue(1);
+                await Within(sender.Entered, "the value was not sent");
+
+                await collector.Stop();
+
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+
+                await collector.Start();
+
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+                Assert.Null(collector.TablePipeline.CurrentRun);
+                Assert.Contains(logger.Errors, e => e.Contains("still stopping"));
+
+                // Nothing touches the missing run.
+                await collector.TickTablesAsync();
+
+                sender.Release();
+            }
+        }
+
+        // Its first value send never returns until released, whatever its token says.
+        private sealed class StuckDataSender : IDataSender
+        {
+            private readonly TaskCompletionSource<bool> _entered = Signal();
+            private readonly TaskCompletionSource<PackageSendingInfo> _release = new TaskCompletionSource<PackageSendingInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            internal Task Entered => _entered.Task;
+
+            internal void Release() => _release.TrySetResult(PackageSendingInfo.NotSent("released"));
+
+            public void Dispose() { }
+
+            public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
+
+            public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+            {
+                _entered.TrySetResult(true);
+                return new ValueTask<PackageSendingInfo>(_release.Task);
+            }
+
+            public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => SendDataAsync(items, token);
+
+            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) =>
+                new ValueTask<PackageSendingInfo>(PackageSendingInfo.Answered(0, 200, null, 0));
+
+            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) =>
+                new ValueTask<PackageSendingInfo>(PackageSendingInfo.Answered(0, 200, null, 0));
+        }
+
         [Fact]
         public async Task Rows_written_across_starts_and_stops_are_delivered_by_the_run_that_accepted_them()
         {
@@ -633,8 +711,12 @@ namespace HSMDataCollector.Tests.Tables
 
             // Room for 2,000 rows (time and two integers, 24 bytes): a full buffer refuses rows, counted, so the writers
             // never wait and the rows to check stay few.
+            var logger = new CapturingLogger();
+
             using (var collector = new DataCollector(Options(sender, o => o.MaxTableBufferBytes = 2_000 * 24)))
             {
+                collector.AddCustomLogger(logger);
+
                 var tables = Enumerable.Range(0, Writers).Select(i => collector.CreateTableSensor($"w{i}", Quotes(TableColumn.Int64("writer"), TableColumn.Int64("n")))).ToList();
                 var pipeline = collector.TablePipeline;
 
@@ -713,6 +795,11 @@ namespace HSMDataCollector.Tests.Tables
                 for (var number = 1; number <= Runs; number++)
                 {
                     await collector.Start();
+
+                    // A Start that found a queue still stopping (its last stop ran out of its wait) starts nothing and
+                    // leaves no run (#1925, A_start_refused_while_a_queue_is_still_stopping_starts_no_table_run): said
+                    // here, not as a null run below.
+                    Assert.True(collector.Status == CollectorStatus.Running, $"start {number} did not start the collector: {string.Join(" | ", logger.Errors)}");
 
                     var run = pipeline.CurrentRun;
 
