@@ -29,8 +29,8 @@ Rewritten in the #1071–#1075 lifecycle refactor (PR #1080) and hardened by #10
 ### File values on the file connection (4.2.0)
 
 On a session, the file queue's `SendFileAsync` hands a file value above a quarter of the session frame to the large file
-uploader (`../large-files/feature.md`, "Routed sends") and counts it as delivered; the uploader keeps it, bounded by
-`MaxQueueSize` (past it the oldest not yet begun is dropped and counted under the file queue). A value the uploader cannot
+uploader (`../large-files/feature.md`, "Routed sends") and counts it as delivered; the uploader keeps it, bounded to 64 MiB in
+memory (past it a value is not taken and goes the ordinary way). A value the uploader cannot
 store is said and counted under the file queue (`DataProcessor.ReportDroppedFileValues`); one it cannot send because the
 server has no file connection is given back to the file queue (`DataProcessor.RequeueFile`) and goes the ordinary way.
 

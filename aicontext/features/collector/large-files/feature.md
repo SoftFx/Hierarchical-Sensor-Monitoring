@@ -104,7 +104,7 @@ On the uploader's thread (`ThreadPriority.BelowNormal`; no effect on Linux), rea
 | registration (`commands`, its own request, before the first begin of each session) | per-path error / 4xx | the watch `Refused`, hand-overs `Refused`, until the next Start |
 | `begin` | `200 next/pieces/pieceBytes` | pieces from `next` (`next == pieces`: `end`); a `pieceBytes` larger than the hello allows: begin again with the hello's |
 | | `200 stored` | stored (a lost answer); the source is deleted per the rules below |
-| | `202 checking` + `retryAfter` | wait, `begin` again (every `retryAfter` is capped at 5 minutes) |
+| | `202 checking` + `retryAfter` | wait, `begin` again (every `retryAfter` is capped at 5 minutes; an answer that asks for a wait without one waits 30 s) |
 | | `503` / `409 busy` + `retryAfter` | the file waits `retryAfter`; another file may go meanwhile |
 | | `413`, `422`, `400`, other 4xx | final refusal |
 | piece | `200 {next}` | the digest is kept at its piece number; go on from `next` (a repeat may jump ahead) |
@@ -115,7 +115,7 @@ On the uploader's thread (`ThreadPriority.BelowNormal`; no effect on Linux), rea
 | | `400 … discarded` | begin again from 0; the third discard: given up |
 | `end` (SHA-256 of the piece digests) | `202 checking` + `retryAfter` | wait, `end` again |
 | | `200 stored` | stored |
-| | `409 pieces are missing {next}` | `begin` again (the answer may come from the check, after which the connection holds no upload) |
+| | any `409` (`pieces are missing`, …) | `begin` again, never a piece straight away (after a `202` the server released the upload, so the connection may hold none) |
 | | `400 … discarded` | as at a piece |
 | | `422` / other 4xx | final refusal |
 | | `404` / `503` + `retryAfter` | `begin` again (then `end`) |
@@ -164,9 +164,10 @@ as soon as it is taken, as a queued value does.
   `"source": "send:<guid N>"` (two sends of one name and size are two files); `"modified"` = the value's time; the
   value's `status` (its number) and `comment` in `begin`, left out when Ok / empty; the name is `Name.Extension`. No
   registration of its own and no flag 4: it waits until its sensor's ordinary registration was acknowledged on the session
-  (at most 10 minutes, then dropped and counted: a bound of this collector's, so a registration that never comes does not
-  hold a value for ever). `MaxFileSizeBytes` applies as to every ordinary send. Values waiting are bounded by
-  `CollectorOptions.MaxQueueSize` (they left the file queue): past it the oldest not yet begun is dropped and counted.
+  (at most 60 s, then it goes the ordinary way, as before large files; a registration answered with an error for its path
+  sends it the ordinary way at once). `MaxFileSizeBytes` applies as to every ordinary send. Values waiting are bounded to 64 MiB in
+  memory (one value is always taken): past it a value goes the ordinary way, said once. The comment in `begin` is cut to
+  4,096 characters with an ellipsis, so `begin` stays a small text frame.
   Each value is held once (its own bytes, not a copy). After a `1008` nothing is routed before the next Start: values
   take the ordinary path.
 - Order: routed sends go before the files of the large-file API, in the order sent; one waiting preempts a large file in
@@ -201,7 +202,7 @@ once, when the user has none) / **identity** / `large-files`. The identity is th
 | `sent-<key>.json` (key: sensor path) | the same, for handed-over files | for one upload; another process holding it 5 s: the file is put back |
 | `upload-<key>.json` + `.digests` (key: sensor path, file path) | the upload in progress (id, original facts, piece size, pieces) and its piece digests, 32 bytes per piece by number | — |
 
-Lock files are deleted when let go. Written whole to a temporary file of its own name (`.tmp-<guid>`), flushed, then renamed over the old one: a kill leaves the old or the new state. A missing state
+The schema of the state files and the names of the lock and temporary files are this collector's own: the native collector keeps its state in a layout of its own, and the two need not read each other's data folder. Lock files are deleted when let go on Windows and kept elsewhere (an advisory lock and a delete on close would race). Written whole to a temporary file of its own name (`.tmp-<guid>`), flushed, then renamed over the old one: a kill leaves the old or the new state. A missing state
 is empty; a corrupt one is put aside as `.corrupt-<time>`, said once, and the collector starts it empty (a kept file may
 be offered again; the server answers `stored` for one it still has). Entries of files no longer in the folder are dropped.
 A digest list of another upload, size, time, identity or piece size is dropped; missing digests are filled by reading

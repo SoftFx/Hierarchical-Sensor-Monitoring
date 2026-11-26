@@ -185,7 +185,14 @@ namespace HSMDataCollector.Tests.LargeFiles
 
                         case "end":
                             Log.Add("end");
-                            return Scripted(_end, id, () => End(id, body));
+
+                            var answer = Scripted(_end, id, () => End(id, body));
+
+                            // As the real server: an end answered (202 included) leaves the connection holding no upload.
+                            if (answer.Kind == FileAnswer.AnswerKind.Status && answer.Json.Contains("\"status\":202"))
+                                Current = null;
+
+                            return answer;
 
                         case "discard":
                             Log.Add("discard");
@@ -353,13 +360,23 @@ namespace HSMDataCollector.Tests.LargeFiles
             var upload = body.GetProperty("upload").GetString();
             var hash = body.GetProperty("hash").GetString();
 
+            // A repeated end of an upload this connection held (after a 202) is answered for that upload.
             if (Current == null || Current.Upload != upload)
-                return Json(id, 404, null, "no such upload on this connection");
+            {
+                if (!_byUpload.TryGetValue(upload, out var held))
+                    return Json(id, 404, null, "no such upload on this connection");
+
+                Current = held;
+            }
 
             var part = Current;
 
             if (part.Next < part.PieceCount)
+            {
+                // The check ran and found pieces missing: the connection holds no upload any more.
+                Current = null;
                 return Json(id, 409, $"{{\"upload\":\"{upload}\",\"next\":{part.Next},\"reason\":\"pieces are missing\"}}");
+            }
 
             using (var sha = SHA256.Create())
             {

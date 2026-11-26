@@ -29,6 +29,12 @@ namespace HSMDataCollector.LargeFiles
         /// <summary>The longest a server's <c>retryAfter</c> is waited for, in both collectors.</summary>
         internal static readonly TimeSpan MaxRetryAfter = TimeSpan.FromMinutes(5);
 
+        /// <summary>The wait after an answer that asks for a wait without saying how long (no <c>retryAfter</c>), in both collectors.</summary>
+        internal static readonly TimeSpan DefaultRetryAfter = TimeSpan.FromSeconds(30);
+
+        /// <summary>The longest comment a routed send carries in <c>begin</c>, in characters: longer is cut, with an ellipsis.</summary>
+        internal const int MaxBeginComment = 4096;
+
         private static readonly ManualResetEvent Never = new ManualResetEvent(false);
 
         // Owned by the thread.
@@ -335,8 +341,8 @@ namespace HSMDataCollector.LargeFiles
             SendLoop(job);
         }
 
-        /// <summary>How long a routed send waits for its sensor's registration to be acknowledged.</summary>
-        internal static readonly TimeSpan RoutedRegistrationWait = TimeSpan.FromMinutes(10);
+        /// <summary>How long a routed send waits for its sensor's registration to be acknowledged before it goes the ordinary way.</summary>
+        internal static readonly TimeSpan RoutedRegistrationWait = TimeSpan.FromSeconds(60);
 
         private void SendLoop(Job job)
         {
@@ -573,7 +579,7 @@ namespace HSMDataCollector.LargeFiles
                 return Next.Done;
             }
 
-            Later(job, reply.RetryAfter.HasValue ? RetryAfter(reply) : _transport.Backoff(_connectAttempts++));
+            Later(job, RetryAfter(reply));
             return Next.Later;
         }
 
@@ -737,7 +743,7 @@ namespace HSMDataCollector.LargeFiles
                         return Next.Done;
                     }
 
-                    Sleep(reply.RetryAfter.HasValue ? RetryAfter(reply) : _transport.Backoff(_connectAttempts++), WaitKind.Retry, job);
+                    Sleep(RetryAfter(reply), WaitKind.Retry, job);
                 }
             }
 
@@ -776,9 +782,10 @@ namespace HSMDataCollector.LargeFiles
                     return Next.Done;
                 }
 
-                // Pieces are missing: the answer may come from the check, after which this connection holds no upload; a begin
-                // holds it again and says where to go on from.
-                if (reply.Status == 409 && reply.LongField("next").HasValue)
+                // Any 409 to end (pieces are missing, among others): after a 202 the server released the upload, so this
+                // connection may hold none; a begin holds it again and says where to go on from. A piece is never sent
+                // straight away.
+                if (reply.Status == 409)
                 {
                     if (++job.EndRounds > MaxProtocolCloses * 3)
                         return ProtocolFault(job, $"the server answered end with missing pieces {job.EndRounds} times");
@@ -804,7 +811,7 @@ namespace HSMDataCollector.LargeFiles
                     return Next.Done;
                 }
 
-                Sleep(reply.RetryAfter.HasValue ? RetryAfter(reply) : _transport.Backoff(_connectAttempts++), WaitKind.Retry, job);
+                Sleep(RetryAfter(reply), WaitKind.Retry, job);
                 return Next.Begin;
             }
         }
@@ -1429,7 +1436,7 @@ namespace HSMDataCollector.LargeFiles
                     body["status"] = routed.Status;
 
                 if (!string.IsNullOrEmpty(routed.Comment))
-                    body["comment"] = routed.Comment;
+                    body["comment"] = routed.Comment.Length <= MaxBeginComment ? routed.Comment : routed.Comment.Substring(0, MaxBeginComment - 1) + "\u2026";
             }
 
             return JsonSerializer.Serialize(body);
@@ -1437,7 +1444,7 @@ namespace HSMDataCollector.LargeFiles
 
         private static TimeSpan RetryAfter(FileReply reply)
         {
-            var wait = TimeSpan.FromSeconds(Math.Max(1, reply.RetryAfter ?? 1));
+            var wait = reply.RetryAfter.HasValue ? TimeSpan.FromSeconds(Math.Max(1, reply.RetryAfter.Value)) : DefaultRetryAfter;
 
             return wait > MaxRetryAfter ? MaxRetryAfter : wait;
         }

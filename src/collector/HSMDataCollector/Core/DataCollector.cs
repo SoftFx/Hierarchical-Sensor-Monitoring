@@ -293,10 +293,7 @@ namespace HSMDataCollector.Core
                 files = new HSMDataCollector.LargeFiles.LargeFileService(unavailable == null ? transport : null, unavailable, store,
                                                         (path, options) => _sensorsStorage.LargeFileRegistration(path, options),
                                                         _dataProcessor.AddError, _dataProcessor.TryReportDroppedLargeFiles, _logger, _options.LargeFileTimings,
-                                                        _dataProcessor.ReportDroppedFileValues, _dataProcessor.RequeueFile)
-                {
-                    MaxRouted = _options.MaxQueueSize,
-                };
+                                                        _dataProcessor.ReportDroppedFileValues, _dataProcessor.RequeueFile);
 
                 if (Status == CollectorStatus.Disposed)
                     files.Dispose();

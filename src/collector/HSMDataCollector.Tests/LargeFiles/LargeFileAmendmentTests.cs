@@ -239,22 +239,93 @@ namespace HSMDataCollector.Tests.LargeFiles
         }
 
         [Fact]
-        public void Routed_values_waiting_are_bounded_and_the_oldest_is_dropped_and_counted()
+        public void Routed_values_waiting_are_bounded_in_bytes_and_one_is_always_taken()
         {
             var (h, _, dropped) = Routing();
 
             using (h)
             {
-                h.Service.MaxRouted = 2;
+                h.Transport.Registration = _ => null;
+                h.Service.MaxRoutedBytes = 10;
+
+                // Larger than the bound, but alone: taken.
+                Assert.True(h.Service.Route(FileValue(Piece + 1)));
+
+                // Past the bound: not taken, the ordinary path has it (no drop here).
+                Assert.False(h.Service.Route(FileValue(Piece + 2)));
+
+                Assert.Equal(1, h.Service.RoutedCount);
+                Assert.Empty(dropped);
+                Assert.Single(h.Errors, e => e.Contains("the most this collector keeps"));
+            }
+        }
+
+        [Fact]
+        public void A_routed_value_whose_registration_is_not_acknowledged_in_60_s_goes_the_ordinary_way()
+        {
+            var (h, requeued, dropped) = Routing();
+
+            using (h)
+            {
                 h.Transport.Registration = _ => null;
 
-                Assert.True(h.Service.Route(FileValue(Piece + 1)));
-                Assert.True(h.Service.Route(FileValue(Piece + 2)));
-                Assert.True(h.Service.Route(FileValue(Piece + 3)));
+                var value = FileValue(Piece + 1);
 
-                Assert.Equal(2, h.Service.RoutedCount);
-                Assert.Equal(1, dropped.Sum());
-                Assert.Contains(h.Errors, e => e.Contains("more than 2 file values") && e.Contains((Piece + 1) + " bytes"));
+                Assert.True(h.Service.Route(value));
+                h.Steps(30);
+                Assert.Empty(requeued);
+
+                Assert.True(h.AdvanceUntil(() => { lock (requeued) return requeued.Count == 1; }));
+                Assert.Same(value, requeued.Single());
+                Assert.Empty(dropped);
+            }
+        }
+
+        [Fact]
+        public void The_comment_of_a_routed_value_is_cut_to_4096_characters()
+        {
+            var (h, _, _) = Routing();
+
+            using (h)
+            {
+                Assert.True(h.Service.Route(FileValue(Piece + 1, SensorStatus.Ok, new string('c', 5000))));
+                Assert.True(h.AdvanceUntil(() => h.Store.StoredCount("report.txt") == 1));
+
+                var comment = h.Store.Begins.Single().GetProperty("comment").GetString();
+
+                Assert.Equal(4096, comment.Length);
+                Assert.EndsWith("…", comment);
+            }
+        }
+
+        [Fact]
+        public void Any_409_to_end_begins_again_and_never_sends_a_piece_straight_away()
+        {
+            using (var h = new LargeFileHarness(Piece))
+            {
+                h.Store.AnswerEndNext(FileAnswer.Checking(1));
+                h.Store.AnswerEndNext(FileAnswer.With(409, "{\"reason\":\"something new\"}"));
+                h.Start();
+
+                Assert.True(h.Service.Send("dumps", h.WriteFile("a.dmp", Piece * 2), null, CancellationToken.None).Wait(Wait));
+
+                var log = h.Store.LogSnapshot();
+                // begin, pieces, end (202), end (409), begin, end (stored): after the 409 the next request is a begin.
+                Assert.Equal(new[] { "end", "end", "begin a.dmp", "end" }, log.Where(l => l == "end" || l.StartsWith("begin")).Skip(1));
+                Assert.Equal(1, h.Store.StoredCount("a.dmp"));
+            }
+        }
+
+        [Fact]
+        public void An_answer_that_asks_for_a_wait_without_retry_after_waits_30_s()
+        {
+            using (var h = new LargeFileHarness(Piece))
+            {
+                h.Store.AnswerEndNext(FileAnswer.With(202, "{\"state\":\"checking\"}"));
+                h.Start();
+
+                Assert.True(h.Service.Send("dumps", h.WriteFile("a.dmp", 10), null, CancellationToken.None).Wait(Wait));
+                Assert.Contains(h.Timings.Waits, w => w.Kind == WaitKind.Retry && w.Span == TimeSpan.FromSeconds(30));
             }
         }
 

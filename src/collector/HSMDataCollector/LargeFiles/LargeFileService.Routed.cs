@@ -76,10 +76,14 @@ namespace HSMDataCollector.LargeFiles
         private long _routeMissingSession = -1;
 
         /// <summary>
-        /// The most routed values waiting: they left the file queue, so they get its bound (CollectorOptions.MaxQueueSize);
-        /// past it the oldest that has not begun is dropped and counted, as the file queue drops its oldest.
+        /// The most bytes of routed values waiting in memory (64 MiB, the same in both collectors). One value is always taken;
+        /// past the bound a value is not taken, and goes the ordinary way (a list frame where it fits, else dropped, said and
+        /// counted).
         /// </summary>
-        internal int MaxRouted { get; set; } = 20000;
+        internal long MaxRoutedBytes { get; set; } = 64L * 1024 * 1024;
+
+        // Under _gate.
+        private long _routedBytes;
 
         /// <summary>
         /// An ordinary file value above the threshold (ADR-0022 point 21): sent on the file connection, not secure, in the
@@ -92,28 +96,24 @@ namespace HSMDataCollector.LargeFiles
             if (value == null || _transport == null || _keyRefused != null)
                 return false;
 
-            Routed evicted = null;
+            var size = value.Value?.Count ?? 0;
 
             lock (_gate)
             {
                 if (_disposed || !_running || _routeMissingSession == _transport.SessionNumber)
                     return false;
 
-                if (_routed.Count >= MaxRouted)
+                if (_routed.Count > 0 && _routedBytes + size > MaxRoutedBytes)
                 {
-                    evicted = _routed.FirstOrDefault(r => !r.Began);
-
-                    if (evicted != null)
-                        _routed.Remove(evicted);
+                    Say($"routedfull:{_transport.SessionNumber}", $"File values waiting for the file connection hold {_routedBytes} bytes, the most this collector keeps ({MaxRoutedBytes}): further ones go the ordinary way until it drains.");
+                    return false;
                 }
 
                 _routed.Add(new Routed(value, _timings.Now));
+                _routedBytes += size;
                 EnsureThread();
                 _wake.Set();
             }
-
-            if (evicted != null)
-                CountDroppedFile(evicted, $"more than {MaxRouted} file values waited for the file connection");
 
             return true;
         }
@@ -155,6 +155,7 @@ namespace HSMDataCollector.LargeFiles
                 _routeMissingSession = session;
                 back = _routed.Where(r => !r.Began).ToList();
                 _routed.RemoveAll(r => !r.Began);
+                _routedBytes = _routed.Sum(r => r.Size);
             }
 
             foreach (var item in back)
@@ -182,7 +183,7 @@ namespace HSMDataCollector.LargeFiles
             bool waiting;
 
             lock (_gate)
-                waiting = _routed.Remove(job.Routed);
+                waiting = RemoveRouted(job.Routed);
 
             if (waiting)
                 GiveBack(job.Routed);
@@ -191,7 +192,17 @@ namespace HSMDataCollector.LargeFiles
         private void CompleteRouted(Job job)
         {
             lock (_gate)
-                _routed.Remove(job.Routed);
+                RemoveRouted(job.Routed);
+        }
+
+        // Under _gate.
+        private bool RemoveRouted(Routed item)
+        {
+            if (!_routed.Remove(item))
+                return false;
+
+            _routedBytes -= item.Size;
+            return true;
         }
 
         // A routed send that was not stored: a dropped file value, said once with its path and size and counted where a
@@ -201,7 +212,7 @@ namespace HSMDataCollector.LargeFiles
             bool waiting;
 
             lock (_gate)
-                waiting = _routed.Remove(job.Routed);
+                waiting = RemoveRouted(job.Routed);
 
             if (waiting)
                 CountDroppedFile(job.Routed, reason);
@@ -215,6 +226,7 @@ namespace HSMDataCollector.LargeFiles
             {
                 dropped = _routed.ToList();
                 _routed.Clear();
+                _routedBytes = 0;
             }
 
             if (dropped.Count == 0)
