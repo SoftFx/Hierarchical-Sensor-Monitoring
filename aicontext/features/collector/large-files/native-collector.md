@@ -173,8 +173,7 @@ a Linux build with HTTP and tables (the CI sanitizer presets build without HTTP)
 
 ## Known Issues / Limitations
 
-- The end-to-end run against a real server waits for steps 1 and 2 in the integration branch.
-- Conformance: `tests/conformance/collector/native/large_file_contract.hsmtest` is #1888's fixture (29 cases,
+- Conformance: `tests/conformance/collector/large_file_contract.hsmtest` is the fixture both drivers run (29 cases,
   the registration with and without flag 4 included); the native driver implements every verb.
 - Linux: nothing can deny writers; a writer that keeps writing is caught by the settle time and the comparisons
   before `end` and before the delete. A read blocked on a dead network mount holds Stop until it returns.

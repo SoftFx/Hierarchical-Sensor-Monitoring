@@ -31,6 +31,8 @@
     <Compile Include="..\HSMDataCollector.Tests\Transport\*.cs" Link="Transport\%(Filename)%(Extension)" />
     <!-- Table sensors (#1846): buffers, packing and the pipeline's tasks on both runtimes. -->
     <Compile Include="..\HSMDataCollector.Tests\Tables\*.cs" Link="Tables\%(Filename)%(Extension)" />
+    <!-- Large files (#1888): the same tests against the net6.0 build. -->
+    <Compile Include="..\HSMDataCollector.Tests\LargeFiles\*.cs" Link="LargeFiles\%(Filename)%(Extension)" />
     <!-- The TCP connection failure rate monitor reads the OS through IPGlobalProperties, whose
          implementation differs between .NET Framework and .NET: its tests run on both builds. -->
     <Compile Include="..\HSMDataCollector.Tests\TcpFailureRateTests.cs" Link="Shared\TcpFailureRateTests.cs" />

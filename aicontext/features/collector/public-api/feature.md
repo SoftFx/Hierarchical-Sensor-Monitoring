@@ -40,6 +40,7 @@ Everything a host application touches: `DataCollector` construction, `CollectorO
 | `TableTickPeriod` (4.1.0) | TimeSpan | 10 s | >= 1 s. The table tick: the rows of all table sensors go out as one block ([`../table-sensors/feature.md`](../table-sensors/feature.md)) |
 | `MaxTableBufferBytes` (4.1.0) | long | 64 MiB | > 0. Rows waiting for the tick, 8 bytes per column per row (time included); past it a row is dropped and counted |
 | `MaxTableBacklogBytes` (4.1.0) | long | 64 MiB | > 0. Packed blocks waiting for delivery; past it the oldest go, counted |
+| `DataFolder` (4.2.0) | string | null | — . Where the collector keeps what survives a restart (today: the state of large files), in a subfolder per collector identity; null takes the user's local application data folder, the temporary folder when there is none ([`../large-files/feature.md`](../large-files/feature.md)) |
 
 **Native port (C++)**: `hsm_collector_options_t` (`src/native/collector`, #1095) mirrors this table field-for-field (`0` = managed default per field; the dedup window's `0` = log immediately). The C ABI also mirrors the lifecycle surface — status state machine, `dispose`, `TestConnection`, lifecycle listeners, `MaxSensors` cap — and a pluggable log sink. The `DataSender` seam is not exposed until the HTTP transport (#1096). Contract: [`docs/native-collector-c-abi.md`](../../../../docs/native-collector-c-abi.md).
 
@@ -54,6 +55,10 @@ Lifecycle state machine, gates, registration phases, event ordering, and the dis
 - Properties: `Status`, `ComputerName`, `Module`, `Windows` (IWindowsCollection), `Unix` (IUnixCollection), `DefaultSensors` (`IEnumerable<ISensor>` — public `ISensor` contract: `SensorPath`, `InitAsync`, `StartAsync`, `StopAsync`, `IDisposable`; `SensorBase` additionally exposes `SendValue(SensorValueBase)` and the `ExceptionThrowing` event). `IWindowsCollection`/`IUnixCollection` are themselves `IDisposable`.
 - Logging: `AddNLog(LoggerOptions)` (embedded `collector.nlog.config` fallback; `ConfigPath`, `WriteDebug`), `AddCustomLogger(ICollectorLogger)`. Fluent, chainable, callable pre/post Start.
 - Path validation: every `Create*` throws `ArgumentException` for null/whitespace/slash-only paths (`SensorsStorage`).
+
+## Large files (4.2.0)
+
+Optional capability `ILargeFileCollector` (`Core/ILargeFileCollector.cs`), implemented by `DataCollector`, with extension methods `LargeFileExtensions.WatchLargeFiles` / `SendLargeFileAsync` on `IDataCollector` (another implementation gets `NotSupportedException`). `IDataCollector` is unchanged. Additions: `ILargeFileWatch`, `LargeFileWatchState`, `LargeFileOutcome`, `LargeFileResult` (`HSMDataCollector.PublicInterface`), `LargeFileOptions` (`HSMDataCollector.Options`, with `Secure`), `CollectorOptions.DataFolder`, and `DefaultAlertsOptions.LargeFiles = 4` in `HSMSensorDataObjects`. Behaviour: [`../large-files/feature.md`](../large-files/feature.md). On a session, a file value of `SendFile` / `SendFileAsync` above a quarter of the session frame goes on the file connection as a not-secure large value (same document, "Routed sends").
 
 ## Sensor creation surface
 

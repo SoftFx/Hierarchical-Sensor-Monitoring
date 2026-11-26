@@ -317,6 +317,25 @@ kind in the managed driver, creation order in the native one). Wall clock: the h
 on a 1-second heartbeat (2.5 s of silence), and a native collector reopens a session on a backoff
 that starts at a second, so the timeouts of these cases are generous on purpose.
 
+### Large files (the file connection)
+
+Scenarios of `large_file_contract.hsmtest` (#1888 managed, #1887 native; ADR-0022): a collector on the scripted session
+sends files the driver writes into the case's own folder, against the scripted server's **file connection**
+(`hsm.files.v1`: hello with `fileLimits`, probe, `begin`, binary pieces, `end`, `discard`), which stores and checks them
+as the real server does unless a script says otherwise. The content of a file is reproducible in both drivers: xorshift32
+(`x ^= x << 13; x ^= x >> 17; x ^= x << 5` on uint32, the seed as the state, 1 for 0), one byte per step, the low byte of
+the new state. **Time is the case's**: the uploader's clock moves only by `large_file_clock_advance` (a second at a time,
+each followed by a handshake: the step waits until the uploader has looked at the world after it), by the uploader's own `retryAfter` waits (which pass at once), and by a second per poll of a waiting
+`expect_*` verb; no case is decided by a wall-clock duration. An unanswered request ends its ack wait when the scripted
+server decides (an ack-deadline seam). Each case has its own data folder, so `large_file_restart` finds that case's state.
+The scripted server offers file connections only after `file_server_accept_upgrades`: without it, it stands for a server
+older than large files, so `session_transport_contract`'s `file_larger_than_a_frame_is_dropped` keeps its meaning in both
+drivers (no file connection: the file is dropped), and `large_file_contract` pins the routed send of such a file.
+
+The verbs and the answers each `file_server_answer_*_next` takes are listed in the fixture's header. Both drivers
+implement every verb (managed 4.2.0, #1888; native 0.16.0, #1887); the native driver runs the fixture in builds with
+large files.
+
 ### Tooling
 
 | Verb | Semantics |
@@ -457,8 +476,7 @@ driver):
   the case's next tick, after `table_wait_connection_up`, sends it). A bound on a whole tick (the managed driver: one
   minute) only fails a case whose tick hangs.
 
-The large file verbs (`collector/native/large_file_contract.hsmtest` until #1888 implements them in the managed driver and
-moves the fixture back to `collector/`; listed in its header) run in the native driver. The native driver takes them in the build with `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES`
+The large file verbs (`collector/large_file_contract.hsmtest`, listed in its header) run in both drivers. The native driver takes them in the build with `HSM_COLLECTOR_HTTP` and `HSM_COLLECTOR_TABLES`
 (`HSM_COLLECTOR_LARGE_FILES`) and registers the fixture there (`conformance_large_file_contract`, run only where libcurl
 carries a WebSocket). In a fixture whose file name starts with `large_file_`, `create_collector_on_session` gives the
 scripted session server the side subprotocol `hsm.files.v1` instead of the table one and its file script

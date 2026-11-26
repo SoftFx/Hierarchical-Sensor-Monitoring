@@ -60,6 +60,18 @@ namespace HSMDataCollector.Core
         private TablePipeline _tables;
 
         /// <summary>
+        /// The large files of the collector (ADR-0022, #1888): null until the first watch or hand-over, so a collector without
+        /// large files has no thread and no state of them. Set by the collector under its lifecycle gate.
+        /// </summary>
+        internal HSMDataCollector.LargeFiles.LargeFileService LargeFiles
+        {
+            get => Volatile.Read(ref _largeFiles);
+            set => Volatile.Write(ref _largeFiles, value);
+        }
+
+        private HSMDataCollector.LargeFiles.LargeFileService _largeFiles;
+
+        /// <summary>
         /// Per-collector scheduler used by sensors and the message deduplicator. Owned by the
         /// outer <see cref="DataCollector"/>; disposed there.
         /// </summary>
@@ -135,6 +147,9 @@ namespace HSMDataCollector.Core
             // Never throws: a table pipeline that cannot start says so through its sensors and reports.
             Tables?.Start();
 
+            // Never throws: uploads of large files may run from now on.
+            LargeFiles?.Start();
+
             return true;
         }
 
@@ -152,6 +167,12 @@ namespace HSMDataCollector.Core
             // After all phases attempt to stop, rethrow as AggregateException so the caller knows the stop was degraded.
             var failures = new List<Exception>();
 
+            // An upload of a large file is cut, not waited for (ADR-0022): it continues after the next Start. The cut runs
+            // beside the value drain and is over (bounded, a few seconds at most) before this stop returns, so the file
+            // connection is closed before the session.
+            var largeFiles = LargeFiles;
+            var largeFilesStop = largeFiles != null ? Task.Run(() => largeFiles.Stop()) : Task.CompletedTask;
+
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
 
@@ -159,6 +180,8 @@ namespace HSMDataCollector.Core
                 await StopWithFlushAsync(mode, failures).ConfigureAwait(false);
             else
                 await StopWithoutFlushAsync(mode, failures).ConfigureAwait(false);
+
+            await TryStopPhase(() => largeFilesStop, failures).ConfigureAwait(false);
 
             ReportUnreportedOverflow();
 
@@ -310,6 +333,7 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            LargeFiles?.Dispose();
             Tables?.Dispose();
             _messageDeduplicator?.Dispose();
             SensorStorage?.Dispose();
@@ -353,6 +377,24 @@ namespace HSMDataCollector.Core
         {
             HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
         }
+
+        /// <summary>
+        /// A file value the large file uploader gave back (#1888, amendment: the file connection turned out to be missing
+        /// on this session): it goes the way of any file value again. One the queue no longer takes (a stop) is dropped and
+        /// counted under the file queue.
+        /// </summary>
+        internal void RequeueFile(FileSensorValue file)
+        {
+            var result = EnqueueGated(_fileQueue, file);
+
+            if (result.DroppedCount > 0)
+                EmitOverflowDrops(_fileQueue.QueueName, result.DroppedCount);
+            else if (!result.IsAccepted)
+                EmitOverflowDrops(_fileQueue.QueueName, 1);
+        }
+
+        /// <summary>A file value sent on the file connection that was not stored: counted where a dropped file value is.</summary>
+        internal void ReportDroppedFileValues(int count) => EmitOverflowDrops(_fileQueue.QueueName, count);
 
         /// <summary>
         /// True when this collector sends over a transport another collector owns (it was
@@ -517,6 +559,20 @@ namespace HSMDataCollector.Core
             var sensor = DefaultSensors?.QueueOverflowSensor;
 
             return sensor != null && rows <= int.MaxValue && sensor.TryAddValue(TablePipeline.DroppedRowsQueueName, (int)rows);
+        }
+
+        /// <summary>
+        /// A large file not sent (refused, given up, unreadable) goes to the <c>Queue overflow</c> sensor under the queue
+        /// "Large files" while that sensor takes values; it is said through the errors either way.
+        /// </summary>
+        internal bool TryReportDroppedLargeFiles(long files)
+        {
+            if (files <= 0)
+                return true;
+
+            var sensor = DefaultSensors?.QueueOverflowSensor;
+
+            return sensor != null && files <= int.MaxValue && sensor.TryAddValue(HSMDataCollector.LargeFiles.LargeFileService.DroppedFilesQueueName, (int)files);
         }
 
         private void EmitOverflowDrops(string queueName, int droppedCount)

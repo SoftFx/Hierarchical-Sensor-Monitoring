@@ -1148,7 +1148,7 @@ endif()
 # Large file values (#1887): the uploader against the file connection of the scripted session server. Built with
 # both HSM_COLLECTOR_HTTP and HSM_COLLECTOR_TABLES (HSM_COLLECTOR_LARGE_FILES).
 if(HSM_COLLECTOR_LARGE_FILES)
-    add_conformance_test(conformance_large_file_contract native/large_file_contract.hsmtest)
+    add_conformance_test(conformance_large_file_contract large_file_contract.hsmtest)
 endif()
 
 # collector/windows/: scenarios for sensors that exist only on Windows. The managed driver reads

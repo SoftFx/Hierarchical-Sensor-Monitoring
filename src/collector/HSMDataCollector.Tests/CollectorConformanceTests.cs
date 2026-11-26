@@ -51,6 +51,7 @@ namespace HSMDataCollector.Tests
 
                 state.Collector?.Dispose();
                 state.SessionServer?.Dispose();
+                CleanUpLargeFiles(state);
             }
         }
 
@@ -94,6 +95,7 @@ namespace HSMDataCollector.Tests
 
                 state.Collector?.Dispose();
                 state.SessionServer?.Dispose();
+                CleanUpLargeFiles(state);
             }
 
             Assert.True(detected != null, $"Must-fail fixture '{caseName}' passed — the driver is not detecting wrong expectations.");
@@ -1148,7 +1150,10 @@ namespace HSMDataCollector.Tests
                         maxValuesInPackage: int.Parse(step.Arg(0)),
                         collectPeriodMs: int.Parse(step.Arg(1)),
                         requestTimeoutMs: int.Parse(step.Arg(2)),
-                        directives: state.Directives);
+                        directives: state.Directives,
+                        tune: options => ConfigureLargeFiles(state, options));
+                    state.SessionStep = step;
+                    ConfigureFileConnection(state);
                     WatchTableConnectionAtSessionClose(state, (HSMDataCollector.Client.Session.SessionDataSender)OptionsOf(state.Collector).DataSender);
                     break;
 
@@ -1391,6 +1396,9 @@ namespace HSMDataCollector.Tests
                     if (await ExecuteTableStepAsync(state, step).ConfigureAwait(false))
                         break;
 
+                    if (await ExecuteLargeFileStepAsync(state, step).ConfigureAwait(false))
+                        break;
+
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
         }
@@ -1410,7 +1418,7 @@ namespace HSMDataCollector.Tests
         // arrival: the managed collector handles them inside (no public surface), so the driver reads
         // its internal receiver, where the HTTP header path hands them too.
         private static DataCollector CreateCollectorOnSession(ScriptedSessionServer server, int maxValuesInPackage, int collectPeriodMs, int requestTimeoutMs,
-            System.Collections.Concurrent.ConcurrentQueue<string> directives)
+            System.Collections.Concurrent.ConcurrentQueue<string> directives, Action<CollectorOptions> tune = null)
         {
             var options = new CollectorOptions
             {
@@ -1447,6 +1455,8 @@ namespace HSMDataCollector.Tests
                     TableConnectionWait = TimeSpan.FromMilliseconds(200),
                 },
             };
+
+            tune?.Invoke(options);
 
             var collector = new DataCollector(options);
 
