@@ -12,9 +12,9 @@ namespace HSMServer.Middleware
     /// UseForwardedHeaders replaces <see cref="ConnectionInfo.RemoteIpAddress"/> with the address the proxy stated.
     /// </summary>
     // Registered right before UseForwardedHeaders with the SAME options instance, so "trusted proxy" means exactly the
-    // peers whose X-Forwarded-For the app honours. X-Original-For cannot answer this: the forwarded-headers middleware
-    // sets it on a trusted hop, but leaves a copy the client sent in place. Not registered (no trusted proxy configured,
-    // or a host without it) means no request came through a trusted proxy.
+    // peers whose X-Forwarded-For the app honours. The decision comes from the connection itself, never from a request
+    // header. Not registered (no trusted proxy configured, or a host without it) means no request came through a trusted
+    // proxy.
     public sealed class ConnectionPeerMiddleware
     {
         private static readonly object ItemKey = new();
