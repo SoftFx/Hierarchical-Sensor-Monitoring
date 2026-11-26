@@ -44,11 +44,15 @@ jobs:
       - name: Install dependencies
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
+      # --blame-crash: a test host that dies (an access violation in native code, a stack overflow, a
+      # fail-fast) leaves a mini dump and the Sequence_*.xml of the tests it was running next to the trx
+      # files, so the upload below carries them.
       - name: Build & Test Solution
         run: >
           dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
           --logger "console;verbosity=minimal"
           --logger trx
+          --blame-crash --blame-crash-dump-type mini
           --results-directory ${{ runner.temp }}/test-results
 
       - name: Upload test results on failure

@@ -1948,6 +1948,19 @@ namespace HSMServer.Core.Tests.TableSensors
         // The steps of the move held off in every job of the test, restarts included (TableMergeJob.MoveStepsPerPass = 0).
         private bool _movesHeld;
 
+        // The crash point armed by Crash or CrashAt, and whether its crash was thrown: CrashedPass checks that the pass's
+        // fault is that crash, not another fault before it (which would leave the state of an earlier point).
+        private string _crashPoint;
+        private bool _crashThrown;
+
+        private void ArmCrash(string point) => (_crashPoint, _crashThrown) = (point, false);
+
+        private void ThrowCrash(string message)
+        {
+            _crashThrown = true;
+            throw new IOException(message);
+        }
+
         private void HoldMoves()
         {
             _movesHeld = true;
@@ -1976,10 +1989,11 @@ namespace HSMServer.Core.Tests.TableSensors
 
         private void Crash(string point)
         {
+            ArmCrash(point);
             void Throw(string p)
             {
                 if (p == point)
-                    throw new IOException($"crash at {p}");
+                    ThrowCrash($"crash at {p}");
             }
 
             _server.Job.Checkpoint = Throw;

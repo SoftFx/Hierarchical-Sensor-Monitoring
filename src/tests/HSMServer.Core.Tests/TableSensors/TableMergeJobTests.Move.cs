@@ -1000,6 +1000,7 @@ namespace HSMServer.Core.Tests.TableSensors
             var report = Pass(at);
             Assert.Null(report.Fault);
             Assert.True(_server.Batches.MergeStatistics.MoveFaults > faults);
+            Assert.True(_crashThrown, $"the pass faulted before its crash point {_crashPoint} was reached");
         }
 
         private async Task KeepAsync(BaseSensorModel sensor, TimeIntervalModel keep) =>

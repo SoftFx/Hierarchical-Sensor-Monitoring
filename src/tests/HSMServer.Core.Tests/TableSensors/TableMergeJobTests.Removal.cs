@@ -100,7 +100,7 @@ namespace HSMServer.Core.Tests.TableSensors
         [InlineData("removal-deleted", 2)]
         [InlineData("removal-unplaced", 1)]
         [InlineData("removals-writing", 1)]
-        [InlineData("removal-cleared", 1)]
+        [InlineData("removal-sensors-cleared", 1)]
         public async Task A_crash_after_any_durable_write_of_a_sensors_removal_is_completed_by_the_next_pass_which_then_writes_nothing(string point, int occurrence)
         {
             var (s, r) = await RemovalSetupAsync();
@@ -116,11 +116,11 @@ namespace HSMServer.Core.Tests.TableSensors
             Assert.Equal(rows, Rows(r));
             Assert.Equal((point, occurrence) switch { ("removal-deleted", 1) => (0L, 2L), _ => (0L, 0L) }, (Bytes(s, 5), Bytes(s, 52)));
             Assert.Equal(point is "removal-deleted", _server.Batches.GetPlacement(_product, s.Id) is not null);
-            Assert.Equal(point is not "removal-cleared", _server.Batches.GetRemovals().Count == 1);
+            Assert.Equal(point is not "removal-sensors-cleared", _server.Batches.GetRemovals().Count == 1);
 
             var rerun = Pass(RemoveAt.AddMinutes(1));
             Assert.Null(rerun.Fault);
-            Assert.Equal(point is "removal-cleared" ? 0 : 1, rerun.RemovalsDone);
+            Assert.Equal(point is "removal-sensors-cleared" ? 0 : 1, rerun.RemovalsDone);
             Assert.Equal((0, 0, 3), (Bytes(s, 5), Bytes(s, 52), Bytes(r, 52)));
             Assert.Null(_server.Batches.GetPlacement(_product, s.Id));
             Assert.Empty(_server.Batches.GetRemovals());
@@ -318,7 +318,7 @@ namespace HSMServer.Core.Tests.TableSensors
         [InlineData("removal-blocks-deleted")]
         [InlineData("product-renamed")]
         [InlineData("removal-product-removed")]
-        [InlineData("removal-cleared")]
+        [InlineData("removal-product-cleared")]
         public async Task A_crash_after_any_durable_write_of_a_products_removal_is_completed_by_the_next_pass_which_then_writes_nothing(string point)
         {
             var (victim, r) = await ProductRemovalSetupAsync();
@@ -329,11 +329,11 @@ namespace HSMServer.Core.Tests.TableSensors
             CrashAt(point, 1);
             CrashedPass(RemoveAt);
             await RestartAsync(crash: true);
-            Assert.Equal(point is not "removal-cleared", _server.Batches.GetRemovals().Count > 0);
+            Assert.Equal(point is not "removal-product-cleared", _server.Batches.GetRemovals().Count > 0);
 
             var rerun = Pass(RemoveAt.AddMinutes(1));
             Assert.Null(rerun.Fault);
-            Assert.Equal(point is "removal-cleared" ? 0 : 1, rerun.RemovalsDone);
+            Assert.Equal(point is "removal-product-cleared" ? 0 : 1, rerun.RemovalsDone);
             Assert.Empty(_server.Blocks.GetBlocks(victim));
             Assert.False(Directory.Exists(folder));
             Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(folder), $"{victim:N}*"));
@@ -344,6 +344,39 @@ namespace HSMServer.Core.Tests.TableSensors
             var again = Pass(RemoveAt.AddMinutes(2));
             Assert.Equal((0, null), (again.RemovalsDone, again.Fault));
             Assert.False(Directory.Exists(folder));
+            Assert.Equal(rows, Rows(r));
+        }
+
+
+        [Fact]
+        public async Task A_crash_after_the_sensors_clear_of_a_pass_whose_product_waits_leaves_only_the_products_mark_and_the_next_pass_removes_the_product()
+        {
+            var (victim, r) = await ProductRemovalSetupAsync();
+            var folder = ProductFolder(victim);
+            var kept = _server.Blocks.GetBlocks(_product).Select(e => e.Sequence).ToList();
+            await _server.Cache.RemoveProductAsync(victim);
+
+            // The product's mark made again and not confirmed (its entity not yet known to be gone): the pass leaves the
+            // product and removes its sensor alone, so the sensors' clear comes first; the crash lands right after it.
+            _server.Batches.MarkRemoved([], [victim]);
+            CrashAt("removal-sensors-cleared", 1);
+            CrashedPass(RemoveAt);
+            await RestartAsync(crash: true);
+
+            var left = Assert.Single(_server.Batches.GetRemovals());
+            Assert.Equal((victim, (Guid?)null, true), (left.ProductId, left.SensorId, left.Earlier));
+            Assert.True(Directory.Exists(folder));
+
+            var rerun = Pass(RemoveAt.AddMinutes(1));
+            Assert.Equal((1, null), (rerun.RemovalsDone, rerun.Fault));
+            Assert.Empty(_server.Batches.GetRemovals());
+            Assert.False(Directory.Exists(folder));
+            Assert.Empty(_server.Blocks.GetBlocks(victim));
+            Assert.Equal(kept, _server.Blocks.GetBlocks(_product).Select(e => e.Sequence));
+            var rows = Rows(r);
+
+            var again = Pass(RemoveAt.AddMinutes(2));
+            Assert.Equal((0, null), (again.RemovalsDone, again.Fault));
             Assert.Equal(rows, Rows(r));
         }
 
@@ -668,10 +701,11 @@ namespace HSMServer.Core.Tests.TableSensors
         private void CrashAt(string point, int occurrence)
         {
             var seen = 0;
+            ArmCrash(point);
             void Throw(string p)
             {
                 if (p == point && ++seen == occurrence)
-                    throw new IOException($"crash at {p} ({occurrence})");
+                    ThrowCrash($"crash at {p} ({occurrence})");
             }
 
             _server.Job.Checkpoint = Throw;
