@@ -370,12 +370,23 @@ namespace HSMDatabase.AccessManager.TableBatches
         /// the sensor in are touched: a copy never touches the target for an hour the source has nothing of (there the target's
         /// moved rows may be the sensor's only copy). For each such hour, every moved key of the sensor there is deleted first
         /// (a repeat leaves exactly one copy), then the sensor's index records and batches of both regions of the source are put,
-        /// in the order a read gives them (hour region before moved region, then by ordinal), numbered again 0..n-1, as bytes
+        /// numbered again 0..n-1 in the source's rank order (hour region before moved region, each by its ordinal), as bytes
         /// (an index record whose batch is missing, or a batch that does not decode, is carried as it is), and the hour's mark,
         /// the source's bytes, where the target has none. With no such hour nothing is written at all: no database created, no
         /// generation changed. Creates the target database when there is something to write. The source is not changed. Changes
         /// only the sensor's generation. Bytes deleted in the target count in its deleted-bytes counter
         /// (<see cref="GetDeletedShare"/>). Answers what was written.
+        /// <para>
+        /// The order of the rows is kept by the new ordinals, not by the order of the keys: a read of the target visits the moved
+        /// index records by their first time and then their ordinal (the key is <c>0xFF | hour | sensor | 0x00 | first | ordinal</c>),
+        /// and the reader ranks the rows of equal time by region, ordinal and row, so the rows read after a copy are the rows
+        /// read before it, in the same order.
+        /// </para>
+        /// <para>
+        /// A copy holds every batch of its whole range in memory and writes them in one synced write under the product's lock:
+        /// the caller bounds the range. The move job cuts a step at <c>TableMergeJob.MoveStepBytes</c> (64 MB) of the sensor's
+        /// batches counted with <see cref="GetSensorHourBytes"/> (at least one hour) and never asks for more than one week.
+        /// </para>
         /// <para>
         /// Refuses with <see cref="TableBatchRefusedException"/>, nothing written, no generation changed: a target database
         /// retention dropped; a source hour with the sensor's records and no mark, a mark that does not decode, or an index key
