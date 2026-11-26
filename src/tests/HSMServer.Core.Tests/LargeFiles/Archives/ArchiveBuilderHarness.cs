@@ -126,4 +126,47 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
 
         public ArchiveEntryReader OpenEntry(Stream archive, string password) => _inner.OpenEntry(archive, password);
     }
+
+    /// <summary>A write stream over the temporary archive whose volume is full: a write, or else a flush, throws the
+    /// <see cref="IOException"/> .NET reports for that with the given HResult.</summary>
+    internal sealed class FullVolumeStream(Stream inner, int hresult, bool onFlush) : Stream
+    {
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (!onFlush)
+                throw Full();
+
+            inner.Write(buffer, offset, count);
+        }
+
+        public override void Flush()
+        {
+            if (onFlush)
+                throw Full();
+
+            inner.Flush();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        private IOException Full() => new("There is not enough space on the disk.", hresult);
+    }
 }

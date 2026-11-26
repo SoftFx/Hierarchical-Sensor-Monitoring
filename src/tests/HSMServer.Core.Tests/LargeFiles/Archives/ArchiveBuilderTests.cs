@@ -261,6 +261,38 @@ namespace HSMServer.Core.Tests.LargeFiles.Archives
             Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
         }
 
+        // The same full volume, reported by the temporary archive's own stream rather than by the writer: on a write
+        // or on the flush that follows the last entry.
+        [Theory]
+        [InlineData(unchecked((int)0x80070070), false)]
+        [InlineData(28, false)]
+        [InlineData(unchecked((int)0x80070070), true)]
+        [InlineData(28, true)]
+        public async Task AFullVolumeReportedByTheTemporaryArchiveStream_WaitsForRoom_AndAbandonsIt(int hresult, bool onFlush)
+        {
+            _h.Passwords.Set(_h.Product, Password1);
+            var content = TestContent.Compressible(250_000);
+            var file = _h.Store.AddVerified(_h.Product, content);
+            _h.Builder.WrapTemporaryOutput = output => new FullVolumeStream(output, hresult, onFlush);
+
+            await _h.Run();
+
+            var status = _h.Builder.GetStatus(file.FileId);
+            Assert.Equal(ArchiveBuildState.WaitingForRoom, status.State);
+            Assert.Equal(1, _h.Builder.Statistics.WaitedForRoom);
+            Assert.Equal(0, _h.Builder.Statistics.Failed);
+            Assert.Single(_h.Store.Abandoned);
+            Assert.Empty(_h.Store.TempFiles());
+            Assert.Equal(LargeArchiveFileState.Verified, _h.Store.TryGetFile(file.FileId).State);
+
+            _h.Builder.WrapTemporaryOutput = null;
+            _h.Advance(TimeSpan.FromMinutes(1));
+            await _h.Run();
+
+            Assert.Equal(LargeArchiveFileState.Packed, _h.Store.TryGetFile(file.FileId).State);
+            Assert.Equal(content, _h.ReadArchive(file.FileId, Password1));
+        }
+
         [Fact]
         public async Task AnotherIOFaultWhileWriting_IsAFailure()
         {

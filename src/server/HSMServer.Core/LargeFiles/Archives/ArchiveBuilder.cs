@@ -79,6 +79,9 @@ namespace HSMServer.Core.LargeFiles.Archives
         /// <summary>The files whose status is kept in memory: only those with work pending or a failure reported.</summary>
         internal int TrackedCount => _files.Count;
 
+        /// <summary>Wraps the temporary archive's file stream before a build writes to it; null writes to the file itself.</summary>
+        internal Func<Stream, Stream> WrapTemporaryOutput { get; set; }
+
         public event Action<Guid, bool, string> BuildFinished;
 
 
@@ -423,7 +426,7 @@ namespace HSMServer.Core.LargeFiles.Archives
             var entryName = ArchiveEntryNames.Sanitize(record.Name, record.Extension);
 
             using var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferSize);
-            using var output = new HashingWriteStream(file);
+            using var output = new HashingWriteStream(WrapTemporaryOutput?.Invoke(file) ?? file);
 
             if (source is null)
             {
