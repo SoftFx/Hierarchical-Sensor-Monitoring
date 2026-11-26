@@ -668,8 +668,13 @@ namespace HSMDataCollector.Tests.Tables
                     ((TableSensor)tables[w]).OnAcceptedForTests = run => lastAccepting[writer] = run;
                 }
 
+                // Each writer on a thread of its own, never on the thread pool: a writer loops without a pause until the
+                // last stop is over, and that stop needs the pool. Four such loops on pool threads, on a machine of four
+                // cores, held the pool's threads and its CPU, and the pool adds no thread while the CPU is that busy:
+                // this test and every test running beside it stood still for seconds (a table connection's reconnect
+                // after a 1013 missed its put's wait; #1846).
                 var writersStart = new ManualResetEventSlim();
-                var writers = Enumerable.Range(0, Writers).Select(w => Task.Run(() =>
+                var writers = Enumerable.Range(0, Writers).Select(w => Task.Factory.StartNew(() =>
                 {
                     writersStart.Wait();
 
@@ -696,7 +701,7 @@ namespace HSMDataCollector.Tests.Tables
                     }
 
                     offered[w] = n;
-                })).ToArray();
+                }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
 
                 // A stop that has ended its run's tick and loop (the run refuses rows now), and every pass of a pack,
                 // a tick's or a stop's final one: held until the writers have written more.

@@ -1,6 +1,8 @@
 using System;
+using System.Net.Http;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -16,6 +18,8 @@ using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using HSMServer.Notifications.Telegram.Tokens;
 using HSMServer.ServerConfiguration;
+using Telegram.Bot;
+using Telegram.Bot.Requests.Abstractions;
 using Moq;
 using User = HSMServer.Model.Authentication.User;
 using Xunit;
@@ -276,6 +280,70 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(654321L, created.TelegramChatId?.Identifier);
         }
 
+        // #1829: chat names are unique per server, and the /start flow names a chat after
+        // the Telegram chat — two groups may share a title. A name another chat holds gets
+        // " (2)" appended: nobody is there to pick another name.
+        [Fact]
+        public async Task TryConnect_FolderInvitation_SecondGroupWithTheSameTitle_GetsADisambiguatedName()
+        {
+            var manager = BuildManager();
+            manager.ConnectChatToFolder += (_, _, _) => Task.FromResult("Production");
+
+            await manager.TryConnect(BuildGroupMessage(chatId: 1001, title: "On-call"), new InvitationToken(Guid.NewGuid(), new User("test-user")));
+            await manager.TryConnect(BuildGroupMessage(chatId: 1002, title: "On-call"), new InvitationToken(Guid.NewGuid(), new User("test-user")));
+
+            Assert.Equal(
+                ["On-call", "On-call (2)"],
+                manager.GetValues().Select(chat => chat.Name).OrderBy(name => name, StringComparer.Ordinal));
+        }
+
+        [Fact]
+        public async Task TryConnect_PreAllocatedChat_SecondGroupWithTheSameTitle_GetsADisambiguatedName()
+        {
+            var manager = BuildManager();
+
+            var first = await manager.TryConnect(BuildGroupMessage(chatId: 2001, title: "Dev team"), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: new User("test-user")));
+            var second = await manager.TryConnect(BuildGroupMessage(chatId: 2002, title: "DEV TEAM"), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: new User("test-user")));
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, first.Outcome);
+            Assert.Equal(ChatConnectOutcome.ChatBound, second.Outcome);
+            Assert.Equal("DEV TEAM (2)", second.Name); // its own title, disambiguated: the clash ignores case, as the rule does
+        }
+
+        // Telegram permits 128-character titles, the name rule 100: a title beyond the
+        // maximum is cut, so the name never breaks the length rule — and the suffix of a
+        // disambiguated name still fits.
+        [Fact]
+        public async Task TryConnect_TitleLongerThanTheNameRule_CutsItToTheMaximum()
+        {
+            var manager = BuildManager();
+            var longTitle = new string('t', 128);
+
+            await manager.TryConnect(BuildGroupMessage(chatId: 3001, title: longTitle), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: new User("test-user")));
+            await manager.TryConnect(BuildGroupMessage(chatId: 3002, title: longTitle), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: new User("test-user")));
+
+            // Ordinal order: a space sorts before the "t" it replaces, so the suffixed name is first.
+            Assert.Equal(
+                [new string('t', 96) + " (2)", new string('t', 100)],
+                manager.GetValues().Select(chat => chat.Name).OrderBy(name => name, StringComparer.Ordinal));
+        }
+
+        // A title arrives as Telegram has it, surrounding spaces included: the chat is named
+        // by the trimmed title, the way every other surface holds a name — so a stored name
+        // is that same name, padded or not.
+        [Fact]
+        public async Task TryConnect_TitleWithSurroundingSpaces_IsNamedByTheTrimmedTitle()
+        {
+            var manager = BuildManager();
+            var user = new User("test-user");
+
+            var first = await manager.TryConnect(BuildGroupMessage(chatId: 4001, title: "  Dev team  "), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: user));
+            var second = await manager.TryConnect(BuildGroupMessage(chatId: 4002, title: "Dev team"), new InvitationToken(chatId: Guid.NewGuid(), folderId: Guid.Empty, user: user));
+
+            Assert.Equal("Dev team", first.Name);
+            Assert.Equal("Dev team (2)", second.Name);
+        }
+
         // #1304 conflict policy — target Chat already bound to a different Telegram chat.
         // Strict refuse: TelegramChatId on the record must not be overwritten.
         [Fact]
@@ -467,6 +535,60 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
 
+        // #1826: an invitation issued with the management-surface lifetime flows through the
+        // SAME one-shot store and /start consumer as a web-issued one — binds once, is
+        // consumed by that use, and an expired token is refused.
+        [Fact]
+        public async Task TryConnect_ManagementLifetimeToken_BindsOnceAndIsConsumed()
+        {
+            var manager = BuildManager();
+            var chat = BuildUnboundChat();
+            await manager.TryAdd(chat);
+
+            var link = manager.GetChatInvitationLink(chat.Id, new User("admin"), TimeSpan.FromMinutes(10));
+            var tokenValue = link.Substring(link.IndexOf("start=") + "start=".Length);
+
+            Assert.True(manager.TokenManager.TryRemoveToken(tokenValue, out var token));
+            var result = await manager.TryConnect(BuildDirectMessage(chatId: 777_111), token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(777_111L, manager[chat.Id].TelegramChatId?.Identifier);
+            Assert.False(manager.TokenManager.TryRemoveToken(tokenValue, out _)); // one-shot
+        }
+
+        // The expiry gate lives in the /start handler (TryConnect itself trusts the token it is
+        // handed), so the refusal is pinned at the handler: an expired token binds nothing and
+        // is consumed by the attempt. The reply send fails — the handler swallows it, and the
+        // assertions read the state that matters.
+        [Fact]
+        public async Task StartCommand_ExpiredManagementToken_BindsNothing()
+        {
+            var manager = BuildManager();
+            var chat = BuildUnboundChat();
+            await manager.TryAdd(chat);
+
+            var link = manager.GetChatInvitationLink(chat.Id, new User("admin"), TimeSpan.FromSeconds(-1));
+            var tokenValue = link.Substring(link.IndexOf("start=") + "start=".Length);
+
+            var handler = new TelegramUpdateHandler(null, manager, new Mock<IFolderManager>().Object,
+                new TelegramConfig { BotName = "hsm_alerts_bot" });
+
+            var client = new Mock<ITelegramBotClient>();
+            client.Setup(c => c.SendRequest<It.IsAnyType>(It.IsAny<IRequest<It.IsAnyType>>(), It.IsAny<CancellationToken>()))
+                .Throws(new HttpRequestException("reply send failed — irrelevant to this pin"));
+
+            var message = BuildDirectMessage(chatId: 777_222);
+            message.Text = $"/start {tokenValue}";
+
+            // Update.Type is computed: a set Message yields UpdateType.Message.
+            await handler.HandleUpdateAsync(client.Object,
+                new Telegram.Bot.Types.Update { Message = message },
+                CancellationToken.None);
+
+            Assert.Null(manager[chat.Id].TelegramChatId); // the expired token bound nothing
+            Assert.False(manager.TokenManager.TryRemoveToken(tokenValue, out _)); // consumed by the attempt
+        }
+
         private static Telegram.Bot.Types.Message BuildDirectMessage(long chatId = 123456) =>
             new()
             {
@@ -474,9 +596,35 @@ namespace HSMServer.Core.Tests.Notifications
                 From = new() { Id = 789, Username = "tg-user", FirstName = "Test" },
             };
 
+        private static Telegram.Bot.Types.Message BuildGroupMessage(long chatId, string title) =>
+            new()
+            {
+                Chat = new() { Id = chatId, Type = Telegram.Bot.Types.Enums.ChatType.Group, Title = title },
+                From = new() { Id = 789, Username = "tg-user", FirstName = "Test" },
+            };
 
-        private static ChatsManager BuildManager()
-            => new(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object);
+
+        private static ChatsManager BuildManager() => BuildManagerWithBot();
+
+        // #1826: a chat with NO Telegram binding yet — the invitation tests bind one.
+        private static Chat BuildUnboundChat() =>
+            new(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "unbound-chat",
+            });
+
+        // #1826: the invitation link builders read the configured bot name.
+        private static ChatsManager BuildManagerWithBot(string botName = "hsm_alerts_bot")
+        {
+            var config = new Mock<IServerConfig>();
+            config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = botName });
+
+            return new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, config.Object,
+                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
+        }
 
         private static Chat BuildChat() =>
             new(new ChatEntity

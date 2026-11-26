@@ -3,6 +3,7 @@ using HSMServer.Controllers.DataTables;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
+using System.Net;
 
 namespace HSMServer.Model.History.Personal.Journal;
 
@@ -72,18 +73,24 @@ public sealed class JournalRecordViewModel
     }
 
 
+    // The view value is HTML: the Record cell of the per-node journal table is inserted as markup (it
+    // carries <strong> and the operation badge). So every piece of recorded text is encoded on its way
+    // in: a property name, an old or new value, a free-text record hold what users and collectors typed
+    // (descriptions, paths, names). The search value stays plain text.
     private static (string ViewValue, string SearchValue) BuildSearchAndViewValue(JournalRecordModel model)
     {
+        static string Text(string value) => WebUtility.HtmlEncode(value);
+
         if (string.IsNullOrEmpty(model.PropertyName))
-            return (model.Enviroment, $"{model.Enviroment} {model.Initiator}");
+            return (Text(model.Enviroment), $"{model.Enviroment} {model.Initiator}");
 
         var header = string.Empty;
         var value = string.Empty;
 
         if (string.IsNullOrEmpty(model.NewValue))
             return ($"""
-                     {model.PropertyName} has been removed: 
-                     <strong>{model.OldValue}</strong>
+                     {Text(model.PropertyName)} has been removed: 
+                     <strong>{Text(model.OldValue)}</strong>
                      """, $"{model.PropertyName} {model.OldValue} {model.Initiator}");
 
         if (string.IsNullOrEmpty(model.OldValue) || model.Enviroment == "Added new value")
@@ -96,14 +103,14 @@ public sealed class JournalRecordViewModel
 
         if (header != string.Empty)
             return ($"""
-            {header} {model.PropertyName}:
-            <strong>{value}</strong>
+            {header} {Text(model.PropertyName)}:
+            <strong>{Text(value)}</strong>
             """, changeText);
 
         return ($"""
-            {model.PropertyName} was modified
-            Old value: {model.OldValue}
-            <strong>New value: {model.NewValue}</strong>
+            {Text(model.PropertyName)} was modified
+            Old value: {Text(model.OldValue)}
+            <strong>New value: {Text(model.NewValue)}</strong>
             """, changeText);
     }
 }

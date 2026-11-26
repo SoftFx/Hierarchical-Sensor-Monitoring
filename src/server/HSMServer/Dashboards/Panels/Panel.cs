@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using HSMCommon.Collections;
@@ -154,11 +155,13 @@ namespace HSMServer.Dashboards
         }
 
 
+        // Called from the cache's events, with no user edit to store the panel
+        // after it: a source that is not stored here is gone after a restart,
+        // when the sensor is no longer new and no subscription adds it again.
         public void AddSensor(BaseSensorModel sensor)
         {
-            foreach (var (_, sub) in Subscriptions)
-                if (sub.IsSubscribed && sub.TryBuildSource(sensor, out var source))
-                    TrySaveNewSource(source, out _);
+            if (AddSubscribedSources(sensor))
+                Sources.Call();
         }
 
         // A moved sensor (#1719) keeps its sources by id; a subscription whose
@@ -170,6 +173,45 @@ namespace HSMServer.Dashboards
                     return;
 
             AddSensor(sensor);
+        }
+
+        // AddMovedSensor for many sensors at once (a root product that changed its name or folder):
+        // the sources are looked through once, not once per sensor, and the
+        // panel is stored once if any source was added.
+        public void AddMovedSensors(IReadOnlyCollection<BaseSensorModel> sensors)
+        {
+            if (!Subscriptions.Any(s => s.Value.IsSubscribed))
+                return;
+
+            var onPanel = Sources.Select(s => s.Value.Sensor?.Id).ToHashSet();
+            var added = false;
+
+            // A candidate that throws (a subscription edited at this very
+            // moment) ends the batch; what was added before it is still stored.
+            try
+            {
+                foreach (var sensor in sensors)
+                    if (!onPanel.Contains(sensor.Id))
+                        added |= AddSubscribedSources(sensor);
+            }
+            finally
+            {
+                if (added)
+                    Sources.Call();
+            }
+        }
+
+        // One source per subscription that covers the sensor. The panel is not
+        // stored here: the caller raises the Sources reaction once for all of them.
+        private bool AddSubscribedSources(BaseSensorModel sensor)
+        {
+            var added = false;
+
+            foreach (var (_, sub) in Subscriptions)
+                if (sub.IsSubscribed && sub.TryBuildSource(sensor, out var source))
+                    added |= TrySaveNewSource(source, out _).IsOk;
+
+            return added;
         }
 
         public void RemoveSensor(Guid sensorId)
@@ -255,7 +297,15 @@ namespace HSMServer.Dashboards
                 SubscribeModuleToUpdates(source);
             }
             
-            return string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source, ApplyNewSource) : errorResult;
+            var result = string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source, ApplyNewSource) : errorResult;
+
+            // A candidate built by a subscription may already listen to the
+            // sensor's values (PanelSubscription.TryBuildSource): a rejected one
+            // is not on the panel, so nothing else would ever dispose it.
+            if (!result.IsOk)
+                source.Dispose();
+
+            return result;
         }
 
         private PanelSubscription ApplyPanelSettings(PanelSubscription sub) => sub.UpdatePanelSettings(YRange, AggregateValues, ShowProperties);

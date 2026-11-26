@@ -119,6 +119,12 @@ namespace HSMDatabase.AccessManager
         /// cannot be deserialized exists), false when a read that succeeded did not find it, null when the read failed.
         /// </summary>
         bool? SensorEntityExists(string sensorId);
+
+        /// <summary>
+        /// Whether a sensor's or product's entity is in the database (#1850 part 4d): true unless a read says it is absent,
+        /// so a read that fails answers true (the caller deletes nothing on it).
+        /// </summary>
+        bool EntityExists(string id);
         List<string> GetAllSensorsIds();
 
         #endregion

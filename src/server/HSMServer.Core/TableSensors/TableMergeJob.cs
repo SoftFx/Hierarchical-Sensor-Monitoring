@@ -48,6 +48,21 @@ namespace HSMServer.Core.TableSensors
         /// start (#1850 part 4b): nothing of them was merged, dropped or judged for expiry. The next pass tries again.
         /// </summary>
         public int ProductsNotReconciled { get; init; }
+
+        /// <summary>Steps of the move between period classes run (#1850 part 4c): copy steps (each cut of at most 64 MB) and expired steps.</summary>
+        public int MoveSteps { get; init; }
+
+        /// <summary>Bytes of batches the move copied into their new class.</summary>
+        public long MovedBytes { get; init; }
+
+        /// <summary>Rows the move deleted because the sensor's new period had passed for their week (expired steps).</summary>
+        public long MoveExpiredRows { get; init; }
+
+        /// <summary>Week databases compacted after a tenth of them was deleted.</summary>
+        public int Compactions { get; init; }
+
+        /// <summary>Removals of table sensors and root products completed in the pass (#1850 part 4d): their stored rows deleted, their record cleared.</summary>
+        public int RemovalsDone { get; init; }
     }
 
 
@@ -170,6 +185,10 @@ namespace HSMServer.Core.TableSensors
                 if (Blocks is null || Batches is null)
                     return new TableMergePassReport();
 
+                // The removals the tree recorded (#1850 part 4d), read once a pass: the merge leaves a removed root product
+                // alone (a commit, even one without any class, would create its folder again), and RunMoves deletes them.
+                var removals = ReadRemovals(utcNow);
+
                 // First, and whatever the merge below does: deleting the blocks of merged hours past their delay is what
                 // gives disk back when the merge cannot write (too little free disk), so a fault of the merge never holds it off.
                 deleted = DeleteDue(utcNow, token, ref fault);
@@ -202,13 +221,25 @@ namespace HSMServer.Core.TableSensors
                         merged++;
                 }
 
-                Stats.Set(ref Stats.LagHours, DueHours(utcNow).Count);
+                var due = DueHours(utcNow, out var lagging);
+                Stats.Set(ref Stats.LagHours, due.Count);
+
+                // The move between period classes (#1850 part 4c): after the merge, so that no placement is written and no hour
+                // merged while a step runs, and before retention, which then sees the week databases the steps released. A
+                // product's copy steps only while its own merge has no lag (one product that keeps faulting holds off no
+                // other's); the recovery of a step in flight and expired steps always.
+                var moves = RunMoves(utcNow, unreconciled, lagging, removals, token);
 
                 // After the merge, so that a catch-up merges what it can before retention judges what is left.
                 var (weeks, expired) = RunRetention(utcNow, token, ref fault);
 
+                // After retention, on this thread: a compaction never runs beside the drop of its database.
+                RunCompactions(utcNow, moves, token);
+
                 return new TableMergePassReport { HoursMerged = merged, HoursDeleted = deleted, Mismatches = mismatches, Fault = fault,
-                    WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count };
+                    WeeksDropped = weeks, ExpiredHoursDeleted = expired, ProductsNotReconciled = unreconciled.Count,
+                    MoveSteps = moves.Steps - moves.RemovalSteps, MovedBytes = moves.MovedBytes, MoveExpiredRows = moves.ExpiredRows, Compactions = moves.Compactions,
+                    RemovalsDone = moves.Removals };
             }
             catch (Exception ex)
             {
@@ -262,17 +293,25 @@ namespace HSMServer.Core.TableSensors
         }
 
         // Closed hours with a product not committed (and not failed verification in this process), oldest first.
-        private List<long> DueHours(DateTime utcNow)
+        private List<long> DueHours(DateTime utcNow) => DueHours(utcNow, out _);
+
+        // The same, and the products with such an hour (their merge lags).
+        private List<long> DueHours(DateTime utcNow, out HashSet<Guid> lagging)
         {
             var due = new List<long>();
+            lagging = [];
 
             foreach (var (hour, products) in BlocksByHour())
             {
                 if (hour + TimeSpan.TicksPerHour + _options.MergeGrace.Ticks > utcNow.Ticks)
                     break;
 
-                if (products.Keys.Any(p => !IsMerged(p, hour) && !_failedVerification.Contains((p, hour))))
+                var behind = products.Keys.Where(p => !_removedProducts.Contains(p) && !IsMerged(p, hour) && !_failedVerification.Contains((p, hour))).ToList();
+                if (behind.Count > 0)
+                {
                     due.Add(hour);
+                    lagging.UnionWith(behind);
+                }
             }
 
             return due;
@@ -297,6 +336,11 @@ namespace HSMServer.Core.TableSensors
             var products = new List<(Guid Product, List<TableBlockIndexEntry> Entries)>();
             foreach (var product in Blocks.GetProducts())
             {
+                // A removed root product is not merged: its blocks are deleted by its removal (RunRemovals), and a commit
+                // would create its folder again.
+                if (_removedProducts.Contains(product))
+                    continue;
+
                 var entries = Blocks.GetBlocks(product).Where(e => e.ArrivalHourTicks == hour).ToList();
                 if (entries.Count > 0)
                     products.Add((product, entries));

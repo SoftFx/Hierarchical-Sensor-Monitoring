@@ -34,7 +34,17 @@ namespace HSMDataCollector.Tests
     /// (<c>WaitBeforeAbandon</c>): it ends when the test says so. The only thing awaited from
     /// the clock is the stop budget itself (one second), and it is awaited as an event.
     /// Compiled into both collector test projects (net472 and net6.0).
+    ///
+    /// That second, and the second a stop waits for a queue's loop to exit, are the
+    /// collector's own and are measured by the clock. Beside tests that keep the thread pool
+    /// busy for longer than that, a stop can give a queue up ("did not stop within 00:00:01")
+    /// or come to the send late, and the drain then does not wait when the test expects it
+    /// to. So the class runs with no other test beside it (<see cref="StopBudgetCollection"/>),
+    /// as it always did in the unit project, whose assembly runs its tests one at a time.
+    /// That takes the load of the other tests away, not the clock: a process stalled for a
+    /// whole second on its own would still fail the first assertion.
     /// </summary>
+    [Collection(StopBudgetCollection.Name)]
     public sealed class StopDrainAbandonedSendTests
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
@@ -63,14 +73,15 @@ namespace HSMDataCollector.Tests
         {
             var sender = new GatedSender(queueName, outcome);
             var log = new Log();
+            var wait = new AbandonWait();
 
             using (var collector = CreateCollector(sender))
+            using (ReleasedOnExit(wait, sender))
             {
                 collector.AddCustomLogger(log);
 
                 var items = await FillQueueAsync(collector, sender, queueName);
                 var queue = GetQueue(collector, queueName);
-                var wait = new AbandonWait();
 
                 SetWaitBeforeAbandon(queue, wait.Begin);
                 sender.CloseGate();
@@ -78,12 +89,12 @@ namespace HSMDataCollector.Tests
                 var stop = collector.Stop();
 
                 // The budget has fired and the send is still in flight: the drain waits.
-                Assert.True(await Within(wait.Begun.Task), "The drain never waited for the cancelled send.");
+                Assert.True(await Within(wait.Begun.Task), $"The drain never waited for the cancelled send. {log.Describe()}");
 
                 // The wait ends and the sender has not come back: the drain gives the send up.
                 wait.End();
 
-                Assert.True(await Within(stop), "The stop did not return.");
+                Assert.True(await Within(stop), $"The stop did not return. {log.Describe()}");
 
                 Assert.Contains(log.Errors, line => line.Contains(GaveUp));
                 Assert.Contains($"{queueName} queue discarded {items} item(s) during collector shutdown.", log.Infos);
@@ -109,14 +120,15 @@ namespace HSMDataCollector.Tests
         {
             var sender = new GatedSender(queueName, Outcome.Cancelled);
             var log = new Log();
+            var wait = new AbandonWait();
 
             using (var collector = CreateCollector(sender))
+            using (ReleasedOnExit(wait, sender))
             {
                 collector.AddCustomLogger(log);
 
                 var items = await FillQueueAsync(collector, sender, queueName);
                 var queue = GetQueue(collector, queueName);
-                var wait = new AbandonWait();
 
                 SetWaitBeforeAbandon(queue, wait.Begin);
                 sender.CloseGate();
@@ -130,7 +142,7 @@ namespace HSMDataCollector.Tests
                 // The send honours the cancellation; the wait is never ended by the test.
                 sender.OpenGate();
 
-                Assert.True(await Within(stop), "The stop did not return.");
+                Assert.True(await Within(stop), $"The stop did not return. {log.Describe()}");
 
                 Assert.DoesNotContain(log.Errors, line => line.Contains(GaveUp));
                 Assert.Contains($"{queueName} queue discarded {items} item(s) during collector shutdown.", log.Infos);
@@ -239,6 +251,25 @@ namespace HSMDataCollector.Tests
             }
         }
 
+
+        // Ends the wait and opens the gate when the test leaves its block, before the collector
+        // is disposed: after a failed assertion the drain would otherwise wait for a test that
+        // is gone, and the Dispose with it. Both are no-ops for a test that already did them.
+        private static IDisposable ReleasedOnExit(AbandonWait wait, GatedSender sender) =>
+            new OnExit(() =>
+            {
+                wait.End();
+                sender.OpenGate();
+            });
+
+        private sealed class OnExit : IDisposable
+        {
+            private readonly Action _action;
+
+            internal OnExit(Action action) => _action = action;
+
+            public void Dispose() => _action();
+        }
 
         /// <summary>The wait before the drain gives a send up, in the hands of the test.</summary>
         private sealed class AbandonWait
@@ -370,6 +401,13 @@ namespace HSMDataCollector.Tests
                 }
             }
 
+            /// <summary>What the collector said, for the message of a failed assertion.</summary>
+            internal string Describe()
+            {
+                lock (_lock)
+                    return $"Collector log: errors [{string.Join(" | ", _errors)}], infos [{string.Join(" | ", _infos)}].";
+            }
+
             public void Debug(string message) { }
 
             public void Info(string message)
@@ -390,5 +428,15 @@ namespace HSMDataCollector.Tests
                     _errors.Add(ex?.ToString() ?? string.Empty);
             }
         }
+    }
+
+    /// <summary>
+    /// Tests that wait for the collector's one-second stop timeouts: the collection runs with
+    /// no other test collection beside it.
+    /// </summary>
+    [CollectionDefinition(Name, DisableParallelization = true)]
+    public sealed class StopBudgetCollection
+    {
+        public const string Name = "Stop budget";
     }
 }

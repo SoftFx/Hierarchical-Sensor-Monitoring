@@ -154,7 +154,8 @@ namespace HSMServer.Dashboards
             return template;
         }
 
+        // A product outside any folder is selected in the filter as Guid.Empty.
         internal bool AreFoldersContain(Guid? folder) =>
-            Folders is null || (!folder.HasValue && Folders.Contains(Guid.Empty)) || Folders.Contains(folder.Value);
+            Folders is null || Folders.Contains(folder ?? Guid.Empty);
     }
 }

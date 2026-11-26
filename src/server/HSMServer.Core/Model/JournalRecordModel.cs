@@ -52,9 +52,16 @@ public sealed class JournalRecordModel
         ChangeSetId = entity.ChangeSetId;
     }
 
-    public JournalRecordModel(Guid id, InitiatorInfo initiator)
+    public JournalRecordModel(Guid id, InitiatorInfo initiator) : this(id, initiator, DateTime.UtcNow.Ticks) { }
+
+    /// <summary>
+    /// A record stamped at an exact time. The storage key is (entity id, ticks, record
+    /// type), so a writer that leaves several records for one entity in one write gives
+    /// them successive ticks — records sharing one would overwrite each other.
+    /// </summary>
+    public JournalRecordModel(Guid id, InitiatorInfo initiator, long ticks)
     {
-        Key = new JournalKey(id, DateTime.UtcNow.Ticks);
+        Key = new JournalKey(id, ticks);
         Initiator = (initiator ?? InitiatorInfo.System).ToString();
     }
 
