@@ -1026,6 +1026,16 @@ namespace HSMDatabase.LevelDB.TableBatches
 
             OpenPlacements(product, folder);
 
+            // The newest week of the product (of a commit or of a database) is its pinned week from the open on, as it would be
+            // had this process written it: a write of that week pins its databases, and the move's primitives, which pin only
+            // that week, never pin an older one (they would stay open past the bound until the product wrote a newer week).
+            long newest = long.MinValue;
+            foreach (var week in product.Weeks)
+                newest = Math.Max(newest, week.WeekStartTicks);
+            foreach (var hour in product.Hours.Keys)
+                newest = Math.Max(newest, StorageWeek.GetStartTicks(hour));
+            product.PinnedWeek = newest;
+
             _logger.Info($"Table batches of product {productId} opened in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms: " +
                          $"{product.Hours.Count} merged hours, {product.Weeks.Count} week databases, {product.Placements.Count} placements");
             return product;
