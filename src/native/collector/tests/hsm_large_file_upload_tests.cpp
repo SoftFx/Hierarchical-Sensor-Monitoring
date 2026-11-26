@@ -1455,6 +1455,62 @@ namespace
         }
     }
 
+    // Design §17 (with #1910's bounded sends): a piece whose write cannot finish (the server stops reading
+    // after the begin) ends at its send bound without an answer: the connection is lost, not closed by
+    // the server, so it counts as neither a checksum mismatch nor a protocol close. The file is sent
+    // again on a new connection after a begin and stored. And the ack deadline starts once the frame is
+    // written: a write that takes longer than the ack timeout is still answered in time.
+    void NativeLargeFilePieceSendTimeoutBeginsAgain()
+    {
+        constexpr std::int64_t kBigFrame = 32LL * 1024 * 1024; // a piece larger than the loopback buffers
+        for (int round = 0; round < 2; ++round)
+        {
+            Rig rig;
+            rig.script->SetHello(kBigFrame, 30, 1LL << 40);
+            const auto& script = rig.script;
+            rig.server->PauseFileReading(1, 2); // the probe and the begin, then nothing
+            FileServerScript* scripted = script.get();
+            lf::test::AdjustConnection(rig.collector, [scripted, round](lf::FileConnectionOptions& connection) {
+                connection.ack_abandoned_for_tests = [scripted](std::int64_t id) { return scripted->Unanswered(id); };
+                if (round == 0)
+                    // A short bound only on the first connection, the one that stops reading.
+                    connection.send_bound_ms_for_tests = [](std::int64_t opened) { return opened == 1 ? std::int64_t{ 1000 } : std::int64_t{ 600000 }; };
+                else
+                    connection.request_timeout_ms = 8000; // the ack deadline, below how long the write is held
+            });
+            const std::string source = rig.folder.File("stuck.dmp");
+            const std::string bytes = Content(static_cast<std::size_t>(script->PieceBytes()) + 1000, 50 + round); // two pieces
+            WriteFile(source, bytes);
+            rig.Start();
+            auto options = NoLimit();
+            hsm_large_file_t* file = nullptr;
+            Check(hsm_collector_send_large_file(rig.collector, "dumps", source.c_str(), &options, &file) == HSM_RESULT_OK, "send");
+            if (round == 1)
+            {
+                // The write of the first piece is held well past the ack deadline, then the server reads on.
+                Check(WaitFor([&] { return rig.server->PausedFileBytes() > 0; }), "the piece's write is held" + rig.log.All());
+                std::this_thread::sleep_for(std::chrono::milliseconds(12000));
+                rig.server->ResumeFileReading();
+            }
+            Check(WaitFor([&] { return Settled(file); }, 60) && Result(file).outcome == HSM_LARGE_FILE_STORED, "stored (round " + std::to_string(round) + "): " + Reason(file) + rig.log.All());
+            Check(rig.script->StoredFiles().begin()->second == bytes, "the bytes");
+            std::vector<std::int64_t> numbers;
+            for (const auto& piece : rig.script->Pieces())
+                numbers.push_back(piece.number);
+            Check(numbers == std::vector<std::int64_t>{ 0, 1 }, "each piece stored once (the cut one never reached the script)");
+            Check(rig.log.Count("checksum") == 0 && rig.log.Count("closed the file connection with") == 0, "neither a checksum mismatch nor a protocol close");
+            if (round == 0)
+            {
+                Check(rig.script->Begins().size() == 2 && rig.script->Connections().size() >= 2, "a new connection and a begin");
+                Check(rig.log.Count("send timed out") >= 1, "the write ended at its bound: " + rig.log.All());
+            }
+            else
+                Check(rig.script->Begins().size() == 1, "the ack came after the long write: no new connection" + rig.log.All());
+            rig.server->ResumeFileReading();
+            hsm_large_file_release(file);
+        }
+    }
+
 #if defined(_WIN32)
     void NativeLargeFileWriterHoldsTheFile()
     {
@@ -1552,6 +1608,7 @@ const std::map<std::string, std::function<void(const std::string&)>>& LargeFileU
         { "native_large_file_watch_release_racing_an_upload", [](const std::string&) { NativeLargeFileWatchReleaseRacingAnUpload(); } },
         { "native_large_file_lifecycle_from_the_logger_is_refused", [](const std::string&) { NativeLargeFileLifecycleFromTheLoggerIsRefused(); } },
         { "native_large_file_discard_after_a_cut", [](const std::string&) { NativeLargeFileDiscardAfterACut(); } },
+        { "native_large_file_piece_send_timeout_begins_again", [](const std::string&) { NativeLargeFilePieceSendTimeoutBeginsAgain(); } },
 #if defined(_WIN32)
         { "native_large_file_writer_holds_the_file", [](const std::string&) { NativeLargeFileWriterHoldsTheFile(); } },
 #else

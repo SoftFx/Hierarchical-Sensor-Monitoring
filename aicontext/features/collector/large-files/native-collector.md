@@ -70,6 +70,7 @@ restart of either side.
 | Changed file | size, time or identity differ before `end` or before the delete (Linux: also the path's inode): `discard` on the connection, or `begin` with the facts it was begun with and then `discard`; taken again when settled; `400 unknown op` (a server before `discard`): the part expires there, said once |
 | Delete | only after `stored` in this run (at `end`, or at `begin` for a file the server has), in delete mode, after the facts compare equal again; Windows through the open handle (`FileDispositionInfo`), Linux `unlink` with the descriptor still open over the comparison; the delivered entry is written first. Without an identity, a `stored` at `begin` deletes only with the collector's own record of sending that file. A hard link loses one name |
 | Feature absent | an upgrade answered 404 or 400: said once; asked again with every new session and every 30 minutes |
+| A piece's write past its bound | every frame's write is bounded (`max(request timeout, 10 heartbeats)`); a write that passes it ("send timed out") loses the connection: reconnect after a backoff, `begin`, go on from the server's piece; not a checksum mismatch, not a protocol close. The ack deadline starts after the frame was written |
 | Stop / dispose | cut, never waited for; continue after Start from the server's `next` |
 | Cancel racing `stored` | a cancel before the uploader commits the outcome (right after `stored`) keeps the source and stays `CANCELLED`; after it (the delete decided or done) the outcome is `STORED` |
 | Lifecycle on the uploader thread | a logger called there must not stop, dispose or destroy the collector: Stop returns `HSM_RESULT_INVALID_STATE`, Dispose returns and says so once; destroy there is not allowed (as for the lifecycle listener) |
@@ -157,6 +158,9 @@ a name that is not UTF-8 (Linux); stop, dispose and destroy from another thread 
 202 check and a speed-limit wait; a watch released during an upload; stop and dispose from the logger on the
 uploader thread; a discard after a cut (and `400 unknown op`); routed sends: the threshold of the live session, a
 refused registration, a bad comment, a 1008, a stop that gives them back to the value queue, and the 64 MiB bound.
+A piece whose write passes its send bound (the server stops reading; the bounded WebSocket send of #1910) is
+sent again after a new connection and `begin`, counted neither as a checksum mismatch nor as a protocol close; the
+ack deadline starts once the frame is written, so a write held longer than the ack timeout is still answered.
 The fake server lets the upload go when an `end` begins its check, as the real one does. Run under ASan and TSan in
 a Linux build with HTTP and tables (the CI sanitizer presets build without HTTP).
 

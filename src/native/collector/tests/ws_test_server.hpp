@@ -892,6 +892,18 @@ namespace hsm::test
             std::lock_guard<std::mutex> guard(side_send_mutex_);
             return static_cast<int>(file_open_.size());
         }
+        // A file connection that stops reading once it has handled `after_messages` messages (text or
+        // binary; the probe and a begin are two): `connection` 1 = the first file connection accepted, 0 =
+        // every one from now on, -1 = none (the default). Until ResumeFileReading it reads nothing, so a
+        // piece frame larger than the socket buffers cannot be written whole.
+        void PauseFileReading(int connection, int after_messages)
+        {
+            file_pause_after_.store(after_messages, std::memory_order_release);
+            file_pause_.store(connection, std::memory_order_release);
+        }
+        void ResumeFileReading() { file_pause_.store(-1, std::memory_order_release); }
+        // Bytes a paused file connection has not read yet; 0 when none is paused.
+        size_t PausedFileBytes() const { return paused_file_bytes_.load(std::memory_order_acquire); }
         // Closes every open file connection from the server's side.
         void CloseFileConnections(uint16_t code, const std::string& reason = {})
         {
@@ -1556,8 +1568,22 @@ namespace hsm::test
             Frame frame;
             bool open = true;
             bool dropped = false;
-            while (open && ReadFrame(conn, side_drop_, frame))
+            int handled = 0;
+            while (open)
             {
+                // PauseFileReading: nothing is read until resumed (or the server stops).
+                for (;;)
+                {
+                    const int pause = file_pause_.load(std::memory_order_acquire);
+                    if (!((pause == 0 || pause == index) && handled >= file_pause_after_.load(std::memory_order_acquire)) ||
+                        stop_.load(std::memory_order_acquire))
+                        break;
+                    paused_file_bytes_.store(BytesWaiting(conn), std::memory_order_release);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                }
+                paused_file_bytes_.store(0, std::memory_order_release);
+                if (!ReadFrame(conn, side_drop_, frame))
+                    break;
                 if (frame.opcode == 0x8)
                 {
                     bool closing = false;
@@ -1611,6 +1637,7 @@ namespace hsm::test
                 }
                 message.clear();
                 message_opcode = 0;
+                ++handled;
 
                 switch (action.kind)
                 {
@@ -2168,6 +2195,9 @@ namespace hsm::test
         std::atomic<bool> drop_{ false };
         std::atomic<bool> main_paused_{ false };
         std::atomic<int> table_pause_{ -1 };
+        std::atomic<int> file_pause_{ -1 };
+        std::atomic<int> file_pause_after_{ 0 };
+        std::atomic<size_t> paused_file_bytes_{ 0 };
         std::atomic<size_t> paused_table_bytes_{ 0 };
         std::atomic<bool> connected_{ false };
         std::atomic<int> upgrades_{ 0 };

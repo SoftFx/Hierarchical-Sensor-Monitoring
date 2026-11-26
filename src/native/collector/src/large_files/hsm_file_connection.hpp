@@ -132,6 +132,9 @@ namespace hsm::collector::large_files
         std::int64_t request_timeout_ms = 30000;
         /// For tests: see AckedLinkOptions.
         std::function<bool(std::int64_t request_id)> ack_abandoned_for_tests;
+        /// For tests: the bound of every frame's write on the `connection`-th connection this object
+        /// opened (from 1), instead of SendTimeoutMs's.
+        std::function<std::int64_t(std::int64_t connection)> send_bound_ms_for_tests;
     };
 
     class FileConnection
@@ -184,5 +187,6 @@ namespace hsm::collector::large_files
         FileConnectionOptions options_;
         std::unique_ptr<hsm::http::AckedBinaryLink> link_;
         FileHello hello_{};
+        std::int64_t opens_ = 0; // connections opened so far
     };
 } // namespace hsm::collector::large_files

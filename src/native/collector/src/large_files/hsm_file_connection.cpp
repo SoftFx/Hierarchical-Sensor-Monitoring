@@ -171,12 +171,23 @@ namespace hsm::collector::large_files
         {
             hello.heartbeat_ms = opened.heartbeat_ms;
             hello_ = hello;
+            ++opens_;
         }
         return opened;
     }
 
     std::int64_t FileConnection::SendTimeoutMs() const noexcept
     {
+        if (options_.send_bound_ms_for_tests)
+        {
+            try
+            {
+                return options_.send_bound_ms_for_tests(opens_);
+            }
+            catch (...)
+            {
+            }
+        }
         // A frame of megabytes on a slow link: the write gets the longer of the request timeout and ten
         // heartbeats (the server's frame deadline is three).
         return (std::max)(options_.request_timeout_ms, 10 * (std::max<std::int64_t>)(link_->HeartbeatMs(), 1000));
