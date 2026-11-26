@@ -558,8 +558,9 @@ namespace HSMServer.ServiceExtensions
         }
     
         // The options of the large file store, with a lease at least as long as the collector sessions' silence limit
-        // (#1884): a frame of a file connection may take that long to arrive, and a lease shorter than it would let a
-        // frame that began under a live lease outlast it, past the memory bound of file frames. A shorter setting is
+        // (#1884), which is a frame's deadline. A frame that began under a live lease may outlast it and still arrive
+        // within its deadline after the store gave the upload to another connection; a lease never shorter than that
+        // deadline keeps the frames in flight to at most twice LargeFiles.MaxUploadsInProgress. A shorter setting is
         // raised, and the log says so.
         internal static HSMServer.Core.LargeFiles.LargeFileOptions LargeFileOptionsFor(IServerConfig config)
         {
@@ -570,7 +571,8 @@ namespace HSMServer.ServiceExtensions
                 return options;
 
             NLog.LogManager.GetLogger("LargeFiles").Warn($"LargeFiles.LeaseTimeoutSeconds = {options.LeaseTimeoutSeconds} is shorter than the collector sessions' silence limit " +
-                                                        $"({silenceSeconds} s, three heartbeats): the lease is raised to {silenceSeconds} s, so a piece that began under a live lease cannot outlast it.");
+                                                        $"({silenceSeconds} s, three heartbeats): the lease is raised to {silenceSeconds} s, a frame's deadline, so the file frames in flight stay at most twice LargeFiles.MaxUploadsInProgress " +
+                                                        "(a frame that began under a live lease may still outlast it).");
 
             return options with { LeaseTimeoutSeconds = silenceSeconds };
         }
