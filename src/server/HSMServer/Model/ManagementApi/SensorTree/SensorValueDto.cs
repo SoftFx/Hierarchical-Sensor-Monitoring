@@ -86,8 +86,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     [Description("Typed value of a File sensor: metadata only. The file CONTENT is never part of any management API response.")]
     public sealed record FileValueDto
     {
-        /// <summary>File name without extension.</summary>
-        [Description("File name without extension.")]
+        /// <summary>File name as the value carries it: an ordinary file value usually without its extension (see extension); a large file value (largeFile set) with its whole original name.</summary>
+        [Description("File name as the value carries it: an ordinary file value usually without its extension (see extension); a large file value (largeFile set) with its whole original name.")]
         public string Name { get; init; }
 
         /// <summary>File extension (with the leading dot, may be empty).</summary>

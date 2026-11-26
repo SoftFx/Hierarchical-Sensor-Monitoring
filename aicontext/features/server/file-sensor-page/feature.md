@@ -21,7 +21,7 @@ Issue #1886 (step 4 of epic #1882). The store is step 1 (#1883), the archive, th
 - Every file action (`GetFile`, `GetFileStream`, `GetFileInfo`, `GetRecentFilesView`, `GetFilesPage`) answers an unknown sensor and a sensor of a product the user may not see the same way (404); it relies on the web UI access-check work.
 - Nothing a client sent (a file name, an extension, a comment, an application, a host) goes into a script or an event attribute: rows carry it as HTML-encoded text and `data-*` attributes, element ids are made of the value's time only, and the handlers in `_SensorFileContent.cshtml` read the attributes.
 - A large value never reaches the text preview or the content download of an ordinary file: both answer 404 for it.
-- The download log of a file is shown to a Manager of the product and an admin only.
+- The download log of a file is shown to a Manager of the product and an admin only, and read only when they ask for it in the row (`GetLargeFileDownloads`), never with a page: the log is not read on every view.
 
 ## Primary Workflows
 
@@ -55,6 +55,7 @@ There is no "removed by retention" state: retention removes a value's row by its
 | `POST /Home/GetFileStream?Selected=<id>&dateTime=<ticks>` | the same as a stream, for the preview |
 | `GET /Home/GetRecentFilesView?fileId=<id>` | the first page (partial `_FileAccordions`) |
 | `GET /Home/GetFilesPage?fileId=<id>&olderThan=<ticks>` | the page of values older than the time |
+| `GET /Home/GetLargeFileDownloads?fileId=<sensor id>&file=<file id>` | who downloaded the file and when, the 20 most recent (partial `_LargeFileDownloads`); 404 for a Viewer, a file of another sensor, an unknown file or sensor |
 
 ## Key Files
 
@@ -62,9 +63,11 @@ There is no "removed by retention" state: retention removes a value's row by its
 |---|---|
 | `src/server/HSMServer/Model/FileSensors/FileSensorPageService.cs` | the description, the point read, the pages, the state of a large row (`Decide`) |
 | `src/server/HSMServer/Model/FileSensors/FileSensorPageModels.cs` | `FileInfoDto`, the row, upload and page view models |
-| `src/server/HSMServer/Model/FileSensors/LargeFilePageSource.cs` | `ILargeFilePageSource`: what the page reads from the store, the builder, the passwords and the download log |
+| `src/server/HSMServer/Model/FileSensors/ILargeFilePageSource.cs` | `ILargeFilePageSource`: what the page reads about large files, and its facts |
+| `src/server/HSMServer/Model/FileSensors/LargeFilePageSource.cs` | its implementation: the store's uploads and origin (#1883), `LargeFileDownloadService.DescribeFile`, `IDumpPasswordService.HasPassword`, `IDownloadLog.ReadFile` (#1885) |
 | `src/server/HSMServer/Controllers/HomeController.cs` region "File" | the thin actions and their access check |
 | `src/server/HSMServer/Views/Home/_FileAccordions.cshtml` | one page: the password notice, the uploads, the rows |
+| `src/server/HSMServer/Views/Home/_LargeFileDownloads.cshtml` | who downloaded one file |
 | `src/server/HSMServer/Views/Home/Sensor/History/_SensorFileContent.cshtml` | the last value and the handlers of the list |
 | `src/server/HSMServer.Core/Extensions/FileValueNameExtensions.cs` | the name rule (`GetDisplayName`) |
 
@@ -78,7 +81,10 @@ There is no "removed by retention" state: retention removes a value's row by its
 ## Tests
 
 - `src/tests/HSMServer.Core.Tests/Controllers/HomeControllerFileTests.cs`: the description without bytes, the same 404 for an unknown and an invisible sensor in every action, a file found by its time past the first 20, pages past 20 without the last value, the name rule, a client's extension kept as data, the state of a stored file for every builder state with and without a password, the missing file, the upload percent and "being checked", uploads on the first page only with the application, the host or `—`, the password notice and its link for a Viewer, a Manager and an admin.
-- Playwright: `src/tests/Autotests` (the page with large values).
+- `src/tests/HSMServer.Core.Tests/Controllers/FileAccordionsRenderTests.cs`: the partials rendered by the server's compiled views on a test host: every state of a large file and both kinds, the download only when ready, no preview for a large value, the live mark, an upload's percent and origin, the password notice with and without the settings link, a client's name, extension, application and host only as encoded text and data attributes (no `onclick`, ids of digits), the downloads of a file encoded.
+- `src/tests/HSMServer.Core.Tests/LargeFiles/LargeFilePageSourceTests.cs`: the real store's uploads with their progress, kind and origin; over the download step: a packed file ready with its web link, a secure verified file waiting in the download step's words, a not secure one never waiting, a file of a removed sensor missing, the downloads naming the user or the token.
+- `src/tests/HSMServer.Core.Tests/LargeFiles/FileSensorPageDatabaseTests.cs`: on the real database, a value at the first tick of a storage week found by its time and listed.
+- Playwright: `src/tests/Autotests/home/file_sensor_page.spec.ts` covers ordinary file values (pages past 20, the 25th downloaded by its time, a hostile extension). Large values are not seeded there yet: a real upload needs the file connection (#1884), which is not in the integration branch at this step; the state matrix is held by the render tests above.
 
 ## Known Issues / Limitations
 
