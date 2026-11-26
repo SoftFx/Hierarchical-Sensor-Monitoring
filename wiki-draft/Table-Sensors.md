@@ -155,7 +155,7 @@ For a table sensor the period is counted in **whole weeks**, rounded up:
 
 Rows are stored by week and deleted a whole week at a time, once the period has passed **after the end of the row's week**. A row is therefore kept at least for the period and at most one week longer. The server checks once an hour.
 
-One exception, open for the owner of the product: a table sensor that takes "1 month" (or another preset) from a **folder** is currently kept for ever, as an ordinary sensor's history is in that case.
+One exception, a known issue of this branch that is not decided yet: a table sensor that takes "1 month" (or another preset) from a **folder** is currently kept for ever, as an ordinary sensor's history is in that case.
 
 **Changing the period.** What this branch does today:
 
