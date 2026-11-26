@@ -970,6 +970,55 @@ namespace HSMDatabase.LevelDB.Tests.LargeFileTests
             }
         }
 
+        // #1883 review: the first verifies of two files run on two products' queues, each under its own file's gate only. Before
+        // the mark had a lock of its own both wrote hsm-large-files-seen.tmp at once, and one of the verifies failed on it.
+        [Fact]
+        public async Task The_first_verifies_of_two_files_at_once_write_the_mark_once_and_both_verify()
+        {
+            var databases = _root + "-databases";
+
+            try
+            {
+                for (var round = 0; round < 20; round++)
+                {
+                    var mark = Path.Combine(databases, $"round{round}", LargeFileStore.UsedMarkName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(mark)!);
+
+                    var store = new LargeFileStore(Path.Combine(_root, $"round{round}"), mark) { Clock = () => _now, FreeBytes = () => _free };
+                    _stores.Add(store);
+
+                    var files = new[] { "a", "b" }.Select(name =>
+                    {
+                        var begin = Begin(store, Key(name, Piece));
+                        Append(store, begin.Lease, 0, Content(Piece));
+                        Assert.Equal(LargeFileFinishStart.Ready, store.StartFinish(begin.Lease).Outcome);
+                        return begin.FileId;
+                    }).ToArray();
+
+                    using var start = new Barrier(files.Length);
+                    var verifies = files.Select(fileId => Task.Run(() =>
+                    {
+                        start.SignalAndWait();
+                        return store.MarkVerified(fileId, new byte[32], _now);
+                    })).ToArray();
+
+                    var verified = await Task.WhenAll(verifies);
+
+                    Assert.All(verified, record => Assert.Equal(LargeFileState.Verified, record.State));
+                    Assert.True(File.Exists(mark));
+                    Assert.False(File.Exists(mark + ".tmp"));
+                }
+            }
+            finally
+            {
+                foreach (var store in _stores)
+                    store.Dispose();
+
+                _stores.Clear();
+                Directory.Delete(databases, recursive: true);
+            }
+        }
+
         [Fact]
         public void A_file_is_being_checked_from_the_start_of_its_finish_to_its_end()
         {

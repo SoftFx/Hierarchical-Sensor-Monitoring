@@ -77,7 +77,7 @@ ones:
 
 | Collection | Classes | Why |
 |---|---|---|
-| `NLog isolated` | `AlertScheduleProviderMissingIdLoggingTests`, `LoggingExceptionMiddlewareTests`, `ChannelTestSendResultTests`, `TelegramBotStartFailureLoggingTests`, `TableFeedSensorsServiceTests`, `DumpPasswordServiceLoggingTests` | They swap the process-global NLog configuration. |
+| `NLog isolated` | `AlertScheduleProviderMissingIdLoggingTests`, `LoggingExceptionMiddlewareTests`, `ChannelTestSendResultTests`, `TelegramBotStartFailureLoggingTests`, `TelegramBotCredentialLoggingTests`, `TelegramBotProbeTests`, `TableFeedSensorsServiceTests`, `DumpPasswordServiceLoggingTests` | They swap the process-global NLog configuration. |
 | `Process-wide measurement` | `CollectorSessionTests` | `IdleSession_CostsTensOfKilobytes` reads the process-wide managed heap, and a shutdown test bounds a wall-clock time. |
 | `File alert context` | `FileAlertVariablesTests` | They swap the process-wide `FileAlertContext` that File sensor alert messages read (#1886). |
 | `7-Zip child process (alone)` | `SevenZipInteropTests`, `LargeFileEndToEndTests` | They start 7-Zip (when it is installed) with redirected output: the child inherits the open LevelDB files of the classes running beside it, which then cannot delete their folders. |
