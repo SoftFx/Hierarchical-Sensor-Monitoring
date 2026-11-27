@@ -40,7 +40,7 @@ Select the File sensor in the tree and open the **Files** tab. Under the last va
 
 **A large value** shows its name, its kind, its state, its size and the time it was accepted. Opened, it shows:
 
-- **File time**: the modification time of the source file;
+- **File time**: the modification time of the source file; for a file sent by an ordinary send (`SendFile`), the time of the send, since such a send carries content and no file;
 - **Accepted**: the time the server accepted it (the value's time);
 - **Application** and **Host**: the collector's application name and the address the server recorded for it (`—` when not known);
 - why it cannot be downloaded yet, when it cannot;
