@@ -245,6 +245,32 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(JournalOperations.Create, JournalOperations.Of(record));
         }
 
+        // #1932: a read returns the author's name from the row, and a row used to get it at
+        // server start only — a chat created while the server ran read with no author until
+        // the next restart. The name is resolved with the add.
+        [Fact]
+        public async Task TryAdd_OfAKnownAuthor_ReadsWithTheAuthorsNameAtOnce()
+        {
+            var admin = new User("admin");
+            Assert.True(await _userManager.TryAdd(admin));
+
+            var chat = new Chat(BuildChatEntity(name: "Ops") with { Author = admin.Id.ToByteArray() });
+            Assert.True(await _chats.TryAdd(chat));
+
+            var dto = HSMServer.Model.ManagementApi.Chats.ChatDtoMapper.ToDto(_chats[chat.Id], _ => true, includeDetail: true);
+            Assert.Equal("admin", dto.Author);
+        }
+
+        // A row whose author is not a user of this server has no name to read.
+        [Fact]
+        public async Task TryAdd_OfAnUnknownAuthor_ReadsWithNoAuthor()
+        {
+            var chat = await AddChatAsync(name: "Ops");
+
+            var dto = HSMServer.Model.ManagementApi.Chats.ChatDtoMapper.ToDto(_chats[chat.Id], _ => true, includeDetail: true);
+            Assert.Null(dto.Author);
+        }
+
         [Fact]
         public async Task TryAdd_ChatCreatedWithItsChannels_LeavesARecordPerChannel()
         {
