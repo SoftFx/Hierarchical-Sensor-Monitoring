@@ -476,7 +476,7 @@ driver):
   protocol error of the server, the `1000` of a stop), and a server that has not read the close by then loses it with
   the connection (#1925). The managed driver sets `TableConnection.CloseHeardForTests` to the scripted server's record
   of the close codes it read, so the abort waits for the read, and writes the close of a stop without its 250 ms bound
-  (`CloseFrameBoundForTests`). A close that could not be written is not waited for. The native driver has no such seam
+  (`CloseFrameBoundForTests`). A close that could not be written, and the answer to a close of the server, are not waited for. The native driver has no such seam
   yet: its close lingers up to a second for the server's answer before the connection goes.
 - **The long waits of the table connection may be shortened, and decide nothing**: the pause after an upgrade refused
   with 404 or 400 (shortened so a case that waits for a second refusal is quick), and how long a put waits for a table

@@ -139,7 +139,7 @@ namespace HSMDataCollector.Client.Session
         /// block without an ack) or of a stop (1000) is written, the socket is aborted only once the task this returns
         /// for the close code completes. The abort follows the close soon otherwise, and a server that is not reading at
         /// that moment loses the close with the connection, so a test that checks the close code waits for the server
-        /// to have it. A close that could not be written is not waited for.
+        /// to have it. A close that could not be written, and the answer to a close of the server, are not waited for.
         /// </summary>
         internal Func<WebSocketCloseStatus, Task> CloseHeardForTests { get; set; }
 
@@ -1131,18 +1131,20 @@ namespace HSMDataCollector.Client.Session
             }
         }
 
-        // True when the close frame was written.
+        // True when this wrote the collector's own close, not the answer to a close of the server.
         private static async Task<bool> CloseOutputAsync(Link link, WebSocketCloseStatus code, string reason, CancellationToken token)
         {
             await link.SendLock.WaitAsync(token).ConfigureAwait(false);
 
             try
             {
-                if (link.Socket.State != WebSocketState.Open && link.Socket.State != WebSocketState.CloseReceived)
+                var state = link.Socket.State;
+
+                if (state != WebSocketState.Open && state != WebSocketState.CloseReceived)
                     return false;
 
                 await link.Socket.CloseOutputAsync(code, reason, token).ConfigureAwait(false);
-                return true;
+                return state == WebSocketState.Open;
             }
             finally
             {
@@ -1154,11 +1156,15 @@ namespace HSMDataCollector.Client.Session
         private static async Task CloseQuietlyAsync(ClientWebSocket socket, WebSocketCloseStatus code, string reason, SemaphoreSlim sendLock = null,
                                                     Func<WebSocketCloseStatus, Task> closeHeard = null)
         {
+            // Whether the collector's own close was written: an answer to the server's close is not waited for, the
+            // server that closed first need not read it.
             var written = false;
 
             try
             {
-                if (socket.State == WebSocketState.Open || socket.State == WebSocketState.CloseReceived)
+                var initiated = socket.State == WebSocketState.Open;
+
+                if (initiated || socket.State == WebSocketState.CloseReceived)
                 {
                     using (var timeout = new CancellationTokenSource(CloseAnswerTimeout))
                     {
@@ -1169,7 +1175,7 @@ namespace HSMDataCollector.Client.Session
                             try
                             {
                                 await socket.CloseOutputAsync(code, Truncate(reason), timeout.Token).ConfigureAwait(false);
-                                written = true;
+                                written = initiated;
                             }
                             finally
                             {
@@ -1183,7 +1189,8 @@ namespace HSMDataCollector.Client.Session
             {
             }
 
-            // A close that was not written is never heard: waiting for it would hold the abort for good.
+            // A close that was not written is never heard, and the answer to the server's close need not be: waiting
+            // for either would hold the abort for good.
             if (written && closeHeard != null)
             {
                 try { await closeHeard(code).ConfigureAwait(false); }
