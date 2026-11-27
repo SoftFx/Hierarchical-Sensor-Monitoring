@@ -127,7 +127,7 @@ namespace HSMDataCollector.Tests
 
             foreach (var configuration in new[] { preferredConfiguration, preferredConfiguration == "Release" ? "Debug" : "Release" })
             {
-                var candidate = Path.Combine(hostBin, configuration, "net6.0", HostProjectName + ".dll");
+                var candidate = Path.Combine(hostBin, configuration, "net8.0", HostProjectName + ".dll");
                 if (File.Exists(candidate))
                     return candidate;
             }

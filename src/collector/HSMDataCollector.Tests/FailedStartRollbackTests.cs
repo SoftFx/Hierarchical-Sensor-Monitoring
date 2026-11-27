@@ -31,7 +31,7 @@ namespace HSMDataCollector.Tests
     /// Dispose returns.</item>
     /// </list>
     /// Nothing is timed: the initialization and the sensor stop wait on gates the test opens once
-    /// the racing call has been made. Compiled into both collector test projects (net472 and net6.0).
+    /// the racing call has been made. Compiled into both collector test projects (net472 and net8.0).
     /// </summary>
     public sealed class FailedStartRollbackTests
     {

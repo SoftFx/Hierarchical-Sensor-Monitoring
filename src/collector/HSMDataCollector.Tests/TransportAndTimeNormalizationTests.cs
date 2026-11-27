@@ -17,7 +17,7 @@ namespace HSMDataCollector.Tests
     /// <summary>
     /// #1102-E4: a busy keep-alive connection never re-resolves DNS — when a load balancer moves but
     /// the old IP still accepts TCP, the agent sticks to it indefinitely. On .NET Framework the fix
-    /// is a bounded ServicePoint.ConnectionLeaseTimeout for the collector endpoint (net6+ uses
+    /// is a bounded ServicePoint.ConnectionLeaseTimeout for the collector endpoint (net8.0 uses
     /// SocketsHttpHandler.PooledConnectionLifetime, compiled per-TFM).
     ///
     /// #1102-E5: SensorValueBase.Time has a public setter that accepts DateTimeKind.Local; such

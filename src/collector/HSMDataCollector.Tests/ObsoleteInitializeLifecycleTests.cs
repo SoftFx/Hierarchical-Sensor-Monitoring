@@ -28,7 +28,7 @@ namespace HSMDataCollector.Tests
     /// Nothing is timed. The race is opened by a sensor whose InitAsync waits on a gate, and the
     /// gate is opened from the one point of Dispose that both the old and the fixed code reach
     /// after Dispose has decided how to stop: the cancel of the sender's pending requests.
-    /// Compiled into both collector test projects (net472 and net6.0).
+    /// Compiled into both collector test projects (net472 and net8.0).
     /// </summary>
     public sealed class ObsoleteInitializeLifecycleTests
     {

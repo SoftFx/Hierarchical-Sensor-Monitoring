@@ -23,7 +23,7 @@ namespace HSMDataCollector.Tests.Transport
     /// cycle, which is what the native collector does.
     ///
     /// Compiled into both collector test projects: the unit project runs it against the net472
-    /// build, the integration project against net6.0.
+    /// build, the integration project against net8.0.
     /// </summary>
     [Trait("Category", "FakeServerE2E")]
     public sealed class CommandSendAttemptTests

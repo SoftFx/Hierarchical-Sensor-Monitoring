@@ -24,7 +24,7 @@ namespace HSMDataCollector.Tests
     /// <see cref="IDataSender"/>: nothing here depends on the built-in HTTP client.
     ///
     /// Nothing is timed: a send that should not happen is seen as a recorded send, not as a
-    /// stop that took long. Compiled into both collector test projects (net472 and net6.0).
+    /// stop that took long. Compiled into both collector test projects (net472 and net8.0).
     /// </summary>
     public sealed class StopDrainFailedSendTests
     {

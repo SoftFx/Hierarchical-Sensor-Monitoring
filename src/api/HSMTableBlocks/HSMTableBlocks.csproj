@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- The block format is shared by the managed collector (net6.0, net472), the server (net8.0) and client
+    <!-- The block format is shared by the managed collector (net8.0, net472), the server (net8.0) and client
          libraries, so it targets netstandard2.0 like HSMSensorDataObjects. -->
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -18,8 +18,8 @@
          Brings System.Memory (spans, BinaryPrimitives) to netstandard2.0. -->
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- MIT, Microsoft: CRC-32 (IEEE). 8.0.0 matches the collector's other Microsoft packages and builds without a
-         target-framework support warning on net472, net6.0 and net8.0 consumers. (CRC-32C needs 11.0.0, whose
-         build warns on every net6.0..net9.0 consumer of the collector package.) -->
+         target-framework support warning on net472 and net8.0 consumers. (CRC-32C needs 11.0.0, whose
+         build warns on every net8.0 and net9.0 consumer of the collector package.) -->
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
   </ItemGroup>
 

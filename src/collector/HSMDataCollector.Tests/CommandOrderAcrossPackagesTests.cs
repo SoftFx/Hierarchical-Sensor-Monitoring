@@ -30,7 +30,7 @@ namespace HSMDataCollector.Tests
     /// Every test issues more commands than one package takes (three), and holds the first
     /// send at a gate until the rest is queued, so what the queue holds when that send fails
     /// is the same on every run. A command is written as "path@description".
-    /// Compiled into both collector test projects (net472 and net6.0).
+    /// Compiled into both collector test projects (net472 and net8.0).
     /// </summary>
     public sealed class CommandOrderAcrossPackagesTests
     {

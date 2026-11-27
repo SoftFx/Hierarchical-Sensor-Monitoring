@@ -1,3 +1,10 @@
+# HSM DataCollector 5.0.0-preview
+
+Prerelease for testing. New since 4.2.0-preview: the .NET build of the package targets .NET 8 instead of .NET 6 (#1975). No API or behaviour changes.
+
+## Breaking changes
+* The package ships **`net8.0`** and **`net472`** builds; the `net6.0` build is gone (.NET 6 has been out of support since November 2024). Apps on .NET 8, 9, 10 and later use the `net8.0` build; apps on .NET Framework 4.7.2 and later keep the `net472` build. An app on .NET 6 or 7 is not supported by 5.0.0 (NuGet would hand it the .NET Framework build with warning NU1701): move it to .NET 8 or later, or stay on 4.x.
+
 # HSM DataCollector 4.2.0-preview
 
 Prerelease for testing. New since 4.1.0-preview: large files.

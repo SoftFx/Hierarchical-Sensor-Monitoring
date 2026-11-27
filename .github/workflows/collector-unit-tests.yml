@@ -38,7 +38,7 @@ jobs:
     # pull_request payload, so they must still run — hence the event_name guard.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     # windows-latest: the test project targets net48, and the crash-isolation lane spawns the
-    # net6.0 HSMDataCollector.CrashTests.Host process (RollForward=LatestMajor, so the runner's
+    # net8.0 HSMDataCollector.CrashTests.Host process (RollForward=LatestMajor, so the runner's
     # newer runtime is fine).
     runs-on: windows-latest
     steps:

@@ -8,7 +8,7 @@ namespace HSMDataCollector.LargeFiles
     /// one per platform library): <c>*</c> matches any run of characters (also none), <c>?</c> exactly one, every other
     /// character itself; the whole name must match. Case-insensitive on Windows by ASCII folding only (A-Z = a-z), exact
     /// elsewhere. The system's matchers are not used: they differ between net472 (8.3 names: <c>*.dmp</c> matches
-    /// <c>a.dmp_old</c>), net6.0 and the native collector.
+    /// <c>a.dmp_old</c>), net8.0 and the native collector.
     /// </summary>
     internal sealed class FileNameMask
     {
