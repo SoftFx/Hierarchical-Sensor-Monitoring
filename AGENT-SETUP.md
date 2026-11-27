@@ -84,7 +84,7 @@ Ask the user to do this now, and wait until they confirm:
 2. Open **Configuration → Users**, edit the user `default` and set a new password of 8 characters
    or more.
 
-## 5. USER: create a personal token
+## 5. USER: create an API token
 
 Ask the user to open the menu under their user name, choose **Personal tokens** and create a token.
 It is shown once. One token serves both the REST API and MCP. Ask for a read/write token: a
@@ -139,7 +139,7 @@ it with:
 curl -s https://<HSM_DOMAIN>/api/swagger/index.js | grep -o '/swagger/[^"]*swagger.json'
 ```
 
-People can browse the same specification at `/api/swagger`. Send `X-HSM-Dry-Run: true` to preview a
+The version is also shown in the footer of the web UI. People can browse the same specification at `/api/swagger`. Send `X-HSM-Dry-Run: true` to preview a
 delete or a move.
 
 ## 7. Operations

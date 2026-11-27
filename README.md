@@ -36,7 +36,7 @@ flowchart LR
 | Product | A container for one application, service or machine, with its own access keys |
 | Sensor | One stream of values, identified by its path inside a product |
 | Access key | The credential a source uses to send data to one product |
-| Personal token | The credential your scripts and AI agent use to manage HSM, over the REST API and MCP |
+| API token | The personal credential your scripts and AI agent use to manage HSM, over the REST API and MCP. Created under **Personal tokens** |
 | Alert | A rule on a sensor: a condition, and where to send the message |
 
 ## Ways to send data
@@ -92,7 +92,7 @@ A product at a glance. The error of one sensor is visible on its folder and its 
 
 ## What your AI agent can do
 
-HSM operations work over the REST API and over MCP, with the same personal token. The agent can do
+HSM operations work over the REST API and over MCP, with the same API token. The agent can do
 what the token's owner can do. Installing needs shell access, and sending values uses an access key.
 
 | Area | The agent can |
@@ -115,7 +115,7 @@ or a node inside it are set through the REST API only.
 **Only you, in the web UI:**
 
 - the first sign-in and the new password;
-- creating and revoking personal tokens;
+- creating and revoking API tokens;
 - users and their roles;
 - folders, product settings and product removal;
 - dashboards, server settings, backups and restore.
@@ -135,7 +135,7 @@ Current versions: [releases](https://github.com/SoftFx/Hierarchical-Sensor-Monit
 
 - One server instance. There is no clustering.
 - The default administrator password is not forced to change.
-- Personal tokens can be created only in the web UI.
+- API tokens can be created only in the web UI.
 - The Windows agent collects standard host sensors only. It has no plugins.
 - The Linux probe is built for Debian.
 - New products keep history for 3 months by default.
@@ -159,7 +159,7 @@ Current versions: [releases](https://github.com/SoftFx/Hierarchical-Sensor-Monit
 - **Access keys are limited to a product.** Each key has its own permissions and can be blocked.
 - **Roles per product:** Viewer and Manager, plus server administrators.
 - **Single sign-on** with OpenID Connect is optional.
-- **A personal token has all the rights of its owner** over the REST API and MCP, including deleting
+- **An API token has all the rights of its owner** over the REST API and MCP, including deleting
   data. For daily work, use the token of a user who has roles only on the products needed.
 - **A read-only token** can read through the REST API. It cannot change anything or connect to MCP.
 
@@ -174,7 +174,7 @@ Ask me what you need before you change anything.
 ```
 
 The agent installs the server and connects your sources. You change the default password, create
-one personal token and confirm the notification chat.
+one API token and confirm the notification chat.
 
 ## Quick start by hand
 
@@ -233,6 +233,7 @@ A `200` response means HSM accepted it. The sensor `demo/temperature` appears in
 | Connect an AI agent over MCP | [MCP](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/MCP) |
 | Send data over HTTP | [Sensor API](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/REST-API) |
 | Set up alerts | [Alerts](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Alerts-Overview) |
+| Read all documentation | [HSM wiki](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki) |
 | Connect Grafana | [Grafana](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Integration-with-Grafana) |
 
 ## Repository
