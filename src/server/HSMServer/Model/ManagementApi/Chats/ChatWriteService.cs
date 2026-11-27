@@ -152,8 +152,9 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// Remove a chat — for an admin or the manager of a folder it is bound to — through
         /// the same removal the web UI's list runs. The storage's own removal event prunes
         /// the chat's id from every folder bound to it, and each such folder update from the
-        /// alert policies of its products; references elsewhere are left in place. A dry run
-        /// answers the usage preview and removes nothing.
+        /// alert policies of its products; it also takes the chat out of the default chats of
+        /// every folder that lists it there, bound or not. References elsewhere are left in
+        /// place. A dry run answers the usage preview and removes nothing.
         /// </summary>
         public async Task<PolicyWriteResult> DeleteChat(Guid chatId, ClaimsPrincipal caller, bool dryRun = false)
         {
@@ -192,11 +193,14 @@ namespace HSMServer.Model.ManagementApi.Chats
             };
 
         // The counter behind the web chat list's usage badge (skipped sensors make it a
-        // lower bound, as on the badge) and the bindings the deletion would take with it —
-        // only the ones the caller can see.
+        // lower bound, as on the badge) and what the deletion would take with it: the
+        // bindings, among the folders the caller can see, and the default chats of the
+        // folders whose detail the caller can see.
         private ChatDeletePreviewDto PreviewOf(Chat chat, ClaimsPrincipal caller)
         {
             var (counts, skipped) = _usage.Compute();
+
+            var bound = StableCopy.Of(() => chat.Folders);
 
             return new ChatDeletePreviewDto
             {
@@ -213,7 +217,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 Affected =
                 [
                     new() { Id = chat.Id.ToString(), Path = chat.Name, Change = "remove" },
-                    .. StableCopy.Of(() => chat.Folders)
+                    .. bound
                         .Where(folderId => _authorization.IsVisible(caller, ApiTokenResource.Folder(folderId)))
                         .Select(folderId => new PreviewAffectedEntityDto
                         {
@@ -221,9 +225,20 @@ namespace HSMServer.Model.ManagementApi.Chats
                             Path = _folders.TryGetValue(folderId, out var folder) ? folder.Name : folderId.ToString(),
                             Change = "unbind",
                         }),
+                    .. FoldersLosingADefaultChat(chat.Id, bound, caller),
                 ],
             };
         }
+
+        // The folders whose default chats list the chat, the deletion taking it out of them
+        // (#1927). A folder the chat is bound to is already listed with its binding. A
+        // folder's default chats are its detail: a folder is named only where the caller
+        // reads that detail.
+        private IEnumerable<PreviewAffectedEntityDto> FoldersLosingADefaultChat(Guid chatId, List<Guid> bound, ClaimsPrincipal caller) =>
+            _folders.GetValues()
+                .Where(folder => StableCopy.Of(() => folder.DefaultChats.SelectedChats).Contains(chatId))
+                .Where(folder => !bound.Contains(folder.Id) && _authorization.CanSeeFolderDetail(caller, folder.Id))
+                .Select(folder => new PreviewAffectedEntityDto { Id = folder.Id.ToString(), Path = folder.Name, Change = "prune" });
 
         private static ChatUpdate ToUpdate(Guid chatId, CreateChatRequestDto request) => new()
         {

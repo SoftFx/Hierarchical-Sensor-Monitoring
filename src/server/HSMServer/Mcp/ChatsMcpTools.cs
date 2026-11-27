@@ -147,10 +147,10 @@ namespace HSMServer.Mcp
         // Idempotent=false: a delete — re-sent after a network retry it answers
         // the not-found error for an already-removed chat.
         [McpServerTool(Name = "delete_chat", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Removes a notification chat — the same removal the web UI's list runs. Its id is pruned from every folder it was bound to, and through them from the alert policies of those folders' products; references elsewhere are left in place (senders skip a chat that no longer exists). The write leaves a journal record. Needs an admin token, or the manager of a folder the chat is bound to. Use dryRun first to learn how many sensors' alerts reference the chat and which folder bindings the deletion would take with it.")]
+        [Description("Removes a notification chat — the same removal the web UI's list runs. Its id is pruned from every folder it was bound to, and through them from the alert policies of those folders' products; it is also taken out of the default chats of every folder that lists it. References elsewhere are left in place (senders skip a chat that no longer exists). The write leaves a journal record. Needs an admin token, or the manager of a folder the chat is bound to. Use dryRun first to learn how many sensors' alerts reference the chat and which folder bindings and default-chat references the deletion would take with it.")]
         public async Task<McpChatDeleteResult> DeleteChat(
             [Description("Chat id.")] Guid chatId,
-            [Description("Preview the deletion — how many sensors' alerts reference the chat and which folder bindings it would take with it — WITHOUT removing anything; the answer carries `preview` instead of `value`.")] bool dryRun = false)
+            [Description("Preview the deletion — how many sensors' alerts reference the chat and which folder bindings and default-chat references it would take with it — WITHOUT removing anything; the answer carries `preview` instead of `value`.")] bool dryRun = false)
         {
             var result = await _writer.DeleteChat(chatId, User, dryRun);
 

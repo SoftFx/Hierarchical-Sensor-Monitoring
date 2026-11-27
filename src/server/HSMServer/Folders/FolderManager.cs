@@ -12,6 +12,7 @@ using HSMServer.Extensions;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Chats;
 using NLog;
@@ -306,24 +307,41 @@ namespace HSMServer.Folders
             return folder?.Name;
         }
 
+        // Runs from the chat storage's Removed event, which ConcurrentStorage raises AFTER its
+        // own removal: no folder can resolve the chat's name any more, so the name travels
+        // with the updates — the journals of the folders' changes still name the chat they
+        // lost (#1931).
         public void RemoveChatHandler(Chat chat, InitiatorInfo initiator)
         {
+            string NameOf(Guid id) => id == chat.Id ? chat.Name : GetChatName?.Invoke(id);
+
             foreach (var (folderId, folder) in this)
             {
-                if (folder.Chats.Contains(chat.Id))
+                var wasBound = folder.Chats.Contains(chat.Id);
+
+                // DefaultChats is replaced wholesale by a folder update and its set is
+                // mutated in place by a save of the Chats tab: captured and copied before
+                // the read, as the management read paths do.
+                var defaultChats = folder.DefaultChats;
+                var remainingDefaults = StableCopy.Of(() => defaultChats.SelectedChats);
+                var wasDefault = remainingDefaults.Remove(chat.Id);
+
+                if (!wasBound && !wasDefault)
+                    continue;
+
+                var update = new FolderUpdate()
                 {
-                    var chats = new HashSet<Guid>(folder.Chats);
-                    chats.Remove(chat.Id);
+                    Id = folderId,
+                    Initiator = initiator,
+                    ChatNameResolver = NameOf,
+                    Chats = wasBound ? [.. folder.Chats.Where(id => id != chat.Id)] : null,
+                    // A default chat that no longer exists routes nowhere. It is taken out
+                    // with the deletion, from every folder that lists it — bound or not —
+                    // instead of staying there until the folder is next saved (#1927).
+                    DefaultChats = wasDefault ? defaultChats with { SelectedChats = [.. remainingDefaults] } : null,
+                };
 
-                    var update = new FolderUpdate()
-                    {
-                        Id = folderId,
-                        Chats = chats,
-                        Initiator = initiator,
-                    };
-
-                    _ = TryUpdate(update);
-                }
+                _ = TryUpdate(update);
             }
 
             _logger.Info($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");

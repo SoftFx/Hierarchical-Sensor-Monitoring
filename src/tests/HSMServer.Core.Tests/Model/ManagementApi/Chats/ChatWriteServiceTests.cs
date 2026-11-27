@@ -670,6 +670,32 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Contains(chat.Id, _world.FolderStore.Single().Chats);
         }
 
+        // #1927: the deletion takes the chat out of the default chats of every folder that
+        // lists it there, bound or not. The preview names those folders — the ones whose
+        // detail the caller reads — and does not repeat a folder it lists with its binding.
+        [Fact]
+        public async Task DeleteChat_DryRun_NamesTheFoldersWhoseDefaultChatsLoseTheChat()
+        {
+            var chat = AddChat("Ops alerts");
+            var bound = AddFolder(chat.Id);
+            bound.DefaultChats.SelectedChats.Add(chat.Id);
+            var listedOnly = AddFolder();
+            listedOnly.DefaultChats.SelectedChats.Add(chat.Id);
+            var outsideTheCallersDetail = AddFolder();
+            outsideTheCallersDetail.DefaultChats.SelectedChats.Add(chat.Id);
+            _world.Unmanaged.Add(outsideTheCallersDetail.Id);
+            _world.Usage.Setup(u => u.Compute()).Returns((new Dictionary<Guid, int>(), 0));
+
+            var result = await Service.DeleteChat(chat.Id, Token, dryRun: true);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            var affected = Assert.IsType<ChatDeletePreviewDto>(result.Preview).Affected;
+            Assert.Equal([(listedOnly.Id.ToString(), listedOnly.Name, "prune")],
+                affected.Where(e => e.Change == "prune").Select(e => (e.Id, e.Path, e.Change)));
+            Assert.Single(affected, e => e.Id == bound.Id.ToString());
+            Assert.DoesNotContain(affected, e => e.Id == outsideTheCallersDetail.Id.ToString());
+        }
+
         [Fact]
         public async Task DeleteChat_DryRun_CountIsALowerBound_WhenSensorsWereSkipped()
         {

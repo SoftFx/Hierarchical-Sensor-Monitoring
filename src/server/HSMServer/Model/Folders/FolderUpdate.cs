@@ -17,6 +17,13 @@ namespace HSMServer.Model.Folders
         public HashSet<Guid> Chats { get; init; }
 
 
+        // Where the journals of a chats change in this update read the chat names from. Null:
+        // the chat storage, as for every update. An update that follows a chat's deletion
+        // carries its own — the chat is out of the storage by then, and the records must
+        // still name it (#1931).
+        public Func<Guid, string> ChatNameResolver { get; init; }
+
+
         public TimeIntervalViewModel TTL { get; init; }
 
         public TimeIntervalViewModel KeepHistory { get; init; }

@@ -101,9 +101,10 @@ namespace HSMServer.Model.ManagementApi.Chats
 
     /// <summary>
     /// The dry-run preview of a chat deletion (#1829): the chat, the folder bindings the
-    /// deletion would take with it, and how many sensors' alerts reference the chat.
+    /// deletion would take with it, the folders whose default chats list it (#1927), and how
+    /// many sensors' alerts reference the chat.
     /// </summary>
-    [Description("The dry-run preview of a chat deletion: the chat, the folder bindings it would take with it, and how many sensors' alerts reference the chat. Nothing was applied.")]
+    [Description("The dry-run preview of a chat deletion: the chat, the folder bindings it would take with it, the folders whose default chats list it, and how many sensors' alerts reference the chat. Nothing was applied.")]
     public sealed record ChatDeletePreviewDto : WritePreviewDto
     {
         /// <summary>Number of sensors whose effective alert configuration references the chat — the counter behind the web chat list's usage badge.</summary>
