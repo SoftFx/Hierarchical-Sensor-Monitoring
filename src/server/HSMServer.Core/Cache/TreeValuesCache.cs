@@ -4082,9 +4082,9 @@ namespace HSMServer.Core.Cache
 
         // The newest value is compared in memory, and only when the tick matches. A value older than it costs one read
         // of the row at or before its tick: the path of an out-of-order value, which writes that row directly anyway.
-        // With AggregateValues a row stands for a run of equal values from its time to its last update: a value equal
-        // to the run within that span is one the run already holds (folding it again would add to the count and move
-        // the last update back). Another value, status or comment on a stored tick is not a repeat and replaces the
+        // An aggregated row stands for a run of equal values from its time to its last update (whether AggregateValues
+        // is still on or not): a value equal to the run within that span is one the run already holds (folding it
+        // again would add to the count and move the last update back). Any other row spans its own tick only. Another value, status or comment on a stored tick is not a repeat and replaces the
         // row as before.
         private bool IsRepeatOfStoredValue(BaseSensorModel sensor, BaseValue value)
         {
@@ -4098,7 +4098,7 @@ namespace HSMServer.Core.Cache
 
             var ticks = value.Time.Ticks;
 
-            if (Holds(sensor, newest, ticks))
+            if (Holds(newest, ticks))
                 return newest.HasSameContent(value);
 
             if (ticks > newest.Time.Ticks)
@@ -4121,10 +4121,9 @@ namespace HSMServer.Core.Cache
                 return false;
             }
 
-            return Holds(sensor, stored, ticks) && stored.HasSameContent(value);
+            return Holds(stored, ticks) && stored.HasSameContent(value);
 
-            static bool Holds(BaseSensorModel sensor, BaseValue row, long ticks) =>
-                ticks == row.Time.Ticks || (sensor.AggregateValues && row.Time.Ticks <= ticks && ticks <= row.LastUpdateTime.Ticks);
+            static bool Holds(BaseValue row, long ticks) => row.Time.Ticks <= ticks && ticks <= row.LastUpdateTime.Ticks;
         }
 
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)

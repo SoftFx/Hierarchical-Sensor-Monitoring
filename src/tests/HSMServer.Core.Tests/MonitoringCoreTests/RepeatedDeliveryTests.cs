@@ -251,6 +251,37 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         [Fact]
+        public async Task A_value_equal_to_a_stored_run_is_a_repeat_after_aggregation_is_switched_off()
+        {
+            var path = "repeatedDelivery/aggregateOff";
+            var t28 = StorageWeekTestTime.WithinOneWeek(DateTime.UtcNow.AddMinutes(-30), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+            var t29 = t28.AddSeconds(1);
+            var t30 = t28.AddSeconds(2);
+
+            using var warns = new WarnCapture(path);
+
+            await SendAsync([Value(path, t28.AddSeconds(-1), 27)]);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, AggregateValues = true, Initiator = InitiatorInfo.System })).IsOk);
+
+            // One run 5 @ t28..t30, then a newer value, then aggregation goes off; the frame [t29] comes again.
+            await SendAsync(Frame(path, t28, 5, t29, 5));
+            await SendAsync([Value(path, t30, 5), Value(path, t30.AddSeconds(1), 6)]);
+
+            Assert.True((await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, AggregateValues = false, Initiator = InitiatorInfo.System })).IsOk);
+
+            await SendAsync([Value(path, t29, 5)]);
+
+            var rows = await ReadRowsAsync(sensor.Id);
+
+            Assert.DoesNotContain(rows, r => r.Time == t29);
+            Assert.Equal(3, rows.Single(r => r.Time == t28).AggregatedValuesCount);
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+            Assert.Empty(warns.Lines);
+        }
+
+        [Fact]
         public async Task A_repeated_frame_of_bars_keeps_the_bar_in_progress()
         {
             var path = "repeatedDelivery/bars";

@@ -31,8 +31,9 @@ changes nothing for it: no row, no alert, no EMA, no aggregate count, no counter
   count, min, max, mean, first and last value and standard deviation. What the server adds is not compared: the
   receiving and delivery stamps, the aggregate count and last update, the EMA.
 - **Held** means: the sensor's newest value has that tick (compared in memory), or the row at that tick in the
-  database (one read, only for a value older than the newest). With `AggregateValues` a row stands for a run of equal
-  values from its time to its last update, and a value equal to the run within that span is held.
+  database (one read, only for a value older than the newest). An aggregated row stands for a run of equal values
+  from its time to its last update, and a value equal to the run within that span is held, whether `AggregateValues`
+  is still on or not.
 - Another value, status or comment on a stored tick is not a repeat: it replaces the row as before, whichever client
   sent it. The same value at the same time from two clients is indistinguishable from a repeat and is taken once.
 - Not covered: files (their content is not compared, a repeat rewrites its own row as before), a timeout marker, and
