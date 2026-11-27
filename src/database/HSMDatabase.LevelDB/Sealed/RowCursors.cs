@@ -34,6 +34,15 @@ namespace HSMDatabase.LevelDB.Sealed
         /// <summary>Whether the current key starts with <paramref name="prefix"/> (the row database's StartsWith).</summary>
         bool KeyStartsWith(byte[] prefix);
 
+        /// <summary>
+        /// Whether the current value starts with <paramref name="firstByte"/> (#1913). A row database's value is looked at
+        /// in place, without copying it out of LevelDB as <see cref="Value"/> does.
+        /// </summary>
+        bool ValueStartsWith(byte firstByte);
+
+        /// <summary>Throws when an iterator under the cursor stopped on an error, which otherwise looks like the end of the rows.</summary>
+        void ThrowIfFailed(string database);
+
         void Seek(byte[] target);
 
         void SeekToFirst();
@@ -94,6 +103,10 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public bool KeyStartsWith(byte[] prefix) => Key.StartsWith(prefix);
 
+        public bool ValueStartsWith(byte firstByte) => iterator.ValueStartsWith(firstByte);
+
+        public void ThrowIfFailed(string database) => iterator.ThrowIfFailed(database);
+
 
         public void Seek(byte[] target)
         {
@@ -153,6 +166,14 @@ namespace HSMDatabase.LevelDB.Sealed
         public byte[] Key => Current.Key;
 
         public byte[] Value => Current.Value;
+
+        public bool ValueStartsWith(byte firstByte) => Current.ValueStartsWith(firstByte);
+
+        public void ThrowIfFailed(string database)
+        {
+            overlay.ThrowIfFailed(database);
+            chunks.ThrowIfFailed(database);
+        }
 
         /// <summary>True when the current row comes from a chunk, false when from the overlay.</summary>
         public bool IsChunkRow => ReferenceEquals(Current, chunks);

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using NLog;
 using HSMCommon.Constants;
@@ -419,6 +420,14 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public bool? SensorEntityExists(Guid sensorId) => _environmentDatabase.SensorEntityExists(sensorId.ToString());
+
+        // An id that is not a Guid names no sensor the tree builds and keys no history row: left out.
+        public List<(Guid Id, byte? Type)> GetSensorTypes() =>
+            [.. _environmentDatabase.GetSensorTypes().Where(s => Guid.TryParse(s.Id, out _)).Select(s => (Guid.Parse(s.Id), s.Type))];
+
+        // The shards, as GetSensorValue's Overlaps(ticks, ticks + 1) asks the databases behind them, without opening one.
+        public bool HasSensorValuesDatabaseAt(long ticks) =>
+            _sensorValuesDatabases.GetShards().Any(shard => shard.From < ticks + 1 && shard.To > ticks);
         public bool EntityExists(Guid id) => _environmentDatabase.EntityExists(id.ToString());
 
         public void RemoveSensorWithMetadata(Guid sensorId)
@@ -534,6 +543,20 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
             }
 
+        }
+
+        public async IAsyncEnumerable<byte[]> GetSensorValuesWithFirstByte(Guid sensorId, byte firstByte, [EnumeratorCancellation] CancellationToken token = default)
+        {
+            var fromBytes = new DbKey(sensorId, DateTime.MinValue.Ticks).ToBytes();
+            var toBytes = new DbKey(sensorId, DateTime.MaxValue.Ticks).ToBytes();
+
+            foreach (var database in _sensorValuesDatabases)
+            {
+                token.ThrowIfCancellationRequested();
+
+                foreach (var bytes in database.GetValuesWithFirstByte(fromBytes, toBytes, firstByte, token))
+                    yield return bytes;
+            }
         }
 
         #endregion

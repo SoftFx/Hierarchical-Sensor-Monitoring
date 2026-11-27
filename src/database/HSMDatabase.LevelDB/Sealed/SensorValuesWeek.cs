@@ -204,6 +204,9 @@ namespace HSMDatabase.LevelDB.Sealed
 
         public IEnumerable<(byte[] key, byte[] value)> GetAll() => LeasedRange(db => db.GetAll());
 
+        public IEnumerable<byte[]> GetValuesWithFirstByte(byte[] from, byte[] to, byte firstByte, System.Threading.CancellationToken token = default) =>
+            LeasedRange(db => db.GetValuesWithFirstByte(from, to, firstByte, token));
+
         #endregion
 
         #region Compaction bookkeeping (#1801): the current instance's

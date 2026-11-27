@@ -127,6 +127,12 @@ namespace HSMDatabase.AccessManager
         bool EntityExists(string id);
         List<string> GetAllSensorsIds();
 
+        /// <summary>
+        /// Every sensor in the list of sensors with the type of its entity (#1913): null when the entity is there but cannot
+        /// be read. An id without an entity is left out. A list that cannot be read throws, rather than reading as empty.
+        /// </summary>
+        List<(string Id, byte? Type)> GetSensorTypes();
+
         #endregion
 
         #region Policy

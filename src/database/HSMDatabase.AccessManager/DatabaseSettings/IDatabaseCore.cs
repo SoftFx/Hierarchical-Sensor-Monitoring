@@ -170,6 +170,20 @@ namespace HSMServer.Core.DataLayer
         bool? SensorEntityExists(Guid sensorId);
 
         /// <summary>
+        /// Every sensor the database lists, with the type of its entity: null when the entity is there but cannot be read
+        /// (#1913: the check of large values at start cannot tell about such a sensor). A listed sensor without an entity is
+        /// left out. Throws when the list cannot be read.
+        /// </summary>
+        List<(Guid Id, byte? Type)> GetSensorTypes();
+
+        /// <summary>
+        /// Whether a values database (a history week) the server knows covers <paramref name="ticks"/> (#1913). When none
+        /// does, <see cref="GetSensorValue"/> answers "no row" without having read anything: the week was never written, or
+        /// its folder was lost. Opens or creates no week database.
+        /// </summary>
+        bool HasSensorValuesDatabaseAt(long ticks);
+
+        /// <summary>
         /// Whether the entity of a sensor or of a product (node) with the id is in the environment database (#1850 part 4d:
         /// a table removal is acted on only once its entity is gone). True when the read fails.
         /// </summary>
@@ -203,6 +217,14 @@ namespace HSMServer.Core.DataLayer
         IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
         IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
+
+        /// <summary>
+        /// The stored values of a sensor, its whole history week by week (newest week first, each week oldest first), whose bytes start with
+        /// <paramref name="firstByte"/> (#1913: the large values of a File sensor, <c>LargeFileValue.UnionTag</c>). Every
+        /// other value is passed by in the database without being copied or deserialized. A read that fails throws;
+        /// <paramref name="token"/> is asked at every row, also at the rows passed by.
+        /// </summary>
+        IAsyncEnumerable<byte[]> GetSensorValuesWithFirstByte(Guid sensorId, byte firstByte, System.Threading.CancellationToken token = default);
 
         List<SensorEntity> GetAllSensors();
 

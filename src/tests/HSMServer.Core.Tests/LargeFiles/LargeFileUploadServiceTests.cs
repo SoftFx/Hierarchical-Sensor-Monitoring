@@ -572,11 +572,214 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Equal(0, (await _service.RunPassAsync(DateTime.UtcNow, atStart: false)).RowsWithoutRecord);
         }
 
+        // #1913: the check at start recognises a large value by the first byte of its row; the content of an ordinary file
+        // value never reaches the server, only the rows of large values do.
+        [Fact]
+        public async Task The_start_check_reads_no_ordinary_file_value()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            var start = DateTime.UtcNow.AddHours(-2);
+
+            for (var i = 0; i < 50; i++)
+            {
+                var time = start.AddSeconds(i);
+                _databaseCoreManager.DatabaseCore.AddSensorValue(sensor.Id, new FileValue { Time = time, ReceivingTime = time, Value = Content(Piece), OriginalSize = Piece, Name = $"v{i}", Extension = "log" });
+            }
+
+            AddRowsWithoutRecord(sensor, 1);
+            await UseTheStoreAsync();
+
+            var reads = HistoryRowsCounter.Wrap(_databaseCoreManager.DatabaseCore, out var counter);
+            var report = await new LargeFileUploadService(reads, _valuesCache, new LargeFileOptions { MinFreeDiskMb = 0 }).RunPassAsync(DateTime.UtcNow, atStart: true);
+
+            Assert.Equal(1, report.RowsWithoutRecord);
+            Assert.Equal(1, counter.LargeRows);
+            Assert.Equal(0, counter.OrdinaryRows);
+            Assert.Equal(0, counter.OrdinaryBytes);
+        }
+
+        // #1913, gap 1: a File sensor the database holds but the tree did not build at start has rows the check never reads.
+        // It cannot tell, as for a sensor whose rows cannot be read: archives no record names are kept. An entity that
+        // cannot be read may be a File sensor; a sensor of another type outside the tree has no large value.
+        [Theory]
+        [InlineData("file", true)]
+        [InlineData("unreadable", true)]
+        [InlineData("double", false)]
+        public async Task A_file_sensor_in_the_database_but_not_in_the_tree_leaves_the_start_check_unable_to_tell(string unloaded, bool kept)
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            await UploadAsync(sensor, Content(Piece));
+            var stray = StrayArchive(_product, DateTime.UtcNow.AddDays(-2));
+
+            var entity = EntitiesFactory.BuildSensorEntity(name: "unloaded", parent: _product.ToString(),
+                type: (byte)(unloaded == "double" ? SensorType.Double : SensorType.File));
+            _databaseCoreManager.DatabaseCore.AddSensor(entity);
+
+            if (unloaded == "unreadable")
+                PutEnvironmentRow(entity.Id, System.Text.Encoding.UTF8.GetBytes("not an entity"));
+
+            Assert.Null(_valuesCache.GetSensor(Guid.Parse(entity.Id)));
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: true);
+
+            Assert.Equal(kept, File.Exists(stray));
+            Assert.Equal(kept ? 0 : 1, report.Store.OrphanArchivesRemoved);
+            Assert.Equal(kept ? 1 : 0, Store.Statistics.StartDisagreements);
+        }
+
+        // #1913, gap 2: a value time that falls in no values database the server has open (its week's folder lost) is not
+        // "no row": the pass and a clear cannot tell, and keep the file.
+        [Fact]
+        public async Task A_file_whose_value_time_falls_in_no_values_database_is_kept_by_the_pass_and_by_a_clear()
+        {
+            var sensor = await CreateFileSensorAsync("f");
+            await SetKeepHistoryAsync(sensor, TimeSpan.FromDays(1));
+
+            var time = DateTime.UtcNow.AddDays(-200);
+            var fileId = VerifiedRecordOf(sensor.Id, time);
+
+            Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.SensorValuesDatabases, db => db.Overlaps(time.Ticks, time.Ticks + 1));
+            Assert.Null(_databaseCoreManager.DatabaseCore.GetSensorValue(sensor.Id, time.Ticks));
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: false);
+
+            Assert.Equal(0, report.FilesRemoved);
+            Assert.Equal(1, report.Unchecked);
+            Assert.NotNull(Store.TryGetFile(fileId));
+
+            Assert.True((await _valuesCache.ClearSensorHistoryAsync(new ClearHistoryRequest(sensor.Id))).IsOk);
+            Assert.NotNull(Store.TryGetFile(fileId));
+            Assert.Equal(0, Store.Statistics.FilesRemoved);
+        }
+
+        // The read the check is made of (#1913): the large values of one sensor, from every week, none of its ordinary values
+        // and nothing of another sensor; a stop ends it between ordinary rows, not only at a large one.
+        [Fact]
+        public async Task The_read_of_a_sensors_large_values_finds_them_in_every_week_and_a_stop_ends_it_between_ordinary_rows()
+        {
+            var database = _databaseCoreManager.DatabaseCore;
+            var (sensor, neighbour) = (Guid.NewGuid(), Guid.NewGuid());
+            var now = DateTime.UtcNow;
+            var large = new List<Guid>();
+
+            foreach (var time in new[] { now.AddDays(-21), now.AddMinutes(-1) })
+            {
+                database.AddSensorValue(sensor, new FileValue { Time = time.AddSeconds(-1), ReceivingTime = time, Value = [1, 2], OriginalSize = 2 });
+                large.Add(AddLargeValue(sensor, time));
+                database.AddSensorValue(sensor, new FileValue { Time = time.AddSeconds(1), ReceivingTime = time, Value = [3], OriginalSize = 1 });
+                AddLargeValue(neighbour, time);
+            }
+
+            var rows = new List<byte[]>();
+            await foreach (var row in database.GetSensorValuesWithFirstByte(sensor, LargeFileValue.UnionTag))
+                rows.Add(row);
+
+            Assert.All(rows, row => Assert.True(LargeFileValue.IsLargeFileRow(row)));
+            Assert.Equal(large.OrderBy(id => id), rows.Select(row => ((LargeFileValue)new MemoryPackFormatter().Deserialize(row)).FileId).OrderBy(id => id));
+
+            // A week of ordinary rows only: a cancelled read throws at its first row instead of passing them all by.
+            using var stopped = new CancellationTokenSource();
+            stopped.Cancel();
+
+            var week = database.SensorValuesDatabases.Single(db => db.Overlaps(now.Ticks, now.Ticks + 1));
+            var (from, to) = (new HSMDatabase.AccessManager.DbKey(sensor, 0).ToBytes(), new HSMDatabase.AccessManager.DbKey(sensor, DateTime.MaxValue.Ticks).ToBytes());
+
+            Assert.Equal(3, week.GetValuesFrom(from, to).Count());
+            Assert.Empty(week.GetValuesWithFirstByte(from, to, 255));
+            Assert.ThrowsAny<OperationCanceledException>(() => week.GetValuesWithFirstByte(from, to, 255, stopped.Token).ToList());
+
+            Guid AddLargeValue(Guid id, DateTime time)
+            {
+                var fileId = Guid.NewGuid();
+                database.AddSensorValue(id, new LargeFileValue { Time = time, ReceivingTime = time, Value = [], OriginalSize = 10, FileId = fileId, Hash = new byte[32], Name = "a.dmp" });
+                return fileId;
+            }
+        }
+
+        // An archive file in the product's archives folder that no record names, last written at `written`.
+        private string StrayArchive(Guid productId, DateTime written)
+        {
+            var folder = Path.Combine(Store.Folder, "archives", productId.ToString("N"));
+            Directory.CreateDirectory(folder);
+
+            var path = Path.Combine(folder, $"{Guid.NewGuid():N}.zip");
+            File.WriteAllBytes(path, [1]);
+            File.SetLastWriteTimeUtc(path, written);
+
+            return path;
+        }
+
+        // The real database; counts the rows its history reads hand out, by kind, and the bytes of the ordinary ones.
+        public class HistoryRowsCounter : System.Reflection.DispatchProxy
+        {
+            private HSMServer.Core.DataLayer.IDatabaseCore _inner;
+
+            public int LargeRows;
+            public int OrdinaryRows;
+            public long OrdinaryBytes;
+
+            public static HSMServer.Core.DataLayer.IDatabaseCore Wrap(HSMServer.Core.DataLayer.IDatabaseCore inner, out HistoryRowsCounter counter)
+            {
+                var database = Create<HSMServer.Core.DataLayer.IDatabaseCore, HistoryRowsCounter>();
+                counter = (HistoryRowsCounter)(object)database;
+                counter._inner = inner;
+
+                return database;
+            }
+
+            protected override object Invoke(System.Reflection.MethodInfo targetMethod, object[] args)
+            {
+                try
+                {
+                    return targetMethod.Invoke(_inner, args) switch
+                    {
+                        IAsyncEnumerable<byte[]> rows => Counted(rows),
+                        IAsyncEnumerable<List<byte[]>> pages => CountedPages(pages),
+                        var result => result,
+                    };
+                }
+                catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is not null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException);
+                    throw;
+                }
+            }
+
+            private void Count(byte[] row)
+            {
+                if (LargeFileValue.IsLargeFileRow(row))
+                    Interlocked.Increment(ref LargeRows);
+                else
+                {
+                    Interlocked.Increment(ref OrdinaryRows);
+                    Interlocked.Add(ref OrdinaryBytes, row.Length);
+                }
+            }
+
+            private async IAsyncEnumerable<byte[]> Counted(IAsyncEnumerable<byte[]> rows)
+            {
+                await foreach (var row in rows)
+                {
+                    Count(row);
+                    yield return row;
+                }
+            }
+
+            private async IAsyncEnumerable<List<byte[]>> CountedPages(IAsyncEnumerable<List<byte[]>> pages)
+            {
+                await foreach (var page in pages)
+                {
+                    page.ForEach(Count);
+                    yield return page;
+                }
+            }
+        }
+
         // === Stopped by the shutdown (#1958 merged into #1882) ===
 
-        // The start scan reads every row of every File sensor; a stop of the server must end it inside a sensor's rows,
-        // not after them: the history read does not take the token (GetSensorValues has no cancellation), and a scan that
-        // outlives the stop of its hosted service reads the history weeks while they close.
+        // The start scan reads the large values of every File sensor; a stop of the server must end it inside a sensor's rows,
+        // not after them: a scan that outlives the stop of its hosted service reads the history weeks while they close.
+        // Here the stop comes between two large values; the next test of the database stops it between ordinary rows.
         [Fact]
         public async Task A_cancelled_start_scan_stops_inside_a_sensors_rows_and_is_done_again_by_the_next_pass()
         {
@@ -665,9 +868,7 @@ namespace HSMServer.Core.Tests.LargeFiles
                 {
                     var result = targetMethod.Invoke(_inner, args);
 
-                    return targetMethod.Name == nameof(HSMServer.Core.DataLayer.IDatabaseCore.GetSensorValues)
-                        ? AfterFirst((IAsyncEnumerable<byte[]>)result)
-                        : result;
+                    return result is IAsyncEnumerable<byte[]> rows ? AfterFirst(rows) : result;
                 }
                 catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is not null)
                 {
@@ -1097,13 +1298,13 @@ namespace HSMServer.Core.Tests.LargeFiles
         }
 
         // A verified record of a sensor id, made through the store alone.
-        private Guid VerifiedRecordOf(Guid sensorId)
+        private Guid VerifiedRecordOf(Guid sensorId, DateTime? valueTime = null)
         {
             var content = Content(Piece);
             var begin = Store.Begin(new LargeFileUploadKey(_product, sensorId, "x.dmp", content.Length, Modified, null), "dmp", Piece, Piece);
             Store.Append(begin.Lease, 0, content, SHA256.HashData(content));
             Store.StartFinish(begin.Lease);
-            Store.MarkVerified(begin.FileId, SHA256.HashData(content), DateTime.UtcNow);
+            Store.MarkVerified(begin.FileId, SHA256.HashData(content), valueTime ?? DateTime.UtcNow);
             Store.EndFinish(begin.Lease);
 
             return begin.FileId;

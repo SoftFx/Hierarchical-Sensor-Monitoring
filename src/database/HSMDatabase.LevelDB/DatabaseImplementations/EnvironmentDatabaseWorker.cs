@@ -452,6 +452,37 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public List<string> GetAllSensorsIds() =>
             GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
 
+        public List<(string Id, byte? Type)> GetSensorTypes()
+        {
+            var ids = _database.TryRead(_sensorIdsKey, out byte[] list)
+                ? JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(list))
+                : [];
+
+            var types = new List<(string, byte?)>(ids.Count);
+
+            foreach (var id in ids)
+            {
+                byte? type;
+
+                try
+                {
+                    if (!_database.TryRead(Encoding.UTF8.GetBytes(id), out byte[] value))
+                        continue;
+
+                    type = JsonSerializer.Deserialize<SensorEntity>(Encoding.UTF8.GetString(value))?.Type;
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, $"Failed to read the type of sensor {id}");
+                    type = null;
+                }
+
+                types.Add((id, type));
+            }
+
+            return types;
+        }
+
         // Null when the list was written, otherwise the logged exception (#1756).
         private Exception UpdateSensorIdsList(Action<List<string>> updateListAction, string errorMessage)
         {

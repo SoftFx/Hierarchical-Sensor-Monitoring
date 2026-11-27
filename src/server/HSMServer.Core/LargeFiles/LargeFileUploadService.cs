@@ -501,9 +501,11 @@ namespace HSMServer.Core.LargeFiles
             return false;
         }
 
-        // The rows of File sensors that hold a large value whose file has no record. A row is recognised by its union tag
-        // (its first byte); only those rows are deserialized.
-        // The number of large values without a record, and of File sensors whose rows could not be read ("cannot tell").
+        // The rows of File sensors that hold a large value whose file has no record. A large value is recognised in the
+        // database by the first byte of its row, its union tag (#1913): only those rows leave the database and are
+        // deserialized; the content of an ordinary file value is never copied out of it.
+        // The number of large values without a record, and of File sensors whose rows could not be read or were not read
+        // ("cannot tell").
         private async Task<(int Missing, int Failed)> ReportRowsWithoutRecordAsync(CancellationToken token)
         {
             var store = Store;
@@ -517,13 +519,13 @@ namespace HSMServer.Core.LargeFiles
 
                 try
                 {
-                    // The history read does not take the token, so it is asked at every row: a stop of the server ends the
-                    // scan inside a sensor's history, before the history weeks close under it (#1958).
-                    await foreach (var row in _database.GetSensorValues(sensor.Id, DateTime.MinValue, DateTime.MaxValue))
+                    // The read asks the token at every row, also at the ordinary rows it passes by: a stop of the server ends
+                    // the scan inside a sensor's history, before the history weeks close under it (#1958).
+                    await foreach (var row in _database.GetSensorValuesWithFirstByte(sensor.Id, LargeFileValue.UnionTag, token))
                     {
                         token.ThrowIfCancellationRequested();
 
-                        if (!LargeFileValue.IsLargeFileRow(row) || sensor.Convert(row) is not LargeFileValue value || known.Contains(value.FileId))
+                        if (sensor.Convert(row) is not LargeFileValue value || known.Contains(value.FileId))
                             continue;
 
                         missing++;
@@ -546,7 +548,45 @@ namespace HSMServer.Core.LargeFiles
                 }
             }
 
+            failed += CountFileSensorsNotInTree();
+
             return (missing, failed);
+        }
+
+        // A File sensor the database holds but the tree did not build at start (its entity, its path or its product could not
+        // be loaded) has rows the scan above never reads: it cannot tell, as for a sensor whose rows cannot be read (#1913).
+        // So can an entity that cannot be read (it may be a File sensor's), and a list of sensors that cannot be read.
+        private int CountFileSensorsNotInTree()
+        {
+            var store = Store;
+            List<(Guid Id, byte? Type)> stored;
+
+            try
+            {
+                stored = _database.GetSensorTypes();
+            }
+            catch (Exception ex)
+            {
+                store.Statistics.Add(ref store.Statistics.StartDisagreements);
+                _logger.Error(ex, "The list of sensors could not be read, so File sensors outside the tree could not be compared with the large file store; archives no record names are kept");
+                return 1;
+            }
+
+            var count = 0;
+
+            foreach (var (id, type) in stored)
+            {
+                if (type is { } known && known != (byte)SensorType.File || _cache.GetSensor(id) is not null)
+                    continue;
+
+                count++;
+                store.Statistics.Add(ref store.Statistics.StartDisagreements);
+                _logger.Error(type is null
+                    ? $"The entity of sensor {id} cannot be read and the sensor is not in the tree: its rows were not compared with the large file store; archives no record names are kept"
+                    : $"File sensor {id} is in the database but not in the tree (not loaded at start): its rows were not compared with the large file store; archives no record names are kept");
+            }
+
+            return count;
         }
 
 
