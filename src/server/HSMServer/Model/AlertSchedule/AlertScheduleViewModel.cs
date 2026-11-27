@@ -22,7 +22,7 @@ namespace HSMServer.Model.AlertSchedule
         // management API afterwards. The constant is referenced so the two
         // cannot drift.
         [Required]
-        [StringLength(AlertScheduleAdministrationService.MaxNameLength, ErrorMessage = "{0} length should be less than {1}.")]
+        [StringLength(AlertScheduleAdministrationService.MaxNameLength, ErrorMessage = "{0} length should be at most {1} characters.")]
         public string Name { get; set; }
 
         [Required]

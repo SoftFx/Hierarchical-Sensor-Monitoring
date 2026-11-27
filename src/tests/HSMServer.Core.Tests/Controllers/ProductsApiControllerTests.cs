@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
@@ -10,6 +11,7 @@ using HSMServer.Folders;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
+using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -401,8 +403,26 @@ namespace HSMServer.Core.Tests.Controllers
                 new CreateProductRequestDto { Name = new string('a', 101) });
 
             Assert.Equal(400, StatusCodeOf(result));
-            Assert.Contains("New product name length should be less than 100.", NameErrorsOf(result));
+            Assert.Contains("New product name length should be at most 100 characters.", NameErrorsOf(result));
+            // The web form's own text (#1934): the form formats it from its attribute, which
+            // accepts the maximum itself — "at most", not "less than".
+            var formLength = typeof(AddProductViewModel).GetProperty(nameof(AddProductViewModel.Name))
+                .GetCustomAttribute<StringLengthAttribute>();
+            Assert.Equal(formLength.FormatErrorMessage("New product name"), Assert.Single(NameErrorsOf(result)));
             VerifyAddProduct(Times.Never());
+        }
+
+
+        [Fact]
+        public async System.Threading.Tasks.Task CreateProduct_NameOfExactly100Chars_IsAccepted()
+        {
+            var name = new string('a', 100);
+            SetupAddProduct(BuildRoot(name, Guid.NewGuid()));
+
+            var result = await CreateController().CreateProduct(new CreateProductRequestDto { Name = name });
+
+            Assert.Equal(201, StatusCodeOf(result));
+            VerifyAddProduct(Times.Once());
         }
 
 

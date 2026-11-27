@@ -515,14 +515,15 @@
             <summary>
             Remove a notification chat (#1829): the same removal the web UI's list runs. Its
             id is pruned from every folder it was bound to, and through them from the alert
-            policies of those folders' products; references elsewhere are left in place.
+            policies of those folders' products; it is also taken out of the default chats of
+            every folder that lists it (#1927). References elsewhere are left in place.
             Every write leaves a journal record. Admin, or the manager of a
             folder the chat is bound to. With the
             <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
-            preview: how many sensors' alerts reference the chat, and the folder bindings the
-            deletion would take with it. Alerts that referenced the chat outside the folders it
-            was bound to keep their reference and deliver nothing from now on — point them at
-            another chat.
+            preview: how many sensors' alerts reference the chat, the folder bindings the
+            deletion would take with it, and the folders whose default chats list it. Alerts
+            that referenced the chat outside the folders it was bound to keep their reference
+            and deliver nothing from now on — point them at another chat.
             </summary>
             <param name="id">Chat id.</param>
         </member>
@@ -4289,7 +4290,8 @@
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatDeletePreviewDto">
             <summary>
             The dry-run preview of a chat deletion (#1829): the chat, the folder bindings the
-            deletion would take with it, and how many sensors' alerts reference the chat.
+            deletion would take with it, the folders whose default chats list it (#1927), and how
+            many sensors' alerts reference the chat.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDeletePreviewDto.SensorUsageCount">
@@ -4329,8 +4331,9 @@
             Remove a chat — for an admin or the manager of a folder it is bound to — through
             the same removal the web UI's list runs. The storage's own removal event prunes
             the chat's id from every folder bound to it, and each such folder update from the
-            alert policies of its products; references elsewhere are left in place. A dry run
-            answers the usage preview and removes nothing.
+            alert policies of its products; it also takes the chat out of the default chats of
+            every folder that lists it there, bound or not. References elsewhere are left in
+            place. A dry run answers the usage preview and removes nothing.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Folders.FolderDto">

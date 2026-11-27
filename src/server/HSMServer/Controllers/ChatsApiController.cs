@@ -201,14 +201,15 @@ namespace HSMServer.Controllers
         /// <summary>
         /// Remove a notification chat (#1829): the same removal the web UI's list runs. Its
         /// id is pruned from every folder it was bound to, and through them from the alert
-        /// policies of those folders' products; references elsewhere are left in place.
+        /// policies of those folders' products; it is also taken out of the default chats of
+        /// every folder that lists it (#1927). References elsewhere are left in place.
         /// Every write leaves a journal record. Admin, or the manager of a
         /// folder the chat is bound to. With the
         /// <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
-        /// preview: how many sensors' alerts reference the chat, and the folder bindings the
-        /// deletion would take with it. Alerts that referenced the chat outside the folders it
-        /// was bound to keep their reference and deliver nothing from now on — point them at
-        /// another chat.
+        /// preview: how many sensors' alerts reference the chat, the folder bindings the
+        /// deletion would take with it, and the folders whose default chats list it. Alerts
+        /// that referenced the chat outside the folders it was bound to keep their reference
+        /// and deliver nothing from now on — point them at another chat.
         /// </summary>
         /// <param name="id">Chat id.</param>
         [HttpDelete("{id:guid}")]

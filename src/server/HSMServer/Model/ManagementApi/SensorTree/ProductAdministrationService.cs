@@ -56,7 +56,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // The web view model's error strings (AddProductViewModel), verbatim —
         // the area's validation-parity invariant.
         private const string NameRequiredMessage = "New product name is required.";
-        private const string NameLengthMessage = "New product name length should be less than 100.";
+        private const string NameLengthMessage = "New product name length should be at most 100 characters.";
         private const string NameDuplicateMessage = "Product with the same name already exists.";
         private const string NameCharsetMessage = "New product name contains forbidden characters.";
 

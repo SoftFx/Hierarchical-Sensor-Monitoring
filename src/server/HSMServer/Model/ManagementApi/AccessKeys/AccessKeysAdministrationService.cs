@@ -54,7 +54,7 @@ namespace HSMServer.Model.ManagementApi.AccessKeys
         // AccessKeyPermissionsValidation), verbatim — the area's
         // validation-parity invariant.
         private const string NameRequiredMessage = "Display name is required.";
-        private const string NameLengthMessage = "Display name length should be less than 100.";
+        private const string NameLengthMessage = "Display name length should be at most 100 characters.";
         private const string NameDuplicateMessage = "Access key with the same name already exists.";
         private const string PermissionsRequiredMessage = "At least one permission should be selected.";
 

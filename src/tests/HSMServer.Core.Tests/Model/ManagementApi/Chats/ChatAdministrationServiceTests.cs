@@ -379,7 +379,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
         [InlineData("   ", "Name is required")]
         [InlineData("", "Name is required")]
         [InlineData("The name of this chat is far too long for a chat name because it has more than one hundred characters in it, which the form forbids!",
-            "Name length should be less than 100.")]
+            "Name length should be at most 100 characters.")]
         public async Task CreateChat_NameBreakingARule_AnswersInvalid_AndStoresNothing(string name, string message)
         {
             SetupNoChatAnywhere();
@@ -390,6 +390,23 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
             Assert.Equal([message], result.Failure.Errors[nameof(ChatUpdate.Name)]);
             _chats.Verify(m => m.TryAdd(It.IsAny<Chat>()), Times.Never);
+        }
+
+        // #1934: the limit includes its own value — a name of exactly the maximum is stored,
+        // which is what the message says ("at most").
+        [Theory]
+        [InlineData(ChatNameValidator.NameMaxLength, true)]
+        [InlineData(ChatNameValidator.NameMaxLength + 1, false)]
+        public async Task CreateChat_NameOfTheMaximumLength_IsAccepted_TheNextCharacterIsNot(int length, bool accepted)
+        {
+            SetupNoChatAnywhere();
+            _chats.Setup(m => m.TryAdd(It.IsAny<Chat>())).ReturnsAsync(true);
+
+            var result = await Engine.CreateChatAsync(new ChatUpdate { Id = Guid.Empty, Name = new string('n', length) },
+                new ChatFolderBinding(Keep: [], Add: [], Managed: []), AuthorId, _initiator);
+
+            Assert.Equal(accepted, result.Success);
+            _chats.Verify(m => m.TryAdd(It.Is<Chat>(c => c.Name.Length == length)), accepted ? Times.Once() : Times.Never());
         }
 
         [Fact]

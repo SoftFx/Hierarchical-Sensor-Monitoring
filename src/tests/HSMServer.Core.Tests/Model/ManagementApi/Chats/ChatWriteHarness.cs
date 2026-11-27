@@ -75,14 +75,18 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 .ReturnsAsync(true);
             // The removal reaches the folders the way NotificationsCenter wires it in
             // production: ChatsManager's Removed event runs FolderManager.RemoveChatHandler,
-            // which prunes the chat id from every folder bound to it.
+            // which takes the chat out of every folder bound to it and out of the default
+            // chats of every folder that lists it (#1927).
             Chats.Setup(c => c.TryRemove(It.IsAny<RemoveRequest>()))
                 .Callback<RemoveRequest>(remove =>
                 {
                     Store.RemoveAll(c => c.Id == remove.Id);
 
                     foreach (var folder in FolderStore)
+                    {
                         folder.Chats.Remove(remove.Id);
+                        folder.DefaultChats.SelectedChats.Remove(remove.Id);
+                    }
                 })
                 .ReturnsAsync(true);
 

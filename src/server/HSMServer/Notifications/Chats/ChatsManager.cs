@@ -103,6 +103,10 @@ namespace HSMServer.Notifications.Chats
             await _nameWrites.WaitAsync();
             try
             {
+                // With the write, before the row becomes visible to the reads that return
+                // the author.
+                NameTheAuthor(model);
+
                 added = await add();
 
                 if (added)
@@ -194,8 +198,7 @@ namespace HSMServer.Notifications.Chats
 
             foreach (var (_, chat) in this)
             {
-                if (_userManager.TryGetValueById(chat.AuthorId, out var author))
-                    chat.Author = author.Name;
+                NameTheAuthor(chat);
 
                 if (chat.TelegramChatId is not null)
                     _telegramChatIds.TryAdd(chat.TelegramChatId, chat);
@@ -206,17 +209,23 @@ namespace HSMServer.Notifications.Chats
 
         public Chat GetChatByChatId(ChatId chatId) => _telegramChatIds.GetValueOrDefault(chatId);
 
+        // A row stores its author's id only: the name is read from the user storage. It is
+        // resolved for every stored row at start and for a new one with its add — the reads
+        // return the name (the DTO's author, the form's), so a chat created while the
+        // server runs carries it at once (#1932), and not from the next start. A row whose
+        // author is gone keeps the name it was given while that author existed.
+        private void NameTheAuthor(Chat chat)
+        {
+            if (_userManager.TryGetValueById(chat.AuthorId, out var author))
+                chat.Author = author.Name;
+        }
+
         // The initiator of a chat's creation is its author. A fresh row has no slot for the
         // write's initiator, and whoever creates a row is its author: the web flow passes the
         // signed-in user, the /start flow the user who issued the invitation. A row whose
         // author is gone journals under System.
-        private InitiatorInfo AuthorOf(Chat chat)
-        {
-            var name = chat.Author
-                ?? (_userManager.TryGetValueById(chat.AuthorId, out var author) ? author.Name : null);
-
-            return name is null ? InitiatorInfo.System : InitiatorInfo.AsUser(name);
-        }
+        private static InitiatorInfo AuthorOf(Chat chat) =>
+            chat.Author is null ? InitiatorInfo.System : InitiatorInfo.AsUser(chat.Author);
 
         // Test-only seam to inject a stale _telegramChatIds entry — mirrors the production failure
         // mode where a binding was cleared through a path that bypassed TryUpdate. Lets the self-heal

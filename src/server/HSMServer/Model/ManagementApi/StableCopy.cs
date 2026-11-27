@@ -14,7 +14,10 @@ namespace HSMServer.Model.ManagementApi
     // was modified"), which the area's JSON contract would otherwise render
     // as an HTML 500. The read side therefore retries the copy: the mutating
     // side's per-entity work is tiny, so a retry virtually always observes a
-    // stable state. Deferred LINQ chains are fine — the whole chain
+    // stable state. The same copy is taken off the read paths wherever
+    // such a set is read with no lock to hold — a chat's removal handler
+    // reads a folder's default chats here before it changes them. Deferred
+    // LINQ chains are fine — the whole chain
     // materializes inside one ToList, inside one attempt.
     internal static class StableCopy
     {

@@ -97,11 +97,13 @@ namespace HSMServer.Model.Folders
             if (update.SelfDestroy != null)
                 SelfDestroy = UpdateSetting(SelfDestroy, new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory), update.Initiator, "Remove sensor after inactivity");
 
+            var chatName = update.ChatNameResolver ?? GetChatName;
+
             if (update.Chats is not null)
-                Chats = UpdateChats(Chats, update.Chats, update.Initiator, GetChatName);
+                Chats = UpdateChats(Chats, update.Chats, update.Initiator, chatName);
 
             if (update.DefaultChats != null)
-                DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator);
+                DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator, chatName);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -132,13 +134,19 @@ namespace HSMServer.Model.Folders
             return newValue;
         }
 
-        private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator)
+        private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator,
+                                                   Func<Guid, string> chatName)
         {
+            // The chats a mode holds are named, so the record tells which chat came or left —
+            // in From parent too, whose selected chats add to the inherited ones.
             string GetJournalValue((HashSet<Guid> ids, DefaultChatMode mode) value) => value.mode switch
             {
-                DefaultChatMode.Custom => string.Join(", ", value.ids.Select(i => GetChatName(i))),
+                DefaultChatMode.Custom => JoinedNamesOf(value.ids),
+                DefaultChatMode.FromParent when value.ids.Count != 0 => $"{value.mode.GetDisplayName()}, {JoinedNamesOf(value.ids)}",
                 _ => value.mode.GetDisplayName(),
             };
+
+            string JoinedNamesOf(HashSet<Guid> ids) => string.Join(", ", ids.Select(chatName));
 
             var oldChat = (currentValue.SelectedChats, currentValue.ChatMode);
             var newChat = (newValue.SelectedChats, newValue.ChatMode);

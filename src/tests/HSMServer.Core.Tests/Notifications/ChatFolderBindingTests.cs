@@ -6,13 +6,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
+using HSMServer.Model.Controls;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
@@ -134,6 +137,177 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Empty(folderManager[folderId1].Chats);
             Assert.Empty(folderManager[folderId2].Chats);
         }
+
+        // #1931: a chat's removal reaches the folders after the chat left the chat storage —
+        // where a folder reads the chat names of its journal records from. The record of the
+        // folder's change must still name the chat it lost, instead of a blank.
+        [Fact]
+        public async Task TryRemove_BoundChat_FolderRecordNamesTheDeletedChat()
+        {
+            var world = BuildWorld();
+            var (deleted, kept) = await world.AddChatsAsync("gone-chat", "kept-chat");
+            var folder = await world.AddFolderAsync("On-call", bound: [deleted.Id, kept.Id]);
+            world.Journal.Clear();
+
+            Assert.True(await world.Chats.TryRemove(new RemoveRequest(deleted.Id, InitiatorInfo.AsUser("admin"))));
+
+            var record = Assert.Single(world.Journal);
+            Assert.Equal(("Chats", "gone-chat, kept-chat", "kept-chat"), (record.PropertyName, record.OldValue, record.NewValue));
+            Assert.Equal("On-call", record.Path);
+            Assert.Equal("User (admin)", record.Initiator);
+            Assert.Equal([kept.Id], folder.Chats);
+        }
+
+        // #1927: a chat listed among a folder's default chats without being bound to it stayed
+        // there after its deletion — in the API's folder read and in the alert routing — until
+        // the folder was saved again. The deletion takes it out of every folder that lists it,
+        // whatever the folder's mode, stores that, and leaves the other folders alone.
+        [Fact]
+        public async Task TryRemove_ChatListedAsADefaultChat_IsTakenOutOfEveryFolderThatListsIt()
+        {
+            var world = BuildWorld();
+            var (deleted, kept) = await world.AddChatsAsync("gone-chat", "kept-chat");
+            var custom = await world.AddFolderAsync("Custom", defaultChats: [deleted.Id, kept.Id], mode: DefaultChatsMode.Custom);
+            var fromParent = await world.AddFolderAsync("From parent", defaultChats: [deleted.Id], mode: DefaultChatsMode.FromParent);
+            var untouched = await world.AddFolderAsync("Untouched", defaultChats: [kept.Id], mode: DefaultChatsMode.Custom);
+            world.Journal.Clear();
+            world.Database.Invocations.Clear();
+
+            Assert.True(await world.Chats.TryRemove(new RemoveRequest(deleted.Id, InitiatorInfo.AsUser("admin"))));
+
+            Assert.Equal([kept.Id], custom.DefaultChats.SelectedChats);
+            Assert.Equal(DefaultChatMode.Custom, custom.DefaultChats.ChatMode);
+            Assert.Empty(fromParent.DefaultChats.SelectedChats);
+            Assert.Equal(DefaultChatMode.FromParent, fromParent.DefaultChats.ChatMode);
+            Assert.Equal([kept.Id], untouched.DefaultChats.SelectedChats);
+
+            // One record per folder that lost the chat — From parent names its chats too —
+            // and the stored folder no longer lists it.
+            Assert.Equal(
+                [("Custom", "Default chats", "gone-chat, kept-chat", "kept-chat"), ("From parent", "Default chats", "From parent, gone-chat", "From parent")],
+                world.Journal.Select(r => (r.Path, r.PropertyName, r.OldValue, r.NewValue)).OrderBy(t => t.Item1, StringComparer.Ordinal));
+            Assert.Equal([kept.Id.ToString()], StoredDefaultChatsOf(world, custom));
+            Assert.Empty(StoredDefaultChatsOf(world, fromParent));
+            world.Database.Verify(d => d.UpdateFolder(It.Is<FolderEntity>(e => e.Id == untouched.Id.ToString())), Times.Never);
+        }
+
+        // A folder that both binds the chat and lists it among its default chats gets ONE
+        // update, which journals both of its changes.
+        [Fact]
+        public async Task TryRemove_ChatBoundAndListedByOneFolder_JournalsBothChangesOfThatFolder()
+        {
+            var world = BuildWorld();
+            var (deleted, kept) = await world.AddChatsAsync("gone-chat", "kept-chat");
+            var folder = await world.AddFolderAsync("On-call", bound: [deleted.Id, kept.Id], defaultChats: [deleted.Id], mode: DefaultChatsMode.Custom);
+            world.Journal.Clear();
+
+            Assert.True(await world.Chats.TryRemove(new RemoveRequest(deleted.Id, InitiatorInfo.System)));
+
+            Assert.Equal([kept.Id], folder.Chats);
+            Assert.Empty(folder.DefaultChats.SelectedChats);
+            Assert.Equal(
+                [("Chats", "gone-chat, kept-chat", "kept-chat"), ("Default chats", "gone-chat", "")],
+                world.Journal.Select(r => (r.PropertyName, r.OldValue, r.NewValue)));
+            world.Database.Verify(d => d.UpdateFolder(It.IsAny<FolderEntity>()), Times.Once);
+        }
+
+        // A folder that neither binds the chat nor lists it is not written at all.
+        [Fact]
+        public async Task TryRemove_ChatUnknownToAFolder_LeavesThatFolderAlone()
+        {
+            var world = BuildWorld();
+            var (deleted, kept) = await world.AddChatsAsync("gone-chat", "kept-chat");
+            await world.AddFolderAsync("Untouched", bound: [kept.Id], defaultChats: [kept.Id], mode: DefaultChatsMode.Custom);
+            world.Journal.Clear();
+            world.Database.Invocations.Clear();
+
+            Assert.True(await world.Chats.TryRemove(new RemoveRequest(deleted.Id, InitiatorInfo.System)));
+
+            Assert.Empty(world.Journal);
+            world.Database.Verify(d => d.UpdateFolder(It.IsAny<FolderEntity>()), Times.Never);
+        }
+
+        // What the database was last told about a folder's default chats: their ids.
+        private static List<string> StoredDefaultChatsOf(World world, FolderModel folder) =>
+            world.Database.Invocations
+                .Where(i => i.Method.Name == nameof(IDatabaseCore.UpdateFolder))
+                .Select(i => (FolderEntity)i.Arguments[0])
+                .Single(e => e.Id == folder.Id.ToString())
+                .DefaultChatsSettings.Chats.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
+
+        // The two managers wired the way NotificationsCenter wires them, over a journal and
+        // a database that record what is written to them. The chat storage's own journal
+        // (the `chat` records) is the caller's: most tests leave it unrecorded. Shared with
+        // ChatRemovalFolderUpdateFailureTests.
+        internal sealed class World
+        {
+            public ChatsManager Chats { get; }
+
+            public FolderManager Folders { get; }
+            public List<JournalRecordModel> Journal { get; } = [];
+            public Mock<IDatabaseCore> Database { get; } = new();
+
+
+            public World(IJournalService chatJournal)
+            {
+                Chats = BuildManager(chatJournal);
+
+                var cache = new Mock<ITreeValuesCache>();
+                cache.Setup(c => c.GetProducts()).Returns(new List<ProductModel>());
+
+                var users = new Mock<IUserManager>();
+                users.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
+
+                var journal = new Mock<IJournalService>();
+                journal.Setup(j => j.AddRecord(It.IsAny<JournalRecordModel>())).Callback<JournalRecordModel>(Journal.Add);
+
+                Folders = new FolderManager(Database.Object, cache.Object, users.Object, journal.Object, Chats);
+
+                Chats.Removed += Folders.RemoveChatHandler;
+                Folders.AddFolderToChats += Chats.AddFolderToChats;
+                Folders.RemoveFolderFromChats += Chats.RemoveFolderFromChats;
+                Folders.GetChatName += Chats.GetChatName;
+            }
+
+
+            public async Task<(Chat Deleted, Chat Kept)> AddChatsAsync(params string[] names)
+            {
+                var chats = names.Select(BuildUnboundChat).ToList();
+
+                foreach (var chat in chats)
+                    Assert.True(await Chats.TryAdd(chat));
+
+                return (chats[0], chats[1]);
+            }
+
+            // The chat ids a folder is stored with, hydrated into the chats the way
+            // NotificationsCenter does it at start.
+            public async Task<FolderModel> AddFolderAsync(string name, Guid[] bound = null, Guid[] defaultChats = null, DefaultChatsMode mode = DefaultChatsMode.NotInitialized)
+            {
+                var folder = new FolderModel(new FolderEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    DisplayName = name,
+                    AuthorId = Guid.NewGuid().ToString(),
+                    Chats = [.. (bound ?? []).Select(c => c.ToByteArray())],
+                    DefaultChatsSettings = new PolicyDestinationSettingsEntity
+                    {
+                        Mode = (byte)mode,
+                        Chats = (defaultChats ?? []).ToDictionary(c => c.ToString(), _ => (string)null),
+                    },
+                });
+
+                Assert.True(await Folders.TryAdd(folder, InitiatorInfo.System));
+
+                foreach (var chatId in bound ?? [])
+                    if (Chats.TryGetValue(chatId, out var chat))
+                        chat.Folders.Add(folder.Id);
+
+                return folder;
+            }
+        }
+
+        internal static World BuildWorld(IJournalService chatJournal = null) => new(chatJournal);
 
         // Regression for #1261 single-subscription wiring: NotificationsCenter wires
         // FolderManager.AddFolderToChats -> IChatsManager.AddFolderToChats once. The previous
@@ -604,26 +778,26 @@ namespace HSMServer.Core.Tests.Notifications
             };
 
 
-        private static ChatsManager BuildManager() => BuildManagerWithBot();
+        private static ChatsManager BuildManager(IJournalService journal = null) => BuildManagerWithBot(journal: journal);
 
         // #1826: a chat with NO Telegram binding yet — the invitation tests bind one.
-        private static Chat BuildUnboundChat() =>
+        private static Chat BuildUnboundChat(string name = "unbound-chat") =>
             new(new ChatEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
                 Author = Guid.NewGuid().ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                Name = "unbound-chat",
+                Name = name,
             });
 
         // #1826: the invitation link builders read the configured bot name.
-        private static ChatsManager BuildManagerWithBot(string botName = "hsm_alerts_bot")
+        private static ChatsManager BuildManagerWithBot(string botName = "hsm_alerts_bot", IJournalService journal = null)
         {
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = botName });
 
             return new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, config.Object,
-                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
+                new JournalAppender(journal ?? new Mock<IJournalService>().Object, TimeProvider.System));
         }
 
         private static Chat BuildChat() =>
