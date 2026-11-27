@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.Folders
 
 
     // #1864: a folder's "Keep sensor history" / "Remove sensor after inactivity" set to a calendar preset (a month,
-    // three months, six months, a year) must apply to the products that inherit it, as the same preset set on the
+    // three months, six months, a year; five years since #1945) must apply to the products that inherit it, as the same preset set on the
     // product itself does. Each test works on its own folder and product in the shared fixture database. History is
     // seeded years older than the longest preset, so no outcome depends on when the test runs; the calendar arithmetic
     // is checked on a fixed instant. In the NLog-isolated collection (run alone), because one test reads what the
@@ -48,7 +48,11 @@ namespace HSMServer.Core.Tests.Folders
         // (a month is 29 days, three months 90, six months 182, a year 366).
         private static readonly DateTime Fixed = new(2028, 2, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        private static readonly DateTime Old = DateTime.UtcNow.AddYears(-3);
+        // Older than five years, the longest preset (#1945).
+        private static readonly DateTime Old = DateTime.UtcNow.AddYears(-7);
+
+        // Within five years and past every shorter preset.
+        private static readonly DateTime FourYearsAgo = DateTime.UtcNow.AddYears(-4);
 
         private readonly FolderManager _folders;
 
@@ -66,6 +70,7 @@ namespace HSMServer.Core.Tests.Folders
             { TimeInterval.ThreeMonths, CoreTimeInterval.ThreeMonths, 3, 14 },
             { TimeInterval.SixMonths, CoreTimeInterval.SixMonths, 6, 27 },
             { TimeInterval.Year, CoreTimeInterval.Year, 12, 53 },
+            { TimeInterval.FiveYears, CoreTimeInterval.FiveYears, 60, 261 }, // #1945
         };
 
 
@@ -326,9 +331,10 @@ namespace HSMServer.Core.Tests.Folders
             Assert.Single(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
         }
 
-        // (c) A folder changed from a month to Forever, to a period of ticks longer than the history, or to five years:
-        // the preset is gone from the product and nothing is deleted.
-        public static TheoryData<string> AwayFromTheMonth => new() { "forever", "2000 days", "five years" };
+        // (c) A folder changed from a month to Forever or to a period of ticks longer than the history: the preset is gone
+        // from the product and nothing is deleted. (Five years was in this list while it was saved as "from parent" and
+        // never applied; since #1945 it is a calendar preset, see FolderChangedFromAMonth_ToFiveYears_...)
+        public static TheoryData<string> AwayFromTheMonth => new() { "forever", "3000 days" };
 
         [Theory]
         [MemberData(nameof(AwayFromTheMonth))]
@@ -471,14 +477,16 @@ namespace HSMServer.Core.Tests.Folders
             Assert.NotNull(_valuesCache.GetSensor(sensor.Id));
         }
 
-        // (f, finding 2) A folder with a custom period of exactly a preset's nominal length (31, 93, 186, 365 days) is
-        // stored as ticks and stays ticks across a restart: the products inheriting it keep the ticks, a later save of
-        // the folder keeps them too, and the start does not turn them into the calendar preset.
+        // (f, finding 2) A folder with a custom period of exactly a preset's nominal length (31, 93, 186, 365, 1826 days)
+        // is stored as ticks and stays ticks across a restart: the products inheriting it keep the ticks, a later save of
+        // the folder keeps them too, and the start does not turn them into the calendar preset. Before #1945, 1826 days
+        // were read back as "5 years" and the next save of the folder stored "from parent".
         [Theory]
         [InlineData(31)]
         [InlineData(93)]
         [InlineData(186)]
         [InlineData(365)]
+        [InlineData(1826)]
         public async Task FolderWithACustomPeriodOfAPresetsNominalLength_StaysTicks_AcrossARestart(int days)
         {
             var (folder, product, _) = await InheritingProductAsync();
@@ -596,7 +604,552 @@ namespace HSMServer.Core.Tests.Folders
         }
 
 
+        // === Five years (#1945): saved and read back as the preset, not as "from parent" ===
+        // The inherited cases (a folder change, a product saved "from folder", a product stored without the preset and
+        // resolved at start, a table sensor's class) run for five years through Presets above.
+
+        [Fact]
+        public async Task FiveYears_SetOnAFolder_IsStoredAsThePreset_AndReadBackAsItAfterARestart()
+        {
+            var (folder, _, _) = await ProductInFolderAsync();
+
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.FiveYears);
+
+            AssertFiveYears(folder.KeepHistory.ToModel());
+            var stored = _databaseCoreManager.DatabaseCore.GetAllFolders().Single(f => f.Id == folder.Id.ToString()).Settings;
+            Assert.Equal(new TimeIntervalEntity((long)TimeInterval.FiveYears, 0L), stored["KeepHistory"]);
+
+            var restarted = BuildFolderManager();
+            await restarted.Initialize();
+
+            Assert.True(restarted.TryGetValue(folder.Id, out var reloaded));
+            Assert.Equal(TimeInterval.FiveYears, reloaded.KeepHistory.Interval);
+            AssertFiveYears(reloaded.KeepHistory.ToModel());
+        }
+
+        // What HomeController.UpdateProductInfo stores when "5 years" is posted for the product itself: its own preset,
+        // not "from folder" (in a folder, before #1945) or "from parent" (in none).
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task FiveYears_SetOnAProduct_IsItsOwnPreset_InAFolderOrInNone(bool inFolder)
+        {
+            ProductModel product;
+            Guid key;
+            ProductNodeViewModel view;
+
+            if (inFolder)
+            {
+                FolderModel folder;
+                (folder, product, key) = await InheritingProductAsync();
+                await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+                view = folder.Products[product.Id];
+            }
+            else
+            {
+                product = await _valuesCache.AddProductAsync($"product-{Guid.NewGuid():N}", Guid.NewGuid());
+                key = _valuesCache.AddAccessKey(new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString()))).Id;
+                view = new ProductNodeViewModel(product, null, null);
+                view.Update(product);
+            }
+
+            var sensor = await SeedAsync(product, key, Old, FourYearsAgo, DateTime.UtcNow.AddHours(-1));
+
+            var posted = new TimeIntervalViewModel { Interval = TimeInterval.FiveYears };
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                KeepHistory = posted.ToModel(view.KeepHistory),
+                Initiator = InitiatorInfo.AsUser("operator"),
+            });
+
+            AssertFiveYears(product.Settings.KeepHistory.CurValue);
+            Assert.Equal(TimeInterval.FiveYears, ReadBack(product.Settings.KeepHistory.CurValue).Interval);
+
+            // The start leaves a value of the product's own as it is.
+            await BuildFolderManager().Initialize();
+            AssertFiveYears(product.Settings.KeepHistory.CurValue);
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.Empty(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
+            Assert.Single(await ReadAsync(sensor, FourYearsAgo.AddDays(-1), FourYearsAgo.AddDays(1)));
+        }
+
+        // What HomeController.UpdateSensorInfo stores when "5 years" is posted for a sensor.
+        [Fact]
+        public async Task FiveYears_SetOnASensor_IsItsOwnPreset()
+        {
+            var (_, product, key) = await ProductWithOwnForeverAsync();
+            var sensor = await SeedAsync(product, key, Old, FourYearsAgo, DateTime.UtcNow.AddHours(-1));
+
+            var posted = new TimeIntervalViewModel { Interval = TimeInterval.FiveYears };
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate { Id = sensor.Id, KeepHistory = posted.ToModel(), Initiator = InitiatorInfo.AsUser("operator") });
+
+            AssertFiveYears(sensor.Settings.KeepHistory.CurValue);
+            Assert.Same(sensor.Settings.KeepHistory.CurValue, sensor.Settings.KeepHistory.Value);
+            Assert.Equal(TimeInterval.FiveYears, ReadBack(sensor.Settings.KeepHistory.CurValue).Interval);
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.Empty(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
+            Assert.Single(await ReadAsync(sensor, FourYearsAgo.AddDays(-1), FourYearsAgo.AddDays(1)));
+        }
+
+        // The pinned case of #1864 (c) with the meaning #1945 gives it: a folder changed from a month to five years is
+        // inherited as five years, which keeps what is younger than five calendar years and clears what is older.
+        [Fact]
+        public async Task FolderChangedFromAMonth_ToFiveYears_IsInheritedAsFiveYears()
+        {
+            var (folder, product, key) = await InheritingProductAsync();
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month, selfDestroy: TimeInterval.Month);
+            var sensor = await SeedAsync(product, key, Old, FourYearsAgo, DateTime.UtcNow.AddHours(-1));
+
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.FiveYears);
+
+            AssertInheritsCalendar(product.Settings.KeepHistory.CurValue, CoreTimeInterval.FiveYears, 60);
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.Empty(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
+            Assert.Single(await ReadAsync(sensor, FourYearsAgo.AddDays(-1), FourYearsAgo.AddDays(1)));
+        }
+
+
+        // === Five years (#1945): what an earlier build stored is not converted ===
+        // A 5-year choice saved before #1945 is "from parent" with 0 ticks (a folder, a product in no folder, a sensor),
+        // or "from folder" with the folder's value (a product in a folder): the same bytes as a real "from parent" or
+        // "from folder". Nothing tells them apart, so they stay what they say, and nothing is deleted because of them.
+
+        [Fact]
+        public async Task StoredFromParent_OnAFolder_StaysFromParent_AcrossARestart_AndDeletesNothing()
+        {
+            var (folder, product, key) = await InheritingProductAsync();
+
+            // What a folder set to "5 years" stores before #1945, posted the same way.
+            var fromParent = new TimeIntervalViewModel { Interval = TimeInterval.FromParent };
+            await ChangeFolderAsync(folder, fromParent, fromParent);
+
+            var stored = _databaseCoreManager.DatabaseCore.GetAllFolders().Single(f => f.Id == folder.Id.ToString()).Settings;
+            Assert.Equal(new TimeIntervalEntity((long)CoreTimeInterval.FromParent, 0L), stored["KeepHistory"]);
+            Assert.Equal(new TimeIntervalEntity((long)CoreTimeInterval.FromParent, 0L), stored["SelfDestroy"]);
+
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+            var idle = await SeedAsync(product, key, Old);
+
+            var restarted = BuildFolderManager();
+            await restarted.Initialize();
+
+            Assert.True(restarted.TryGetValue(folder.Id, out var reloaded));
+            // Shown as what it does (never expires), not as 5 years; still stored as FromParent.
+            Assert.Equal(TimeInterval.Forever, reloaded.KeepHistory.Interval);
+            Assert.Equal(CoreTimeInterval.FromParent, reloaded.KeepHistory.ToModel().Interval);
+            Assert.Equal(0L, reloaded.KeepHistory.ToModel().Ticks);
+
+            foreach (var inherited in new[] { product.Settings.KeepHistory.CurValue, product.Settings.SelfDestroy.CurValue })
+            {
+                Assert.True(inherited.IsFromFolder);
+                Assert.Null(inherited.FolderPreset);
+                Assert.Equal(0L, inherited.Ticks);
+            }
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+            await _valuesCache.RunSensorsSelfDestroyAsync();
+
+            Assert.Single(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
+            Assert.NotNull(_valuesCache.GetSensor(idle.Id));
+            Assert.Equal(TablePeriodClass.Forever, TablePeriodClass.Weeks(product.Settings.KeepHistory.CurValue, Fixed));
+        }
+
+        [Fact]
+        public async Task StoredFromParent_OnAProductInNoFolder_AndOnASensor_StaysFromParent_AndDeletesNothing()
+        {
+            var product = await _valuesCache.AddProductAsync($"product-{Guid.NewGuid():N}", Guid.NewGuid());
+            var key = _valuesCache.AddAccessKey(new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString()))).Id;
+
+            var stored = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L);
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                KeepHistory = stored,
+                SelfDestroy = stored,
+                Initiator = InitiatorInfo.AsSystemMigrator(),
+            });
+
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+            var idle = await SeedAsync(product, key, Old);
+            await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                KeepHistory = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                SelfDestroy = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                Initiator = InitiatorInfo.AsUser("operator"),
+            });
+
+            await BuildFolderManager().Initialize();
+
+            foreach (var model in new[] { product.Settings.KeepHistory.CurValue, sensor.Settings.KeepHistory.CurValue })
+            {
+                Assert.True(model.IsFromParent, $"{model} is not from parent");
+                Assert.Equal(TimeInterval.FromParent, ReadBack(model).Interval);
+            }
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+            await _valuesCache.RunSensorsSelfDestroyAsync();
+
+            Assert.Single(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
+            Assert.NotNull(_valuesCache.GetSensor(idle.Id));
+        }
+
+        // The stored bytes of "from parent" read as "from parent" and write back unchanged; the view shows them as such.
+        [Fact]
+        public void FromParentWithZeroTicks_ReadsAndWritesBackAsFromParent()
+        {
+            const string json = "{\"Interval\":-10,\"Ticks\":0}";
+
+            var model = new TimeIntervalModel(System.Text.Json.JsonSerializer.Deserialize<TimeIntervalEntity>(json));
+            Assert.True(model.IsFromParent);
+            Assert.Null(model.FolderPreset);
+            Assert.Equal(json, System.Text.Json.JsonSerializer.Serialize(model.ToEntity()));
+
+            var view = ReadBack(model);
+            Assert.Equal(TimeInterval.FromParent, view.Interval);
+            Assert.Equal(json, System.Text.Json.JsonSerializer.Serialize(view.ToModel().ToEntity()));
+        }
+
+        // A period of 1826 days in ticks, the history the collectors give their version sensors (365 * 5 + 1 days), is a
+        // custom period: before #1945 it was read back as "5 years" and the next save of the sensor stored "from parent",
+        // the product's setting, which could clear the version history.
+        [Fact]
+        public void TicksOf1826Days_AreACustomPeriod_AndAreSavedBackAsTheSameTicks()
+        {
+            var ticks = TimeSpan.FromDays(1826).Ticks;
+            Assert.Equal((long)TimeInterval.FiveYears, ticks);
+            Assert.Equal((long)TimeInterval.FiveYears, (long)CoreTimeInterval.FiveYears);
+
+            var view = ReadBack(new TimeIntervalModel(ticks));
+
+            Assert.Equal(TimeInterval.Custom, view.Interval);
+            Assert.Equal(TimeSpan.FromDays(1826), view.CustomSpan);
+
+            var saved = view.ToModel();
+            Assert.Equal(CoreTimeInterval.Ticks, saved.Interval);
+            Assert.Equal(ticks, saved.Ticks);
+        }
+
+
+        // === A setting with nothing to inherit from, stored as "from parent": the edit form (#1945 follow-up) ===
+        // A folder, or a product in no folder, whose setting is stored as FromParent (an old 5-year choice, or the default
+        // TTL of a product) never expires. Its select has no "from parent" item (the view removes it when there is no
+        // parent), so before the fix no option matched the stored value, the browser selected the first one ("1 week"
+        // for Keep sensor history) and an unchanged save stored it. The form now shows the item that behaves the same
+        // (Forever, or Never where the list has no Forever), and an unchanged save keeps the stored value as it is.
+
+        [Fact]
+        public async Task UnchangedSaveOfAFolderStoredAsFromParent_KeepsWhatItStores_DeletesNothing_AndJournalsNothing()
+        {
+            var (folder, product, key) = await InheritingProductAsync();
+            var fromParent = new TimeIntervalViewModel { Interval = TimeInterval.FromParent };
+            Assert.True(await _folders.TryUpdate(new FolderUpdate
+            {
+                Id = folder.Id,
+                TTL = fromParent,
+                KeepHistory = fromParent,
+                SelfDestroy = fromParent,
+                Initiator = InitiatorInfo.AsUser("operator"),
+            }));
+
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+            var idle = await SeedAsync(product, key, Old);
+
+            // The next start reads the folder from the database; the tree lists the product in it.
+            var restarted = BuildFolderManager();
+            await restarted.Initialize();
+            Assert.True(restarted.TryGetValue(folder.Id, out var reloaded));
+            new ProductNodeViewModel(product, null, reloaded).Update(product);
+
+            var inheritedBefore = InheritedSettings(product);
+            var form = new HSMServer.Model.Folders.ViewModels.FolderInfoViewModel(reloaded, reloaded.Products.Values);
+
+            var records = 0;
+            void Count(JournalRecordModel _) => records++;
+            reloaded.ChangesHandler += Count;
+            product.Settings.ChangesHandler += Count;
+
+            try
+            {
+                // HomeController.UpdateFolderInfo with the form posted as it was shown.
+                Assert.True(await restarted.TryUpdate(new FolderUpdate
+                {
+                    Id = folder.Id,
+                    Description = string.Empty,
+                    TTL = PostedUnchanged(form.ExpectedUpdateInterval),
+                    KeepHistory = PostedUnchanged(form.SavedHistoryPeriod),
+                    SelfDestroy = PostedUnchanged(form.SelfDestroyPeriod),
+                    Initiator = InitiatorInfo.AsUser("operator"),
+                }));
+            }
+            finally
+            {
+                reloaded.ChangesHandler -= Count;
+                product.Settings.ChangesHandler -= Count;
+            }
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+            await _valuesCache.RunSensorsSelfDestroyAsync();
+
+            Assert.True((await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1))).Count == 1,
+                $"old history deleted; the product now inherits keep history {product.Settings.KeepHistory.CurValue}");
+            Assert.NotNull(_valuesCache.GetSensor(idle.Id));
+
+            var stored = _databaseCoreManager.DatabaseCore.GetAllFolders().Single(f => f.Id == folder.Id.ToString()).Settings;
+            foreach (var setting in new[] { "TTL", "KeepHistory", "SelfDestroy" })
+                Assert.Equal(new TimeIntervalEntity((long)CoreTimeInterval.FromParent, 0L), stored[setting]);
+
+            Assert.Equal(inheritedBefore, InheritedSettings(product));
+            Assert.Equal(0, records);
+
+            // The form showed what the folder does: never expires.
+            Assert.Equal(TimeInterval.Forever, SelectedInForm(form.SavedHistoryPeriod));
+            Assert.Equal(TimeInterval.None, SelectedInForm(form.SelfDestroyPeriod));
+            Assert.Equal(TimeInterval.None, SelectedInForm(form.ExpectedUpdateInterval));
+        }
+
+        [Fact]
+        public async Task UnchangedSaveOfAProductInNoFolderStoredAsFromParent_KeepsWhatItStores_DeletesNothing_AndJournalsNothing()
+        {
+            var product = await _valuesCache.AddProductAsync($"product-{Guid.NewGuid():N}", Guid.NewGuid());
+            var key = _valuesCache.AddAccessKey(new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString()))).Id;
+
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                TTL = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                KeepHistory = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                SelfDestroy = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                Initiator = InitiatorInfo.AsSystemMigrator(),
+            });
+
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+            var idle = await SeedAsync(product, key, Old);
+
+            // The tree's view of the product and the form built from it (HomeController.GetProductInfo).
+            var view = new ProductNodeViewModel(product, null, null);
+            view.Update(product);
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(view);
+
+            var records = 0;
+            void Count(JournalRecordModel _) => records++;
+            product.Settings.ChangesHandler += Count;
+
+            try
+            {
+                // HomeController.UpdateProductInfo with the form posted as it was shown.
+                await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+                {
+                    Id = product.Id,
+                    TTL = PostedUnchanged(form.ExpectedUpdateInterval).ToModel(view.TTL),
+                    KeepHistory = PostedUnchanged(form.SavedHistoryPeriod).ToModel(view.KeepHistory),
+                    SelfDestroy = PostedUnchanged(form.SelfDestroyPeriod).ToModel(view.SelfDestroy),
+                    Initiator = InitiatorInfo.AsUser("operator"),
+                });
+            }
+            finally
+            {
+                product.Settings.ChangesHandler -= Count;
+            }
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+            await _valuesCache.RunSensorsSelfDestroyAsync();
+
+            Assert.True((await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1))).Count == 1,
+                $"old history deleted; the product now keeps history {product.Settings.KeepHistory.CurValue}");
+            Assert.NotNull(_valuesCache.GetSensor(idle.Id));
+
+            Assert.True(product.Settings.TTL.CurValue.IsFromParent);
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+            Assert.True(product.Settings.SelfDestroy.CurValue.IsFromParent);
+            Assert.Equal(0, records);
+
+            Assert.Equal(TimeInterval.Forever, SelectedInForm(form.SavedHistoryPeriod));
+            Assert.Equal(TimeInterval.None, SelectedInForm(form.SelfDestroyPeriod));
+            Assert.Equal(TimeInterval.None, SelectedInForm(form.ExpectedUpdateInterval));
+        }
+
+        // Whether a product has nothing to inherit from is its folder NOW, not when its view was last updated: the tree
+        // updates a product's view before it attaches the new folder (TreeViewModel.ChangeProductHandler), and at start it
+        // attaches the folder first. A product stored as FromParent moved into a folder with a month shows "from parent
+        // (1 month)" and an unchanged save inherits the month, as before #1945; moved out of a folder, it shows Forever and
+        // an unchanged save keeps FromParent.
+
+        [Fact]
+        public async Task ProductStoredAsFromParent_MovedIntoAFolder_ShowsTheFoldersValue_AndAnUnchangedSaveInheritsIt()
+        {
+            var product = await _valuesCache.AddProductAsync($"product-{Guid.NewGuid():N}", Guid.NewGuid());
+            var folder = new FolderModel(new FolderAdd { Name = $"folder-{Guid.NewGuid():N}", Products = [], AuthorId = Guid.NewGuid(), Initiator = InitiatorInfo.System });
+            Assert.True(await _folders.TryAdd(folder, InitiatorInfo.System));
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+            await StoreFromParentAsync(product);
+
+            var (folders, tree) = await TreeAsync();
+            var node = tree.Nodes[product.Id];
+            Assert.Equal(TimeInterval.Forever, SelectedInForm(new HSMServer.Model.ViewModel.ProductInfoViewModel(node).SavedHistoryPeriod));
+
+            // The live move: the cache's update reaches the tree, which updates the view and then attaches the folder.
+            await folders.MoveProduct(node, null, folder.Id, InitiatorInfo.AsUser("operator"));
+            Assert.Equal(folder.Id, product.FolderId);
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(node);
+            Assert.Equal(TimeInterval.FromParent, SelectedInForm(form.SavedHistoryPeriod));
+            Assert.Equal("From parent (1 month)", form.SavedHistoryPeriod.DisplayValue);
+
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                KeepHistory = PostedUnchanged(form.SavedHistoryPeriod).ToModel(node.KeepHistory),
+                Initiator = InitiatorInfo.AsUser("operator"),
+            });
+
+            AssertInheritsCalendar(product.Settings.KeepHistory.CurValue, CoreTimeInterval.Month, 1);
+        }
+
+        [Fact]
+        public async Task ProductStoredAsFromParent_InAFolderAtStart_ShowsTheFoldersValue()
+        {
+            var (folder, product, _) = await ProductInFolderAsync();
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+
+            var (_, tree) = await TreeAsync(storeFromParent: product);
+
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(tree.Nodes[product.Id]);
+            Assert.Equal(TimeInterval.FromParent, SelectedInForm(form.SavedHistoryPeriod));
+            Assert.Equal("From parent (1 month)", form.SavedHistoryPeriod.DisplayValue);
+        }
+
+        [Fact]
+        public async Task ProductStoredAsFromParent_MovedOutOfAFolder_ShowsForever_AndAnUnchangedSaveDeletesNothing()
+        {
+            var (folder, product, key) = await ProductInFolderAsync();
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+
+            var (folders, tree) = await TreeAsync(storeFromParent: product);
+            var node = tree.Nodes[product.Id];
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+
+            await folders.MoveProduct(node, folder.Id, null, InitiatorInfo.AsUser("operator"));
+            Assert.Null(product.FolderId);
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(node);
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                TTL = PostedUnchanged(form.ExpectedUpdateInterval).ToModel(node.TTL),
+                KeepHistory = PostedUnchanged(form.SavedHistoryPeriod).ToModel(node.KeepHistory),
+                SelfDestroy = PostedUnchanged(form.SelfDestroyPeriod).ToModel(node.SelfDestroy),
+                Initiator = InitiatorInfo.AsUser("operator"),
+            });
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.True((await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1))).Count == 1,
+                $"old history deleted; the product now keeps history {product.Settings.KeepHistory.CurValue}");
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+            Assert.Equal(TimeInterval.Forever, SelectedInForm(form.SavedHistoryPeriod));
+        }
+
+        // A real choice on such a form is applied: the shown "Forever" is no lock.
+        [Fact]
+        public async Task FolderStoredAsFromParent_ChangedOnItsForm_TakesTheNewValue()
+        {
+            var (folder, product, key) = await InheritingProductAsync();
+            var fromParent = new TimeIntervalViewModel { Interval = TimeInterval.FromParent };
+            await ChangeFolderAsync(folder, fromParent, fromParent);
+
+            var restarted = BuildFolderManager();
+            await restarted.Initialize();
+            Assert.True(restarted.TryGetValue(folder.Id, out var reloaded));
+            new ProductNodeViewModel(product, null, reloaded).Update(product);
+
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+
+            var journal = new List<JournalRecordModel>();
+            reloaded.ChangesHandler += journal.Add;
+
+            try
+            {
+                Assert.True(await restarted.TryUpdate(new FolderUpdate
+                {
+                    Id = folder.Id,
+                    KeepHistory = new TimeIntervalViewModel { Interval = TimeInterval.Month },
+                    Initiator = InitiatorInfo.AsUser("operator"),
+                }));
+            }
+            finally
+            {
+                reloaded.ChangesHandler -= journal.Add;
+            }
+
+            AssertInheritsCalendar(product.Settings.KeepHistory.CurValue, CoreTimeInterval.Month, 1);
+            var record = Assert.Single(journal);
+            Assert.Equal("Forever", record.OldValue);
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+            Assert.Empty(await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1)));
+        }
+
+
         // === Helpers ===
+
+        // The option a browser shows selected: the one whose value is the model's interval, or the first when none is.
+        private static TimeInterval SelectedInForm(TimeIntervalViewModel shown) =>
+            Enum.Parse<TimeInterval>((shown.IntervalItems.FirstOrDefault(i => i.Value == shown.Interval?.ToString()) ?? shown.IntervalItems[0]).Value);
+
+        // What the form posts back unchanged, bound in the model binder's order (CustomString before Interval).
+        private static TimeIntervalViewModel PostedUnchanged(TimeIntervalViewModel shown) =>
+            new() { CustomString = shown.CustomString, Interval = SelectedInForm(shown) };
+
+        private Task StoreFromParentAsync(ProductModel product) =>
+            ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                TTL = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                KeepHistory = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                SelfDestroy = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                Initiator = InitiatorInfo.AsSystemMigrator(),
+            });
+
+        // The start: a folder manager read from the database (its folders list no product yet) and the tree built over
+        // it, as the server builds them. A product stored as FromParent in a folder is taken as the folder's own value
+        // by the folder manager's start (ResetServerPolicyForFolderProducts), so it is stored after that and before the
+        // tree, as one stored by an earlier build and not yet reset would be.
+        private async Task<(FolderManager Folders, TreeViewModel Tree)> TreeAsync(ProductModel storeFromParent = null)
+        {
+            var folders = BuildFolderManager();
+            await folders.Initialize();
+
+            if (storeFromParent is not null)
+                await StoreFromParentAsync(storeFromParent);
+
+            return (folders, new TreeViewModel(_valuesCache, folders, _userManager));
+        }
+
+        private static string InheritedSettings(ProductModel product) =>
+            $"{product.Settings.TTL.CurValue}|{product.Settings.KeepHistory.CurValue}|{product.Settings.SelfDestroy.CurValue}";
+
+        private static TimeIntervalViewModel ReadBack(TimeIntervalModel model) =>
+            new TimeIntervalViewModel(PredefinedIntervals.ForKeepHistory).FromModel(model, PredefinedIntervals.ForKeepHistory);
+
+        // The 5-year preset set on the node itself: five calendar years, not 1826 days of ticks.
+        private static void AssertFiveYears(TimeIntervalModel model)
+        {
+            Assert.Equal(CoreTimeInterval.FiveYears, model.Interval);
+            Assert.False(model.UseTicks);
+            Assert.Null(model.FolderPreset);
+            Assert.Equal(Fixed.AddYears(5), model.GetShiftedTime(Fixed));
+            Assert.Equal(Fixed.AddYears(-5), model.GetShiftedTime(Fixed, -1));
+        }
 
         private static TimeIntervalViewModel Custom(int days) =>
             new() { Interval = TimeInterval.Custom, CustomSpan = TimeSpan.FromDays(days) };
@@ -604,8 +1157,7 @@ namespace HSMServer.Core.Tests.Folders
         private static TimeIntervalViewModel NonCalendar(string setting) => setting switch
         {
             "forever" => new TimeIntervalViewModel { Interval = TimeInterval.Forever },
-            "2000 days" => Custom(2000),
-            "five years" => new TimeIntervalViewModel { Interval = TimeInterval.FiveYears },
+            "3000 days" => Custom(3000),
             _ => throw new ArgumentOutOfRangeException(nameof(setting)),
         };
 

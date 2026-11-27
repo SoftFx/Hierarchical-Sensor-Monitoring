@@ -598,7 +598,7 @@ namespace HSMServer.Folders
         }
 
         // #1864: what a product inherits from its folder is brought in line with the folder's present setting at start.
-        // - A product stored by an earlier build inherits a calendar preset (a month to a year) without it: as FromFolder
+        // - A product stored by an earlier build inherits a calendar preset (a month to five years) without it: as FromFolder
         //   with 0 ticks after a change of the folder, which never expires, or with the preset's nominal length in ticks
         //   when saved as "from folder". It is re-derived from the folder.
         // - A product holding a preset is always re-derived from the folder, whatever the folder says now: a change of

@@ -106,6 +106,11 @@ namespace HSMServer.Model.Folders
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
         {
+            // A setting stored as FromParent is shown as the item that never expires; posted back unchanged, it stays as
+            // stored: no change, no journal record (#1945).
+            if (currentValue.KeepsStoredFromParent(newValue))
+                return currentValue;
+
             var oldModel = currentValue.ToModel(currentValue);
             var newModel = newValue.ToModel(newValue);
 
@@ -114,7 +119,8 @@ namespace HSMServer.Model.Folders
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "Folder settings update",
-                    OldValue = oldModel.IsNone ? $"{none}" : $"{oldModel}",
+                    // A folder has no parent: FromParent on it never expires, and its form showed it as such.
+                    OldValue = oldModel.IsNone || oldModel.IsFromParent ? $"{none}" : $"{oldModel}",
                     NewValue = newModel.IsNone ? $"{none}" : $"{newModel}",
 
                     PropertyName = propName,

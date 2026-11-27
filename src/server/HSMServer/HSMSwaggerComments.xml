@@ -2256,6 +2256,18 @@
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
         </member>
+        <member name="M:HSMServer.Model.TimeIntervalViewModel.FromNodeSetting(HSMServer.Core.Model.TimeIntervalModel,System.Collections.Generic.HashSet{HSMServer.Model.TimeInterval})">
+            <summary>
+            Reads a node's own setting (a folder's, or a product's or sensor's <c>CurValue</c>): as <see cref="M:HSMServer.Model.TimeIntervalViewModel.FromModel(HSMServer.Core.Model.TimeIntervalModel,System.Collections.Generic.HashSet{HSMServer.Model.TimeInterval})"/>,
+            and a FromParent is remembered, to be shown as the item that never expires and kept as stored while the node
+            has no parent (see <see cref="F:HSMServer.Model.TimeIntervalViewModel._storedFromParent"/>). A folder's own view, which never has a parent, shows it
+            at once (the folder's settings page renders the view itself); a node's view keeps FromParent and its form
+            decides when it is built.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TimeIntervalViewModel.KeepsStoredFromParent(HSMServer.Model.TimeIntervalViewModel)">
+            <summary>True when <paramref name="posted"/> keeps the item this view shows for a stored FromParent.</summary>
+        </member>
         <member name="T:HSMServer.Model.FileSensors.FileInfoDto">
             <summary>
             What the sensor page reads about the last value of a File sensor (#1886): its description, never its bytes. The
@@ -3610,7 +3622,8 @@
             One TTL interval. `Interval` is a SPARSE TimeInterval enum (long):
             -100=FromFolder, -10=FromParent, -1=Ticks (authoritative — read Ticks),
             0=None, 26784000000000=Month (31 days), 80352000000000=ThreeMonths,
-            160704000000000=SixMonths, 315360000000000=Year (365 days).
+            160704000000000=SixMonths, 315360000000000=Year (365 days),
+            1577664000000000=FiveYears (1826 days).
             Undefined values answer 400 (they would throw inside the timeout scan later).
             </summary>
         </member>
