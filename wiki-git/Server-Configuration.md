@@ -174,7 +174,7 @@ Use either `Password` or `PrivateKey`/`PrivateKeyFileName` for authentication �
 | `BotToken` | Token from [@BotFather](https://t.me/botfather) |
 | `IsRunning` | If `true`, bot starts automatically when the server launches |
 
-You can also start/stop the bot at runtime from **Configuration → Telegram** in the web UI without editing the file.
+You can also start/stop the bot at runtime from **Configuration → Settings**, tab **Telegram**, in the web UI without editing the file.
 
 For the full Telegram setup guide, see [Telegram Setup](Telegram-Setup).
 

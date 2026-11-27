@@ -28,8 +28,8 @@ engine and gates). #1830 lands the bot credential (`GET`/`PATCH /api/v1/telegram
 remains of the problem above is the guide: its instructions moved into one source in code that the web modals
 print from (#1827), and the guide of the management API (#1831) answers from that source.
 
-The guide and the next steps landed with #1831; of this initiative only #1832 — the documentation
-sweep and the end-to-end smoke — is open.
+The guide and the next steps landed with #1831. #1832 is the last ticket: the documentation sweep and
+the end-to-end smoke, whose transcript is under "End-to-end smoke".
 
 ## Goals
 
@@ -179,21 +179,23 @@ End-to-end scenario:
 
 ## Work Breakdown
 
-Tickets published 2026-11-23. Two planning steps became several tickets each — 2 is the engine, the
-journal and the API surface; 6 is the web half and the orchestrator half of the guide.
+Tickets published 2026-11-23 (with this document, PR #1836). Two planning steps became several tickets
+each — 2 is the engine, the journal and the API surface; 6 is the web half and the orchestrator half
+of the guide. Steps 1–6 have landed, each by the PR named in its row; step 7 is the smoke recorded
+under "End-to-end smoke" and the documentation sweep around it.
 
 | Step | Scope | Notes |
 |---|---|---|
-| 1 | Stop logging the bot token | #1824 — the two clear-text log sites; a prerequisite for step 5, valuable on its own |
-| 2a | Prefactor: chat write engine | #1825 — the write rules leave the web controller for one administration service; every chat write carries the initiator |
-| 2b | Journal kinds `chat` and `serverSettings` | #1828 — blocked by #1825 (the records need the initiator). The web Journal filter is built from the kinds list and picks them up by itself; the hand-written enumerations in the journal API and the MCP journal tool descriptions are extended, and a test pins the full list (none does today) |
-| 2c | Chats write surface + name uniqueness | #1829 — blocked by #1828 (API writes are journaled from their first day). `POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, the dry-run usage preview, the managed-folder binding rule, the shared name validator behind the API and the web form |
-| 3 | Test message with a delivery result | #1826 — one ticket with step 4: a result-returning send path on the three channels, `POST /api/v1/chats/{id}/test-message`, `send_chat_test_message` |
-| 4 | Telegram invitation issuer | #1826 — `POST /api/v1/chats/{id}/telegram-invitations`, `create_chat_telegram_invitation`; the 10-minute lifetime for management-surface tokens; the bot-not-running error pointing at step 5's tool. Shares the chats controller and tool class with #1829 — whichever lands second rebases |
-| 5 | Bot credential surface | #1830 — blocked by #1824 and #1828. `TelegramBotAdministrationService` (a token change: probe → apply → restart; the name and the on/off switch restart nothing; write-only token; username match against the effective token; `serverSettings` journal records), `GET`/`PATCH /api/v1/telegram-bot`, `get_telegram_bot`/`update_telegram_bot` |
-| 6a | Guide text: the single source | #1827 — the web modals render from it; the `?setln=uz` FAQ links fixed on the way. The source marks each step messenger-side or HSM-side |
-| 6b | Guide tool + next-step hints | #1831 — landed. `GET /api/v1/chats/setup-guide`, `get_chat_setup_guide`: the messenger-side steps for the human as text, the HSM-side ones as the calls that perform them; next-step hints in the write results and error texts. Settled points below |
-| 7 | Docs + end-to-end smoke | #1832 — closes the initiative; blocked by every other ticket. `aicontext/features/server/{notifications,mcp,management-api}/`, the glossary; the scenario above against a dev server |
+| 1 | Stop logging the bot token | #1824, PR #1838 — the two clear-text log sites; a prerequisite for step 5, valuable on its own |
+| 2a | Prefactor: chat write engine | #1825, PR #1840 and its round-2 review fixes PR #1856 — the write rules leave the web controller for one administration service; every chat write carries the initiator |
+| 2b | Journal kinds `chat` and `serverSettings` | #1828, PR #1875 — blocked by #1825 (the records need the initiator). The web Journal filter is built from the kinds list and picks them up by itself; the hand-written enumerations in the journal API and the MCP journal tool descriptions are extended, and a test pins the full list (none did before) |
+| 2c | Chats write surface + name uniqueness | #1829, PR #1901 — blocked by #1828 (API writes are journaled from their first day). `POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, the dry-run usage preview, the managed-folder binding rule, the shared name validator behind the API and the web form |
+| 3 | Test message with a delivery result | #1826, PR #1841 — one ticket with step 4: a result-returning send path on the three channels, `POST /api/v1/chats/{id}/test-message`, `send_chat_test_message` |
+| 4 | Telegram invitation issuer | #1826, PR #1841 — `POST /api/v1/chats/{id}/telegram-invitations`, `create_chat_telegram_invitation`; the 10-minute lifetime for management-surface tokens; the bot-not-running error pointing at step 5's tool. Shares the chats controller and tool class with #1829 — whichever lands second rebases |
+| 5 | Bot credential surface | #1830, PR #1937 — blocked by #1824 and #1828. `TelegramBotAdministrationService` (a token change: probe → apply → restart; the name and the on/off switch restart nothing; write-only token; username match against the effective token; `serverSettings` journal records), `GET`/`PATCH /api/v1/telegram-bot`, `get_telegram_bot`/`update_telegram_bot` |
+| 6a | Guide text: the single source | #1827, PR #1972 — the web modals render from it; the `?setln=uz` FAQ links fixed on the way. The source marks each step messenger-side or HSM-side |
+| 6b | Guide tool + next-step hints | #1831, PR #1976 — `GET /api/v1/chats/setup-guide`, `get_chat_setup_guide`: the messenger-side steps for the human as text, the HSM-side ones as the calls that perform them; next-step hints in the write results and error texts. Settled points below |
+| 7 | Docs + end-to-end smoke | #1832 — closes the initiative; it waited for every other ticket. The feature docs of the area were kept current by the PRs of the steps above and were checked against the wire here; this step adds the glossary terms, the wiki pages MCP, Telegram Setup and Server Configuration, and runs the scenario above on the wire against a locally run server |
 
 Steps 1, 2a, 3–4 and 6a have no blockers and start in parallel.
 
@@ -264,6 +266,153 @@ Step 6b as landed (#1831) settled six points the table above leaves open:
   hands out. `botName` travels with `telegram-chat` alone and is absent when no bot is stored — the
   steps then name `<botName>`.
 
+## End-to-end smoke (#1832)
+
+Run 2026-11-27 on the wire, through MCP, with an administrator's read-write token.
+
+**The server.** `master` at `cc8edf030` — HSMServer 3.46.0 with every other ticket of this initiative
+merged (the two commits `master` gained since touch the collector only) — published for linux-x64
+and built into an image on the published deps base with the healthcheck layer, the way
+`scripts/local-docker-build.ps1` builds. It ran alone in its own compose project on
+`127.0.0.1:18443`, with empty `Config/`, `Databases/` and `Logs/` folders, beside the developer's own
+local stack, which stayed up untouched. "Nothing configured" holds for notifications: a fresh server
+has no bot and no chats, and one product of its own, `HSM Server Monitoring`.
+
+**The token.** Signed in through the login form as the fresh server's `default` and created a
+read/write token on the Profile page the way its dialog does (`POST /Profile/CreateToken`); it was
+kept in a file outside any repository.
+
+**The client.** A small Python script on the standard library: JSON-RPC over HTTPS to `/mcp` — every
+call is `initialize`, `notifications/initialized`, then `tools/call`; the server answers protocol
+`2025-06-18` as `HSMServer 3.46.0` with 50 tools — and plain requests to `/api/v1`. The token and
+every messenger secret are read from files and replaced with `<redacted>` in everything the script
+logs. The script and its logs stay with the developer, outside the repository; what follows is
+abridged from them — ids are cut to eight hex digits, and the `nextSteps` lines are spelled out once,
+where they first appear.
+
+**The steps that stay with a person.** The guide names them on the wire; the run against the real
+messengers records when each was done.
+
+1. In Telegram, with BotFather: `/newbot`, a name, a username ending in `bot`, and the token to copy
+   — five steps (`telegram-bot`).
+2. In Slack: create an app, turn on incoming webhooks, add one to the workspace, allow the channel,
+   copy the URL — fourteen steps (`slack`).
+3. In Mattermost: main menu → Integrations → Incoming Webhooks, add one, choose the channel, save,
+   copy the URL — ten steps (`mattermost`).
+4. In Telegram, for a group: create it, add the bot, give it admin rights and post the command within
+   the invitation's 10 minutes; for a direct chat: follow the link and press Start (`telegram-chat`).
+5. Look into each messenger and confirm the message arrived.
+
+### Pre-flight: the HSM side without a messenger
+
+Before any messenger credential was at hand, the scenario ran with the Slack and Mattermost webhooks
+pointing at a local stand-in: a listener on the developer's machine that answers 200, or 500 on a
+path holding `fail`, which the server reaches as `host.docker.internal:18555`. This proves the
+HSM-side steps that need no messenger credential — 1, 3, 4, 5 and 8 — and the refusals of the other
+two, 2 and 6. Step 7 is a person's and is not run here. Nothing here says a message arrived in Slack
+or Mattermost. Times are UTC.
+
+Ids, cut to eight hex digits: the Slack chat `322983e0`, the Mattermost chat `89b24c75`, a chat with
+no channel `0e945c7c`, the folder `91206dbb`, the token's owner `6abd755d`.
+
+| UTC | Step | Call | Answer |
+|---|---|---|---|
+| 17:50:40 | — | `initialize`, `tools/list` | protocol `2025-06-18`, `HSMServer 3.46.0`, 50 tools |
+| 17:51:37 | 1 | `get_telegram_bot` | `{"isEnabled":false,"hasBotToken":false,"isRunning":false}` |
+| 17:51:37 | 1 | `list_chats`; `list_products` | `{"chats":[],"totalFound":0,…}`; one product, `HSM Server Monitoring` |
+| 17:52:03 | 2, refused | `update_telegram_bot(botName:"hsm_smoke_1832_bot", botToken:<redacted>, isEnabled:true)` with a token Telegram does not know | `isError`: `botToken: Telegram rejected the bot token: Unauthorized.` in 221 ms |
+| 17:52:16 | | `get_telegram_bot`; `list_journal_records(kind:"serverSettings")` | unchanged, and `"records":[]`: nothing was saved, so the pre-flight has no `serverSettings` record. The log says only `Telegram was asked who owns a bot token and gave no username: Rejected (Unauthorized)` |
+| 17:52:45 | 3 | `get_chat_setup_guide` for `slack`, `mattermost`, `telegram-bot`, `telegram-chat` | 14, 10, 5 and 5 steps for a person and 2, 2, 1 and 4 calls of HSM, each call with its REST twin; with no bot stored the Telegram steps name `<botName>` |
+| 17:52:51 | 3, refused | `get_chat_setup_guide(channel:"ms-teams")` | `channel: Unknown channel 'ms-teams'. Channels: telegram-bot, telegram-chat, slack, mattermost.` |
+| 17:53:03 | 4, refused | `create_chat(name:"Smoke Slack", slackWebhookUrl:"hooks-slack-example/T000/B000/XXX")` | `slackWebhookUrl: Webhook URL must be a valid URL` |
+| 17:53:03 | 4, refused | `create_chat(slackWebhookUrl:<redacted>)`, the name left out | `An error occurred invoking 'create_chat'.` — the SDK's binder refusing a missing required argument |
+| 17:53:04 | 4 | `create_chat(name:"Smoke Slack", slackWebhookUrl:<redacted>)` | chat `322983e0`: `"name":"Smoke Slack"`, `"sendMessages":true`, `"messagesAggregationTimeSec":60`, `"hasSlackWebhook":true`, `"hasMattermostWebhook":false`, `"folders":[]`, and three `nextSteps` lines, given below |
+| 17:53:17 | 5 | `send_chat_test_message(chatId:"322983e0…", channel:"slack")` | `"delivered":true` in 79 ms with the third of the three lines; the stand-in received a `POST` on `/slack-hook` with `{"text":"Test message from HSM"}` |
+| 17:53:17 | 5, refused | the same with `channel:"mattermost"`, then `channel:"telegram"` | `channel: The chat has no Mattermost configured. get_chat_setup_guide(channel: "mattermost") has the steps to make a webhook, and update_chat(chatId: "322983e0…", mattermostWebhookUrl: <the URL>) stores it.`; `channel: The chat has no Telegram configured. create_chat_telegram_invitation(chatId: "322983e0…", kind: "direct" \| "group") issues the invitation a person's /start inside Telegram binds the chat with.` |
+| 17:53:26 | 4, refused | `create_chat(name:"smoke SLACK")` | `name: Chat with the same name already exists.` |
+| 17:53:26 | 4–5, Mattermost | `create_chat(name:"Smoke Mattermost", mattermostWebhookUrl:<redacted>)`, then `send_chat_test_message(chatId:"89b24c75…", channel:"mattermost")` | chat `89b24c75` with `"hasMattermostWebhook":true`; `"delivered":true` in 52 ms, the stand-in received a `POST` on `/mattermost-hook` |
+| 17:53:40 | 5, not delivered | `create_chat(name:"Smoke Slack 500", slackWebhookUrl:<the stand-in's `fail` path>)`, then the test | `delivered` false with `"error":"Slack POST to Smoke Slack 500 returned terminal status InternalServerError; giving up"`, after three attempts, 6.1 s; `nextSteps` as on the next row |
+| 17:53:47 | 5, not delivered | the same with a webhook nobody listens at, on a closed port | `delivered` false with `"error":"Slack POST to Smoke Slack dead failed (attempt 3/3): Network is unreachable (host.docker.internal:18599)"` and the `nextSteps` line `The webhook is wrong or gone: get_chat_setup_guide(channel: "slack") has the steps to make a webhook, and update_chat(chatId: "b52d66fa…", slackWebhookUrl: <the URL>) stores it.` |
+| 17:54:01 | 6 | `create_chat(name:"Smoke Telegram")` | chat `0e945c7c` with no channel; `nextSteps` name the invitation call |
+| 17:54:02 | 6, refused | `create_chat_telegram_invitation(chatId:"cc9417a2…", kind:"group")` with no bot running | `telegram: The Telegram bot is not running. Pass the bot token to update_telegram_bot: a token change starts the bot. If the token is stored already, restart the bot on the web Configuration page. The steps of the credential: get_chat_setup_guide(channel: "telegram-bot").` |
+| 17:54:02 | 6, refused | the same with `kind:"channel"` | `kind: Unknown invitation kind 'channel'.` |
+| 17:56:38 | — | `update_chat(chatId:"322983e0…", folders:["91206dbb…"])` and the same for the Mattermost chat: both bound to the folder created in the web UI at 17:56:28 | each answer carries `"folders":["91206dbb…"]` |
+| 17:56:55 | 8, refused | `create_sensor_policy` routed to both chats | `destination.chats: Chat '322983e0…' is not available on this node.; Chat '89b24c75…' is not available on this node.` — a bound chat serves its folders' products, and the folder held none yet |
+| 17:57:07 | 8 | the product added to the folder in the web UI; then `create_sensor_policy(sensorId:"ccb6e449…" — Cache/Sensors count, Value ≥ 0, destination {mode:"Custom", chats:[both]})` | the stored policy `170c9d39` |
+| 17:57:20 | 8, refused | `create_alert_template` with the condition's enums by name, `property:"Value"` | `An error occurred invoking 'create_alert_template'.` — the binder; the server log says `The JSON value could not be converted to System.Int32. Path: $.policies[0].conditions[0].property` |
+| 17:57:42 | 8 | `create_alert_template` with the enums as codes, `property:20, operation:3`: a dry run, then the write | the preview names the sensor of the fan-out; template `8e6cf584` in the folder, `destination.chats` as a map by chat id. Its policy had no message: the write put it under `notification`, a member a template's policy does not have, and it was ignored without an error |
+| 17:58:06 | 8 | `update_chat(chatId:"322983e0…", messagesAggregationTimeSec:0)`; `create_sensor_policy(sensorId:"17d74635…" — MCP/Request rate, Value > -1, destination {mode:"Custom", chats:[both]})` | the Slack chat now sends as a value comes; the stored policy `a1d37c3d` |
+| 17:58:44 | 8 | — | the stand-in received `1832 smoke policy: Request rate = 0.3…` on `/slack-hook`, and on `/mattermost-hook` at 17:59:00: the next whole minute, where the accumulator's 60-second window ends |
+| 17:59:11 | journal | `list_journal_records(kind:"chat")` | twelve `chat` records: a create with the webhook as `Slack webhook: not set → set`, the web edit as `Description: "" → "Edited in the web UI during the 1832 smoke"`, the delay change as `Messages delay: 60 sec → 0 sec`, each `"rollbackable":false` and authored `User (default)`, the token's owner. No webhook value and no token in any of them |
+| 18:00:06 | — | `delete_chat(dryRun:true)` on `3deb0dff…`, a chat no alert references, and on the Slack chat | `"sensorUsageCount":0`; `3` with the folder's `unbind` |
+| 18:00:06 | — | `delete_chat(chatId:"3deb0dff…")`; `GET /api/v1/chats/3deb0dff…` | `"value":{"id":"3deb0dff…"}` with `nextSteps`: `Alerts that referenced the chat outside the folders it was bound to keep the reference and deliver nothing now — point them at another chat with update_sensor_policy or update_alert_template.`; `404` with `{"error":"not_found","message":"The requested resource was not found.","details":null}` |
+| 18:15:15 | 8 | `update_alert_template(templateId:"8e6cf584…")`: the message as `template`, the path of the MCP/Request rate sensor; a dry run, then the write | the preview names two sensors of the fan-out; the stored policy carries `"template": "1832 smoke template: $path = $value"` |
+| 18:15:45 | 8 | — | the stand-in received `1832 smoke template: API tokens/By owner/default/6abd755d…/MCP/Request rate = 0.28…` on `/slack-hook` beside the policy's own line, and on `/mattermost-hook` at 18:16:00 one message of three lines: `1832 smoke policy: Sensors count = 63`, the template's line, the policy's line |
+
+The three `nextSteps` of the `create_chat` answer, as the wire carries them:
+
+1. `send_chat_test_message(chatId: "322983e0-d969-4bc7-a148-83694d43ad3d", channel: "slack") — the proof the channel works.`
+2. `For Telegram: create_chat_telegram_invitation(chatId: "322983e0-d969-4bc7-a148-83694d43ad3d", kind: "direct" | "group") — a person's /start inside Telegram binds the chat. The steps come with the invitation; get_chat_setup_guide(channel: "telegram-chat") has them beforehand.`
+3. `Alerts reach the chat through destination.chats: in create_sensor_policy as policy.destination {mode: "Custom", chats: ["322983e0-d969-4bc7-a148-83694d43ad3d"]}; in create_alert_template as each policy's destination.chats as {"322983e0-d969-4bc7-a148-83694d43ad3d": "<the chat's name>"}.`
+
+**The web UI alongside**, over its pages through a signed-in cookie session, its forms posted with
+their antiforgery token:
+
+- 17:56:01 — **Configuration → Chats** lists the six chats created through MCP, each with its Edit
+  link.
+- 17:56:11 — the edit form of the Slack chat opens with its name and saves a changed description,
+  landing on the list. `get_chat` answers `"description":"Edited in the web UI during the 1832 smoke"`
+  with `"hasSlackWebhook":true`, a test message still delivers, and the journal carries the change.
+- 17:56:28 — a folder is created in the web UI's form; bound to both chats through
+  `update_chat(folders:[…])`, it lists them on its own page.
+- 17:57:07 — the folder's form saves the product `HSM Server Monitoring`; `get_folder` answers the
+  product and both chats.
+- 17:59:31 — the Journal's kind filter offers `chat` and `serverSettings`; the table lists the `chat`
+  records with their author, and an empty table for `serverSettings`.
+- 18:00:06 — the new-chat form's help modals print the guide's steps (#1827); after the delete, the
+  chats list no longer has `Smoke Slack 500`.
+
+Seen on the way, outside this initiative and not tracked as an issue yet: an argument of a wrong
+type — at 17:51:49 `isEnabled` sent as the string `"true"` — fails in the MCP SDK's binder as
+`System.Text.Json.JsonException` and lands in `HSM-error-log.txt` with a stack trace. ADR-0016 keeps
+the binder's `System.Argument*` arm out of that log; this arm is not covered by the filter.
+
+### The run against Slack, Mattermost and Telegram
+
+_Not made yet: it needs the messenger credentials and a person's `/start` in Telegram. Its transcript
+takes this place when it has been made — the same calls with the answers of the real messengers, the
+`serverSettings` record of the bot save, the binding of step 7, and the times of the five steps that
+stay with a person._
+
+## Known limitations
+
+- **The bot credential surface restarts the bot only on a token change** ("Step 5 as landed"): a
+  bot that is stopped with its token already saved is restarted on the web Configuration page, not
+  through the surface; an empty `botToken` or `botName` is refused, so clearing the credential is a
+  web page action too; and a restart that fails after the save answers 200 with `isRunning: false`.
+- **The folder stays the web UI's.** Folder lifecycle has no API, and a chat bound to a folder is
+  refused as a destination for a sensor outside the folder's products. An orchestrator that binds a
+  chat to a new folder needs a person to create the folder and put the product in it, or leaves the
+  chat global (step 8 of the pre-flight).
+- **Invitation tokens live in memory**: a restart forgets the outstanding ones, and instances do not
+  share them. On the management surface they live 10 minutes.
+- **The `nextSteps` of a chat without a webhook name the Slack guide only**; Mattermost's guide is
+  asked for by its channel.
+- **The inherited web rule stands** (Non-Goals, Risks): the manager of one bound folder can redirect
+  the alerts of every other folder the chat serves.
+- **An argument the MCP binder cannot take answers `An error occurred invoking '<tool>'.`**, with the
+  reason in the server log only: a required argument missing, a string where a boolean is due, and
+  an enum name where a wire wants its code — `create_sensor_policy` takes `"Value"`,
+  `create_alert_template` takes `20`. This is the SDK's binder, the same for every tool. The
+  `nextSteps` line about a template's `destination.chats` is right but does not say that. And a
+  member the wire does not know is ignored without an error: a template policy's message put under
+  `notification`, the shape of a sensor policy, leaves it without one (step 8 of the pre-flight).
+- **A failed delivery names the webhook's host and port** — in the test's `error` and in the
+  channel's `Errors` diagnostics sensor — never its path.
+- **The web UI was checked over its pages' HTML, not in a browser** with its scripts; the smoke's
+  web checks are a hand run, as is the whole transcript — MCP has no automated end-to-end test
+  (`aicontext/features/server/mcp/feature.md`).
+
 ## Risks
 
 - A webhook is an exfiltration channel, and an orchestrator is an amplifier for injected instructions:
@@ -278,8 +427,8 @@ Step 6b as landed (#1831) settled six points the table above leaves open:
   It is one-shot and guarded by the theft rule, but the first click wins — which is why the lifetime
   above is a ceiling, not a default to raise.
 - Journal kinds are public contract: the journal API and the MCP `kind` descriptions enumerate them by
-  hand, and no test pins the full list today (the web Journal filter is built from the kinds list
-  itself) — step 2b adds the pin.
+  hand, and no test pinned the full list (the web Journal filter is built from the kinds list
+  itself) — step 2b added the pin.
 - The guide refactor touches three Razor modals; the web copy must not change meaning, only its source.
 - Pre-existing, NOT fixed here — tracked as #1833, #1834 and #1835: TLS certificate validation is
   disabled on the Telegram Bot API client (`TelegramBot.StartBotAsync` — the
@@ -300,4 +449,5 @@ Step 6b as landed (#1831) settled six points the table above leaves open:
   result mapping; the dry-run usage preview; the guide's messenger-side / HSM-side step split.
 - MCP parity tests per `aicontext/features/server/mcp/tests.md`, including tool metadata (reads
   `ReadOnly=true, Idempotent=true`; `delete_chat` `Idempotent=false`).
-- Smoke: the end-to-end scenario above against a dev server with an admin token.
+- Smoke: the end-to-end scenario above against a locally run server with an administrator's token
+  ("End-to-end smoke").
