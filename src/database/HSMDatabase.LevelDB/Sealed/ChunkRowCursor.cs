@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.Formatters;
+using HSMDatabase.LevelDB.Extensions;
 using HSMDatabase.SealedHistory;
 using LevelDB;
 
@@ -104,6 +105,16 @@ namespace HSMDatabase.LevelDB.Sealed
                 return _formatter.Serialize(_rows[_index].Value);
             }
         }
+
+        // A chunk row exists only as decoded: its value is serialized to be looked at (#1913).
+        public bool ValueStartsWith(byte firstByte)
+        {
+            var value = Value;
+
+            return value.Length > 0 && value[0] == firstByte;
+        }
+
+        public void ThrowIfFailed(string database) => _iterator.ThrowIfFailed(database);
 
         // Every row of a chunk carries the sensor prefix of the chunk's key: a key of another sensor is ordered
         // against the whole chunk by the prefix, before anything of the chunk (or its watermark) is read.

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace HSMDatabase.AccessManager
 {
@@ -32,6 +33,14 @@ namespace HSMDatabase.AccessManager
         IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to);
 
         IEnumerable<(byte[] key, byte[] value)> GetKeysValuesTo(byte[] from, byte[] to);
+
+        /// <summary>
+        /// The values in [<paramref name="from"/>, <paramref name="to"/>] whose stored bytes start with
+        /// <paramref name="firstByte"/>, oldest first (#1913: the large values of a File sensor, by their union tag). The
+        /// other values are passed by without being copied out of the database. Unlike the other reads, a read that fails
+        /// throws, from the call or from the enumeration; <paramref name="token"/> is asked at every row.
+        /// </summary>
+        IEnumerable<byte[]> GetValuesWithFirstByte(byte[] from, byte[] to, byte firstByte, CancellationToken token = default);
 
         Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null);
 

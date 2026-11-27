@@ -404,6 +404,23 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 yield return (cursor.Key, cursor.Value);
         }
 
+        // The merged stream, as GetValuesFrom reads it. An overlay row is looked at in place (NativeRowCursor); a chunk row is
+        // serialized to be looked at, but a File sensor, the one this read is for (#1913), is never sealed and has none.
+        public IEnumerable<byte[]> GetValuesWithFirstByte(byte[] from, byte[] to, byte firstByte, CancellationToken token = default)
+        {
+            using var cursor = OpenCursor();
+
+            for (cursor.Seek(from); cursor.IsValid && Le(cursor, to); cursor.Next())
+            {
+                token.ThrowIfCancellationRequested();
+
+                if (cursor.ValueStartsWith(firstByte))
+                    yield return cursor.Value;
+            }
+
+            cursor.ThrowIfFailed(SealedName);
+        }
+
         private IEnumerable<byte[]> ValuesFromTo(byte[] from, byte[] to)
         {
             using var cursor = OpenCursor();

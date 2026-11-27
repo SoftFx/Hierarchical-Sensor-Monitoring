@@ -448,6 +448,23 @@ internal sealed class WeekPair : IDisposable
                 Assert.Equal(Plain.CalculateHistorySize(from, to).count, Sealed.CalculateHistorySize(from, to).count);
         }
 
+        // The values with a given first byte, over each sensor's whole history (#1913: how the large values of a File sensor
+        // are found): the row database answers its own values filtered by their first byte, the sealed week the same. Asked
+        // with the first byte of the sensor's first row and with the large file union tag (12), which no seeded row has.
+        foreach (var sensor in sensors)
+        {
+            var (from, to) = (new DbKey(sensor, 0).ToBytes(), new DbKey(sensor, DateTime.MaxValue.Ticks).ToBytes());
+            var first = Plain.GetValuesFrom(from, to).FirstOrDefault();
+
+            foreach (var firstByte in first is { Length: > 0 } ? new byte[] { first[0], 12 } : [12])
+            {
+                var expected = Plain.GetValuesFrom(from, to).Where(v => v.Length > 0 && v[0] == firstByte).ToList();
+
+                Assert.Equal(expected, Plain.GetValuesWithFirstByte(from, to, firstByte).ToList());
+                Compare.Values(expected, Sealed.GetValuesWithFirstByte(from, to, firstByte), $"GetValuesWithFirstByte {firstByte} of {sensor}");
+            }
+        }
+
         var unknown = new byte[16];
         random.NextBytes(unknown);
         var ids = sensors.Append(new Guid(unknown)).ToList();

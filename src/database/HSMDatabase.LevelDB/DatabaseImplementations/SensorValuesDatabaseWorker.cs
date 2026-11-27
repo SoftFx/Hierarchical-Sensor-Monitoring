@@ -159,6 +159,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        // No fallback to "no values" here: the caller takes a read that fails for "cannot tell" (#1913).
+        public IEnumerable<byte[]> GetValuesWithFirstByte(byte[] from, byte[] to, byte firstByte, System.Threading.CancellationToken token = default) =>
+            _openedDb.GetValuesWithFirstByte(from, to, firstByte, token);
+
         public IEnumerable<(byte[] key, byte[] value)> GetAll()
         {
             try

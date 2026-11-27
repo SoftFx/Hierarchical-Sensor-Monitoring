@@ -369,7 +369,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count) => _inner.GetSensorValuesPage(sensorId, from, to, count);
         public IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to) =>
             SensorValuesReadFails ? throw new InvalidOperationException("a history read that fails (test)") : _inner.GetSensorValues(sensorId, from, to);
+        public IAsyncEnumerable<byte[]> GetSensorValuesWithFirstByte(Guid sensorId, byte firstByte, System.Threading.CancellationToken token = default) =>
+            SensorValuesReadFails ? throw new InvalidOperationException("a history read that fails (test)") : _inner.GetSensorValuesWithFirstByte(sensorId, firstByte, token);
         public List<SensorEntity> GetAllSensors() => _inner.GetAllSensors();
+        public List<(Guid Id, byte? Type)> GetSensorTypes() => _inner.GetSensorTypes();
+        public bool HasSensorValuesDatabaseAt(long ticks) => _inner.HasSensorValuesDatabaseAt(ticks);
 
         public bool EntityExists(Guid id) => _inner.EntityExists(id);
         public void ExportValuesDatabase(string databaseName, Dictionary<Guid, string> sensors) => _inner.ExportValuesDatabase(databaseName, sensors);

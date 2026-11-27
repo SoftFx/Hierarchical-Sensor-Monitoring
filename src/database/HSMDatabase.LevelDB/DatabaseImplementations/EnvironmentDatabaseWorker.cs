@@ -452,6 +452,47 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public List<string> GetAllSensorsIds() =>
             GetListOfKeys(_sensorIdsKey, "Failed to get sensors ids list");
 
+        // Walks the entities actually stored, not the list of sensors (#1913 review): an entity whose id did not make it into
+        // the list (AddSensor ignores a failed write of the list) is in the database all the same. Sensors, products, folders
+        // and access keys are stored under their id as text (a Guid, 36 characters) and as JSON; a sensor is the one whose
+        // object has a "Type" (ProductEntity, FolderEntity and AccessKeyEntity have none). Every other kind of row has another
+        // key (a prefix, a list name, 16 bytes of a Guid). A row under such a key that is not a JSON object, or whose Type is
+        // not a byte, cannot be told apart: its type is null.
+        public List<(string Id, byte? Type)> GetSensorTypes()
+        {
+            var types = new List<(string, byte?)>();
+
+            foreach (var (key, value) in _database.ReadAll(key => key.Length == GuidTextLength && Guid.TryParseExact(Encoding.UTF8.GetString(key), "D", out _)))
+            {
+                var id = Encoding.UTF8.GetString(key);
+                byte? type;
+
+                try
+                {
+                    using var json = JsonDocument.Parse(value);
+                    var root = json.RootElement;
+
+                    if (root.ValueKind != JsonValueKind.Object)
+                        type = null;
+                    else if (!root.TryGetProperty(nameof(SensorEntity.Type), out var typeProperty))
+                        continue;
+                    else
+                        type = typeProperty.ValueKind == JsonValueKind.Number && typeProperty.TryGetByte(out var parsed) ? parsed : null;
+                }
+                catch (JsonException e)
+                {
+                    _logger.Error(e, $"The entity {id} is not JSON: taken as a sensor whose type cannot be told");
+                    type = null;
+                }
+
+                types.Add((id, type));
+            }
+
+            return types;
+        }
+
+        private const int GuidTextLength = 36;
+
         // Null when the list was written, otherwise the logged exception (#1756).
         private Exception UpdateSensorIdsList(Action<List<string>> updateListAction, string errorMessage)
         {

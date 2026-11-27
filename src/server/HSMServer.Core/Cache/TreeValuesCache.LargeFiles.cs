@@ -294,7 +294,14 @@ namespace HSMServer.Core.Cache
             var floor = HistoryFloor(sensor, utcNow);
 
             if (time < floor)
+            {
+                // No row found where no values database covers the time is no evidence (#1913): its week's folder may be
+                // lost or not opened, with the row in it. The file is removed only on a read that could have found the row.
+                if (!_database.HasSensorValuesDatabaseAt(time.Ticks))
+                    return new LargeFileVerdict(record, LargeFileVerdictKind.ReadFailed, $"no values database covers its value time {time:O}, so whether its row is gone cannot be told");
+
                 return new LargeFileVerdict(record, LargeFileVerdictKind.ValueGone, $"its value at {time:O} is below the history floor {floor:O} of sensor '{sensor.FullPath}' (retention or a clear)");
+            }
 
             // Inside the kept range and no row: the row was never written (a crash between the verified record and the row)
             // or was lost. Written again from the record (the owner's decision, #1883), never silently.
@@ -348,10 +355,19 @@ namespace HSMServer.Core.Cache
                 foreach (var record in store.GetFiles().Where(r => r.SensorId == sensor.Id && r.State != LargeFileState.Uploading &&
                                                                    r.ValueTimeUtc is { } time && time >= from && time <= to))
                 {
+                    var ticks = record.ValueTimeUtc.Value.Ticks;
+
                     // A row that a point read still finds after the delete keeps its file; the pass looks at it again.
-                    if (_database.GetSensorValue(sensor.Id, record.ValueTimeUtc.Value.Ticks) is not null)
+                    if (_database.GetSensorValue(sensor.Id, ticks) is not null)
                     {
                         _logger.Warn($"The row of large file {record.FileId:N} of sensor '{sensor.FullPath}' at {record.ValueTimeUtc:O} is still there after the clear; the file is kept");
+                        continue;
+                    }
+
+                    // No values database covers the time: the read found nothing because it read nothing (#1913).
+                    if (!_database.HasSensorValuesDatabaseAt(ticks))
+                    {
+                        _logger.Warn($"No values database covers the value time {record.ValueTimeUtc:O} of large file {record.FileId:N} of sensor '{sensor.FullPath}': whether the clear removed its row cannot be told; the file is kept");
                         continue;
                     }
 
