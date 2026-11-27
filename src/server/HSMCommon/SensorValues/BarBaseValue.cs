@@ -77,6 +77,12 @@ namespace HSMCommon.Model
         }
 
         protected override bool IsEqual(BaseValue value) => false;
+
+        public override bool HasSameContent(BaseValue value) =>
+            base.HasSameContent(value) && value is BarBaseValue<T> other &&
+            (OpenTime, CloseTime, Count, StdDev) == (other.OpenTime, other.CloseTime, other.Count, other.StdDev) &&
+            Min.Equals(other.Min) && Max.Equals(other.Max) && Mean.Equals(other.Mean) && LastValue.Equals(other.LastValue) &&
+            Nullable.Equals(FirstValue, other.FirstValue);
     }
 
 

@@ -37,4 +37,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0020 | Accepted | [Sensor history of closed weeks is sealed into chunks with a codec of our own, on top of LevelDB](0020-sealed-sensor-history.md) | 2026-11-19 |
 | 0021 | Accepted | [Table sensors: collectors send simple blocks, the server packs them into batches in LevelDB](0021-table-sensors.md) | 2026-11-24 |
 | 0022 | Accepted | [Large file values: pieces on a file connection, files on the server's disk, given out as a zip, a secure file's under the product's dump password](0022-large-file-values.md) | 2026-11-25 |
+| 0023 | Accepted | [A value the server already holds is a no-op when it comes again](0023-repeated-values-are-a-no-op.md) | 2026-11-27 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

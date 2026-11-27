@@ -4041,6 +4041,12 @@ namespace HSMServer.Core.Cache
             if (sensor.State == SensorState.Blocked)
                 return false;
 
+            // A value the sensor already holds, time and content (#1925): delivery is at-least-once (ADR-0017), and a
+            // frame the server stored may come again, e.g. when a stop cut off its ack. Taken as delivered, it changes
+            // nothing: no row, no alert, no EMA, no aggregate count, no out-of-order or same-tick count.
+            if (IsRepeatOfStoredValue(sensor, value))
+                return true;
+
             var added = true;
 
             // The previous cached newest, captured before the add: a value that
@@ -4073,6 +4079,52 @@ namespace HSMServer.Core.Cache
             return added;
         }
 
+
+        // The newest value is compared in memory, and only when the tick matches. A value older than it costs one read
+        // of the row at or before its tick: the path of an out-of-order value, which writes that row directly anyway.
+        // An aggregated row stands for a run of equal values from its time to its last update (whether AggregateValues
+        // is still on or not): a value equal to the run within that span is one the run already holds (folding it
+        // again would add to the count and move the last update back). Any other row spans its own tick only. Another value, status or comment on a stored tick is not a repeat and replaces the
+        // row as before.
+        private bool IsRepeatOfStoredValue(BaseSensorModel sensor, BaseValue value)
+        {
+            if (value is null || value.IsTimeout || value is FileValue || sensor is TableSensorModel)
+                return false;
+
+            var newest = sensor.LastValue;
+
+            if (newest is null || newest.IsTimeout)
+                return false;
+
+            var ticks = value.Time.Ticks;
+
+            if (Holds(newest, ticks))
+                return newest.HasSameContent(value);
+
+            if (ticks > newest.Time.Ticks)
+                return false;
+
+            BaseValue stored;
+
+            try
+            {
+                var bytes = _database.GetLatestValue(sensor.Id, ticks);
+
+                if (bytes is null)
+                    return false;
+
+                stored = sensor.Convert(bytes);
+            }
+            catch (SealedChunkReadException)
+            {
+                // Not readable: the value goes on as a new one, as it did before (#1803 counts the chunk where it is found).
+                return false;
+            }
+
+            return Holds(stored, ticks) && stored.HasSameContent(value);
+
+            static bool Holds(BaseValue row, long ticks) => row.Time.Ticks <= ticks && ticks <= row.LastUpdateTime.Ticks;
+        }
 
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)
         {
