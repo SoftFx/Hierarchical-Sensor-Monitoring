@@ -239,6 +239,12 @@ namespace HSMDataCollector.Tests
         // that frame (by its request id) without an answer (store_without_ack, no_answer), never when a clock says so;
         // the wait for a frame that is answered never ends this way. A case whose server answers nothing although its
         // script said it would hangs its tick, which the tick's bound fails.
+        //
+        // A close the collector writes (a protocol error of the server, the 1000 of a stop) is followed by the abort of
+        // the socket; a server that has not read the close by then loses it with the connection (#1925: net48, and
+        // starved machines). The abort waits here until the scripted server has read that close, and the close frame
+        // of a stop is written without its 250 ms bound, so expect_table_close_code and
+        // expect_table_closed_before_session see whether the close was sent, not how fast either side was.
         private static void ConfigureTableConnection(ContractState state)
         {
             var tables = OnSession(state) ? state.SessionSender?.TablesIfMade : null;
@@ -249,6 +255,8 @@ namespace HSMDataCollector.Tests
             var server = state.SessionServer;
 
             tables.AckDeadlineForTests = id => server.WhenTableFrameUnanswered(id);
+            tables.CloseHeardForTests = status => server.WhenTableCloseHeard((int)status);
+            tables.CloseFrameBoundForTests = System.Threading.Timeout.InfiniteTimeSpan;
         }
 
         private static readonly TimeSpan TickSafetyBound = TimeSpan.FromMinutes(1);

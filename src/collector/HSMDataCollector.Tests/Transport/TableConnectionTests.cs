@@ -49,7 +49,12 @@ namespace HSMDataCollector.Tests.Transport
                     MinBackoff = TimeSpan.FromMilliseconds(20),
                     MaxBackoff = TimeSpan.FromMilliseconds(100),
                     TableRefusedRetry = TimeSpan.FromMilliseconds(200),
-                    TableConnectionWait = TimeSpan.FromSeconds(5),
+
+                    // A block waits for its table connection until it comes (or the stop), not for a few seconds: the
+                    // cases that lose a connection send the same block again on the next one, and whether the reconnect
+                    // made it within a clock was what they decided on a busy machine (#1925, item 5). A case that must
+                    // see the wait give up sets a short one; TickAsync fails a tick that never ends.
+                    TableConnectionWait = Timeout.InfiniteTimeSpan,
                 },
             };
 
@@ -62,6 +67,16 @@ namespace HSMDataCollector.Tests.Transport
             SensorLocation = SensorLocation.Product,
             Columns = { TableColumn.Double("bid"), TableColumn.Double("ask") },
         };
+
+        // A tick, bounded by Patience: with no clock on the wait for a table connection, a connection that never comes
+        // back would hold the tick for good.
+        private static async Task TickAsync(DataCollector collector) => await Bounded(collector.TickTablesAsync(), "a table tick did not end");
+
+        private static async Task Bounded(Task task, string what)
+        {
+            Assert.True(await Task.WhenAny(task, Task.Delay(Patience)) == task, what);
+            await task;
+        }
 
         private static async Task UntilAsync(Func<bool> condition, string what)
         {
@@ -82,7 +97,7 @@ namespace HSMDataCollector.Tests.Transport
             while (table.State == TableSensorState.Pending)
             {
                 Assert.True(clock.Elapsed < Patience, "the table sensor was not registered");
-                await collector.TickTablesAsync();
+                await TickAsync(collector);
                 await Task.Delay(10);
             }
 
@@ -139,7 +154,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 Assert.True(rig.Table.AddRow(T0, 1.5, 1.6));
                 Assert.True(rig.Table.AddRow(T0.AddSeconds(1), 2.5, TableCell.Null));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 var frame = Assert.Single(rig.Server.TableFrames);
                 Assert.Equal("stored", frame.Outcome);
@@ -208,7 +223,7 @@ namespace HSMDataCollector.Tests.Transport
                     await RegisterAsync(collector, table);
 
                     Assert.True(table.AddRow(T0, 1.0, 2.0));
-                    await collector.TickTablesAsync();
+                    await TickAsync(collector);
 
                     Assert.Single(server.StoredTableRowsOf("quotes/late"));
                 }
@@ -236,13 +251,13 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AnswerTableNext(Scripted(answer));
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Equal(dropped, rig.Table.RowsDropped);
                 Assert.Equal(state, rig.Table.State);
 
                 // The next delivery: a block a repeat can cure goes again with its sequence; a settled one does not.
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 var sequences = rig.Server.TableFrames.Select(f => f.Sequence).ToList();
 
@@ -297,7 +312,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 await UntilAsync(() => rig.Server.TableFrames.Count == 1, "the block was not sent");
                 noAckInTime.SetResult(true);
-                await tick;
+                await Bounded(tick, "the table tick did not end");
 
                 // The connection that got no ack was closed with a close frame, not cut.
                 await UntilAsync(() => rig.Server.TableCloses.Contains(1000), "the collector did not close the connection that got no ack");
@@ -345,7 +360,7 @@ namespace HSMDataCollector.Tests.Transport
                 // The next hello takes frames of 2,000 bytes.
                 rig.Server.TableMaxFrameBytes = 2000;
                 noAckInTime.SetResult(true);
-                await tick;
+                await Bounded(tick, "the table tick did not end");
 
                 var frames = rig.Server.TableFrames;
 
@@ -372,7 +387,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AnswerTableNext(TableAnswer.CloseWith(1013, "the server holds too many table frames; try again later"));
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 var frames = rig.Server.TableFrames;
                 Assert.Equal(2, frames.Count);
@@ -396,7 +411,7 @@ namespace HSMDataCollector.Tests.Transport
                 await rig.StartAsync();
 
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 await UntilAsync(() => rig.Server.RefusedTableUpgrades >= 3, "the table upgrade was not asked again");
 
@@ -406,7 +421,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AcceptTableUpgrades();
                 await UntilAsync(() => rig.Link.IsUp, "the table connection did not come up");
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Equal(0L, Assert.Single(rig.Server.TableFrames).Sequence);
                 Assert.Equal(0, rig.Table.RowsDropped);
@@ -430,7 +445,7 @@ namespace HSMDataCollector.Tests.Transport
                 await UntilAsync(() => rig.Server.RefusedTableUpgrades == 1, "no table upgrade was tried");
 
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Equal(1, rig.Server.RefusedTableUpgrades);
 
@@ -438,7 +453,7 @@ namespace HSMDataCollector.Tests.Transport
                 rig.Server.DropSessions();
 
                 await UntilAsync(() => rig.Link.IsUp, "the table connection was not asked for again with the next session");
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Equal(rig.Server.SessionIds[1], rig.Server.TableUpgradeHeaders.Last()["X-Hsm-Session"]);
                 Assert.Single(rig.Server.StoredTableRowsOf("quotes/A"));
@@ -459,7 +474,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AcceptTableUpgrades();
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Single(rig.Server.StoredTableRowsOf("quotes/A"));
             }
@@ -477,15 +492,15 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AcceptTableUpgrades();
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
+                await TickAsync(rig.Collector);
 
                 Assert.Equal(1, rig.Server.RefusedTableUpgrades);
                 Assert.Equal(0, rig.Server.TableConnections);
 
                 rig.Server.DropSessions();
                 await UntilAsync(() => rig.Link.IsUp, "the table connection did not come up with the next session");
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Single(rig.Server.StoredTableRowsOf("quotes/A"));
                 Assert.Equal(rig.Server.SessionIds[1], rig.Server.TableUpgradeHeaders.Last()["X-Hsm-Session"]);
@@ -508,7 +523,7 @@ namespace HSMDataCollector.Tests.Transport
                 await UntilAsync(() => rig.Server.TableFrames.Count == 1, "the block was not sent");
 
                 rig.Server.DropSessions();
-                await tick;
+                await Bounded(tick, "the table tick did not end");
 
                 var frames = rig.Server.TableFrames;
                 Assert.Equal(2, frames.Count);
@@ -532,7 +547,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AnswerTableNext(TableAnswer.CloseWith(1000, "its session ended"));
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 var frames = rig.Server.TableFrames;
                 Assert.Equal(2, frames.Count);
@@ -559,7 +574,7 @@ namespace HSMDataCollector.Tests.Transport
                 for (var row = 0; row < 250; row++)
                     Assert.True(rig.Table.AddRow(T0.AddTicks(row), row, row));
 
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.Equal(new[] { 100, 100, 50 }, rig.Server.TableFrames.Select(f => f.Decoded.Tables[0].RowCount));
                 Assert.Equal(new long[] { 0, 1, 2 }, rig.Server.TableFrames.Select(f => f.Sequence));
@@ -596,7 +611,7 @@ namespace HSMDataCollector.Tests.Transport
                 for (var row = 0; row < 600; row++)
                     Assert.True(rig.Table.AddRow(T0.AddTicks(row), random.NextDouble(), random.NextDouble()));
 
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.True(rig.Server.TableFrames.Count > 1);
                 Assert.All(rig.Server.TableFrames, f => Assert.True(f.FrameBytes <= 2000, $"a frame of {f.FrameBytes} bytes"));
@@ -619,12 +634,12 @@ namespace HSMDataCollector.Tests.Transport
                 for (var row = 0; row < 600; row++)
                     Assert.True(rig.Table.AddRow(T0.AddTicks(row), random.NextDouble(), random.NextDouble()));
 
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
                 Assert.Equal(1, rig.Collector.TablePipeline.BacklogBlocks);
 
                 rig.Server.AcceptTableUpgrades();
                 await UntilAsync(() => rig.Link.IsUp, "the table connection did not come up");
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 Assert.True(rig.Server.TableFrames.Count > 1);
                 Assert.All(rig.Server.TableFrames, f => Assert.True(f.FrameBytes <= 2000, $"a frame of {f.FrameBytes} bytes"));
@@ -654,6 +669,10 @@ namespace HSMDataCollector.Tests.Transport
                 // the close is not bounded here, so the test sees whether the close is written, not how fast.
                 rig.Link.CloseFrameBoundForTests = Timeout.InfiniteTimeSpan;
 
+                // And the abort that follows the close waits until the server has read it: a close written but not yet
+                // read when the socket is aborted is lost with it.
+                rig.Link.CloseHeardForTests = status => rig.Server.WhenTableCloseHeard((int)status);
+
                 // Neither the delivery nor the drain's resend is answered.
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
                 rig.Server.AnswerTableNext(TableAnswer.NoAnswer());
@@ -671,7 +690,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 var stopped = Stopwatch.StartNew();
                 await rig.Collector.Stop();
-                await tick;
+                await Bounded(tick, "the table tick did not end");
 
                 Assert.True(stopped.Elapsed < TimeSpan.FromSeconds(15), $"the stop took {stopped.Elapsed}");
                 Assert.Equal(1, rig.Table.RowsDropped);
@@ -703,7 +722,7 @@ namespace HSMDataCollector.Tests.Transport
 
                 rig.Server.AnswerTableNext(Broken(broken));
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 await UntilAsync(() => rig.Server.TableCloses.Contains(code), $"the collector did not close with {code}");
 
@@ -737,7 +756,7 @@ namespace HSMDataCollector.Tests.Transport
                 await rig.StartAsync();
 
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
                 var first = rig.Collector.TablePipeline.Producer;
 
                 await rig.Collector.Stop();
@@ -745,7 +764,7 @@ namespace HSMDataCollector.Tests.Transport
                 await RegisterAsync(rig.Collector, rig.Table);
 
                 Assert.True(rig.Table.AddRow(T0, 3.0, 4.0));
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
 
                 var frames = rig.Server.TableFrames;
                 Assert.Equal(2, frames.Count);
@@ -805,7 +824,7 @@ namespace HSMDataCollector.Tests.Transport
                 await rig.Link.StopAsync(TimeSpan.FromSeconds(1));
 
                 Assert.True(await Task.WhenAny(tick, Task.Delay(Patience)) == tick, "the tick did not end after the dispose");
-                await tick;
+                await Bounded(tick, "the table tick did not end");
 
                 Assert.False(rig.Link.IsUp);
                 Assert.Equal(1, rig.Collector.TablePipeline.BacklogBlocks);
@@ -821,8 +840,8 @@ namespace HSMDataCollector.Tests.Transport
                 await rig.StartAsync();
 
                 Assert.True(rig.Table.AddRow(T0, 1.0, 2.0));
-                await rig.Collector.TickTablesAsync();
-                await rig.Collector.TickTablesAsync();
+                await TickAsync(rig.Collector);
+                await TickAsync(rig.Collector);
 
                 Assert.Empty(rig.Server.TableUpgradeHeaders);
                 Assert.Equal(1, rig.Collector.TablePipeline.BacklogBlocks);

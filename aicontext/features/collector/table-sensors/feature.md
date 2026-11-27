@@ -426,7 +426,9 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 - The table connection, both TFMs, against `ScriptedSessionServer` (which takes the table upgrade, sends a hello with
   settable limits, decodes each binary frame with the block reader and answers it as scripted): `TableConnectionTests`:
   the upgrade, hello and probe; every ack status; a lost ack and its `duplicate` (the end of the wait is decided by the
-  test through `AckDeadlineForTests`, not by a clock); `1013`; `1000`; each upgrade refusal (404, 400, 409, 406, 503)
+  test through `AckDeadlineForTests`, not by a clock; a block waits for its table connection without a clock too,
+  `TableConnectionWait` infinite, unless the case checks that the wait gives up; a close the test checks is read by the
+  server before the abort, `CloseHeardForTests`); `1013`; `1000`; each upgrade refusal (404, 400, 409, 406, 503)
   and the 404 / 400 asked again with the next session; a block in flight across a new session; splitting by the
   hello's frame limit and block limits, a block packed before a smaller hello, and one packed again after a lost ack
   (new sequences, never the stored block's); a stop with a block in flight; a binary frame, an oversized frame, a text
