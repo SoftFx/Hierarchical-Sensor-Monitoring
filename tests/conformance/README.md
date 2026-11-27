@@ -471,6 +471,13 @@ driver):
   completes for that request id; the native driver sets `SessionTableChannelOptions::ack_abandoned_for_tests` to a
   test of the scripted server's record of the frames it left unanswered (`TableFrameUnanswered`), polled while the
   put waits. A frame that is answered never ends its wait that way.
+- **A close the collector writes reaches the scripted server before the socket goes** (`expect_table_close_code`,
+  `expect_table_closed_before_session`): the collector aborts a table connection soon after its close frame (a
+  protocol error of the server, the `1000` of a stop), and a server that has not read the close by then loses it with
+  the connection (#1925). The managed driver sets `TableConnection.CloseHeardForTests` to the scripted server's record
+  of the close codes it read, so the abort waits for the read, and writes the close of a stop without its 250 ms bound
+  (`CloseFrameBoundForTests`). A close that could not be written, and the answer to a close of the server, are not waited for. The native driver has no such seam
+  yet: its close lingers up to a second for the server's answer before the connection goes.
 - **The long waits of the table connection may be shortened, and decide nothing**: the pause after an upgrade refused
   with 404 or 400 (shortened so a case that waits for a second refusal is quick), and how long a put waits for a table
   connection before it answers "not delivered" (a put that gives up leaves its block at the head with its sequence;
