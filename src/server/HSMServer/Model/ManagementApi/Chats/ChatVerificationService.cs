@@ -1,9 +1,11 @@
 using HSMServer.Authentication;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Extensions;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.Authentication;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
+using HSMServer.ServerConfiguration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +20,7 @@ namespace HSMServer.Model.ManagementApi.Chats
     /// outcome, and the Telegram invitation issuer for the management surface. Transport-
     /// agnostic — the REST controller and the MCP tools both call it; the caller supplies
     /// the token principal and gets the area's write envelope back, never an IActionResult.
+    /// Every answer carries the next steps of the setup (#1831).
     /// </summary>
     // Admission mirrors the web actions' gate (TelegramRoleFilterById): the chat's detail
     // rule — an admin or the manager of a folder the chat is bound to. A global chat is
@@ -31,23 +34,28 @@ namespace HSMServer.Model.ManagementApi.Chats
 
         private const string UnknownChannelMessage = "Unknown channel '{0}'.";
         private const string ChannelNotCarriedMessage = "The chat has no {0} configured.";
-        private const string BotNotRunningMessage =
+
+        // The remedy names the tool that starts the bot, and where the steps of its credential are.
+        private static readonly string BotNotRunningMessage =
             "The Telegram bot is not running. Pass the bot token to update_telegram_bot: a token change starts the bot. " +
-            "If the token is stored already, restart the bot on the web Configuration page.";
+            "If the token is stored already, restart the bot on the web Configuration page. " +
+            $"The steps of the credential: {ChatSetupNextSteps.Guide(ChatSetupChannel.TelegramBot)}.";
 
         private readonly IChatsManager _chats;
         private readonly IApiTokenAuthorizationService _authorization;
         private readonly IUserManager _users;
         private readonly IChatDelivery _delivery;
+        private readonly IServerConfig _config;
 
 
         public ChatVerificationService(IChatsManager chats, IApiTokenAuthorizationService authorization,
-            IUserManager users, IChatDelivery delivery)
+            IUserManager users, IChatDelivery delivery, IServerConfig config)
         {
             _chats = chats;
             _authorization = authorization;
             _users = users;
             _delivery = delivery;
+            _config = config;
         }
 
 
@@ -86,6 +94,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             {
                 Delivered = result.Delivered,
                 Error = result.Error,
+                NextSteps = ChatSetupNextSteps.AfterTestMessage(chatId, parsed, result.Delivered),
             });
         }
 
@@ -131,8 +140,18 @@ namespace HSMServer.Model.ManagementApi.Chats
                 Kind = kind,
                 Value = value,
                 ExpiresAt = expiresAt,
-                NextSteps = isDirect ? [.. ChatInvitationDto.DirectNextSteps] : [.. ChatInvitationDto.GroupNextSteps],
+                NextSteps = HumanSteps(isDirect, value),
             });
+        }
+
+        // The person's steps of the kind: the guide's own words, the ones the web Telegram modal
+        // prints, with the words that stand for an invitation reading as what was just issued.
+        private List<string> HumanSteps(bool isDirect, string value)
+        {
+            var issued = isDirect ? ChatSetupInvitationText.IssuedLink(value) : ChatSetupInvitationText.IssuedCommand(value);
+            var guide = isDirect ? ChatSetupGuide.TelegramDirect : ChatSetupGuide.TelegramGroup;
+
+            return [.. guide.Select(step => step.ToText(_config.Telegram.BotName, issued))];
         }
 
         private bool CanOperate(ClaimsPrincipal caller, Chat chat) =>
@@ -199,7 +218,7 @@ namespace HSMServer.Model.ManagementApi.Chats
     }
 
     /// <summary>The outcome of a chat test message: delivered, or the delivery error text.</summary>
-    [Description("The outcome of a chat test message: delivered, or the error the delivery channel reported (the same text it logs).")]
+    [Description("The outcome of a chat test message: delivered, or the error the delivery channel reported (the same text it logs) — and what to do next.")]
     public sealed record ChatTestMessageResultDto
     {
         /// <summary>Whether the message reached the channel.</summary>
@@ -209,6 +228,10 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// <summary>The delivery error text when not delivered; null otherwise.</summary>
         [Description("The delivery error text when not delivered; null otherwise. Never a response body.")]
         public string Error { get; init; }
+
+        /// <summary>The next step of the setup, naming its tool call.</summary>
+        [Description("What to do next, naming its tool call: delivered — the channel works, and alerts can be routed to the chat; not delivered — where to look, and the call that stores a new webhook.")]
+        public List<string> NextSteps { get; init; }
     }
 
     /// <summary>A one-shot Telegram invitation for a chat, issued to an orchestrator (#1826).</summary>
@@ -219,7 +242,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         [Description("The invitation kind — \"direct\" or \"group\".")]
         public string Kind { get; init; }
 
-        /// <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post in the group.</summary>
+        /// <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post into the group.</summary>
         [Description("The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post into the group.")]
         public string Value { get; init; }
 
@@ -228,21 +251,8 @@ namespace HSMServer.Model.ManagementApi.Chats
         public DateTime ExpiresAt { get; init; }
 
         /// <summary>The steps a PERSON does inside Telegram — the orchestrator cannot press Start.</summary>
-        [Description("The steps a PERSON performs inside Telegram; the orchestrator cannot do them (ADR docs/adr/0002).")]
+        [Description("The steps a PERSON performs inside Telegram, with this invitation in place — relay them; the orchestrator cannot do them (ADR docs/adr/0002). The same steps as get_chat_setup_guide(channel: \"telegram-chat\").")]
         public List<string> NextSteps { get; init; }
-
-        internal static readonly string[] DirectNextSteps =
-        [
-            "Open the invitation link.",
-            "Press Start in the opened chat with the bot.",
-        ];
-
-        internal static readonly string[] GroupNextSteps =
-        [
-            "Create the Telegram group (if it does not exist yet).",
-            "Add the bot to the group and grant it admin rights.",
-            "Post the command into the group.",
-        ];
     }
 
     /// <summary>The channel a test message targets.</summary>

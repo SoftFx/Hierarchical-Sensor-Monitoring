@@ -50,6 +50,14 @@ namespace HSMServer.Notifications.Chats
         /// <summary>Words that stand for the invitation link HSM issues to bind a direct chat.</summary>
         public sealed record InvitationLink(string Value) : ChatSetupPart;
 
+        /// <summary>
+        /// Words that hold only in the web modal — about its own way with what a step stands
+        /// on, as the clipboard of the link that copies the command. The modal prints them; the
+        /// text an agent reads leaves them out, for there the part before says where the thing
+        /// comes from.
+        /// </summary>
+        public sealed record InTheModal(string Value) : ChatSetupPart;
+
 
         // A string on its own is plain words: the guide writes a step as what it says, with the
         // other parts between the words.

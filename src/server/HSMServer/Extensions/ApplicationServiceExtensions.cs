@@ -181,6 +181,11 @@ namespace HSMServer.ServiceExtensions
             services.AddScoped<IChatDelivery, NotificationsCenterChatDelivery>();
             services.AddScoped<ChatVerificationService>();
 
+            // The chat setup guide (#1831): the steps of one channel as an orchestrator reads
+            // them, from the source the web help modals print from — behind the REST action and
+            // the MCP tool of the chats surface.
+            services.AddScoped<ChatSetupGuideService>();
+
             // The bot-credential surface (#1830): the first server-settings surface of the
             // area, behind the REST controller and the MCP tools. Its Telegram side is the
             // running bot behind NotificationsCenter (a sealed concrete type), reached

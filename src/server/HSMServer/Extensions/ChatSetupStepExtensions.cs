@@ -61,6 +61,10 @@ namespace HSMServer.Extensions
                         html.AppendHtml(Invitation(link, invitationLinks, isDirectChatLink: true));
                         break;
 
+                    case ChatSetupPart.InTheModal { Value: var words }:
+                        html.Append(words);
+                        break;
+
                     default:
                         throw new NotSupportedException($"A step of the chat setup guide has a part nothing shows: {part?.GetType().Name}");
                 }

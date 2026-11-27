@@ -423,12 +423,29 @@
             The notification chats of the management API: the read surface (epic #1347
             follow-up) — the id source for the destination.chats references alert policies and
             alert templates validate against — the verification pair (#1826: a test message, a
-            Telegram invitation) and the write surface (#1829: create, update, delete). Bearer-
+            Telegram invitation), the write surface (#1829: create, update, delete) and the
+            setup guide (#1831). Bearer-
             token authenticated only (the HsmApiToken scheme); served on the web-UI port only.
             The token mirrors its owner: the caller-wide gate applies, then a chat is visible
             when it is global or bound to a folder the owner can see; invisible chats answer the
             same 404 as an unknown id.
             </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ChatsApiController.GetSetupGuide(System.String)">
+            <summary>
+            The chat setup guide of one channel (#1831): the steps a person performs inside the
+            messenger, as text, and the calls that do HSM's part of the channel. Answered from
+            the same source as the web UI's help modals. The server never acts inside the
+            messengers (ADR docs/adr/0002): a client relays the steps or performs them with its
+            own tools. Requires the caller-wide gate.
+            </summary>
+            <param name="channel">The channel: telegram-bot, telegram-chat, slack or mattermost.</param>
+            <remarks>
+            The HSM steps of the web modals — store a webhook, send a test — are no instruction
+            for a person here: toolSteps names the calls that perform them, written with the
+            arguments the channel needs. The calls are the MCP tools' names; their REST twins
+            are the same writes under /api/v1.
+            </remarks>
         </member>
         <member name="M:HSMServer.Controllers.ChatsApiController.GetChats(System.Int32,System.Int32)">
             <summary>
@@ -449,7 +466,8 @@
             <summary>
             Send a test message to one of the chat's channels and answer the delivery outcome
             (#1826) — the web test actions answer OK regardless; here the caller learns whether
-            the message arrived. Same gate as the web editor: the chat's detail rule.
+            the message arrived, and nextSteps says what to do with the outcome. Same gate as
+            the web editor: the chat's detail rule.
             </summary>
             <param name="id">Chat id.</param>
             <param name="request">The channel to test (telegram / slack / mattermost).</param>
@@ -458,7 +476,8 @@
             <summary>
             Issue a ONE-SHOT Telegram invitation for the chat (#1826): the link (direct) or the
             group command, its expiry (+10 minutes — the relay through an orchestrator is slower
-            than the web UI's issue-at-the-moment-of-use) and the human steps. The binding lands
+            than the web UI's issue-at-the-moment-of-use) and the person's steps — the chat setup
+            guide's own words, with this invitation in place. The binding lands
             when a person completes /start in Telegram; read the chat's telegramChatId afterwards.
             </summary>
             <param name="id">Chat id.</param>
@@ -470,7 +489,9 @@
             attacker-supplied webhook URL would exfiltrate every alert sent to it. Optionally
             with a Slack and/or Mattermost webhook and folder bindings; a Telegram binding
             is added afterwards by a person's /start against an invitation. The 201 echo is
-            the stored chat — never a webhook URL, only its presence flag. A client-sent id
+            the stored chat — never a webhook URL, only its presence flag — and its nextSteps
+            name what the setup does next (the test message of each webhook carried, a Telegram
+            invitation). A client-sent id
             is ignored: the id is the server's.
             </summary>
             <param name="request">The chat to create: name, description, enable switch, aggregation delay, webhooks, folder bindings.</param>
@@ -482,7 +503,9 @@
             empty webhook value never clears one. <c>folders</c> is the complete list of
             bindings among the folders the token's owner manages (omitted: unchanged). Admin,
             or the manager of a folder the chat is bound to — a global chat is admin-only.
-            The 200 echo is the stored chat, never a webhook URL.
+            The 200 echo is the stored chat, never a webhook URL; its nextSteps name the test
+            message of each webhook the request set, and the invitation when the Telegram
+            binding was cleared.
             </summary>
             <param name="id">Chat id.</param>
             <param name="request">The changes; every field optional.</param>
@@ -496,7 +519,9 @@
             folder the chat is bound to. With the
             <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
             preview: how many sensors' alerts reference the chat, and the folder bindings the
-            deletion would take with it.
+            deletion would take with it. Alerts that referenced the chat outside the folders it
+            was bound to keep their reference and deliver nothing from now on — point them at
+            another chat.
             </summary>
             <param name="id">Chat id.</param>
         </member>
@@ -1225,7 +1250,8 @@
             (a rejected token changes nothing and the running bot keeps running); a passed
             botName must be the bot Telegram reports for the effective token; only a token
             change restarts the bot. The 200 body is the resulting status — read its
-            isRunning after a token change. The token is write-only and never echoed.
+            isRunning after a token change — and its nextSteps name the channel to set up next:
+            the guide of binding a chat to the bot. The token is write-only and never echoed.
             Administrators only.
             </summary>
             <param name="request">The changes: botName, botToken, isEnabled — every field optional.</param>
@@ -1235,6 +1261,81 @@
         </member>
         <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TTL">
             <summary>Backward compat: maps single TTL to TTLs list.</summary>
+        </member>
+        <member name="M:HSMServer.Extensions.ChatSetupStepExtensions.ToHtml(HSMServer.Notifications.Chats.ChatSetupStep,System.String,HSMServer.Model.Notifications.ChatSetupInvitationLinks)">
+            <summary>
+            A step of a chat setup guide as the web modal prints it: its parts in order, a code part
+            in monospace, a link as a link. Every word is written as text, the bot username included.
+            </summary>
+            <param name="botName">
+            The username of this server's bot, for the steps that name it. No username is the bot not
+            being configured, a state the modal is shown in: the step then names an empty one, as it
+            always did.
+            </param>
+            <param name="invitationLinks">
+            The links behind the words that stand for an invitation. Those are never a setting: a
+            step with such words shown without them is the caller's mistake.
+            </param>
+            <exception cref="T:System.InvalidOperationException">The step stands on an invitation and no links were given.</exception>
+        </member>
+        <member name="T:HSMServer.Extensions.ChatSetupInvitationText">
+            <summary>
+            What the words that stand for an invitation read as in text — the twin of
+            <see cref="T:HSMServer.Model.Notifications.ChatSetupInvitationLinks"/>. Either no invitation is issued
+            yet and the words name the call that issues one (the guide), or one was just issued and
+            the words carry it (the invitation's own answer).
+            </summary>
+            <param name="Link">How the invitation link of a direct chat reads, given the step's own words.</param>
+            <param name="Command">How the /start command of a group reads.</param>
+        </member>
+        <member name="M:HSMServer.Extensions.ChatSetupInvitationText.#ctor(System.Func{System.String,System.String},System.String)">
+            <summary>
+            What the words that stand for an invitation read as in text — the twin of
+            <see cref="T:HSMServer.Model.Notifications.ChatSetupInvitationLinks"/>. Either no invitation is issued
+            yet and the words name the call that issues one (the guide), or one was just issued and
+            the words carry it (the invitation's own answer).
+            </summary>
+            <param name="Link">How the invitation link of a direct chat reads, given the step's own words.</param>
+            <param name="Command">How the /start command of a group reads.</param>
+        </member>
+        <member name="P:HSMServer.Extensions.ChatSetupInvitationText.Link">
+            <summary>How the invitation link of a direct chat reads, given the step's own words.</summary>
+        </member>
+        <member name="P:HSMServer.Extensions.ChatSetupInvitationText.Command">
+            <summary>How the /start command of a group reads.</summary>
+        </member>
+        <member name="M:HSMServer.Extensions.ChatSetupInvitationText.NotIssued(System.Func{System.String,System.String})">
+            <summary>
+            The guide: nothing is issued yet, so the words name the call that issues it, by kind
+            ("direct" or "group").
+            </summary>
+        </member>
+        <member name="M:HSMServer.Extensions.ChatSetupInvitationText.IssuedLink(System.String)">
+            <summary>The answer of a direct chat's invitation: the link under the step's own words.</summary>
+        </member>
+        <member name="M:HSMServer.Extensions.ChatSetupInvitationText.IssuedCommand(System.String)">
+            <summary>The answer of a group's invitation: the command as what the person posts.</summary>
+        </member>
+        <member name="T:HSMServer.Extensions.ChatSetupStepTextExtensions">
+            <summary>
+            A step of a chat setup guide as text — what an agent reads and relays (#1831), the twin of
+            <see cref="M:HSMServer.Extensions.ChatSetupStepExtensions.ToHtml(HSMServer.Notifications.Chats.ChatSetupStep,System.String,HSMServer.Model.Notifications.ChatSetupInvitationLinks)"/>: the same parts, shown another way. A name to
+            find or to type keeps its exact spelling in backticks, a documentation link is
+            [words](url), a stressed word is the word, and the words that hold only in the web modal
+            are left out.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Extensions.ChatSetupStepTextExtensions.NoBotName">
+            <summary>
+            What a step names the bot as when none is configured: the field that says so. The web
+            modal names an empty one, as it always did.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Extensions.ChatSetupStepTextExtensions.ToText(HSMServer.Notifications.Chats.ChatSetupStep,System.String,HSMServer.Extensions.ChatSetupInvitationText)">
+            <param name="step">The step to read.</param>
+            <param name="botName">The username of this server's bot; null when none is stored.</param>
+            <param name="invitation">What the words that stand for an invitation read as.</param>
+            <exception cref="T:System.NotSupportedException">The step has a part nothing reads.</exception>
         </member>
         <member name="M:HSMServer.Extensions.ColorExtensions.GetDefaultColor(System.Int32)">
             <summary>
@@ -1378,9 +1479,11 @@
             alert templates (a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService"/>,
             the #1393 pattern: one visibility rule behind both transports), the
             verification pair of #1826 — a test message that answers its
-            delivery outcome and the one-shot Telegram invitation issuer — and the
+            delivery outcome and the one-shot Telegram invitation issuer — the
             write trio of #1829 (a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatWriteService"/>,
-            on the write engine the web editor runs): create, update and delete.
+            on the write engine the web editor runs): create, update and delete — and
+            the setup guide of #1831 (a rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideService"/>), at which
+            the descriptions of the tools above point in one line.
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.FoldersMcpTools">
@@ -1656,7 +1759,8 @@
             for REST's 204) or <c>preview</c> after a dry run (how many sensors'
             alerts reference the chat, and the folder bindings the deletion would
             take with it). The McpSensorDeleteResult shape with a TYPED preview arm,
-            so the tool's static output schema shows the chat-specific members.
+            so the tool's static output schema shows the chat-specific members. Beside
+            the arm travels what the removal leaves (#1831).
             </summary>
         </member>
         <member name="P:HSMServer.Mcp.McpChatDeleteResult.Value">
@@ -1664,6 +1768,9 @@
         </member>
         <member name="P:HSMServer.Mcp.McpChatDeleteResult.Preview">
             <summary>The dry-run preview (nothing was removed); null (absent) after an applied deletion.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpChatDeleteResult.NextSteps">
+            <summary>The next step of the removal, naming its tool call.</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpSensorMoveResult">
             <summary>
@@ -3952,6 +4059,74 @@
             at all, so a non-empty unfiltered case cannot arise.
             </summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDto.NextSteps">
+            <summary>
+            The next steps of the chat setup (#1831), each naming its tool call. Set on the answers
+            of the create and update actions only; absent on reads, and never read from a request.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatSetupChannel">
+            <summary>The channels the chat setup guide answers for (#1831).</summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatSetupChannelExtensions.WireName(HSMServer.Model.ManagementApi.Chats.ChatSetupChannel)">
+            <summary>The name of the channel on the wire of both transports.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideDto">
+            <summary>
+            The chat setup guide of one channel, as an orchestrator reads it (#1831) — answered from
+            the same source as the web UI's help modals. The server never acts inside the messengers
+            (ADR docs/adr/0002): the person's steps are relayed, HSM's part is called.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideDto.Channel">
+            <summary>The channel the guide answers for.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideDto.BotName">
+            <summary>This server's bot username, as the steps name it; telegram-chat only.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideDto.Steps">
+            <summary>The steps a person performs inside the messenger, in order.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideDto.ToolSteps">
+            <summary>The calls that do HSM's part of the channel, in order.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto">
+            <summary>One call of the guide's HSM part.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Tool">
+            <summary>The name of the tool; the REST twin is the same write on /api/v1.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Call">
+            <summary>The call with the arguments this channel needs.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Performs">
+            <summary>What the call does: the web form's step it stands for.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideService">
+            <summary>
+            The chat setup guide of the management API (#1831): the steps of one channel as an
+            orchestrator reads them. The words are ChatSetupGuide's — the source the web help modals
+            print from — shown as text: the steps a person performs inside the messenger, which the
+            orchestrator relays, and the calls that do what the web form does in HSM (store a webhook,
+            send a test). Transport-agnostic: the REST action and the MCP tool both call it and get
+            the area's read envelope back, never an IActionResult.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideService.GetGuide(System.String,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            The guide of one channel: the person's steps as text, HSM's part as calls. An unknown
+            channel is refused under its field.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Chats.ChatSetupNextSteps">
+            <summary>
+            The next-step texts of the chat setup (#1831): what the answers of the write tools tell an
+            orchestrator to do next, each naming its call. Together with the guide's own tool steps
+            these are the only places a call of the setup is written out — a tool description points
+            at the guide tool and carries none: a description travels in every tool listing and names
+            no chat, an answer is read once, when its step is due.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatsReadService">
             <summary>
             The read surface for notification chats: list and item, with the
@@ -3983,6 +4158,7 @@
             outcome, and the Telegram invitation issuer for the management surface. Transport-
             agnostic — the REST controller and the MCP tools both call it; the caller supplies
             the token principal and gets the area's write envelope back, never an IActionResult.
+            Every answer carries the next steps of the setup (#1831).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.IChatDelivery">
@@ -4000,6 +4176,9 @@
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto.Error">
             <summary>The delivery error text when not delivered; null otherwise.</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatTestMessageResultDto.NextSteps">
+            <summary>The next step of the setup, naming its tool call.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto">
             <summary>A one-shot Telegram invitation for a chat, issued to an orchestrator (#1826).</summary>
         </member>
@@ -4007,7 +4186,7 @@
             <summary>The invitation kind — "direct" or "group".</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.Value">
-            <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post in the group.</summary>
+            <summary>The invitation value: a https://t.me/… link for a direct chat, or the /start@bot command to post into the group.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatInvitationDto.ExpiresAt">
             <summary>When the invitation expires (one-shot; a second /start with it is rejected).</summary>
@@ -5169,7 +5348,8 @@
             <summary>
             Change the bot credential: a partial update, administrators only. A new token is
             asked of Telegram BEFORE anything is saved; the save is journaled; only a token
-            change restarts the bot. The echo is the resulting status.
+            change restarts the bot. The echo is the resulting status, with the next steps of
+            the chat setup.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.TelegramBot.ITelegramBotRuntime">
@@ -5217,6 +5397,12 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.IsRunning">
             <summary>Whether the bot is up and talking to Telegram.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.TelegramBot.TelegramBotDto.NextSteps">
+            <summary>
+            The next steps of the chat setup (#1831), each naming its tool call. Set on the answer
+            of the update only; absent on the status read, and never read from a request.
+            </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.TelegramBot.UpdateTelegramBotRequestDto">
             <summary>
@@ -5478,6 +5664,131 @@
             the maximum, so the name never breaks the length rule. A blank proposal — a
             Telegram user without a username — is left as it is: the row then has no name
             until one is given to it in the web form, which asks for it.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupGuide">
+            <summary>
+            The steps of setting up a notification chat — ONE source for the web UI's help modals
+            (the Slack and Mattermost tabs of the chat form, the Telegram setup modal) and for the guide an
+            agent reads through the management API (#1831): the modals print a step as HTML, the guide
+            shows it as text. Until #1827 they lived only as Razor markup, which an agent cannot read,
+            and a second copy would have drifted from the first.
+            The words are the modals' as they were. The Telegram FAQ links lost their language parameter,
+            which opened the page in Uzbek for everyone. What surrounds the steps in a modal — its title,
+            introduction and closing note — stays in the modal.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Notifications.Chats.ChatSetupGuide.Slack">
+            <summary>
+            A Slack incoming webhook — a private URL that lets HSM post to one Slack channel. The first
+            fourteen steps create the URL in Slack; the last three hand it to HSM.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Notifications.Chats.ChatSetupGuide.Mattermost">
+            <summary>
+            A Mattermost incoming webhook — a private URL that lets HSM post to one Mattermost channel.
+            The first ten steps create the URL on the Mattermost server; the last two hand it to HSM.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Notifications.Chats.ChatSetupGuide.TelegramGroup">
+            <summary>
+            Binding a Telegram group: the bot joins the group and receives the /start command HSM issues.
+            Every step is the person's, in Telegram; the command is fetched where its words are clicked.
+            The bot is named in brackets without the @ of a mention, as the modal always showed it.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Notifications.Chats.ChatSetupGuide.TelegramDirect">
+            <summary>
+            Binding a Telegram direct chat: the person follows the invitation link HSM issues and starts
+            the bot.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Notifications.Chats.ChatSetupGuide.TelegramBot">
+            <summary>
+            Creating the bot in BotFather — the credential HSM stores. Every step is the person's, in
+            Telegram. No web modal prints this guide: the Configuration page's Telegram tab names
+            BotFather in the notes of its two fields only.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupSide">
+            <summary>
+            Where a step of a chat setup guide is carried out. A step is the messenger's while the person
+            acts inside Slack, Mattermost or Telegram — there an agent can only relay the instruction.
+            A step is HSM's once the person acts in HSM's own form. The web modal prints both; the guide an
+            agent reads through the management API (#1831) answers the messenger's steps and names, for an
+            HSM step, the tool call that does the same.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart">
+            <summary>
+            One inline piece of a step's text. A step reads as its parts in order; what a part is decides
+            how it is shown.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.Plain">
+            <summary>The words as they are written.</summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.Plain.#ctor(System.String)">
+            <summary>The words as they are written.</summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.Code">
+            <summary>Something to find or to type spelled exactly this way: a menu item, a button, an address.</summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.Code.#ctor(System.String)">
+            <summary>Something to find or to type spelled exactly this way: a menu item, a button, an address.</summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.Bold">
+            <summary>A word the step stresses.</summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.Bold.#ctor(System.String)">
+            <summary>A word the step stresses.</summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.Link">
+            <summary>Words that open a page of the messenger's documentation.</summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.Link.#ctor(System.String,System.String)">
+            <summary>Words that open a page of the messenger's documentation.</summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.BotName">
+            <summary>The username of this server's bot, as the one showing the step knows it.</summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.StartCommand">
+            <summary>
+            Words that stand for the /start command HSM issues to bind a group chat. The web modal
+            copies the command to the clipboard when they are clicked.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.StartCommand.#ctor(System.String)">
+            <summary>
+            Words that stand for the /start command HSM issues to bind a group chat. The web modal
+            copies the command to the clipboard when they are clicked.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.InvitationLink">
+            <summary>Words that stand for the invitation link HSM issues to bind a direct chat.</summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.InvitationLink.#ctor(System.String)">
+            <summary>Words that stand for the invitation link HSM issues to bind a direct chat.</summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupPart.InTheModal">
+            <summary>
+            Words that hold only in the web modal — about its own way with what a step stands
+            on, as the clipboard of the link that copies the command. The modal prints them; the
+            text an agent reads leaves them out, for there the part before says where the thing
+            comes from.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Notifications.Chats.ChatSetupPart.InTheModal.#ctor(System.String)">
+            <summary>
+            Words that hold only in the web modal — about its own way with what a step stands
+            on, as the clipboard of the link that copies the command. The modal prints them; the
+            text an agent reads leaves them out, for there the part before says where the thing
+            comes from.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Notifications.Chats.ChatSetupStep">
+            <summary>
+            One step of a chat setup guide: where it is carried out, and what it says as parts in order.
             </summary>
         </member>
         <member name="T:HSMServer.Notifications.TelegramTokenVerdict">

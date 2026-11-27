@@ -28,6 +28,9 @@ engine and gates). #1830 lands the bot credential (`GET`/`PATCH /api/v1/telegram
 remains of the problem above is the guide: its instructions moved into one source in code that the web modals
 print from (#1827), and the guide of the management API (#1831) answers from that source.
 
+The guide and the next steps landed with #1831; of this initiative only #1832 — the documentation
+sweep and the end-to-end smoke — is open.
+
 ## Goals
 
 - An orchestrator holding a read-write management token can take notifications from "nothing
@@ -189,7 +192,7 @@ journal and the API surface; 6 is the web half and the orchestrator half of the 
 | 4 | Telegram invitation issuer | #1826 — `POST /api/v1/chats/{id}/telegram-invitations`, `create_chat_telegram_invitation`; the 10-minute lifetime for management-surface tokens; the bot-not-running error pointing at step 5's tool. Shares the chats controller and tool class with #1829 — whichever lands second rebases |
 | 5 | Bot credential surface | #1830 — blocked by #1824 and #1828. `TelegramBotAdministrationService` (a token change: probe → apply → restart; the name and the on/off switch restart nothing; write-only token; username match against the effective token; `serverSettings` journal records), `GET`/`PATCH /api/v1/telegram-bot`, `get_telegram_bot`/`update_telegram_bot` |
 | 6a | Guide text: the single source | #1827 — the web modals render from it; the `?setln=uz` FAQ links fixed on the way. The source marks each step messenger-side or HSM-side |
-| 6b | Guide tool + next-step hints | #1831 — blocked by #1827, #1829, #1826 and #1830. `GET /api/v1/chats/setup-guide`, `get_chat_setup_guide`: the messenger-side steps for the human, the HSM-side ones named as the tool calls that perform them; next-step hints in the write results and error texts |
+| 6b | Guide tool + next-step hints | #1831 — landed. `GET /api/v1/chats/setup-guide`, `get_chat_setup_guide`: the messenger-side steps for the human as text, the HSM-side ones as the calls that perform them; next-step hints in the write results and error texts. Settled points below |
 | 7 | Docs + end-to-end smoke | #1832 — closes the initiative; blocked by every other ticket. `aicontext/features/server/{notifications,mcp,management-api}/`, the glossary; the scenario above against a dev server |
 
 Steps 1, 2a, 3–4 and 6a have no blockers and start in parallel.
@@ -228,6 +231,32 @@ Step 6a as landed (#1827) settled four points for #1831:
 - The copy is the modals' as rendered. The bot is named in brackets without the `@` of a mention: Razor
   had read that `@` as the start of the expression. The source says so in a comment; adding the `@`
   back is a copy change for whoever wants it.
+
+Step 6b as landed (#1831) settled six points the table above leaves open:
+
+- What an agent reads is the same parts shown as text: the words as they are, a name in backticks, a
+  documentation link as `[words](url)`, a stressed word as the word. The words that hold only in the web
+  modal ("from clipboard", of the link that copies the group command) are a part of their own in the
+  source — the modal prints them, the text leaves them out — so the web copy did not change by a
+  character.
+- The BotFather guide is new copy in the same source (`telegram-bot`): five steps, no web modal prints
+  them. `telegram-chat` answers both Telegram guides, the group's steps then the direct chat's one.
+- An HSM step is a call, written out with the arguments the channel needs (`create_chat(name: <a name>,
+  slackWebhookUrl: <the URL>)`), and is never told to a person. The calls are named per channel, not per
+  step: the form's paste and save are one call. The guide's calls name registered tools only, and a test
+  resolves each against the real registration.
+- The invitation's steps are the guide's own words of its kind with the invitation in place of the words
+  that stand for it — the link under "invitation link", the command in backticks — replacing the three
+  hand-written lines of #1826. Before an invitation is issued, the guide names the call that issues one.
+- Next steps ride every write answer of the chats surface, the verification and the bot credential
+  (`nextSteps`, each line naming its call) and no tool description beyond a one-line pointer at the
+  guide. The one step no tool performs — restarting a stored token on the web Configuration page — is
+  a line that names the page. The REST delete answers 204 and carries none; its remarks and the MCP
+  envelope's own `nextSteps` say what the removal leaves.
+- The gate is the chat reads' caller-wide gate for every channel: the guide tells nothing about the
+  server but its bot's username, which is public in Telegram and rides in every invitation the surface
+  hands out. `botName` travels with `telegram-chat` alone and is absent when no bot is stored — the
+  steps then name `<botName>`.
 
 ## Risks
 

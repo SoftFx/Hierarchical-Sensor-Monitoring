@@ -8,6 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.TelegramBot;
 using HSMServer.Notifications;
 using Moq;
@@ -28,6 +29,9 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
 
         private List<(string Property, string Old, string New)> Records =>
             _world.Records.Select(r => (r.PropertyName, r.OldValue, r.NewValue)).ToList();
+
+        // The status half of an update's answer: its next steps have their own pins at the end.
+        private static TelegramBotDto StatusOf(TelegramBotDto echo) => echo with { NextSteps = null };
 
 
         // ---- the status ---------------------------------------------------------------
@@ -68,7 +72,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
             var result = await Service.UpdateAsync(
                 new UpdateTelegramBotRequestDto { BotName = "hsm_oncall_bot", BotToken = TelegramBotHarness.NewToken }, _world.Caller);
 
-            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true }, result.Value);
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true }, StatusOf(result.Value));
             Assert.Equal(TelegramBotHarness.NewToken, _world.Telegram.BotToken);
             Assert.Equal("hsm_oncall_bot", _world.Telegram.BotName);
             Assert.Equal(["probe", "save", "restart"], _world.Steps);
@@ -366,7 +370,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
         {
             var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { IsEnabled = false }, _world.Caller);
 
-            Assert.Equal(new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = false, HasBotToken = true, IsRunning = true }, result.Value);
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = false, HasBotToken = true, IsRunning = true }, StatusOf(result.Value));
             Assert.Equal(["save"], _world.Steps);
             Assert.Equal([("Enable messages", "True", "False")], Records);
         }
@@ -381,7 +385,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
 
             var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { IsEnabled = true }, _world.Caller);
 
-            Assert.Equal(new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = false }, result.Value);
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = false }, StatusOf(result.Value));
             Assert.Equal(["save"], _world.Steps);
         }
 
@@ -391,7 +395,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
         {
             var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { IsEnabled = true }, _world.Caller);
 
-            Assert.Equal(new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = true }, result.Value);
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = true }, StatusOf(result.Value));
             Assert.Empty(_world.Steps);
             Assert.Empty(_world.Records);
         }
@@ -460,7 +464,7 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
             // The save landed. A failure here would read as "not saved" — and the same call
             // again would then be an update that changes nothing, and restart nothing.
             Assert.True(result.Success);
-            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = false }, result.Value);
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = false }, StatusOf(result.Value));
             Assert.Equal(TelegramBotHarness.NewToken, _world.Telegram.BotToken);
             Assert.Equal(["probe", "save", "restart"], _world.Steps);
             Assert.Equal(2, _world.Records.Count);
@@ -481,7 +485,39 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
             Assert.Equal(TelegramBotHarness.NewToken, _world.Telegram.BotToken);
             Assert.Equal(
                 new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = false },
-                result.Value);
+                StatusOf(result.Value));
+        }
+
+
+        // ---- the next steps of the echo (#1831) -----------------------------------------
+
+        // The echo points at the next channel, the guide of binding a chat to the bot; a bot that
+        // did not start is told so first. The texts themselves are pinned by ChatSetupNextStepsTests.
+        [Fact]
+        public async Task Update_TheEchoPointsAtTheNextChannel()
+        {
+            var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { IsEnabled = false }, _world.Caller);
+
+            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: true), result.Value.NextSteps);
+            Assert.Contains("get_chat_setup_guide(channel: \"telegram-chat\")", Assert.Single(result.Value.NextSteps));
+        }
+
+        [Fact]
+        public async Task Update_ABotThatDidNotStart_IsSaidSo_BeforeTheNextChannel()
+        {
+            _world.RestartFails("The Telegram bot token is invalid");
+
+            var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { BotToken = TelegramBotHarness.NewToken }, _world.Caller);
+
+            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: false), result.Value.NextSteps);
+            Assert.StartsWith("The bot is not running", result.Value.NextSteps[0]);
+        }
+
+        [Fact]
+        public void GetStatus_ARead_CarriesNoNextSteps()
+        {
+            // A status read says what is; only a write's answer says what comes after it.
+            Assert.Null(Service.GetStatus(_world.Caller).Value.NextSteps);
         }
     }
 }

@@ -55,7 +55,8 @@ namespace HSMServer.Controllers
         /// (a rejected token changes nothing and the running bot keeps running); a passed
         /// botName must be the bot Telegram reports for the effective token; only a token
         /// change restarts the bot. The 200 body is the resulting status — read its
-        /// isRunning after a token change. The token is write-only and never echoed.
+        /// isRunning after a token change — and its nextSteps name the channel to set up next:
+        /// the guide of binding a chat to the bot. The token is write-only and never echoed.
         /// Administrators only.
         /// </summary>
         /// <param name="request">The changes: botName, botToken, isEnabled — every field optional.</param>

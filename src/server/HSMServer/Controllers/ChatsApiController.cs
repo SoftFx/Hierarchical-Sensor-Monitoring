@@ -16,7 +16,8 @@ namespace HSMServer.Controllers
     /// The notification chats of the management API: the read surface (epic #1347
     /// follow-up) — the id source for the destination.chats references alert policies and
     /// alert templates validate against — the verification pair (#1826: a test message, a
-    /// Telegram invitation) and the write surface (#1829: create, update, delete). Bearer-
+    /// Telegram invitation), the write surface (#1829: create, update, delete) and the
+    /// setup guide (#1831). Bearer-
     /// token authenticated only (the HsmApiToken scheme); served on the web-UI port only.
     /// The token mirrors its owner: the caller-wide gate applies, then a chat is visible
     /// when it is global or bound to a folder the owner can see; invisible chats answer the
@@ -39,14 +40,40 @@ namespace HSMServer.Controllers
         private readonly ChatsReadService _reader;
         private readonly ChatVerificationService _verification;
         private readonly ChatWriteService _writer;
+        private readonly ChatSetupGuideService _guide;
 
-        public ChatsApiController(ChatsReadService reader, ChatVerificationService verification, ChatWriteService writer)
+        public ChatsApiController(ChatsReadService reader, ChatVerificationService verification, ChatWriteService writer,
+            ChatSetupGuideService guide)
         {
             _reader = reader;
             _verification = verification;
             _writer = writer;
+            _guide = guide;
         }
 
+
+        /// <summary>
+        /// The chat setup guide of one channel (#1831): the steps a person performs inside the
+        /// messenger, as text, and the calls that do HSM's part of the channel. Answered from
+        /// the same source as the web UI's help modals. The server never acts inside the
+        /// messengers (ADR docs/adr/0002): a client relays the steps or performs them with its
+        /// own tools. Requires the caller-wide gate.
+        /// </summary>
+        /// <param name="channel">The channel: telegram-bot, telegram-chat, slack or mattermost.</param>
+        /// <remarks>
+        /// The HSM steps of the web modals — store a webhook, send a test — are no instruction
+        /// for a person here: toolSteps names the calls that perform them, written with the
+        /// arguments the channel needs. The calls are the MCP tools' names; their REST twins
+        /// are the same writes under /api/v1.
+        /// </remarks>
+        [HttpGet("setup-guide")]
+        [ProducesResponseType(typeof(ChatSetupGuideDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        public IActionResult GetSetupGuide(string channel) =>
+            _guide.GetGuide(channel, User).ToActionResult();
 
         /// <summary>
         /// List chats visible to the token's owner, paginated, ordered by name
@@ -80,7 +107,8 @@ namespace HSMServer.Controllers
         /// <summary>
         /// Send a test message to one of the chat's channels and answer the delivery outcome
         /// (#1826) — the web test actions answer OK regardless; here the caller learns whether
-        /// the message arrived. Same gate as the web editor: the chat's detail rule.
+        /// the message arrived, and nextSteps says what to do with the outcome. Same gate as
+        /// the web editor: the chat's detail rule.
         /// </summary>
         /// <param name="id">Chat id.</param>
         /// <param name="request">The channel to test (telegram / slack / mattermost).</param>
@@ -98,7 +126,8 @@ namespace HSMServer.Controllers
         /// <summary>
         /// Issue a ONE-SHOT Telegram invitation for the chat (#1826): the link (direct) or the
         /// group command, its expiry (+10 minutes — the relay through an orchestrator is slower
-        /// than the web UI's issue-at-the-moment-of-use) and the human steps. The binding lands
+        /// than the web UI's issue-at-the-moment-of-use) and the person's steps — the chat setup
+        /// guide's own words, with this invitation in place. The binding lands
         /// when a person completes /start in Telegram; read the chat's telegramChatId afterwards.
         /// </summary>
         /// <param name="id">Chat id.</param>
@@ -119,7 +148,9 @@ namespace HSMServer.Controllers
         /// attacker-supplied webhook URL would exfiltrate every alert sent to it. Optionally
         /// with a Slack and/or Mattermost webhook and folder bindings; a Telegram binding
         /// is added afterwards by a person's /start against an invitation. The 201 echo is
-        /// the stored chat — never a webhook URL, only its presence flag. A client-sent id
+        /// the stored chat — never a webhook URL, only its presence flag — and its nextSteps
+        /// name what the setup does next (the test message of each webhook carried, a Telegram
+        /// invitation). A client-sent id
         /// is ignored: the id is the server's.
         /// </summary>
         /// <param name="request">The chat to create: name, description, enable switch, aggregation delay, webhooks, folder bindings.</param>
@@ -148,7 +179,9 @@ namespace HSMServer.Controllers
         /// empty webhook value never clears one. <c>folders</c> is the complete list of
         /// bindings among the folders the token's owner manages (omitted: unchanged). Admin,
         /// or the manager of a folder the chat is bound to — a global chat is admin-only.
-        /// The 200 echo is the stored chat, never a webhook URL.
+        /// The 200 echo is the stored chat, never a webhook URL; its nextSteps name the test
+        /// message of each webhook the request set, and the invitation when the Telegram
+        /// binding was cleared.
         /// </summary>
         /// <param name="id">Chat id.</param>
         /// <param name="request">The changes; every field optional.</param>
@@ -172,7 +205,9 @@ namespace HSMServer.Controllers
         /// folder the chat is bound to. With the
         /// <c>X-HSM-Dry-Run: true</c> header nothing is removed and the 200 body is the
         /// preview: how many sensors' alerts reference the chat, and the folder bindings the
-        /// deletion would take with it.
+        /// deletion would take with it. Alerts that referenced the chat outside the folders it
+        /// was bound to keep their reference and deliver nothing from now on — point them at
+        /// another chat.
         /// </summary>
         /// <param name="id">Chat id.</param>
         [HttpDelete("{id:guid}")]

@@ -100,7 +100,7 @@ namespace HSMServer.Model.ManagementApi.Chats
             // The engine stored the row under the id it was given; a missing row here is
             // the fixed-message conflict, never an echo of a chat that does not exist.
             return _chats[chatId] is { } stored
-                ? PolicyWriteResult<ChatDto>.Ok(Echo(stored, caller))
+                ? PolicyWriteResult<ChatDto>.Ok(Echo(stored, caller, ChatSetupNextSteps.AfterChatCreated(stored)))
                 : PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Conflict, message: NotCreatedMessage);
         }
 
@@ -144,7 +144,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 return PolicyWriteResult<ChatDto>.Fail(result.Failure.Outcome, ToWireKeys(result.Failure.Errors), result.Failure.Message);
 
             return _chats[chatId] is { } stored
-                ? PolicyWriteResult<ChatDto>.Ok(Echo(stored, caller))
+                ? PolicyWriteResult<ChatDto>.Ok(Echo(stored, caller, ChatSetupNextSteps.AfterChatUpdated(chatId, request)))
                 : PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Conflict, message: NotUpdatedMessage);
         }
 
@@ -297,11 +297,13 @@ namespace HSMServer.Model.ManagementApi.Chats
 
         // The read surface's two-tier body, judged on the stored chat AFTER the write: an
         // update can take the chat out of the caller's detail rule (unbinding the last
-        // folder they manage), and the echo must not show what a read would now hide.
-        private ChatDto Echo(Chat chat, ClaimsPrincipal caller) =>
+        // folder they manage), and the echo must not show what a read would now hide. The
+        // echo alone carries the setup's next steps (#1831) — a read answers none.
+        private ChatDto Echo(Chat chat, ClaimsPrincipal caller, List<string> nextSteps) =>
             ChatDtoMapper.ToDto(chat,
                 folderId => _authorization.IsVisible(caller, ApiTokenResource.Folder(folderId)),
-                includeDetail: _authorization.CanSeeChatDetail(caller, StableCopy.Of(() => chat.Folders)));
+                includeDetail: _authorization.CanSeeChatDetail(caller, StableCopy.Of(() => chat.Folders)))
+            with { NextSteps = nextSteps };
 
         // The area's one rule for a journal author string: the token's owner, by name.
         private InitiatorInfo InitiatorOf(ClaimsPrincipal caller) => ChangeSetRecorder.InitiatorOf(caller, _users);

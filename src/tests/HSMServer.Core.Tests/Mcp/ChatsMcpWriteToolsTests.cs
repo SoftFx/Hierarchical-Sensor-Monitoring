@@ -5,6 +5,7 @@ using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Notifications.Chats;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Http;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -31,8 +32,9 @@ namespace HSMServer.Core.Tests.Mcp
         private ChatsMcpTools CreateTools() =>
             new(_world.CreateReader(),
                 new ChatVerificationService(_world.Chats.Object, _world.Authorization.Object, _world.Users.Object,
-                    new Mock<IChatDelivery>().Object),
+                    new Mock<IChatDelivery>().Object, new Mock<IServerConfig>().Object),
                 _world.CreateWriter(),
+                new ChatSetupGuideService(_world.Authorization.Object, new Mock<IServerConfig>().Object),
                 new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = _world.Token } });
 
 
@@ -50,6 +52,54 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.True(chat.SendMessages);                 // the engine's default
             Assert.Equal(60, chat.MessagesAggregationTimeSec);
             Assert.DoesNotContain(ChatWriteHarness.SlackUrl, JsonSerializer.Serialize(chat));
+        }
+
+        // ---- the next steps (#1831) -------------------------------------------------------
+
+        // Every write answer carries the setup's next steps, each naming its call; the texts are
+        // pinned by ChatSetupNextStepsTests, what each answer is told by ChatWriteServiceTests.
+        [Fact]
+        public async Task CreateChat_TheAnswerCarriesTheNextSteps()
+        {
+            var chat = await CreateTools().CreateChat(name: "Ops alerts", slackWebhookUrl: ChatWriteHarness.SlackUrl);
+
+            Assert.Equal(ChatSetupNextSteps.AfterChatCreated(_world.Store.Single()), chat.NextSteps);
+            Assert.Contains($"send_chat_test_message(chatId: \"{chat.Id}\", channel: \"slack\")", chat.NextSteps[0]);
+            Assert.Contains("\"nextSteps\"", JsonSerializer.Serialize(chat, McpJsonUtilities.DefaultOptions));
+        }
+
+        [Fact]
+        public async Task UpdateChat_TheAnswerCarriesTheNextSteps()
+        {
+            var chat = _world.AddChat("Ops alerts");
+
+            var answer = await CreateTools().UpdateChat(chat.Id, mattermostWebhookUrl: ChatWriteHarness.MattermostUrl);
+
+            // The test of the webhook just set, then where the alerts go.
+            var prove = Assert.Single(answer.NextSteps.SkipLast(1));
+            Assert.StartsWith($"send_chat_test_message(chatId: \"{chat.Id}\", channel: \"mattermost\")", prove);
+        }
+
+        [Fact]
+        public async Task DeleteChat_Applied_TheAnswerSaysWhatTheRemovalLeft()
+        {
+            var chat = _world.AddChat("Ops alerts");
+
+            var answer = await CreateTools().DeleteChat(chat.Id);
+
+            Assert.Equal(ChatSetupNextSteps.AfterChatDeleted(), answer.NextSteps);
+            Assert.Contains("update_sensor_policy", answer.NextSteps[0]);
+        }
+
+        [Fact]
+        public async Task DeleteChat_DryRun_TheAnswerSaysTheCallThatAppliesIt()
+        {
+            var chat = _world.AddChat("Ops alerts");
+            _world.Usage.Setup(u => u.Compute()).Returns((new Dictionary<Guid, int> { [chat.Id] = 0 }, 0));
+
+            var answer = await CreateTools().DeleteChat(chat.Id, dryRun: true);
+
+            Assert.Equal([$"delete_chat(chatId: \"{chat.Id}\") without dryRun removes it."], answer.NextSteps);
         }
 
         [Fact]

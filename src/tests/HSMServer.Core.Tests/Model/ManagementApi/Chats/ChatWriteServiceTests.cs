@@ -290,6 +290,39 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Null(_world.Store.Single().TelegramChatId);
         }
 
+        // ---- the next steps of the echo (#1831) ---------------------------------------
+
+        // A created chat points at the test message of the webhook it was created with, and at the
+        // channel it lacks; the texts themselves are pinned by ChatSetupNextStepsTests. The steps
+        // are read off the chat AS STORED, not off the request.
+        [Fact]
+        public async Task CreateChat_TheEchoCarriesTheNextSteps_OfTheChatItStores()
+        {
+            var result = await Service.CreateChat(new CreateChatRequestDto { Name = "Ops alerts", SlackWebhookUrl = SlackUrl }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal(ChatSetupNextSteps.AfterChatCreated(_world.Store.Single()), result.Value.NextSteps);
+            Assert.Contains(result.Value.NextSteps, step => step.Contains($"send_chat_test_message(chatId: \"{result.Value.Id}\", channel: \"slack\")"));
+        }
+
+        [Fact]
+        public async Task UpdateChat_TheEchoCarriesTheNextSteps_OfWhatTheRequestSet()
+        {
+            var chat = AddChat("Ops alerts");
+            var request = new UpdateChatRequestDto { MattermostWebhookUrl = MattermostUrl };
+
+            var set = await Service.UpdateChat(chat.Id, request, Token);
+            var renamed = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "On-call" }, Token);
+
+            Assert.True(set.Success, set.Failure?.Message);
+            Assert.Equal(ChatSetupNextSteps.AfterChatUpdated(chat.Id, request), set.Value.NextSteps);
+            Assert.Contains(set.Value.NextSteps, step => step.Contains("channel: \"mattermost\""));
+
+            // A rename sets no channel: the only step left is where the alerts go.
+            Assert.True(renamed.Success, renamed.Failure?.Message);
+            Assert.Single(renamed.Value.NextSteps);
+        }
+
         [Fact]
         public async Task UpdateChat_ClearFlagSetToFalse_RemovesNothing()
         {

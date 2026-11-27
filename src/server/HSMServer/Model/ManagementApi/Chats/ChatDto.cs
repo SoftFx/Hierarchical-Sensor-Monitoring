@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model.ManagementApi.Chats
 {
@@ -97,5 +98,13 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// </summary>
         [Description("Ids of the folders the chat is bound to, filtered to the folders the caller can see. EMPTY means a global chat — usable from every node's policies; otherwise the chat is usable only from the folders listed (the rule policy/template writes validate destination chats against).")]
         public List<Guid> Folders { get; init; }
+
+        /// <summary>
+        /// The next steps of the chat setup (#1831), each naming its tool call. Set on the answers
+        /// of the create and update actions only; absent on reads, and never read from a request.
+        /// </summary>
+        [Description("The next steps of the chat setup, each naming its tool call — present on the answers of create_chat and update_chat only, absent on reads; ignored when sent by a client.")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> NextSteps { get; init; }
     }
 }

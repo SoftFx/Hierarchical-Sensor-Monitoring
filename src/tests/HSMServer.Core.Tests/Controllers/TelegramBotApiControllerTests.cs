@@ -10,6 +10,7 @@ using HSMServer.Mcp;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.TelegramBot;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
@@ -94,6 +95,10 @@ namespace HSMServer.Core.Tests.Controllers
                 new TelegramBotDto { BotName = "hsm_alerts_bot", IsEnabled = true, HasBotToken = true, IsRunning = true },
                 Assert.IsType<TelegramBotDto>(BodyOf(result)));
             Assert.DoesNotContain(TelegramBotHarness.OldToken, WireOf(result));
+
+            // A status read carries no next steps, not even as a null: only a write's answer says
+            // what comes after it (#1831).
+            Assert.DoesNotContain("NextSteps", WireOf(result));
         }
 
 
@@ -123,9 +128,13 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(200, StatusCodeOf(result));
             Assert.Equal(TelegramBotHarness.NewToken, _world.Telegram.BotToken);
-            Assert.Equal(
-                new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true },
-                Assert.IsType<TelegramBotDto>(BodyOf(result)));
+
+            // The status half of the echo, then the next steps it carries (#1831): the next channel.
+            var echo = Assert.IsType<TelegramBotDto>(BodyOf(result));
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true },
+                echo with { NextSteps = null });
+            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: true), echo.NextSteps);
+            Assert.Contains("\"NextSteps\"", WireOf(result));
             Assert.DoesNotContain(TelegramBotHarness.NewToken, WireOf(result));
         }
 

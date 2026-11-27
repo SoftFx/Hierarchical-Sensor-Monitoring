@@ -55,6 +55,7 @@ namespace HSMServer.Core.Tests.Mcp
                 "get_alert_schedule",
                 "get_alert_template",
                 "get_chat",
+                "get_chat_setup_guide",
                 "get_folder",
                 "get_journal_record",
                 "get_large_file",
@@ -147,7 +148,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             var tools = provider.GetRequiredService<IEnumerable<McpServerTool>>().ToList();
 
-            Assert.Equal(49, tools.Count);
+            Assert.Equal(50, tools.Count);
             Assert.All(tools, tool =>
             {
                 var schema = tool.ProtocolTool.OutputSchema;
