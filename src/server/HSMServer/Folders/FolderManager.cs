@@ -316,35 +316,50 @@ namespace HSMServer.Folders
             string NameOf(Guid id) => id == chat.Id ? chat.Name : GetChatName?.Invoke(id);
 
             foreach (var (folderId, folder) in this)
-            {
-                var wasBound = folder.Chats.Contains(chat.Id);
-
-                // DefaultChats is replaced wholesale by a folder update and its set is
-                // mutated in place by a save of the Chats tab: captured and copied before
-                // the read, as the management read paths do.
-                var defaultChats = folder.DefaultChats;
-                var remainingDefaults = StableCopy.Of(() => defaultChats.SelectedChats);
-                var wasDefault = remainingDefaults.Remove(chat.Id);
-
-                if (!wasBound && !wasDefault)
-                    continue;
-
-                var update = new FolderUpdate()
-                {
-                    Id = folderId,
-                    Initiator = initiator,
-                    ChatNameResolver = NameOf,
-                    Chats = wasBound ? [.. folder.Chats.Where(id => id != chat.Id)] : null,
-                    // A default chat that no longer exists routes nowhere. It is taken out
-                    // with the deletion, from every folder that lists it — bound or not —
-                    // instead of staying there until the folder is next saved (#1927).
-                    DefaultChats = wasDefault ? defaultChats with { SelectedChats = [.. remainingDefaults] } : null,
-                };
-
-                _ = TryUpdate(update);
-            }
+                _ = RemoveFromFolder(folderId, folder);
 
             _logger.Info($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");
+
+            // One folder at a time, and a failure stays with its folder and reaches the log.
+            // The event runs after the chat is already gone from its storage: nothing that
+            // follows it — the other folders, the chat's own removal record, the release of
+            // its Telegram id — may depend on one folder's update. The update is an async
+            // method, so a failure of it — of its synchronous part as much as of what it
+            // awaits — used to vanish in the discarded task, into no log at all. What does
+            // not await still runs at once, inside the event, as it always did.
+            async Task RemoveFromFolder(Guid folderId, FolderModel folder)
+            {
+                try
+                {
+                    var wasBound = folder.Chats.Contains(chat.Id);
+
+                    // DefaultChats is replaced wholesale by a folder update and its set is
+                    // mutated in place by a save of the Chats tab: captured and copied before
+                    // the read, as the management read paths do.
+                    var defaultChats = folder.DefaultChats;
+                    var remainingDefaults = StableCopy.Of(() => defaultChats.SelectedChats);
+                    var wasDefault = remainingDefaults.Remove(chat.Id);
+
+                    if (!wasBound && !wasDefault)
+                        return;
+
+                    await TryUpdate(new FolderUpdate()
+                    {
+                        Id = folderId,
+                        Initiator = initiator,
+                        ChatNameResolver = NameOf,
+                        Chats = wasBound ? [.. folder.Chats.Where(id => id != chat.Id)] : null,
+                        // A default chat that no longer exists routes nowhere. It is taken out
+                        // with the deletion, from every folder that lists it — bound or not —
+                        // instead of staying there until the folder is next saved (#1927).
+                        DefaultChats = wasDefault ? defaultChats with { SelectedChats = [.. remainingDefaults] } : null,
+                    });
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, $"Taking the removed chat '{chat.Name}' ({chat.Id}) out of folder '{folder.Name}' ({folderId}) failed: the folder keeps a reference to the chat");
+                }
+            }
         }
 
         public List<FolderModel> GetUserFolders(User user)

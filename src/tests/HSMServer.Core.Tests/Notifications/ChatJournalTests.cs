@@ -1,4 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
@@ -7,7 +8,10 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Folders;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using HSMServer.Notifications.Telegram.Tokens;
@@ -16,6 +20,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -269,6 +274,37 @@ namespace HSMServer.Core.Tests.Notifications
 
             var dto = HSMServer.Model.ManagementApi.Chats.ChatDtoMapper.ToDto(_chats[chat.Id], _ => true, includeDetail: true);
             Assert.Null(dto.Author);
+        }
+
+        // #1932 at the surface it was reported from, over the real chat storage: the create
+        // response and the reads after it — one chat and the list — carry the author.
+        [Fact]
+        public async Task CreateChat_ThroughTheWriteSurface_TheEchoAndTheReadsCarryTheAuthor()
+        {
+            var admin = new User("admin") { IsAdmin = true };
+            Assert.True(await _userManager.TryAdd(admin));
+
+            var authorization = new Mock<IApiTokenAuthorizationService>();
+            authorization.Setup(a => a.AuthorizeChatCreate(It.IsAny<ClaimsPrincipal>())).Returns(ApiTokenAuthorization.Allowed);
+            authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>())).Returns(true);
+            authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(), It.IsAny<IReadOnlyCollection<Guid>>())).Returns(true);
+            var folders = new Mock<IFolderManager>();
+            folders.Setup(f => f.GetValues()).Returns(new List<FolderModel>());
+            var writer = new ChatWriteService(_chats, new ChatAdministrationService(_chats, folders.Object), authorization.Object,
+                folders.Object, _userManager, new Mock<IChatSensorUsageCalculator>().Object);
+            var reader = new ChatsReadService(_chats, authorization.Object);
+            var token = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(HsmApiTokenClaims.OwnerUserId, admin.Id.ToString()),
+                new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
+            ], HsmApiTokenDefaults.AuthenticationScheme));
+
+            var created = await writer.CreateChat(new CreateChatRequestDto { Name = "Ops" }, token);
+
+            Assert.True(created.Success, created.Failure?.Message);
+            Assert.Equal("admin", created.Value.Author);
+            Assert.Equal("admin", reader.GetChat(created.Value.Id, token).Value.Author);
+            Assert.Equal([("Ops", "admin")], reader.ListChats(token, page: 1, pageSize: 20).Value.Items.Select(chat => (chat.Name, chat.Author)));
         }
 
         [Fact]

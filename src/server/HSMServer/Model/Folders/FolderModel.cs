@@ -141,12 +141,12 @@ namespace HSMServer.Model.Folders
             // in From parent too, whose selected chats add to the inherited ones.
             string GetJournalValue((HashSet<Guid> ids, DefaultChatMode mode) value) => value.mode switch
             {
-                DefaultChatMode.Custom => NamesOf(value.ids),
-                DefaultChatMode.FromParent when value.ids.Count != 0 => $"{value.mode.GetDisplayName()}, {NamesOf(value.ids)}",
+                DefaultChatMode.Custom => JoinedNamesOf(value.ids),
+                DefaultChatMode.FromParent when value.ids.Count != 0 => $"{value.mode.GetDisplayName()}, {JoinedNamesOf(value.ids)}",
                 _ => value.mode.GetDisplayName(),
             };
 
-            string NamesOf(HashSet<Guid> ids) => string.Join(", ", ids.Select(chatName));
+            string JoinedNamesOf(HashSet<Guid> ids) => string.Join(", ", ids.Select(chatName));
 
             var oldChat = (currentValue.SelectedChats, currentValue.ChatMode);
             var newChat = (newValue.SelectedChats, newValue.ChatMode);

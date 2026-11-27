@@ -236,18 +236,22 @@ namespace HSMServer.Core.Tests.Notifications
                 .DefaultChatsSettings.Chats.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
 
         // The two managers wired the way NotificationsCenter wires them, over a journal and
-        // a database that record what is written to them.
-        private sealed class World
+        // a database that record what is written to them. The chat storage's own journal
+        // (the `chat` records) is the caller's: most tests leave it unrecorded. Shared with
+        // ChatRemovalFolderUpdateFailureTests.
+        internal sealed class World
         {
-            public ChatsManager Chats { get; } = BuildManager();
+            public ChatsManager Chats { get; }
 
             public FolderManager Folders { get; }
             public List<JournalRecordModel> Journal { get; } = [];
             public Mock<IDatabaseCore> Database { get; } = new();
 
 
-            public World()
+            public World(IJournalService chatJournal)
             {
+                Chats = BuildManager(chatJournal);
+
                 var cache = new Mock<ITreeValuesCache>();
                 cache.Setup(c => c.GetProducts()).Returns(new List<ProductModel>());
 
@@ -303,7 +307,7 @@ namespace HSMServer.Core.Tests.Notifications
             }
         }
 
-        private static World BuildWorld() => new();
+        internal static World BuildWorld(IJournalService chatJournal = null) => new(chatJournal);
 
         // Regression for #1261 single-subscription wiring: NotificationsCenter wires
         // FolderManager.AddFolderToChats -> IChatsManager.AddFolderToChats once. The previous
@@ -774,7 +778,7 @@ namespace HSMServer.Core.Tests.Notifications
             };
 
 
-        private static ChatsManager BuildManager() => BuildManagerWithBot();
+        private static ChatsManager BuildManager(IJournalService journal = null) => BuildManagerWithBot(journal: journal);
 
         // #1826: a chat with NO Telegram binding yet — the invitation tests bind one.
         private static Chat BuildUnboundChat(string name = "unbound-chat") =>
@@ -787,13 +791,13 @@ namespace HSMServer.Core.Tests.Notifications
             });
 
         // #1826: the invitation link builders read the configured bot name.
-        private static ChatsManager BuildManagerWithBot(string botName = "hsm_alerts_bot")
+        private static ChatsManager BuildManagerWithBot(string botName = "hsm_alerts_bot", IJournalService journal = null)
         {
             var config = new Mock<IServerConfig>();
             config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = botName });
 
             return new ChatsManager(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, config.Object,
-                new JournalAppender(new Mock<IJournalService>().Object, TimeProvider.System));
+                new JournalAppender(journal ?? new Mock<IJournalService>().Object, TimeProvider.System));
         }
 
         private static Chat BuildChat() =>

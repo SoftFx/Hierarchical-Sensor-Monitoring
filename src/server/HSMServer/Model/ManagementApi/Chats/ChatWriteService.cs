@@ -225,19 +225,19 @@ namespace HSMServer.Model.ManagementApi.Chats
                             Path = _folders.TryGetValue(folderId, out var folder) ? folder.Name : folderId.ToString(),
                             Change = "unbind",
                         }),
-                    .. FoldersLosingADefaultChat(chat.Id, bound, caller),
+                    .. FoldersLosingADefaultChat(chat.Id, caller),
                 ],
             };
         }
 
-        // The folders whose default chats list the chat, the deletion taking it out of them
-        // (#1927). A folder the chat is bound to is already listed with its binding. A
-        // folder's default chats are its detail: a folder is named only where the caller
-        // reads that detail.
-        private IEnumerable<PreviewAffectedEntityDto> FoldersLosingADefaultChat(Guid chatId, List<Guid> bound, ClaimsPrincipal caller) =>
+        // The folders whose default chats list the chat: the deletion takes it out of them
+        // (#1927). A folder the chat is bound to appears twice — with its binding above and
+        // here with its default chats, two changes of one folder. A folder's default chats are
+        // its detail: a folder is named only where the caller reads that detail.
+        private IEnumerable<PreviewAffectedEntityDto> FoldersLosingADefaultChat(Guid chatId, ClaimsPrincipal caller) =>
             _folders.GetValues()
                 .Where(folder => StableCopy.Of(() => folder.DefaultChats.SelectedChats).Contains(chatId))
-                .Where(folder => !bound.Contains(folder.Id) && _authorization.CanSeeFolderDetail(caller, folder.Id))
+                .Where(folder => _authorization.CanSeeFolderDetail(caller, folder.Id))
                 .Select(folder => new PreviewAffectedEntityDto { Id = folder.Id.ToString(), Path = folder.Name, Change = "prune" });
 
         private static ChatUpdate ToUpdate(Guid chatId, CreateChatRequestDto request) => new()
