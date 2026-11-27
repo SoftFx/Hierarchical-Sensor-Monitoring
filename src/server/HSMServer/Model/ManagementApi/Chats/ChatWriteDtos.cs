@@ -113,5 +113,9 @@ namespace HSMServer.Model.ManagementApi.Chats
         /// <summary>True when the count is a lower bound — at least one sensor was skipped during the scan.</summary>
         [Description("True when the count is a lower bound: at least one sensor was skipped during the scan, so read sensorUsageCount as \"at least\".")]
         public bool SensorUsageIncomplete { get; init; }
+
+        /// <summary>The next step of the removal, naming its tool call.</summary>
+        [Description("What to do next, naming its tool call: delete_chat(chatId) without dryRun removes the chat.")]
+        public List<string> NextSteps { get; init; }
     }
 }

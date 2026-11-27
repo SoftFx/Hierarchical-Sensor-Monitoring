@@ -6,6 +6,7 @@ using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
 using HSMServer.Model.ManagementApi.Chats;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
@@ -37,8 +38,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             return new ChatsApiController(_world.CreateReader(),
                 new ChatVerificationService(_world.Chats.Object, _world.Authorization.Object, _world.Users.Object,
-                    new Mock<IChatDelivery>().Object),
-                _world.CreateWriter())
+                    new Mock<IChatDelivery>().Object, new Mock<IServerConfig>().Object),
+                _world.CreateWriter(),
+                new ChatSetupGuideService(_world.Authorization.Object, new Mock<IServerConfig>().Object))
             {
                 ControllerContext = new ControllerContext { HttpContext = httpContext },
             };
@@ -81,6 +83,9 @@ namespace HSMServer.Core.Tests.Controllers
 
             // The URL is a secret: it is stored, and nothing the response can carry holds it.
             Assert.DoesNotContain(ChatWriteHarness.SlackUrl, JsonSerializer.Serialize(created));
+
+            // The echo carries the setup's next steps (#1831) — a created chat points at its test.
+            Assert.Contains(echo.NextSteps, step => step.Contains($"send_chat_test_message(chatId: \"{echo.Id}\", channel: \"slack\")"));
         }
 
         [Fact]
@@ -227,6 +232,10 @@ namespace HSMServer.Core.Tests.Controllers
             var preview = Assert.IsType<ChatDeletePreviewDto>(BodyOf(result));
             Assert.True(preview.DryRun);
             Assert.Equal(chat.Id.ToString(), preview.EntityId);
+
+            // The preview is the dry run's whole answer here, as the envelope's arm is on MCP: it
+            // carries the next step itself (#1831) — the REST twin of the MCP line.
+            Assert.Equal([$"delete_chat(chatId: \"{chat.Id}\") without dryRun removes it."], preview.NextSteps);
             Assert.Single(_world.Store);
         }
 

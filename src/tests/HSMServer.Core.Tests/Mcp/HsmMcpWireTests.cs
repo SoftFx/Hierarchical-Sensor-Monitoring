@@ -75,6 +75,7 @@ namespace HSMServer.Core.Tests.Mcp
             "get_alert_schedule",
             "get_alert_template",
             "get_chat",
+            "get_chat_setup_guide",
             "get_folder",
             "get_journal_record",
             "get_large_file",
@@ -118,6 +119,9 @@ namespace HSMServer.Core.Tests.Mcp
         private readonly Mock<IApiTokenManager> _tokens = new();
         private readonly Mock<IUserManager> _users = new();
         private readonly Mock<IApiTokenSecurityEventSink> _securityEvents = new();
+
+        // The stored bot credential (#1831): the setup guide names the bot in its steps.
+        private readonly Mock<IServerConfig> _config = new();
         private readonly Mock<HSMServer.Core.ChangeSets.IChangeSetJournal> _journalMock = new();
 
         // #1588: the recorder's unified-journal writes are a no-op in this
@@ -194,6 +198,8 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns(true);
 
             _users.Setup(u => u[_ownerId]).Returns(new HSMServer.Model.Authentication.User(EntitiesFactory.BuildUser()));
+
+            _config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = "hsm_alerts_bot" });
         }
 
 
@@ -384,6 +390,14 @@ namespace HSMServer.Core.Tests.Mcp
             var updateBot = Descriptions(tools["update_telegram_bot"]);
             Assert.Contains("Must match the bot Telegram reports for the effective token", updateBot);
             Assert.Contains("write-only: never returned, never logged", updateBot);
+
+            // The chat setup (#1831): the guide's own description says what it answers and that it
+            // is the web modals' text, and its parameter names every channel.
+            Assert.Contains("The web UI's help modals' own text", tools["get_chat_setup_guide"].Description);
+            Assert.Contains("relay `steps` to the person", tools["get_chat_setup_guide"].Description);
+
+            var guideChannels = Descriptions(tools["get_chat_setup_guide"]);
+            Assert.Contains("\"telegram-bot\", \"telegram-chat\", \"slack\" or \"mattermost\"", guideChannels);
         }
 
 
@@ -484,6 +498,16 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("hasBotToken says whether one is stored", botStatus);
             Assert.Contains("read it after a token change", botStatus);
 
+            // The chat setup (#1831), output side: what the guide's two lists are for a person and
+            // for the orchestrator, and that the invitation's steps are the guide's own words.
+            var guide = Descriptions(tools["get_chat_setup_guide"]);
+            Assert.Contains("The steps a PERSON performs inside the messenger, in order — relay them.", guide);
+            Assert.Contains("The calls that do HSM's part of the channel, in order", guide);
+            Assert.Contains("absent when no bot is stored", guide);
+
+            var invitation = Descriptions(tools["create_chat_telegram_invitation"]);
+            Assert.Contains("the guide's steps of the invitation's kind", invitation);
+
             // The folder surface: the entity disambiguation (access-grouping
             // folder, not the tree's nested products).
             var folder = Descriptions(tools["get_folder"]);
@@ -496,6 +520,117 @@ namespace HSMServer.Core.Tests.Mcp
             var policies = Descriptions(tools["list_sensor_policies"]);
             Assert.Contains("template-owned ones included, with their template linkage", policies);
         }
+
+
+        [Fact]
+        public async Task Wire_ChatSetupGuide_AnswersTheSteps_AndRefusesAnUnknownChannelUnderItsField()
+        {
+            // #1831: the guide through the real wire — the answer is structured content with the
+            // person's steps, the bot's username in them and HSM's part as calls; an unknown channel
+            // is the field-keyed refusal of the REST twin, flattened with its key.
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            var guide = await client.CallToolAsync("get_chat_setup_guide",
+                new Dictionary<string, object> { ["channel"] = "telegram-chat" });
+
+            Assert.NotEqual(true, guide.IsError);
+
+            var structured = guide.StructuredContent!.Value;
+            Assert.Equal("telegram-chat", structured.GetProperty("channel").GetString());
+            Assert.Equal("hsm_alerts_bot", structured.GetProperty("botName").GetString());
+            Assert.Equal(5, structured.GetProperty("steps").GetArrayLength());
+            Assert.Contains("hsm_alerts_bot", structured.GetProperty("steps")[1].GetString());
+            Assert.Equal("create_chat", structured.GetProperty("toolSteps")[0].GetProperty("tool").GetString());
+
+            var unknown = await client.CallToolAsync("get_chat_setup_guide",
+                new Dictionary<string, object> { ["channel"] = "sms" });
+
+            // Relayed behind the SDK's own prefix, like every expected tool failure.
+            Assert.True(unknown.IsError);
+            Assert.Contains("channel: Unknown channel 'sms'. Channels: telegram-bot, telegram-chat, slack, mattermost.",
+                Assert.IsType<TextContentBlock>(Assert.Single(unknown.Content)).Text);
+        }
+
+        [Fact]
+        public async Task Wire_ChatSetupTools_PointAtTheGuide_AndNoDescriptionCarriesAStep()
+        {
+            // #1831: a tool description is static — the bot's username cannot be filled in — and
+            // travels to the orchestrator in every tool listing. So it points at the guide tool in
+            // one line and carries no step of the guide: the steps are read once, when they are due,
+            // from the guide and from the next steps of the write answers.
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            var tools = (await client.ListToolsAsync()).ToDictionary(t => t.ProtocolTool.Name, t => t.ProtocolTool);
+
+            foreach (var name in new[] { "get_telegram_bot", "update_telegram_bot", "create_chat", "update_chat", "create_chat_telegram_invitation", "send_chat_test_message" })
+                Assert.Contains("get_chat_setup_guide", tools[name].Description);
+
+            Assert.Contains("get_chat_setup_guide(channel: \"telegram-bot\")", tools["update_telegram_bot"].Description);
+            Assert.Contains("get_chat_setup_guide(channel: \"telegram-chat\")", tools["create_chat_telegram_invitation"].Description);
+
+            // No description, of a tool or of a parameter, carries the words of a step.
+            foreach (var tool in tools.Values)
+            {
+                var text = string.Join("\n", new[] { tool.Description ?? string.Empty }.Concat(AllDescriptions(tool.InputSchema)));
+
+                foreach (var words in WordsOfTheGuide())
+                    Assert.DoesNotContain(words, text);
+            }
+        }
+
+        [Fact]
+        public async Task Wire_EveryWriteToolOfTheChatSetup_AnswersNextSteps()
+        {
+            // #1831: each write tool of the chats surface, the verification and the bot credential
+            // carries its next-step text — the output schema shows `nextSteps` on every answer, the
+            // delete envelope included, so an agent knows before its first call that the answer
+            // says what comes next.
+            using var host = BuildHost();
+            host.Start();
+
+            await using var client = await ConnectAsync(host);
+
+            var tools = (await client.ListToolsAsync()).ToDictionary(t => t.ProtocolTool.Name, t => t.ProtocolTool);
+
+            foreach (var name in new[] { "create_chat", "update_chat", "delete_chat", "send_chat_test_message", "create_chat_telegram_invitation", "update_telegram_bot" })
+            {
+                var properties = tools[name].OutputSchema!.Value.GetProperty("properties");
+
+                Assert.True(properties.TryGetProperty("nextSteps", out var nextSteps), $"{name} answers no next steps");
+
+                // An array — written `[array, null]` where the member is absent on some answers.
+                var types = nextSteps.GetProperty("type");
+                var typeNames = types.ValueKind == JsonValueKind.Array
+                    ? types.EnumerateArray().Select(type => type.GetString())
+                    : [types.GetString()];
+
+                Assert.Contains("array", typeNames);
+                Assert.NotEmpty(AllDescriptions(nextSteps));
+            }
+        }
+
+
+        // The words of every step that are the step's own, long enough to be no accident.
+        private static IEnumerable<string> WordsOfTheGuide() =>
+            HSMServer.Notifications.Chats.ChatSetupGuide.TelegramBot
+                .Concat(HSMServer.Notifications.Chats.ChatSetupGuide.Slack)
+                .Concat(HSMServer.Notifications.Chats.ChatSetupGuide.Mattermost)
+                .Concat(HSMServer.Notifications.Chats.ChatSetupGuide.TelegramGroup)
+                .Concat(HSMServer.Notifications.Chats.ChatSetupGuide.TelegramDirect)
+                .SelectMany(step => step.Parts)
+                .Select(part => part switch
+                {
+                    HSMServer.Notifications.Chats.ChatSetupPart.Plain { Value: var words } => words.Trim(),
+                    HSMServer.Notifications.Chats.ChatSetupPart.Code { Value: var name } => name,
+                    _ => string.Empty,
+                })
+                .Where(words => words.Length >= 12);
 
 
         private static IEnumerable<string> AllDescriptions(System.Text.Json.JsonElement schema)
@@ -552,7 +687,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                 var tools = await client.ListToolsAsync();
 
-                Assert.Equal(49, tools.Count);
+                Assert.Equal(50, tools.Count);
 
                 foreach (var tool in tools)
                 {
@@ -885,6 +1020,16 @@ namespace HSMServer.Core.Tests.Mcp
                         services.AddSingleton(_tokens.Object);
                         services.AddSingleton(_users.Object);
                         services.AddSingleton(_securityEvents.Object);
+                        // #1831: the setup guide and the stored bot credential it names. The chat tools
+                        // are one class, so calling the guide's tool constructs its neighbours too —
+                        // their services are registered beside it.
+                        services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatSetupGuideService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatAdministrationService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatWriteService>();
+                        services.AddScoped<HSMServer.Model.ManagementApi.Chats.ChatVerificationService>();
+                        services.AddSingleton(_config.Object);
+                        services.AddSingleton(new Mock<HSMServer.Model.ManagementApi.Chats.IChatDelivery>().Object);
+                        services.AddSingleton(new Mock<HSMServer.Notifications.Chats.IChatSensorUsageCalculator>().Object);
                         services.AddSingleton(new ApiTokensConfig { Enabled = true });
                         services.AddSingleton<ApiTokenInvalidAttemptLimiter>();
                     });

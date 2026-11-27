@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Extensions;
 using HSMServer.Folders;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
@@ -23,6 +26,7 @@ namespace HSMServer.Core.Tests.Views
     // the compiled views, as the MVC pipeline does, these tests pin what the browser receives: every step
     // of its guide in order, and the modal around the steps as it was — how it opens and closes, the
     // group command copied to the clipboard, the invitation links greyed out while the bot is not running.
+    // And since #1831, that the management API's guide shows the same steps as each modal.
     public class ChatSetupHelpModalTests
     {
         private const string BotName = "hsm_alerts_bot";
@@ -119,6 +123,75 @@ namespace HSMServer.Core.Tests.Views
             Assert.Contains("Telegram Bot (&lt;img src=x onerror=alert(1)&gt;)", html);
             Assert.DoesNotContain("<img src=x", html);
         }
+
+
+        // One source, two readers (#1831): a modal prints a step as HTML, the management API's guide —
+        // the service behind its tool and its action — shows it as text. Over the same stored bot,
+        // every step a person performs carries the same words in both, in the same order; and HSM's
+        // steps of a modal, which the guide never tells a person, are what its calls do.
+        [Theory]
+        [InlineData("Slack", "slack")]
+        [InlineData("Mattermost", "mattermost")]
+        [InlineData("Telegram", "telegram-chat")]
+        public async Task AModal_AndTheSetupGuide_ShowTheSameSteps(string modal, string channel)
+        {
+            var page = WebUtility.HtmlDecode(modal == "Telegram" ? await RenderTelegram(BotName) : await Render(WebhookModals[modal].View));
+            var guide = SetupGuideOf(channel);
+
+            var source = (modal == "Telegram" ? ChatSetupGuide.TelegramGroup.Concat(ChatSetupGuide.TelegramDirect) : WebhookModals[modal].Guide)
+                .ToList();
+            var personsSteps = source.Where(step => step.Side == ChatSetupSide.Messenger).ToList();
+
+            // As many steps for a person as the source holds, each carrying its words in both readers.
+            Assert.Equal(personsSteps.Count, guide.Steps.Count);
+
+            var at = 0;
+
+            for (var index = 0; index < personsSteps.Count; index++)
+                foreach (var words in TheWordsOf(personsSteps[index]))
+                {
+                    var found = page.IndexOf(words, at, StringComparison.Ordinal);
+
+                    Assert.True(found >= 0, $"The {modal} modal does not say \"{words}\" of step {index + 1}, or not in order.");
+                    Assert.True(guide.Steps[index].Contains(words), $"The guide's step {index + 1} of {channel} does not say \"{words}\".");
+
+                    at = found + words.Length;
+                }
+
+            // HSM's own steps of a modal — paste the URL, save, send a test — are nobody's to do
+            // here: the guide tells none of them and names a call for them instead.
+            foreach (var words in source.Where(step => step.Side == ChatSetupSide.Hsm).SelectMany(TheWordsOf))
+                Assert.DoesNotContain(guide.Steps, step => step.Contains(words));
+
+            Assert.NotEmpty(guide.ToolSteps);
+        }
+
+        // The guide of the management API, over the service both its transports call, for the bot the
+        // modal names and a caller past the gate.
+        private static ChatSetupGuideDto SetupGuideOf(string channel)
+        {
+            var authorization = new Mock<IApiTokenAuthorizationService>();
+            authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>())).Returns(true);
+
+            var config = new Mock<IServerConfig>();
+            config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = BotName });
+
+            return new ChatSetupGuideService(authorization.Object, config.Object).GetGuide(channel, new ClaimsPrincipal()).Value;
+        }
+
+        // What a step says, whatever shows it: its words, the names it shows in monospace, the words
+        // of its links and the stressed ones — the bot's username where it stands. Shorter than a
+        // word, or true only of the modal, a part is left out.
+        private static IEnumerable<string> TheWordsOf(ChatSetupStep step) =>
+            step.Parts.Select(part => part switch
+            {
+                ChatSetupPart.Plain { Value: var words } => words.Trim(),
+                ChatSetupPart.Code { Value: var name } => name,
+                ChatSetupPart.Bold { Value: var word } => word,
+                ChatSetupPart.Link { Value: var words } => words,
+                ChatSetupPart.BotName => BotName,
+                _ => string.Empty,
+            }).Where(words => words.Length > 1);
 
 
         private Task<string> Render(string view) => ViewRenderer.RenderAsync($"~/Views/Notifications/{view}", null, _admin);

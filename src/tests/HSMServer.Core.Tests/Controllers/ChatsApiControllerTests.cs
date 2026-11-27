@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -39,6 +40,10 @@ namespace HSMServer.Core.Tests.Controllers
         private const string SlackSecret = "https://hooks.slack.com/services/T000/B000/XXXXXXXX";
         private const string MattermostSecret = "https://mattermost.example.com/hooks/yyyyyyyyyyyyyyy";
 
+        // Serialized the way MVC writes an answer: camelCase, a null written out as null — so an absent
+        // field in a pin below is one the answer leaves out, not one the serializer dropped.
+        private static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web);
+
         private readonly Mock<IChatsManager> _chats = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
 
@@ -60,6 +65,8 @@ namespace HSMServer.Core.Tests.Controllers
             _authorization.Setup(a => a.CanSeeChatDetail(It.IsAny<ClaimsPrincipal>(),
                     It.IsAny<System.Collections.Generic.IReadOnlyCollection<Guid>>()))
                 .Returns(true);
+
+            _config.SetupGet(c => c.Telegram).Returns(new TelegramConfig { BotName = "hsm_alerts_bot" });
         }
 
 
@@ -80,6 +87,9 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IChatDelivery> _delivery = new();
         private readonly Mock<IUserManager> _users = new();
 
+        // The bot's username, for the steps that name it (#1831).
+        private readonly Mock<IServerConfig> _config = new();
+
         // The write half of the controller (#1829) has its own suite
         // (ChatsApiControllerWriteTests); this read suite only needs a writer to build it.
         private readonly Mock<IFolderManager> _folders = new();
@@ -89,9 +99,10 @@ namespace HSMServer.Core.Tests.Controllers
 
         private ChatsApiController CreateControllerWith(ClaimsPrincipal principal) =>
             new(new ChatsReadService(_chats.Object, _authorization.Object),
-                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object),
+                new ChatVerificationService(_chats.Object, _authorization.Object, _users.Object, _delivery.Object, _config.Object),
                 new ChatWriteService(_chats.Object, new ChatAdministrationService(_chats.Object, _folders.Object),
-                    _authorization.Object, _folders.Object, _users.Object, _usage.Object))
+                    _authorization.Object, _folders.Object, _users.Object, _usage.Object),
+                new ChatSetupGuideService(_authorization.Object, _config.Object))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -525,7 +536,11 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = Assert.IsType<ChatInvitationDto>(ok.Value);
             Assert.Equal("direct", dto.Kind);
             Assert.Equal("https://t.me/hsm_alerts_bot?start=abc", dto.Value);
-            Assert.NotEmpty(dto.NextSteps);
+
+            // The person's steps are the guide's own, the invitation in place of its words (#1831).
+            Assert.Equal(
+                ["Click [invitation link](https://t.me/hsm_alerts_bot?start=abc) and press Start button at opened direct chat with Telegram Bot (hsm_alerts_bot)."],
+                dto.NextSteps);
         }
 
         [Fact]
@@ -539,6 +554,67 @@ namespace HSMServer.Core.Tests.Controllers
             var answer = await CreateController().PostTelegramInvitation(chat.Id, new ChatInvitationRequestDto { Kind = "direct" });
 
             Assert.Equal(422, StatusCodeOf(answer));
+        }
+
+
+        // #1831: the setup guide renders the guide service's envelope through the same contract — the
+        // steps a person performs, HSM's part as calls, the channel refused under its field.
+
+        [Fact]
+        public void GetSetupGuide_Is200_WithTheStepsOfTheMessenger_AndTheCallsOfHsm()
+        {
+            var result = CreateController().GetSetupGuide("slack");
+
+            Assert.Equal(200, StatusCodeOf(result));
+            var guide = Assert.IsType<ChatSetupGuideDto>(Assert.IsType<OkObjectResult>(result).Value);
+            Assert.Equal("slack", guide.Channel);
+            Assert.Equal(14, guide.Steps.Count);
+            Assert.Equal("Open `api.slack.com/apps`.", guide.Steps[1]);
+            Assert.Equal(["create_chat", "send_chat_test_message"], guide.ToolSteps.Select(step => step.Tool));
+
+            // The bot is not this channel's to name: the field is absent, never a null.
+            Assert.DoesNotContain("botName", JsonSerializer.Serialize(guide, Wire));
+        }
+
+        [Fact]
+        public void GetSetupGuide_TelegramChat_CarriesTheBotName_TheStepsName()
+        {
+            var guide = Assert.IsType<ChatSetupGuideDto>(Assert.IsType<OkObjectResult>(CreateController().GetSetupGuide("telegram-chat")).Value);
+
+            Assert.Equal("hsm_alerts_bot", guide.BotName);
+            Assert.Equal(5, guide.Steps.Count);
+            Assert.Contains("(hsm_alerts_bot)", guide.Steps[1]);
+        }
+
+        [Fact]
+        public void GetSetupGuide_UnknownChannel_Is400_UnderTheFieldKey()
+        {
+            var result = CreateController().GetSetupGuide("sms");
+
+            Assert.Equal(400, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsAssignableFrom<ObjectResult>(result).Value);
+            Assert.Equal(ManagementApiErrors.ValidationFailedCode, body.Error);
+            Assert.Equal("Unknown channel 'sms'. Channels: telegram-bot, telegram-chat, slack, mattermost.",
+                Assert.IsType<string[]>(body.Details["channel"])[0]);
+        }
+
+        [Fact]
+        public void GetSetupGuide_DeniedGate_Is403()
+        {
+            _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>())).Returns(false);
+
+            Assert.Equal(403, StatusCodeOf(CreateController().GetSetupGuide("slack")));
+        }
+
+        // A read answers the chat without next steps: they are the write answers' alone, and a read's
+        // wire differs from before by nothing.
+        [Fact]
+        public void GetChat_ARead_CarriesNoNextSteps_NotEvenAsNull()
+        {
+            var chat = BuildChat("ops");
+            _store.Add(chat);
+
+            Assert.DoesNotContain("nextSteps", JsonSerializer.Serialize(CreateController().GetChat(chat.Id), Wire));
         }
 
 
@@ -588,6 +664,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotNull(provider.GetRequiredService<ChatVerificationService>());
             Assert.NotNull(provider.GetRequiredService<ChatWriteService>());
+            // The setup guide (#1831) is registered like the services beside it.
+            Assert.NotNull(provider.GetRequiredService<ChatSetupGuideService>());
 
             // MVC builds controllers through the type activator over the
             // request provider, and the MCP SDK constructs tool instances the

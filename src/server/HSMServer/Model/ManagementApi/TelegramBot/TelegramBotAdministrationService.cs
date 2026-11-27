@@ -5,6 +5,7 @@ using HSMServer.Model.Configuration;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.ChangeSets;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using System;
@@ -85,7 +86,8 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
         /// <summary>
         /// Change the bot credential: a partial update, administrators only. A new token is
         /// asked of Telegram BEFORE anything is saved; the save is journaled; only a token
-        /// change restarts the bot. The echo is the resulting status.
+        /// change restarts the bot. The echo is the resulting status, with the next steps of
+        /// the chat setup.
         /// </summary>
         public async Task<PolicyWriteResult<TelegramBotDto>> UpdateAsync(UpdateTelegramBotRequestDto request, ClaimsPrincipal caller)
         {
@@ -111,7 +113,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             // name that was passed is still checked — a caller repeating a stored typo is
             // told it is one.
             if (!diff.Any && !nameGiven)
-                return PolicyWriteResult<TelegramBotDto>.Ok(Status());
+                return PolicyWriteResult<TelegramBotDto>.Ok(Echo());
 
             // 1. A new token is asked of Telegram BEFORE anything is saved: a rejected token
             //    changes nothing, and the working bot keeps running.
@@ -161,7 +163,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
             }
 
             if (!diff.Any)
-                return PolicyWriteResult<TelegramBotDto>.Ok(Status());
+                return PolicyWriteResult<TelegramBotDto>.Ok(Echo());
 
             var changes = TelegramSettingsChanges.Between(diff, current, target);
             TelegramSettingsChanges.Apply(_config, diff, target);
@@ -188,7 +190,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
                 }
             }
 
-            return PolicyWriteResult<TelegramBotDto>.Ok(Status());
+            return PolicyWriteResult<TelegramBotDto>.Ok(Echo());
         }
 
         // Asks Telegram who owns a token. Answers the username when it gave one; otherwise no
@@ -240,6 +242,15 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
                 HasBotToken = !string.IsNullOrEmpty(_config.Telegram.BotToken),
                 IsRunning = _bot.IsBotRunning,
             };
+
+        // The update's answer: the status, and what the setup does next (#1831). A status read
+        // says what is; only a write says what comes after it.
+        private TelegramBotDto Echo()
+        {
+            var status = Status();
+
+            return status with { NextSteps = ChatSetupNextSteps.AfterBotSaved(status) };
+        }
     }
 
 

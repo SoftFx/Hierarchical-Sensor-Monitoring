@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model.ManagementApi.TelegramBot
 {
@@ -28,6 +30,9 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
 
         internal const string NewBotToken =
             "Optional new bot token from BotFather — write-only: never returned, never logged. Telegram is asked to accept it BEFORE anything is saved; a rejected token changes nothing. A token change is the only update that restarts the bot. An empty value is refused (omit the field to keep the stored token).";
+
+        internal const string NextSteps =
+            "The next steps of the chat setup, each naming its tool call — present on the answer of update_telegram_bot only, absent on the status read; ignored when sent by a client.";
     }
 
 
@@ -54,6 +59,14 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
         /// <summary>Whether the bot is up and talking to Telegram.</summary>
         [Description(TelegramBotDocs.IsRunning)]
         public bool IsRunning { get; init; }
+
+        /// <summary>
+        /// The next steps of the chat setup (#1831), each naming its tool call. Set on the answer
+        /// of the update only; absent on the status read, and never read from a request.
+        /// </summary>
+        [Description(TelegramBotDocs.NextSteps)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> NextSteps { get; init; }
     }
 
 

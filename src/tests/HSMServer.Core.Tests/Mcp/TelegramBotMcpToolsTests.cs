@@ -8,6 +8,7 @@ using HSMServer.Core.Tests.Model.ManagementApi.TelegramBot;
 using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Model.ManagementApi.TelegramBot;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Http;
@@ -68,8 +69,12 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(TelegramBotHarness.NewToken, _world.Telegram.BotToken);
             Assert.Equal(["probe", "save", "restart"], _world.Steps);
-            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true }, status);
-            Assert.DoesNotContain(TelegramBotHarness.NewToken, JsonSerializer.Serialize(status));
+            // The status half of the echo, then the next steps it carries (#1831): the next channel.
+            Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true },
+                status with { NextSteps = null });
+            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(status), status.NextSteps);
+            Assert.Contains("\"nextSteps\"", JsonSerializer.Serialize(status, McpJsonUtilities.DefaultOptions));
+            Assert.DoesNotContain(TelegramBotHarness.NewToken, JsonSerializer.Serialize(status, McpJsonUtilities.DefaultOptions));
         }
 
 

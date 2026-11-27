@@ -390,6 +390,10 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(ChatsApiController), nameof(ChatsApiController.GetChats))] = [400, 401, 403, 500],
             [(typeof(ChatsApiController), nameof(ChatsApiController.GetChat))] = [401, 403, 404, 500],
 
+            // The chat setup guide (#1831): a read behind the caller-wide gate — its 403 — that
+            // refuses an unknown channel under its field (400).
+            [(typeof(ChatsApiController), nameof(ChatsApiController.GetSetupGuide))] = [400, 401, 403, 500],
+
             // The chat verification surface (#1826): the test message answers
             // its delivery outcome (200 with delivered/error), the invitation
             // the issued value; both carry the detail gate's 403, the 404

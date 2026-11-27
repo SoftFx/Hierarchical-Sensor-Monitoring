@@ -15,9 +15,12 @@ namespace HSMServer.Mcp
     /// alert templates (a thin rendering of <see cref="ChatsReadService"/>,
     /// the #1393 pattern: one visibility rule behind both transports), the
     /// verification pair of #1826 — a test message that answers its
-    /// delivery outcome and the one-shot Telegram invitation issuer — and the
+    /// delivery outcome and the one-shot Telegram invitation issuer — the
     /// write trio of #1829 (a thin rendering of <see cref="ChatWriteService"/>,
-    /// on the write engine the web editor runs): create, update and delete.
+    /// on the write engine the web editor runs): create, update and delete — and
+    /// the setup guide of #1831 (a rendering of <see cref="ChatSetupGuideService"/>), at which
+    /// the description of every tool that sets a channel up points in one line (delete_chat
+    /// removes one, and has no step of the guide to point at).
     /// </summary>
     // The same bearer token, the same caller-wide gate and folder sight, the
     // same DTOs as the REST surface; expected failures surface as tool errors
@@ -33,14 +36,16 @@ namespace HSMServer.Mcp
         private readonly ChatsReadService _reader;
         private readonly ChatVerificationService _verification;
         private readonly ChatWriteService _writer;
+        private readonly ChatSetupGuideService _guide;
         private readonly IHttpContextAccessor _http;
 
         public ChatsMcpTools(ChatsReadService reader, ChatVerificationService verification, ChatWriteService writer,
-            IHttpContextAccessor http)
+            ChatSetupGuideService guide, IHttpContextAccessor http)
         {
             _reader = reader;
             _verification = verification;
             _writer = writer;
+            _guide = guide;
             _http = http;
         }
 
@@ -73,14 +78,14 @@ namespace HSMServer.Mcp
             McpToolErrors.Unwrap(_reader.GetChat(chatId, User));
 
         [McpServerTool(Name = "send_chat_test_message", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Sends a test message to one of a chat's channels and answers the delivery outcome: `delivered`, or the error text the channel reported (never a response body) — the proof that a webhook or a Telegram binding works. The channel must be one the chat carries (see get_chat's flags).")]
+        [Description("Sends a test message to one of a chat's channels and answers the delivery outcome: `delivered`, or the error text the channel reported (never a response body) — the proof that a webhook or a Telegram binding works. The channel must be one the chat carries (see get_chat's flags). The answer's `nextSteps` names what to do with the outcome. The steps to make a webhook anew: get_chat_setup_guide(channel: \"slack\" or \"mattermost\").")]
         public async Task<ChatTestMessageResultDto> SendChatTestMessage(
             [Description("Chat id.")] Guid chatId,
             [Description("The delivery channel to test: \"telegram\", \"slack\" or \"mattermost\".")] string channel) =>
             McpToolWriteErrors.Unwrap(await _verification.SendTestMessageAsync(chatId, channel, User));
 
         [McpServerTool(Name = "create_chat_telegram_invitation", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Issues a ONE-SHOT Telegram invitation for a chat, valid 10 minutes: the link for a direct chat or the /start@bot command for a group, plus the steps a PERSON performs inside Telegram — the orchestrator cannot press Start itself. The binding lands when that person completes it; read get_chat's telegramChatId afterwards. Requires the Telegram bot to be running — update_telegram_bot with the bot token starts it; a bot whose token is stored but which is not running needs the web Configuration page's Restart.")]
+        [Description("Issues a ONE-SHOT Telegram invitation for a chat, valid 10 minutes: the link for a direct chat or the /start@bot command for a group, plus the steps a PERSON performs inside Telegram — the orchestrator cannot press Start itself. The binding lands when that person completes it; read get_chat's telegramChatId afterwards. Requires the Telegram bot to be running — update_telegram_bot with the bot token starts it; a bot whose token is stored but which is not running needs the web Configuration page's Restart. The steps beforehand: get_chat_setup_guide(channel: \"telegram-chat\").")]
         public async Task<ChatInvitationDto> CreateChatTelegramInvitation(
             [Description("Chat id.")] Guid chatId,
             [Description("The invitation kind: \"direct\" (a link to open and press Start) or \"group\" (a command to post into the group after adding the bot with admin rights).")] string kind) =>
@@ -89,7 +94,7 @@ namespace HSMServer.Mcp
         // Idempotent=false: a create — re-sent after a network retry it would
         // answer the duplicate-name error (or make a second chat).
         [McpServerTool(Name = "create_chat", ReadOnly = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Creates a notification chat — ADMIN tokens only: a chat created with an attacker-supplied webhook would exfiltrate every alert sent to it. Optionally with a Slack and/or Mattermost webhook and folder bindings; a Telegram binding is added afterwards by a person's /start against an invitation (create_chat_telegram_invitation). Webhook URLs are write-only: the response answers hasSlackWebhook/hasMattermostWebhook, never the URL. The response echoes the created chat.")]
+        [Description("Creates a notification chat — ADMIN tokens only: a chat created with an attacker-supplied webhook would exfiltrate every alert sent to it. Optionally with a Slack and/or Mattermost webhook and folder bindings; a Telegram binding is added afterwards by a person's /start against an invitation (create_chat_telegram_invitation). Webhook URLs are write-only: the response answers hasSlackWebhook/hasMattermostWebhook, never the URL. The response echoes the created chat, and its `nextSteps` name what the setup does next. The steps inside Slack or Mattermost that produce a webhook URL: get_chat_setup_guide(channel: \"slack\" or \"mattermost\").")]
         public async Task<ChatDto> CreateChat(
             [Description("Display name: 1..100 characters, unique per server ignoring case, without control or bidirectional-override characters.")] string name,
             [Description("Optional free-form description.")] string description = null,
@@ -112,7 +117,7 @@ namespace HSMServer.Mcp
         // Idempotent=true: the retry-safe state-set write — re-sending the
         // same partial update converges on the same chat.
         [McpServerTool(Name = "update_chat", ReadOnly = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Changes a notification chat — every argument is optional, an omitted one stays unchanged. A webhook or the Telegram binding is removed only by its clear flag; an empty webhook value changes nothing. `folders` is the complete list of bindings among the folders the token's owner manages: a managed binding not listed is removed, a binding to a folder the owner cannot manage stays, a new binding needs a folder the owner manages; omitted: the bindings stay as they are. Only an administrator can make a chat global (leave it with no folders). Needs an admin token, or the manager of a folder the chat is bound to. Webhook URLs are write-only. The response echoes the stored chat.")]
+        [Description("Changes a notification chat — every argument is optional, an omitted one stays unchanged. A webhook or the Telegram binding is removed only by its clear flag; an empty webhook value changes nothing. `folders` is the complete list of bindings among the folders the token's owner manages: a managed binding not listed is removed, a binding to a folder the owner cannot manage stays, a new binding needs a folder the owner manages; omitted: the bindings stay as they are. Only an administrator can make a chat global (leave it with no folders). Needs an admin token, or the manager of a folder the chat is bound to. Webhook URLs are write-only. The response echoes the stored chat, and its `nextSteps` name the test to send. The steps that produce a new webhook URL: get_chat_setup_guide(channel: \"slack\" or \"mattermost\").")]
         public async Task<ChatDto> UpdateChat(
             [Description("Chat id.")] Guid chatId,
             [Description("Optional new display name (the rules of create_chat apply; the chat's own name in another letter case is allowed).")] string name = null,
@@ -151,10 +156,22 @@ namespace HSMServer.Mcp
 
             McpToolWriteErrors.Unwrap(result);
 
+            // A dry run's answer is the preview, which carries the next step itself on both
+            // transports; only an applied deletion has no body on REST to carry one.
             return result.IsDryRun
                 ? new() { Preview = (ChatDeletePreviewDto)result.Preview }
-                : new() { Value = new McpDeletedResult { Id = chatId } };
+                : new() { Value = new McpDeletedResult { Id = chatId }, NextSteps = ChatSetupNextSteps.AfterChatDeleted() };
         }
+
+
+        // The read of the setup: the same source the web help modals print from, as text. It
+        // names no chat and changes nothing — and still no read-only token can call it, as no
+        // tool here can (/mcp serves POSTs only); such a token uses the REST twin.
+        [McpServerTool(Name = "get_chat_setup_guide", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
+        [Description("Answers the chat setup guide of one channel: the steps a PERSON performs inside the messenger, with this server's bot name filled in, and the calls that do HSM's part. The web UI's help modals' own text for Slack, Mattermost and Telegram chats; the server never acts inside the messengers, so relay `steps` to the person or do them with your own tools. \"telegram-bot\" creates the bot in BotFather, \"telegram-chat\" binds a direct chat or a group, \"slack\" and \"mattermost\" create an incoming webhook. Read it before update_telegram_bot, create_chat, update_chat or create_chat_telegram_invitation.")]
+        public ChatSetupGuideDto GetChatSetupGuide(
+            [Description("The channel the guide answers for: \"telegram-bot\", \"telegram-chat\", \"slack\" or \"mattermost\".")] string channel) =>
+            McpToolErrors.Unwrap(_guide.GetGuide(channel, User));
 
 
         // The shared ambient-principal accessor (see McpToolContext); a property

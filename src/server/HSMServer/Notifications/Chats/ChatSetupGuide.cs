@@ -5,8 +5,9 @@ namespace HSMServer.Notifications.Chats
     /// <summary>
     /// The steps of setting up a notification chat — ONE source for the web UI's help modals
     /// (the Slack and Mattermost tabs of the chat form, the Telegram setup modal) and for the guide an
-    /// agent reads through the management API (#1831). Until #1827 they lived only as Razor markup,
-    /// which an agent cannot read, and a second copy would have drifted from the first.
+    /// agent reads through the management API (#1831): the modals print a step as HTML, the guide
+    /// shows it as text. Until #1827 they lived only as Razor markup, which an agent cannot read,
+    /// and a second copy would have drifted from the first.
     /// The words are the modals' as they were. The Telegram FAQ links lost their language parameter,
     /// which opened the page in Uzbek for everyone. What surrounds the steps in a modal — its title,
     /// introduction and closing note — stays in the modal.
@@ -72,7 +73,7 @@ namespace HSMServer.Notifications.Chats
             Messenger(Link("Create", TelegramFaq + "#q-how-do-i-create-a-group"), " group chat in Telegram."),
             Messenger(Link("Add", TelegramFaq + "#q-how-do-i-add-more-members-what-39s-an-invite-link"), " Telegram Bot (", new ChatSetupPart.BotName(), ") to group chat."),
             Messenger(Link("Give Admin right", TelegramFaq + "#q-can-i-assign-administrators"), " to Telegram Bot (", new ChatSetupPart.BotName(), ")."),
-            Messenger("Send ", new ChatSetupPart.StartCommand("this message"), " from clipboard to group chat."),
+            Messenger("Send ", new ChatSetupPart.StartCommand("this message"), new ChatSetupPart.InTheModal(" from clipboard"), " to group chat."),
         };
 
         /// <summary>
@@ -83,6 +84,20 @@ namespace HSMServer.Notifications.Chats
         {
             Messenger("Click ", new ChatSetupPart.InvitationLink("invitation link"), " and press ", new ChatSetupPart.Bold("Start"),
                 " button at opened direct chat with Telegram Bot (", new ChatSetupPart.BotName(), ")."),
+        };
+
+        /// <summary>
+        /// Creating the bot in BotFather — the credential HSM stores. Every step is the person's, in
+        /// Telegram. No web modal prints this guide: the Configuration page's Telegram tab names
+        /// BotFather in the notes of its two fields only.
+        /// </summary>
+        public static readonly IReadOnlyList<ChatSetupStep> TelegramBot = new[]
+        {
+            Messenger(Link("Open", "https://t.me/BotFather"), " a chat with ", Code("@BotFather"), " in Telegram."),
+            Messenger("Send ", Code("/newbot"), "."),
+            Messenger("Enter a name for the bot — the name people see in the chat."),
+            Messenger("Enter a username for the bot — it must end in ", Code("bot"), ". HSM needs it as the bot name."),
+            Messenger("BotFather answers the token of the bot. Copy this token."),
         };
 
 

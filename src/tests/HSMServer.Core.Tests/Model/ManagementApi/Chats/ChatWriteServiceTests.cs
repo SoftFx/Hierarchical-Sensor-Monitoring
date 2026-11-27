@@ -290,6 +290,45 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Null(_world.Store.Single().TelegramChatId);
         }
 
+        // ---- the next steps of the echo (#1831) ---------------------------------------
+
+        // A created chat points at the test message of the webhook it was created with, and at the
+        // channel it lacks; the texts themselves are pinned by ChatSetupNextStepsTests. The steps
+        // are read off the chat AS STORED, not off the request.
+        [Fact]
+        public async Task CreateChat_TheEchoCarriesTheNextSteps_OfTheChatItStores()
+        {
+            var result = await Service.CreateChat(new CreateChatRequestDto { Name = "Ops alerts", SlackWebhookUrl = SlackUrl }, Token);
+
+            Assert.True(result.Success, result.Failure?.Message);
+            Assert.Equal(ChatSetupNextSteps.AfterChatCreated(_world.Store.Single()), result.Value.NextSteps);
+            Assert.Contains(result.Value.NextSteps, step => step.Contains($"send_chat_test_message(chatId: \"{result.Value.Id}\", channel: \"slack\")"));
+        }
+
+        // An updated chat is told to prove the webhooks the update sets — the engine's own view of the
+        // request, where an empty value already means "no change".
+        [Fact]
+        public async Task UpdateChat_TheEchoCarriesTheNextSteps_OfWhatTheUpdateSets()
+        {
+            var chat = AddChat("Ops alerts");
+
+            var set = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { MattermostWebhookUrl = MattermostUrl }, Token);
+            var toNothing = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { MattermostWebhookUrl = "  " }, Token);
+            var renamed = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "On-call" }, Token);
+
+            Assert.True(set.Success, set.Failure?.Message);
+            Assert.Equal(
+                [
+                    $"send_chat_test_message(chatId: \"{chat.Id}\", channel: \"mattermost\") — the proof the channel works.",
+                    $"Alerts reach the chat through destination.chats: in create_sensor_policy as policy.destination {{mode: \"Custom\", chats: [\"{chat.Id}\"]}}; " +
+                    $"in create_alert_template as each policy's destination.chats as {{\"{chat.Id}\": \"<the chat's name>\"}}.",
+                ], set.Value.NextSteps);
+
+            // An empty webhook value sets nothing: the only step left is where the alerts go.
+            Assert.Equal([.. set.Value.NextSteps.Skip(1)], toNothing.Value.NextSteps);
+            Assert.Equal([.. set.Value.NextSteps.Skip(1)], renamed.Value.NextSteps);
+        }
+
         [Fact]
         public async Task UpdateChat_ClearFlagSetToFalse_RemovesNothing()
         {

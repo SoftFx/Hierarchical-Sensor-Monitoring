@@ -12,7 +12,8 @@ namespace HSMServer.Core.Tests.Notifications
     // #1827: the chat setup instructions left the help modals' Razor markup for one source in code. These
     // tests pin the copy as the web modal prints it — every step, in its order — so that moving it changed
     // its home and nothing else; the side of each step, which tells the agent-facing guide (#1831) what it
-    // may answer; and the links, which must be absolute http(s).
+    // may answer; and the links, which must be absolute http(s). The BotFather guide (#1831) has no modal
+    // and is pinned the same way.
     public class ChatSetupGuideTests
     {
         private const string BotName = "hsm_alerts_bot";
@@ -106,6 +107,34 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(Sides(ChatSetupGuide.TelegramGroup.Count + ChatSetupGuide.TelegramDirect.Count, 0),
                 TelegramSteps().Select(step => step.Side));
 
+        // The bot itself comes from BotFather (#1831). No web modal prints this guide — the Configuration
+        // page's Telegram tab names BotFather in the notes of its two fields only — so the guide an agent
+        // reads is its one reader; its steps are pinned like the others.
+        [Fact]
+        public void TelegramBot_KeepsTheFiveStepsOfBotFather_InOrder() =>
+            Assert.Equal(new[]
+            {
+                "<a href=\"https://t.me/BotFather\" target=\"_blank\">Open</a> a chat with <code>@BotFather</code> in Telegram.",
+                "Send <code>/newbot</code>.",
+                "Enter a name for the bot — the name people see in the chat.",
+                "Enter a username for the bot — it must end in <code>bot</code>. HSM needs it as the bot name.",
+                "BotFather answers the token of the bot. Copy this token.",
+            }, Render(ChatSetupGuide.TelegramBot));
+
+        [Fact]
+        public void TelegramBot_EveryStepIsInTheMessenger() =>
+            Assert.Equal(Sides(ChatSetupGuide.TelegramBot.Count, 0), ChatSetupGuide.TelegramBot.Select(step => step.Side));
+
+        // Words that hold only in the web modal — the clipboard of the link that copies the group command,
+        // which a person using the management surface has no share in. The modal prints them (the pin
+        // above still reads "from clipboard"); the text an agent reads leaves them out.
+        [Fact]
+        public void TheWordsOfTheModalAlone_AreInOnePlace()
+        {
+            Assert.Equal([new ChatSetupPart.InTheModal(" from clipboard")],
+                AllSteps().SelectMany(step => step.Parts).OfType<ChatSetupPart.InTheModal>());
+        }
+
         [Fact]
         public void EveryStep_SaysSomething() =>
             Assert.All(AllSteps(), step => Assert.NotEmpty(step.Parts));
@@ -142,7 +171,7 @@ namespace HSMServer.Core.Tests.Notifications
         private static IEnumerable<ChatSetupStep> TelegramSteps() => ChatSetupGuide.TelegramGroup.Concat(ChatSetupGuide.TelegramDirect);
 
         private static IEnumerable<ChatSetupStep> AllSteps() =>
-            ChatSetupGuide.Slack.Concat(ChatSetupGuide.Mattermost).Concat(TelegramSteps());
+            ChatSetupGuide.TelegramBot.Concat(ChatSetupGuide.Slack).Concat(ChatSetupGuide.Mattermost).Concat(TelegramSteps());
 
         // A step as text: its markup kept, its characters read back as the browser shows them.
         private static string[] Render(IReadOnlyList<ChatSetupStep> steps, ChatSetupInvitationLinks invitationLinks = null) =>
