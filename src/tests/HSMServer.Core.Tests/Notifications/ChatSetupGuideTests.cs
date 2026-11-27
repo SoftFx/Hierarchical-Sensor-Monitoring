@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Net;
-using System.Text.Encodings.Web;
+using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Extensions;
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications.Chats;
-using Microsoft.AspNetCore.Html;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Notifications
@@ -146,17 +144,8 @@ namespace HSMServer.Core.Tests.Notifications
         private static IEnumerable<ChatSetupStep> AllSteps() =>
             ChatSetupGuide.Slack.Concat(ChatSetupGuide.Mattermost).Concat(TelegramSteps());
 
-        // A step as text, its markup kept and its characters read back as the browser shows them.
+        // A step as text: its markup kept, its characters read back as the browser shows them.
         private static string[] Render(IReadOnlyList<ChatSetupStep> steps, ChatSetupInvitationLinks invitationLinks = null) =>
-            steps.Select(step => WebUtility.HtmlDecode(Html(step.ToHtml(BotName, invitationLinks)))).ToArray();
-
-        private static string Html(IHtmlContent content)
-        {
-            using var writer = new StringWriter();
-
-            content.WriteTo(writer, HtmlEncoder.Default);
-
-            return writer.ToString();
-        }
+            steps.Select(step => ViewRenderer.Text(step.ToHtml(BotName, invitationLinks))).ToArray();
     }
 }

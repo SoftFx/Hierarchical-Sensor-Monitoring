@@ -17,6 +17,8 @@
     var botLinksClass = Notifications.TelegramBot.IsBotRunning ? string.Empty : "disabled-link";
     var botLinksTitle = Notifications.TelegramBot.IsBotRunning ? string.Empty : TelegramBot.BotIsNotRunningError;
 
+    var botName = Config.Telegram.BotName;
+
     var isChatFlow = Model?.ChatId is { } chatId && chatId != Guid.Empty;
     var directAction = isChatFlow ? nameof(NotificationsController.OpenChatInvitationLink) : nameof(NotificationsController.OpenInvitationLink);
     var groupAction = isChatFlow ? nameof(NotificationsController.GetChatGroupInvitation) : nameof(NotificationsController.GetGroupInvitation);
@@ -45,13 +47,13 @@
                 <h6 class="mt-2">For group chat</h6>
                 <p class="ms-2">
                     @* Numbered as a hand-written list, a step to a line; the last line breaks no further. *@
-                    @foreach (var (number, step) in ChatSetupGuide.TelegramGroup.Select((step, index) => (Number: index + 1, Step: step)))
+                    @for (var index = 0; index < ChatSetupGuide.TelegramGroup.Count; index++)
                     {
-                        @if (number > 1)
+                        @if (index > 0)
                         {
                             <br />
                         }
-                        @($"{number}. ")@step.ToHtml(Config.Telegram.BotName, invitationLinks)
+                        @($"{index + 1}. ")@ChatSetupGuide.TelegramGroup[index].ToHtml(botName, invitationLinks)
                     }
                 </p>
 
@@ -59,7 +61,7 @@
                 <p class="ms-2">
                     @foreach (var step in ChatSetupGuide.TelegramDirect)
                     {
-                        @step.ToHtml(Config.Telegram.BotName, invitationLinks)
+                        @step.ToHtml(botName, invitationLinks)
                     }
                 </p>
             </div>

@@ -25,7 +25,8 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half 
 (`POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, on the web editor's
 engine and gates). #1830 lands the bot credential (`GET`/`PATCH /api/v1/telegram-bot`,
 `get_telegram_bot`/`update_telegram_bot`, administrators only — the first server-settings surface). What
-remains of the problem above is the guide (#1827, #1831).
+remains of the problem above is the guide: its instructions moved into one source in code that the web modals
+print from (#1827), and the guide of the management API (#1831) answers from that source.
 
 ## Goals
 

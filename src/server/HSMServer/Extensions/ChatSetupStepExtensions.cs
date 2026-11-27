@@ -1,3 +1,4 @@
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -6,24 +7,21 @@ using System.Linq;
 
 namespace HSMServer.Extensions
 {
-    /// <summary>
-    /// The two links the Telegram setup modal puts behind the words of a step that stand for an
-    /// invitation. HSM issues the invitation at the moment of use: the group command is fetched by
-    /// the link's own request, the invitation link is the route of the action that opens the bot.
-    /// Both carry the tooltip and the class as given — while the bot is not running, the reason and
-    /// the greyed-out look.
-    /// </summary>
-    internal sealed record ChatSetupInvitationLinks(string Title, string Class, string GroupCommandHref, string InvitationHref);
-
-
     internal static class ChatSetupStepExtensions
     {
         /// <summary>
         /// A step of a chat setup guide as the web modal prints it: its parts in order, a code part
         /// in monospace, a link as a link. Every word is written as text, the bot username included.
         /// </summary>
-        /// <param name="botName">The username of this server's bot, for the steps that name it.</param>
-        /// <param name="invitationLinks">The links behind the words that stand for an invitation; a step with such words needs them.</param>
+        /// <param name="botName">
+        /// The username of this server's bot, for the steps that name it. No username is the bot not
+        /// being configured, a state the modal is shown in: the step then names an empty one, as it
+        /// always did.
+        /// </param>
+        /// <param name="invitationLinks">
+        /// The links behind the words that stand for an invitation. Those are never a setting: a
+        /// step with such words shown without them is the caller's mistake.
+        /// </param>
         /// <exception cref="InvalidOperationException">The step stands on an invitation and no links were given.</exception>
         public static IHtmlContent ToHtml(this ChatSetupStep step, string botName = null, ChatSetupInvitationLinks invitationLinks = null)
         {
@@ -56,11 +54,11 @@ namespace HSMServer.Extensions
                         break;
 
                     case ChatSetupPart.StartCommand { Value: var command }:
-                        html.AppendHtml(Invitation(command, invitationLinks, invitationLinks.GroupCommandHref, opensTab: false));
+                        html.AppendHtml(Invitation(command, invitationLinks, isDirectChatLink: false));
                         break;
 
                     case ChatSetupPart.InvitationLink { Value: var link }:
-                        html.AppendHtml(Invitation(link, invitationLinks, invitationLinks.InvitationHref, opensTab: true));
+                        html.AppendHtml(Invitation(link, invitationLinks, isDirectChatLink: true));
                         break;
 
                     default:
@@ -72,17 +70,18 @@ namespace HSMServer.Extensions
 
 
         // The words that stand for an invitation: a link inside a span. The span carries the tooltip
-        // and the link the class, both the modal's.
-        private static TagBuilder Invitation(string text, ChatSetupInvitationLinks links, string href, bool opensTab)
+        // and the link the class, both the modal's. The invitation link of a direct chat opens a new
+        // tab; the group command opens no page — the request behind its link puts the command in the
+        // clipboard.
+        private static TagBuilder Invitation(string text, ChatSetupInvitationLinks links, bool isDirectChatLink)
         {
             var span = new TagBuilder("span");
             span.Attributes["title"] = links.Title;
-            span.InnerHtml.AppendHtml(Anchor(href, text, links.Class, opensTab));
+            span.InnerHtml.AppendHtml(Anchor(isDirectChatLink ? links.InvitationHref : links.GroupCommandHref, text, links.Class, isDirectChatLink));
 
             return span;
         }
 
-        // A group command opens no page: the request behind its link puts the command in the clipboard.
         // An anchor without an address — none could be built for it — is no link.
         private static TagBuilder Anchor(string href, string text, string cssClass, bool opensTab)
         {

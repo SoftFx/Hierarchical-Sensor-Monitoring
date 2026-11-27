@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Tests.Infrastructure;
@@ -14,7 +12,6 @@ using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
-using Microsoft.AspNetCore.Html;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -40,26 +37,27 @@ namespace HSMServer.Core.Tests.Views
         private readonly ChatSetupInvitationLinks _greyedOut = new(TelegramBot.BotIsNotRunningError, "disabled-link", GroupCommandHref, InvitationHref: null);
 
 
-        [Fact]
-        public async Task SlackModal_ListsEveryStepOfTheGuideInOrder()
+        // What a webhook modal is, by channel: its view, its id, the functions that open and close
+        // it, its title, and the guide it prints.
+        private static readonly Dictionary<string, (string View, string Id, string Show, string Hide, string Title, IReadOnlyList<ChatSetupStep> Guide)> WebhookModals = new()
         {
-            var html = await Render("_SlackHelpModal.cshtml");
+            ["Slack"] = ("_SlackHelpModal.cshtml", "slackHelp_modal", "showSlackHelpModal", "hideSlackHelpModal", "How to create a Slack incoming webhook", ChatSetupGuide.Slack),
+            ["Mattermost"] = ("_MattermostHelpModal.cshtml", "mattermostHelp_modal", "showMattermostHelpModal", "hideMattermostHelpModal", "How to create a Mattermost incoming webhook", ChatSetupGuide.Mattermost),
+        };
 
-            AssertInOrder(html, ChatSetupGuide.Slack.Select(step => Text(step.ToHtml())));
-            Assert.Equal(ChatSetupGuide.Slack.Count, Occurrences(html, "<li>"));
-            Assert.Contains("How to create a Slack incoming webhook", html);
-            AssertOpensAndCloses(html, "slackHelp_modal", "showSlackHelpModal", "hideSlackHelpModal");
-        }
-
-        [Fact]
-        public async Task MattermostModal_ListsEveryStepOfTheGuideInOrder()
+        [Theory]
+        [InlineData("Slack")]
+        [InlineData("Mattermost")]
+        public async Task WebhookModal_ListsEveryStepOfTheGuideInOrder(string channel)
         {
-            var html = await Render("_MattermostHelpModal.cshtml");
+            var (view, id, show, hide, title, guide) = WebhookModals[channel];
 
-            AssertInOrder(html, ChatSetupGuide.Mattermost.Select(step => Text(step.ToHtml())));
-            Assert.Equal(ChatSetupGuide.Mattermost.Count, Occurrences(html, "<li>"));
-            Assert.Contains("How to create a Mattermost incoming webhook", html);
-            AssertOpensAndCloses(html, "mattermostHelp_modal", "showMattermostHelpModal", "hideMattermostHelpModal");
+            var html = await Render(view);
+
+            AssertInOrder(html, guide.Select(step => ViewRenderer.Text(step.ToHtml())));
+            Assert.Equal(guide.Count, Occurrences(html, "<li>"));
+            Assert.Contains(title, html);
+            AssertOpensAndCloses(html, id, show, hide);
         }
 
         [Fact]
@@ -68,10 +66,13 @@ namespace HSMServer.Core.Tests.Views
             var html = await RenderTelegram(BotName);
 
             Assert.Contains("<h6 class=\"mt-2\">For group chat</h6>", html);
-            AssertInOrder(html, ChatSetupGuide.TelegramGroup.Select((step, index) => $"{index + 1}. {Text(step.ToHtml(BotName, _greyedOut))}"));
+            AssertInOrder(html, ChatSetupGuide.TelegramGroup.Select((step, index) => $"{index + 1}. {ViewRenderer.Text(step.ToHtml(BotName, _greyedOut))}"));
+
+            // A step to a line, and no empty line after the last one.
+            Assert.Equal(ChatSetupGuide.TelegramGroup.Count - 1, Occurrences(html, "<br />"));
 
             Assert.Contains("<h6 class=\"mt-3\">For direct chat</h6>", html);
-            AssertInOrder(html, ChatSetupGuide.TelegramDirect.Select(step => Text(step.ToHtml(BotName, _greyedOut))));
+            AssertInOrder(html, ChatSetupGuide.TelegramDirect.Select(step => ViewRenderer.Text(step.ToHtml(BotName, _greyedOut))));
 
             AssertOpensAndCloses(html, "newChatHelp_modal", "showAddChatHelpModal", "hideAddChatHelpModal");
         }
@@ -144,16 +145,6 @@ namespace HSMServer.Core.Tests.Views
                     services.AddSingleton(config.Object);
                     services.AddSingleton(notifications);
                 });
-        }
-
-        // A step as text: its markup kept, its characters read back as the browser shows them.
-        private static string Text(IHtmlContent step)
-        {
-            using var writer = new StringWriter();
-
-            step.WriteTo(writer, HtmlEncoder.Default);
-
-            return WebUtility.HtmlDecode(writer.ToString());
         }
 
         private static void AssertInOrder(string html, IEnumerable<string> texts)
