@@ -59,9 +59,9 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            TTL.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
-            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
-            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
+            TTL.FromNodeSetting(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
+            KeepHistory.FromNodeSetting(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
+            SelfDestroy.FromNodeSetting(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
 
             TTLAlerts = model.Policies.TTLPolicies.Select(p => new TimeToLiveAlertViewModel(p, this)).ToList();
         }

@@ -23,6 +23,12 @@ namespace HSMServer.Model
         private TimeSpan _customSpan;
         private string _customString;
 
+        // A node setting with nothing to inherit from (a folder, a product in no folder) stored as FromParent: it never
+        // expires. Its list has no "from parent" item, so it is shown as the item that behaves the same (Forever, or
+        // None where the list has no Forever), and while that item stays selected the stored model is what is saved:
+        // an unchanged form neither changes the setting nor records a change (#1945). Null for every other view.
+        private TimeIntervalModel _storedFromParent;
+
 
         public List<SelectListItem> IntervalItems { get; }
 
@@ -124,7 +130,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
         {
-            FromModel(new TimeIntervalModel(entity), intervals);
+            FromNodeSetting(new TimeIntervalModel(entity), intervals);
 
             if (!HasParent)
                 IntervalItems.RemoveAt(0);
@@ -133,6 +139,11 @@ namespace HSMServer.Model
 
         internal TimeIntervalModel ToModel(TimeIntervalViewModel current = null)
         {
+            var stored = current ?? this;
+
+            if (stored._storedFromParent is { } fromParent && TimeInterval == stored.TimeInterval)
+                return fromParent;
+
             if (TimeInterval.IsStatic() || TimeInterval.IsCustom())
                 return new TimeIntervalModel(CustomSpan.Ticks);
             else if (TimeInterval.IsUnset())
@@ -159,8 +170,32 @@ namespace HSMServer.Model
             return new TimeIntervalModel(hasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
         }
 
+        /// <summary>
+        /// Reads a node's own setting (a folder's, or a product's or sensor's <c>CurValue</c>): as <see cref="FromModel"/>,
+        /// except that FromParent on a view with no parent is shown as the item that never expires and kept as stored
+        /// while that item stays selected (see <see cref="_storedFromParent"/>).
+        /// </summary>
+        internal TimeIntervalViewModel FromNodeSetting(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
+        {
+            FromModel(model, predefinedIntervals);
+
+            if (model.IsFromParent && !HasParent)
+            {
+                Interval = predefinedIntervals?.Contains(TimeInterval.Forever) == true ? TimeInterval.Forever : TimeInterval.None;
+                _storedFromParent = model;
+            }
+
+            return this;
+        }
+
+        /// <summary>True when <paramref name="posted"/> keeps the item this view shows for a stored FromParent.</summary>
+        internal bool KeepsStoredFromParent(TimeIntervalViewModel posted) =>
+            _storedFromParent is not null && posted is not null && posted.TimeInterval == TimeInterval;
+
         internal TimeIntervalViewModel FromModel(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
         {
+            _storedFromParent = null;
+
             if (model.IsFromFolder)
                 Interval = TimeInterval.FromParent;
             else if (!model.UseTicks) //dynamic to dynamic

@@ -2256,6 +2256,16 @@
         <member name="M:HSMServer.Model.Configuration.TelegramSettingsChanges.Write(System.Collections.Generic.IReadOnlyList{HSMServer.Model.Configuration.TelegramSettingsChanges.Change},HSMServer.Core.Journal.JournalAppender,HSMServer.Core.TableOfChanges.InitiatorInfo)">
             <summary>Leaves one serverSettings record per change; no changes, no record.</summary>
         </member>
+        <member name="M:HSMServer.Model.TimeIntervalViewModel.FromNodeSetting(HSMServer.Core.Model.TimeIntervalModel,System.Collections.Generic.HashSet{HSMServer.Model.TimeInterval})">
+            <summary>
+            Reads a node's own setting (a folder's, or a product's or sensor's <c>CurValue</c>): as <see cref="M:HSMServer.Model.TimeIntervalViewModel.FromModel(HSMServer.Core.Model.TimeIntervalModel,System.Collections.Generic.HashSet{HSMServer.Model.TimeInterval})"/>,
+            except that FromParent on a view with no parent is shown as the item that never expires and kept as stored
+            while that item stays selected (see <see cref="F:HSMServer.Model.TimeIntervalViewModel._storedFromParent"/>).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TimeIntervalViewModel.KeepsStoredFromParent(HSMServer.Model.TimeIntervalViewModel)">
+            <summary>True when <paramref name="posted"/> keeps the item this view shows for a stored FromParent.</summary>
+        </member>
         <member name="T:HSMServer.Model.FileSensors.FileInfoDto">
             <summary>
             What the sensor page reads about the last value of a File sensor (#1886): its description, never its bytes. The
