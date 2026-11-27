@@ -22,7 +22,7 @@ namespace HSMServer.Notifications.Chats
         // form formats its length message from the attribute's arguments, so a test keeps
         // the two equal rather than the compiler.
         public const string NameRequiredMessage = "Name is required";
-        public static readonly string NameLengthMessage = $"Name length should be less than {NameMaxLength}.";
+        public static readonly string NameLengthMessage = $"Name length should be at most {NameMaxLength} characters.";
         public const string NameDuplicateMessage = "Chat with the same name already exists.";
 
 

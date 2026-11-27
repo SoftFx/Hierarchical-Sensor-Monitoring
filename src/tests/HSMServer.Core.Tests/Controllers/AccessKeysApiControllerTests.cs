@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
@@ -7,6 +8,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
+using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AccessKeys;
 using HSMServer.Model.ManagementApi.Alerts;
@@ -231,6 +233,21 @@ namespace HSMServer.Core.Tests.Controllers
         // ---- the write surface (#1789) -------------------------------------
 
 
+        // #1934: the limit is the maximum itself — a display name of exactly 100 characters
+        // is created, which is what the message says ("at most").
+        [Fact]
+        public void CreateAccessKey_NameOfExactly100Chars_IsAccepted()
+        {
+            var product = AddProduct("Alpha");
+            _cache.Setup(c => c.AddAccessKey(It.IsAny<AccessKeyModel>())).Returns((AccessKeyModel k) => k);
+
+            var result = Assert.IsType<CreatedAtActionResult>(CreateController().CreateAccessKey(
+                product.Id, new CreateAccessKeyRequestDto { DisplayName = new string('a', 100) }));
+
+            Assert.Equal(201, result.StatusCode);
+        }
+
+
         private static string[] FieldErrorsOf(IActionResult result, string field)
         {
             var errors = Assert.IsType<ManagementApiErrorDto>(
@@ -369,7 +386,12 @@ namespace HSMServer.Core.Tests.Controllers
 
             var longName = controller.CreateAccessKey(product.Id,
                 new CreateAccessKeyRequestDto { DisplayName = new string('a', 101) });
-            Assert.Contains("Display name length should be less than 100.", FieldErrorsOf(longName, "displayName"));
+            Assert.Contains("Display name length should be at most 100 characters.", FieldErrorsOf(longName, "displayName"));
+            // The same text as the web form (#1934), which formats it from its attribute —
+            // "at most": the form accepts the maximum itself.
+            var formLength = typeof(EditAccessKeyViewModel).GetProperty(nameof(EditAccessKeyViewModel.DisplayName))
+                .GetCustomAttribute<StringLengthAttribute>();
+            Assert.Contains(formLength.FormatErrorMessage("Display name"), FieldErrorsOf(longName, "displayName"));
 
             var duplicate = controller.CreateAccessKey(product.Id, new CreateAccessKeyRequestDto { DisplayName = "taken" });
             Assert.Contains("Access key with the same name already exists.", FieldErrorsOf(duplicate, "displayName"));

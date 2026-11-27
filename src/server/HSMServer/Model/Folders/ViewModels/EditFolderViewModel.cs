@@ -29,7 +29,7 @@ namespace HSMServer.Model.Folders.ViewModels
         public Guid Id { get; set; }
 
         [Required(ErrorMessage = "{0} is required.")]
-        [StringLength(60, ErrorMessage = "{0} length should be less than {1}.")]
+        [StringLength(60, ErrorMessage = "{0} length should be at most {1} characters.")]
         [UniqueValidation(ErrorMessage = "Folder with the same name already exists.")]
         public string Name { get; set; }
 

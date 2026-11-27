@@ -24,7 +24,7 @@ namespace HSMServer.Model.Notifications
         // caller and adds the uniqueness check. The name is held TRIMMED, so the length rule
         // measures the same value on both surfaces.
         [Required(ErrorMessage = ChatNameValidator.NameRequiredMessage)]
-        [StringLength(ChatNameValidator.NameMaxLength, ErrorMessage = "{0} length should be less than {1}.")]
+        [StringLength(ChatNameValidator.NameMaxLength, ErrorMessage = "{0} length should be at most {1} characters.")]
         public string Name
         {
             get => _name;
