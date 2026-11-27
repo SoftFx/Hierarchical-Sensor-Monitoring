@@ -1,6 +1,8 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Extensions
 @using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using HSMServer.Model.Notifications
 @using HSMServer.ServerConfiguration
 
@@ -15,6 +17,8 @@
     var botLinksClass = Notifications.TelegramBot.IsBotRunning ? string.Empty : "disabled-link";
     var botLinksTitle = Notifications.TelegramBot.IsBotRunning ? string.Empty : TelegramBot.BotIsNotRunningError;
 
+    var botName = Config.Telegram.BotName;
+
     var isChatFlow = Model?.ChatId is { } chatId && chatId != Guid.Empty;
     var directAction = isChatFlow ? nameof(NotificationsController.OpenChatInvitationLink) : nameof(NotificationsController.OpenInvitationLink);
     var groupAction = isChatFlow ? nameof(NotificationsController.GetChatGroupInvitation) : nameof(NotificationsController.GetGroupInvitation);
@@ -25,6 +29,9 @@
 
     var directLink = Url.Action(directAction, ViewConstants.NotificationsController, routeValues);
     var groupLink = Url.Action(groupAction, ViewConstants.NotificationsController, routeValues);
+
+    // The words of the guide that stand for an invitation are these two links.
+    var invitationLinks = new ChatSetupInvitationLinks(botLinksTitle, botLinksClass, "javascript:getGroupStartCommand()", directLink);
 }
 
 
@@ -39,15 +46,23 @@
             <div id="newChatHelp_modalBody" class="modal-body">
                 <h6 class="mt-2">For group chat</h6>
                 <p class="ms-2">
-                    1. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-create-a-group' target='_blank'>Create</a> group chat in Telegram. <br />
-                    2. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-add-more-members-what-39s-an-invite-link' target='_blank'>Add</a> Telegram Bot (@Config.Telegram.BotName) to group chat. <br />
-                    3. <a href='https://telegram.org/faq?setln=uz#q-can-i-assign-administrators' target='_blank'>Give Admin right</a> to Telegram Bot (@Config.Telegram.BotName). <br />
-                    4. Send <span title="@botLinksTitle"><a href="javascript:getGroupStartCommand()" class="@botLinksClass">this message</a></span> from clipboard to group chat.
+                    @* Numbered as a hand-written list, a step to a line; the last line breaks no further. *@
+                    @for (var index = 0; index < ChatSetupGuide.TelegramGroup.Count; index++)
+                    {
+                        @if (index > 0)
+                        {
+                            <br />
+                        }
+                        @($"{index + 1}. ")@ChatSetupGuide.TelegramGroup[index].ToHtml(botName, invitationLinks)
+                    }
                 </p>
 
                 <h6 class="mt-3">For direct chat</h6>
                 <p class="ms-2">
-                    Click <span title="@botLinksTitle"><a href="@directLink" target="_blank" class="@botLinksClass">invitation link</a></span> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
+                    @foreach (var step in ChatSetupGuide.TelegramDirect)
+                    {
+                        @step.ToHtml(botName, invitationLinks)
+                    }
                 </p>
             </div>
         </div>

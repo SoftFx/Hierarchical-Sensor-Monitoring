@@ -1,10 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using HSMServer.Controllers;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -80,6 +83,19 @@ namespace HSMServer.Core.Tests.Infrastructure
             await found.View.RenderAsync(viewContext);
 
             return writer.ToString();
+        }
+
+        /// <summary>
+        /// HTML content as text: written the way a view writes it, its characters read back as the
+        /// browser shows them.
+        /// </summary>
+        public static string Text(IHtmlContent content)
+        {
+            using var writer = new StringWriter();
+
+            content.WriteTo(writer, HtmlEncoder.Default);
+
+            return WebUtility.HtmlDecode(writer.ToString());
         }
 
 

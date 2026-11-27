@@ -1,4 +1,5 @@
 @using HSMServer.Extensions
+@using HSMServer.Notifications.Chats
 
 <div class="modal fade" tabindex="-1" role="dialog" id="mattermostHelp_modal">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
@@ -11,18 +12,10 @@
             <div class="modal-body">
                 <p>A Mattermost incoming webhook is a private URL that lets HSM post alert messages into one selected Mattermost channel. Create this URL in your Mattermost server, then paste it into the Webhook URL field in HSM.</p>
                 <ol>
-                    <li>You need a Mattermost account with permission to create integrations, or ask a System Admin for help.</li>
-                    <li>Open your Mattermost site in the browser.</li>
-                    <li>Open the main menu (top-left) → <code>Integrations</code> → <code>Incoming Webhooks</code>.</li>
-                    <li>If the page says incoming webhooks are disabled, ask a System Admin to enable them: <code>System Console</code> → <code>Integrations</code> → <code>Custom Integrations</code> → turn on <code>Enable Incoming Webhooks</code>.</li>
-                    <li>Click <code>Add Incoming Webhook</code>.</li>
-                    <li>Select the channel that should receive alert messages. The channel must already exist.</li>
-                    <li>Optionally set a display name (e.g. <code>HSM alerts</code>) and description.</li>
-                    <li>Click <code>Save</code>.</li>
-                    <li>Mattermost will display a URL like <code>https://your-mattermost.example/hooks/xxxx</code>.</li>
-                    <li>Copy this URL.</li>
-                    <li>Paste it into the <code>Mattermost webhook URL</code> field in HSM.</li>
-                    <li>Save the chat.</li>
+                    @foreach (var step in ChatSetupGuide.Mattermost)
+                    {
+                        <li>@step.ToHtml()</li>
+                    }
                 </ol>
                 <p class="mb-0"><strong>Important:</strong> one webhook is connected to one Mattermost channel. To send alerts to multiple channels, create one chat per channel.</p>
             </div>

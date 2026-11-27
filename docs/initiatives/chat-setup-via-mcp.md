@@ -1,6 +1,6 @@
 # Initiative: Chat setup via MCP (notifications onboarding by an AI agent)
 
-> Owner: server | Last reviewed: 2026-11-26 | Canonical: yes
+> Owner: server | Last reviewed: 2026-11-27 | Canonical: yes
 
 ## Problem
 
@@ -25,7 +25,8 @@ tools (web-UI only)" among the known gaps; this initiative closes the chat half 
 (`POST`/`PATCH`/`DELETE /api/v1/chats`, `create_chat`/`update_chat`/`delete_chat`, on the web editor's
 engine and gates). #1830 lands the bot credential (`GET`/`PATCH /api/v1/telegram-bot`,
 `get_telegram_bot`/`update_telegram_bot`, administrators only — the first server-settings surface). What
-remains of the problem above is the guide (#1827, #1831).
+remains of the problem above is the guide: its instructions moved into one source in code that the web modals
+print from (#1827), and the guide of the management API (#1831) answers from that source.
 
 ## Goals
 
@@ -211,6 +212,22 @@ Step 5 as landed (#1830) settled five points the table above leaves open:
   an update that changes nothing restarts nothing. Together with "only a token change restarts" this
   means a stopped bot with a saved credential cannot be started through this surface; the web
   page's Restart button does it. An explicit restart is a possible follow-up.
+
+Step 6a as landed (#1827) settled four points for #1831:
+
+- A step is its side and its text as ordered parts: plain words, a name shown in monospace, a link to
+  the messenger's documentation, the bot's username, the `/start` command of a group, the invitation
+  link of a direct chat. The web modals print the parts; the source has no plain-text projection yet —
+  #1831 decides what an agent reads (the words, a link as its URL, the invitation parts as the tool
+  call that issues them).
+- Telegram is two guides — the four steps of a group and the one step of a direct chat — and every
+  Telegram step is messenger-side: a person sends the command and follows the link inside Telegram,
+  although HSM issues both. The invitation parts are where an HSM tool call belongs.
+- What surrounds the steps in a modal — its title, its introduction and its closing note ("one webhook
+  is connected to one channel…") — stays in the modal; the source holds the steps only.
+- The copy is the modals' as rendered. The bot is named in brackets without the `@` of a mention: Razor
+  had read that `@` as the start of the expression. The source says so in a comment; adding the `@`
+  back is a copy change for whoever wants it.
 
 ## Risks
 
