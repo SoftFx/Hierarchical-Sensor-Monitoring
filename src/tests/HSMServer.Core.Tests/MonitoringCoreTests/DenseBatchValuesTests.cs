@@ -413,12 +413,22 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             };
             Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, foldAndNewest)));
 
-            // The retry re-send AT the span's key: skipped, the span survives.
+            // The retry re-send AT the span's key: a value the span already holds,
+            // taken as a no-op (#1925, ADR-0023) — not counted, the span survives.
             var reSend = new SensorValueBase[]
             {
                 new DoubleSensorValue { Path = path, Time = t0, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Ok },
             };
             Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, reSend)));
+            Assert.Equal(0, Volatile.Read(ref sensor.AggregateSpanOverlapsSkipped));
+            Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
+
+            // Another status at the span's key is not a repeat: non-foldable out-of-order data, skipped and counted.
+            var otherStatusAtKey = new SensorValueBase[]
+            {
+                new DoubleSensorValue { Path = path, Time = t0, Value = 42, Status = HSMSensorDataObjects.SensorStatus.Error },
+            };
+            Assert.Empty((await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, otherStatusAtKey)));
             Assert.Equal(1, Volatile.Read(ref sensor.AggregateSpanOverlapsSkipped));
             Assert.Equal(0, Volatile.Read(ref sensor.OutOfOrderValuesStored));
 

@@ -141,6 +141,15 @@ namespace HSMCommon.Model
         }
 
         protected virtual bool IsEqual(BaseValue value) => (Status, Comment) == (value.Status, value.Comment);
+
+        /// <summary>
+        /// Whether <paramref name="value"/> carries what a collector sent for this value: the same type, status,
+        /// comment and value, the time aside (#1925: a repeated delivery is taken as a no-op). What the server adds is
+        /// not compared: the receiving and delivery stamps, the aggregate count and its last update, the EMA. False
+        /// for a file, whose content is not compared.
+        /// </summary>
+        public virtual bool HasSameContent(BaseValue value) =>
+            value is not null && value.Type == Type && !IsTimeout && !value.IsTimeout && (Status, Comment) == (value.Status, value.Comment);
     }
 
     public abstract partial record BaseInstantValue : BaseValue
@@ -181,5 +190,8 @@ namespace HSMCommon.Model
                 value is BaseValue<T> other &&
                 EqualityComparer<T>.Default.Equals(Value, other.Value);
         }
+
+        public override bool HasSameContent(BaseValue value) =>
+            base.HasSameContent(value) && value is BaseValue<T> other && EqualityComparer<T>.Default.Equals(Value, other.Value);
     }
 }

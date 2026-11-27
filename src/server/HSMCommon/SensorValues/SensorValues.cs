@@ -103,6 +103,8 @@ namespace HSMCommon.Model
 
         protected override bool IsEqual(BaseValue value) => false;
 
+        public override bool HasSameContent(BaseValue value) => false;
+
         private string GetShortDescription()
         {
             string sizeString = FileSizeToNormalString();
