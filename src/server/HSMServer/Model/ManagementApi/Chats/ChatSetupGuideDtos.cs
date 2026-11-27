@@ -34,7 +34,7 @@ namespace HSMServer.Model.ManagementApi.Chats
     /// the same source as the web UI's help modals. The server never acts inside the messengers
     /// (ADR docs/adr/0002): the person's steps are relayed, HSM's part is called.
     /// </summary>
-    [Description("The chat setup guide of one channel: `steps` are what a PERSON performs inside the messenger — relay them, or do them with your own tools; `toolSteps` are the calls that do HSM's part. The same source as the web UI's help modals.")]
+    [Description("The chat setup guide of one channel: `steps` are what a PERSON performs inside the messenger — relay them, or do them with your own tools; `toolSteps` are the calls that do HSM's part. The web UI's help modals' own source for Slack, Mattermost and Telegram chats.")]
     public sealed record ChatSetupGuideDto
     {
         /// <summary>The channel the guide answers for.</summary>
@@ -51,7 +51,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         public List<string> Steps { get; init; }
 
         /// <summary>The calls that do HSM's part of the channel, in order.</summary>
-        [Description("The calls that do HSM's part of the channel, in order — the web form's own steps (store a webhook, send a test) as the orchestrator performs them. A value in angle brackets comes from the person's steps or from an earlier call.")]
+        [Description("The calls that do HSM's part of the channel, in order — the web form's own steps (store a webhook, send a test) as the orchestrator performs them. A value in angle brackets is the orchestrator's to pick, or comes from the person's steps or from an earlier call.")]
         public List<ChatSetupToolStepDto> ToolSteps { get; init; }
     }
 
@@ -60,12 +60,16 @@ namespace HSMServer.Model.ManagementApi.Chats
     [Description("One call of the guide's HSM part.")]
     public sealed record ChatSetupToolStepDto
     {
-        /// <summary>The name of the tool; the REST twin is the same write on /api/v1.</summary>
-        [Description("The name of the tool; its REST twin is the same write on /api/v1.")]
+        /// <summary>The name of the tool, as MCP names it; <see cref="Rest"/> is its twin on the REST surface.</summary>
+        [Description("The name of the tool, as MCP names it; `rest` names its twin on the REST surface.")]
         public string Tool { get; init; }
 
+        /// <summary>The REST twin of the call: the method and the path under /api/v1.</summary>
+        [Description("The REST twin of the call: the method and the path under /api/v1, as `POST /api/v1/chats`. `{id}` in a path is the chat's id.")]
+        public string Rest { get; init; }
+
         /// <summary>The call with the arguments this channel needs.</summary>
-        [Description("The call with the arguments this channel needs. A value in angle brackets comes from the person's steps or from an earlier call.")]
+        [Description("The call with the arguments this channel needs. A value in angle brackets is the orchestrator's to pick, or comes from the person's steps or from an earlier call.")]
         public string Call { get; init; }
 
         /// <summary>What the call does: the web form's step it stands for.</summary>

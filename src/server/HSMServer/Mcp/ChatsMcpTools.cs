@@ -19,7 +19,8 @@ namespace HSMServer.Mcp
     /// write trio of #1829 (a thin rendering of <see cref="ChatWriteService"/>,
     /// on the write engine the web editor runs): create, update and delete — and
     /// the setup guide of #1831 (a rendering of <see cref="ChatSetupGuideService"/>), at which
-    /// the descriptions of the tools above point in one line.
+    /// the description of every tool that sets a channel up points in one line (delete_chat
+    /// removes one, and has no step of the guide to point at).
     /// </summary>
     // The same bearer token, the same caller-wide gate and folder sight, the
     // same DTOs as the REST surface; expected failures surface as tool errors
@@ -155,8 +156,10 @@ namespace HSMServer.Mcp
 
             McpToolWriteErrors.Unwrap(result);
 
+            // A dry run's answer is the preview, which carries the next step itself on both
+            // transports; only an applied deletion has no body on REST to carry one.
             return result.IsDryRun
-                ? new() { Preview = (ChatDeletePreviewDto)result.Preview, NextSteps = ChatSetupNextSteps.AfterDeletePreview(chatId) }
+                ? new() { Preview = (ChatDeletePreviewDto)result.Preview }
                 : new() { Value = new McpDeletedResult { Id = chatId }, NextSteps = ChatSetupNextSteps.AfterChatDeleted() };
         }
 
@@ -165,7 +168,7 @@ namespace HSMServer.Mcp
         // names no chat and changes nothing — and still no read-only token can call it, as no
         // tool here can (/mcp serves POSTs only); such a token uses the REST twin.
         [McpServerTool(Name = "get_chat_setup_guide", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-        [Description("Answers the chat setup guide of one channel: the steps a PERSON performs inside the messenger, with this server's bot name filled in, and the calls that do HSM's part. The same text as the web UI's help modals; the server never acts inside the messengers, so relay `steps` to the person or do them with your own tools. \"telegram-bot\" creates the bot in BotFather, \"telegram-chat\" binds a direct chat or a group, \"slack\" and \"mattermost\" create an incoming webhook. Read it before update_telegram_bot, create_chat, update_chat or create_chat_telegram_invitation.")]
+        [Description("Answers the chat setup guide of one channel: the steps a PERSON performs inside the messenger, with this server's bot name filled in, and the calls that do HSM's part. The web UI's help modals' own text for Slack, Mattermost and Telegram chats; the server never acts inside the messengers, so relay `steps` to the person or do them with your own tools. \"telegram-bot\" creates the bot in BotFather, \"telegram-chat\" binds a direct chat or a group, \"slack\" and \"mattermost\" create an incoming webhook. Read it before update_telegram_bot, create_chat, update_chat or create_chat_telegram_invitation.")]
         public ChatSetupGuideDto GetChatSetupGuide(
             [Description("The channel the guide answers for: \"telegram-bot\", \"telegram-chat\", \"slack\" or \"mattermost\".")] string channel) =>
             McpToolErrors.Unwrap(_guide.GetGuide(channel, User));

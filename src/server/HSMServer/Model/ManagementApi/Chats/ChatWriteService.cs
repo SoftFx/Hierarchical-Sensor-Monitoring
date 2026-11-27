@@ -144,7 +144,7 @@ namespace HSMServer.Model.ManagementApi.Chats
                 return PolicyWriteResult<ChatDto>.Fail(result.Failure.Outcome, ToWireKeys(result.Failure.Errors), result.Failure.Message);
 
             return _chats[chatId] is { } stored
-                ? PolicyWriteResult<ChatDto>.Ok(Echo(stored, caller, ChatSetupNextSteps.AfterChatUpdated(chatId, request)))
+                ? PolicyWriteResult<ChatDto>.Ok(Echo(stored, caller, ChatSetupNextSteps.AfterChatUpdated(update)))
                 : PolicyWriteResult<ChatDto>.Fail(PolicyWriteOutcome.Conflict, message: NotUpdatedMessage);
         }
 
@@ -207,6 +207,9 @@ namespace HSMServer.Model.ManagementApi.Chats
                 Path = chat.Name,
                 SensorUsageCount = counts.GetValueOrDefault(chat.Id),
                 SensorUsageIncomplete = skipped > 0,
+                // The preview is the dry run's whole answer on both transports: it carries the
+                // next step itself — the applied deletion answers none on REST, an envelope on MCP.
+                NextSteps = ChatSetupNextSteps.AfterDeletePreview(chat.Id),
                 Affected =
                 [
                     new() { Id = chat.Id.ToString(), Path = chat.Name, Change = "remove" },

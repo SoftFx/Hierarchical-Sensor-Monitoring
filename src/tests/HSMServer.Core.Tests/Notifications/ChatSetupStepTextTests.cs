@@ -92,5 +92,17 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal($"Click [invitation link]({Link}) and press Start.", direct.ToText(BotName, ChatSetupInvitationText.IssuedLink(Link)));
             Assert.Equal($"Send `{Command}` to group chat.", group.ToText(BotName, ChatSetupInvitationText.IssuedCommand(Command)));
         }
+
+        // An invitation of the other kind is refused aloud: a group's step cannot stand on a direct
+        // chat's link, nor a direct chat's step on a group's command.
+        [Fact]
+        public void AnInvitationOfTheOtherKind_IsRefused()
+        {
+            var group = new ChatSetupStep(ChatSetupSide.Messenger, "Send ", new ChatSetupPart.StartCommand("this message"), " to group chat.");
+            var direct = new ChatSetupStep(ChatSetupSide.Messenger, "Click ", new ChatSetupPart.InvitationLink("invitation link"), " and press Start.");
+
+            Assert.Throws<InvalidOperationException>(() => group.ToText(BotName, ChatSetupInvitationText.IssuedLink(Link)));
+            Assert.Throws<InvalidOperationException>(() => direct.ToText(BotName, ChatSetupInvitationText.IssuedCommand(Command)));
+        }
     }
 }

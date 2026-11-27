@@ -99,7 +99,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             var answer = await CreateTools().DeleteChat(chat.Id, dryRun: true);
 
-            Assert.Equal([$"delete_chat(chatId: \"{chat.Id}\") without dryRun removes it."], answer.NextSteps);
+            // A dry run's answer is the preview, on both transports: it carries the next step itself.
+            Assert.Null(answer.NextSteps);
+            Assert.Equal([$"delete_chat(chatId: \"{chat.Id}\") without dryRun removes it."], answer.Preview.NextSteps);
         }
 
         [Fact]

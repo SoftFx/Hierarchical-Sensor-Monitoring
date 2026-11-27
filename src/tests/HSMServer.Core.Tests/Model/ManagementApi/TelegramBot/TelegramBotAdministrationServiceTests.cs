@@ -491,15 +491,21 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
 
         // ---- the next steps of the echo (#1831) -----------------------------------------
 
-        // The echo points at the next channel, the guide of binding a chat to the bot; a bot that
-        // did not start is told so first. The texts themselves are pinned by ChatSetupNextStepsTests.
+        private const string NextChannel =
+            "get_chat_setup_guide(channel: \"telegram-chat\") — the steps of binding a chat to the bot: create_chat, then create_chat_telegram_invitation.";
+
+        // The echo points at the next channel, the guide of binding a chat to the bot. The texts
+        // themselves are pinned by ChatSetupNextStepsTests; these pin which state of the bot each
+        // answer is told from.
         [Fact]
         public async Task Update_TheEchoPointsAtTheNextChannel()
         {
-            var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { IsEnabled = false }, _world.Caller);
+            // The stored name passed back: it matches the username the running bot remembers, so
+            // nothing is probed, saved or restarted.
+            var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { BotName = TelegramBotHarness.OldName }, _world.Caller);
 
-            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: true), result.Value.NextSteps);
-            Assert.Contains("get_chat_setup_guide(channel: \"telegram-chat\")", Assert.Single(result.Value.NextSteps));
+            Assert.Equal([NextChannel], result.Value.NextSteps);
+            Assert.Empty(_world.Steps);
         }
 
         [Fact]
@@ -509,8 +515,43 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.TelegramBot
 
             var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { BotToken = TelegramBotHarness.NewToken }, _world.Caller);
 
-            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: false), result.Value.NextSteps);
-            Assert.StartsWith("The bot is not running", result.Value.NextSteps[0]);
+            Assert.Equal(
+                [
+                    "The bot is not running: the credential is saved, but only the web Configuration page's Restart button starts a stored token.",
+                    NextChannel,
+                ], result.Value.NextSteps);
+        }
+
+        // The switch is part of how the bot is: a switched-off bot delivers nothing to any chat, so
+        // the echo says how to switch it on before it points at binding one.
+        [Fact]
+        public async Task Update_ASwitchedOffBot_IsToldToSwitchItOn_BeforeTheNextChannel()
+        {
+            var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto { IsEnabled = false }, _world.Caller);
+
+            Assert.Equal(
+                [
+                    "Telegram delivery is switched off: update_telegram_bot(isEnabled: true) turns it on — a switched-off bot delivers nothing.",
+                    NextChannel,
+                ], result.Value.NextSteps);
+        }
+
+        // With no token stored there is nothing to restart: the echo does not send the orchestrator
+        // to the Restart button, but to the guide of the credential.
+        [Fact]
+        public async Task Update_WithNoTokenStored_PointsAtTheCredentialGuide_NotAtRestart()
+        {
+            _world.Telegram.BotToken = null;
+            _world.IsRunning = false;
+
+            var result = await Service.UpdateAsync(new UpdateTelegramBotRequestDto(), _world.Caller);
+
+            Assert.True(result.Success);
+            var steps = result.Value.NextSteps;
+
+            Assert.Equal(2, steps.Count);
+            Assert.StartsWith("No bot token is stored, so there is no bot to bind a chat to yet: get_chat_setup_guide(channel: \"telegram-bot\")", steps[0]);
+            Assert.Equal(NextChannel, steps[1]);
         }
 
         [Fact]

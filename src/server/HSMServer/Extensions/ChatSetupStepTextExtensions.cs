@@ -11,8 +11,8 @@ namespace HSMServer.Extensions
     /// the words carry it (the invitation's own answer).
     /// </summary>
     /// <param name="Link">How the invitation link of a direct chat reads, given the step's own words.</param>
-    /// <param name="Command">How the /start command of a group reads.</param>
-    internal sealed record ChatSetupInvitationText(Func<string, string> Link, string Command)
+    /// <param name="Command">How the /start command of a group reads, given the step's own words.</param>
+    internal sealed record ChatSetupInvitationText(Func<string, string> Link, Func<string, string> Command)
     {
         /// <summary>
         /// The guide: nothing is issued yet, so the words name the call that issues it, by kind
@@ -20,13 +20,22 @@ namespace HSMServer.Extensions
         /// </summary>
         public static ChatSetupInvitationText NotIssued(Func<string, string> callOf) => new(
             _ => $"the `value` of `{callOf("direct")}`",
-            $"the `value` of `{callOf("group")}`");
+            _ => $"the `value` of `{callOf("group")}`");
 
         /// <summary>The answer of a direct chat's invitation: the link under the step's own words.</summary>
-        public static ChatSetupInvitationText IssuedLink(string link) => new(words => $"[{words}]({link})", Command: null);
+        public static ChatSetupInvitationText IssuedLink(string link) => new(
+            words => $"[{words}]({link})",
+            _ => throw NothingIssued("the command of a group", "a direct chat's invitation link"));
 
         /// <summary>The answer of a group's invitation: the command as what the person posts.</summary>
-        public static ChatSetupInvitationText IssuedCommand(string command) => new(Link: null, $"`{command}`");
+        public static ChatSetupInvitationText IssuedCommand(string command) => new(
+            _ => throw NothingIssued("the invitation link of a direct chat", "a group's command"),
+            _ => $"`{command}`");
+
+        // A step of the other kind met: the source keeps a group's command and a direct chat's
+        // link in guides of their own, so this is the caller's mistake, said aloud as ToHtml says its own.
+        private static InvalidOperationException NothingIssued(string wordsStandFor, string issued) =>
+            new($"The step stands on {wordsStandFor}, and the invitation issued is {issued}.");
     }
 
 
@@ -49,6 +58,7 @@ namespace HSMServer.Extensions
         /// <param name="botName">The username of this server's bot; null when none is stored.</param>
         /// <param name="invitation">What the words that stand for an invitation read as.</param>
         /// <exception cref="NotSupportedException">The step has a part nothing reads.</exception>
+        /// <exception cref="InvalidOperationException">The invitation given is of another kind than the step stands on.</exception>
         public static string ToText(this ChatSetupStep step, string botName, ChatSetupInvitationText invitation)
         {
             var text = new StringBuilder();
@@ -80,11 +90,12 @@ namespace HSMServer.Extensions
                         text.Append(invitation.Link(words));
                         break;
 
-                    case ChatSetupPart.StartCommand:
-                        text.Append(invitation.Command);
+                    case ChatSetupPart.StartCommand { Value: var words }:
+                        text.Append(invitation.Command(words));
                         break;
 
-                    // True of the web modal only: there the part before says where the thing comes from.
+                    // True of the web modal only. In the text the part before says where the
+                    // thing comes from.
                     case ChatSetupPart.InTheModal:
                         break;
 

@@ -62,9 +62,10 @@ namespace HSMServer.Controllers
         /// <param name="channel">The channel: telegram-bot, telegram-chat, slack or mattermost.</param>
         /// <remarks>
         /// The HSM steps of the web modals — store a webhook, send a test — are no instruction
-        /// for a person here: toolSteps names the calls that perform them, written with the
-        /// arguments the channel needs. The calls are the MCP tools' names; their REST twins
-        /// are the same writes under /api/v1.
+        /// for a person here: toolSteps names the calls that perform them, each written with the
+        /// arguments the channel needs and beside its REST twin (rest). A secret a call takes — a
+        /// webhook URL, the bot token — reaches the client from a file or the web UI, never from
+        /// the conversation: each such call says so.
         /// </remarks>
         [HttpGet("setup-guide")]
         [ProducesResponseType(typeof(ChatSetupGuideDto), StatusCodes.Status200OK)]

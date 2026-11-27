@@ -442,9 +442,10 @@
             <param name="channel">The channel: telegram-bot, telegram-chat, slack or mattermost.</param>
             <remarks>
             The HSM steps of the web modals — store a webhook, send a test — are no instruction
-            for a person here: toolSteps names the calls that perform them, written with the
-            arguments the channel needs. The calls are the MCP tools' names; their REST twins
-            are the same writes under /api/v1.
+            for a person here: toolSteps names the calls that perform them, each written with the
+            arguments the channel needs and beside its REST twin (rest). A secret a call takes — a
+            webhook URL, the bot token — reaches the client from a file or the web UI, never from
+            the conversation: each such call says so.
             </remarks>
         </member>
         <member name="M:HSMServer.Controllers.ChatsApiController.GetChats(System.Int32,System.Int32)">
@@ -1286,9 +1287,9 @@
             the words carry it (the invitation's own answer).
             </summary>
             <param name="Link">How the invitation link of a direct chat reads, given the step's own words.</param>
-            <param name="Command">How the /start command of a group reads.</param>
+            <param name="Command">How the /start command of a group reads, given the step's own words.</param>
         </member>
-        <member name="M:HSMServer.Extensions.ChatSetupInvitationText.#ctor(System.Func{System.String,System.String},System.String)">
+        <member name="M:HSMServer.Extensions.ChatSetupInvitationText.#ctor(System.Func{System.String,System.String},System.Func{System.String,System.String})">
             <summary>
             What the words that stand for an invitation read as in text — the twin of
             <see cref="T:HSMServer.Model.Notifications.ChatSetupInvitationLinks"/>. Either no invitation is issued
@@ -1296,13 +1297,13 @@
             the words carry it (the invitation's own answer).
             </summary>
             <param name="Link">How the invitation link of a direct chat reads, given the step's own words.</param>
-            <param name="Command">How the /start command of a group reads.</param>
+            <param name="Command">How the /start command of a group reads, given the step's own words.</param>
         </member>
         <member name="P:HSMServer.Extensions.ChatSetupInvitationText.Link">
             <summary>How the invitation link of a direct chat reads, given the step's own words.</summary>
         </member>
         <member name="P:HSMServer.Extensions.ChatSetupInvitationText.Command">
-            <summary>How the /start command of a group reads.</summary>
+            <summary>How the /start command of a group reads, given the step's own words.</summary>
         </member>
         <member name="M:HSMServer.Extensions.ChatSetupInvitationText.NotIssued(System.Func{System.String,System.String})">
             <summary>
@@ -1336,6 +1337,7 @@
             <param name="botName">The username of this server's bot; null when none is stored.</param>
             <param name="invitation">What the words that stand for an invitation read as.</param>
             <exception cref="T:System.NotSupportedException">The step has a part nothing reads.</exception>
+            <exception cref="T:System.InvalidOperationException">The invitation given is of another kind than the step stands on.</exception>
         </member>
         <member name="M:HSMServer.Extensions.ColorExtensions.GetDefaultColor(System.Int32)">
             <summary>
@@ -1483,7 +1485,8 @@
             write trio of #1829 (a thin rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatWriteService"/>,
             on the write engine the web editor runs): create, update and delete — and
             the setup guide of #1831 (a rendering of <see cref="T:HSMServer.Model.ManagementApi.Chats.ChatSetupGuideService"/>), at which
-            the descriptions of the tools above point in one line.
+            the description of every tool that sets a channel up points in one line (delete_chat
+            removes one, and has no step of the guide to point at).
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.FoldersMcpTools">
@@ -1759,8 +1762,9 @@
             for REST's 204) or <c>preview</c> after a dry run (how many sensors'
             alerts reference the chat, and the folder bindings the deletion would
             take with it). The McpSensorDeleteResult shape with a TYPED preview arm,
-            so the tool's static output schema shows the chat-specific members. Beside
-            the arm travels what the removal leaves (#1831).
+            so the tool's static output schema shows the chat-specific members. After an
+            applied deletion the envelope carries the next step beside the arm (#1831); a
+            dry run's preview carries its own.
             </summary>
         </member>
         <member name="P:HSMServer.Mcp.McpChatDeleteResult.Value">
@@ -1770,7 +1774,7 @@
             <summary>The dry-run preview (nothing was removed); null (absent) after an applied deletion.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpChatDeleteResult.NextSteps">
-            <summary>The next step of the removal, naming its tool call.</summary>
+            <summary>What the removal left; null (absent) after a dry run, whose preview carries the next step itself.</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpSensorMoveResult">
             <summary>
@@ -4094,7 +4098,10 @@
             <summary>One call of the guide's HSM part.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Tool">
-            <summary>The name of the tool; the REST twin is the same write on /api/v1.</summary>
+            <summary>The name of the tool, as MCP names it; <see cref="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Rest"/> is its twin on the REST surface.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Rest">
+            <summary>The REST twin of the call: the method and the path under /api/v1.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatSetupToolStepDto.Call">
             <summary>The call with the arguments this channel needs.</summary>
@@ -4290,6 +4297,9 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDeletePreviewDto.SensorUsageIncomplete">
             <summary>True when the count is a lower bound — at least one sensor was skipped during the scan.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.Chats.ChatDeletePreviewDto.NextSteps">
+            <summary>The next step of the removal, naming its tool call.</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.Chats.ChatWriteService">
             <summary>

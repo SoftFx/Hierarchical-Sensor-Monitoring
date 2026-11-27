@@ -249,7 +249,7 @@ namespace HSMServer.Model.ManagementApi.TelegramBot
         {
             var status = Status();
 
-            return status with { NextSteps = ChatSetupNextSteps.AfterBotSaved(status.IsRunning) };
+            return status with { NextSteps = ChatSetupNextSteps.AfterBotSaved(status) };
         }
     }
 

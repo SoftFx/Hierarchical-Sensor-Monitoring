@@ -1,17 +1,22 @@
 using HSMCommon.Model;
 using HSMServer.Authentication;
+using HSMServer.Controllers;
 using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.Chats;
 using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
@@ -126,18 +131,23 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
                 "Copy this URL.",
             }, guide.Steps);
 
-            // The web form's own three steps — paste the URL, save, send a test — are two calls.
+            // The web form's own three steps — paste the URL, save, send a test — are two calls, each
+            // with its REST twin beside it.
             Assert.Equal(
             [
                 new ChatSetupToolStepDto
                 {
                     Tool = "create_chat",
+                    Rest = "POST /api/v1/chats",
                     Call = "create_chat(name: <a name>, slackWebhookUrl: <the URL>)",
-                    Performs = "The web form's paste and save — administrators only: the chat stores the webhook. On a chat that exists: update_chat(chatId: <chatId>, slackWebhookUrl: <the URL>).",
+                    Performs = "The web form's paste and save — administrators only: the chat stores the webhook. " +
+                               "On a chat that exists: update_chat(chatId: <chatId>, slackWebhookUrl: <the URL>). " +
+                               "The URL is a secret: the person writes it into a file the call is sent from, or adds the chat in the web UI (Configuration → Chats) — never pastes it into the conversation.",
                 },
                 new ChatSetupToolStepDto
                 {
                     Tool = "send_chat_test_message",
+                    Rest = "POST /api/v1/chats/{id}/test-message",
                     Call = "send_chat_test_message(chatId: <chatId>, channel: \"slack\")",
                     Performs = "The web form's Send test: one message, and the answer says whether the channel received it.",
                 },
@@ -157,6 +167,66 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Equal(["create_chat", "send_chat_test_message"], guide.ToolSteps.Select(step => step.Tool));
             Assert.Equal("create_chat(name: <a name>, mattermostWebhookUrl: <the URL>)", guide.ToolSteps[0].Call);
             Assert.Equal("send_chat_test_message(chatId: <chatId>, channel: \"mattermost\")", guide.ToolSteps[1].Call);
+        }
+
+        // The calls are named as MCP names them; a client of the REST surface — the canonical one —
+        // learns each call's twin beside it.
+        [Fact]
+        public void EveryCallCarriesItsRestTwin()
+        {
+            var twins = Channels.SelectMany(channel => Service.GetGuide(channel, _caller).Value.ToolSteps)
+                .Select(call => (call.Tool, call.Rest)).ToList();
+
+            Assert.Equal(
+            [
+                ("update_telegram_bot", "PATCH /api/v1/telegram-bot"),
+                ("create_chat", "POST /api/v1/chats"),
+                ("create_chat_telegram_invitation", "POST /api/v1/chats/{id}/telegram-invitations"),
+                ("get_chat", "GET /api/v1/chats/{id}"),
+                ("send_chat_test_message", "POST /api/v1/chats/{id}/test-message"),
+                ("create_chat", "POST /api/v1/chats"),
+                ("send_chat_test_message", "POST /api/v1/chats/{id}/test-message"),
+                ("create_chat", "POST /api/v1/chats"),
+                ("send_chat_test_message", "POST /api/v1/chats/{id}/test-message"),
+            ], twins);
+        }
+
+        // Every REST twin is a route the server has: composed from the management controllers' own
+        // route and verb attributes, so a renamed action or route fails here, not in an agent's call.
+        [Fact]
+        public void EveryRestTwinOfTheGuide_IsARealRoute()
+        {
+            var routes = typeof(ChatsApiController).Assembly.GetTypes()
+                .Where(type => type.GetCustomAttribute<ManagementApiAttribute>() is not null)
+                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>())
+                    .Select(verb => RouteOf(type.GetCustomAttribute<RouteAttribute>()!.Template, verb)))
+                .ToHashSet();
+
+            foreach (var channel in Channels)
+                foreach (var call in Service.GetGuide(channel, _caller).Value.ToolSteps)
+                    Assert.Contains(call.Rest, routes);
+        }
+
+        private static string RouteOf(string controller, HttpMethodAttribute verb)
+        {
+            var template = verb.Template is { Length: > 0 } action ? $"{controller}/{action}" : controller;
+
+            // A route constraint names no path segment: api/v1/chats/{id:guid} is /api/v1/chats/{id}.
+            return $"{verb.HttpMethods.First().ToUpperInvariant()} /{Regex.Replace(template, @":\w+", "")}";
+        }
+
+        // A secret reaches the orchestrator the way AGENT-SETUP.md tells an agent: written into a
+        // file by the person, or typed into the web UI by them — never pasted into the conversation.
+        [Fact]
+        public void TheCallsThatTakeASecret_SayHowItReachesTheOrchestrator()
+        {
+            foreach (var channel in Channels)
+                foreach (var call in Service.GetGuide(channel, _caller).Value.ToolSteps.Where(call => call.Call.Contains("<the token>") || call.Call.Contains("<the URL>")))
+                {
+                    Assert.Contains("is a secret", call.Performs);
+                    Assert.Contains("into the conversation", call.Performs);
+                }
         }
 
         // Telegram is two guides — the four steps of a group and the one step of a direct chat — and the

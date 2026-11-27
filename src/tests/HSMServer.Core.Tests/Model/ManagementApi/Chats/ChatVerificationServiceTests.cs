@@ -136,7 +136,11 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.False(result.Success);
             Assert.Equal(PolicyWriteOutcome.Invalid, result.Failure.Outcome);
             Assert.Contains("channel", result.Failure.Errors.Keys);
-            Assert.Contains("no Telegram", result.Failure.Errors["channel"][0]);
+
+            // And the refusal says the way on: the call that binds a chat to Telegram.
+            Assert.Equal($"The chat has no Telegram configured. create_chat_telegram_invitation(chatId: \"{chat.Id}\", kind: \"direct\" | \"group\") " +
+                "issues the invitation a person's /start inside Telegram binds the chat with.",
+                result.Failure.Errors["channel"][0]);
         }
 
         [Fact]

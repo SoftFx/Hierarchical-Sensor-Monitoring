@@ -305,22 +305,28 @@ namespace HSMServer.Core.Tests.Model.ManagementApi.Chats
             Assert.Contains(result.Value.NextSteps, step => step.Contains($"send_chat_test_message(chatId: \"{result.Value.Id}\", channel: \"slack\")"));
         }
 
+        // An updated chat is told to prove the webhooks the update sets — the engine's own view of the
+        // request, where an empty value already means "no change".
         [Fact]
-        public async Task UpdateChat_TheEchoCarriesTheNextSteps_OfWhatTheRequestSet()
+        public async Task UpdateChat_TheEchoCarriesTheNextSteps_OfWhatTheUpdateSets()
         {
             var chat = AddChat("Ops alerts");
-            var request = new UpdateChatRequestDto { MattermostWebhookUrl = MattermostUrl };
 
-            var set = await Service.UpdateChat(chat.Id, request, Token);
+            var set = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { MattermostWebhookUrl = MattermostUrl }, Token);
+            var toNothing = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { MattermostWebhookUrl = "  " }, Token);
             var renamed = await Service.UpdateChat(chat.Id, new UpdateChatRequestDto { Name = "On-call" }, Token);
 
             Assert.True(set.Success, set.Failure?.Message);
-            Assert.Equal(ChatSetupNextSteps.AfterChatUpdated(chat.Id, request), set.Value.NextSteps);
-            Assert.Contains(set.Value.NextSteps, step => step.Contains("channel: \"mattermost\""));
+            Assert.Equal(
+                [
+                    $"send_chat_test_message(chatId: \"{chat.Id}\", channel: \"mattermost\") — the proof the channel works.",
+                    $"Alerts reach the chat through destination.chats: in create_sensor_policy as policy.destination {{mode: \"Custom\", chats: [\"{chat.Id}\"]}}; " +
+                    $"in create_alert_template as each policy's destination.chats as {{\"{chat.Id}\": \"<the chat's name>\"}}.",
+                ], set.Value.NextSteps);
 
-            // A rename sets no channel: the only step left is where the alerts go.
-            Assert.True(renamed.Success, renamed.Failure?.Message);
-            Assert.Single(renamed.Value.NextSteps);
+            // An empty webhook value sets nothing: the only step left is where the alerts go.
+            Assert.Equal([.. set.Value.NextSteps.Skip(1)], toNothing.Value.NextSteps);
+            Assert.Equal([.. set.Value.NextSteps.Skip(1)], renamed.Value.NextSteps);
         }
 
         [Fact]

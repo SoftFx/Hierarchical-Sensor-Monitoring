@@ -33,7 +33,6 @@ namespace HSMServer.Model.ManagementApi.Chats
         public static readonly TimeSpan InvitationLifetime = TimeSpan.FromMinutes(10);
 
         private const string UnknownChannelMessage = "Unknown channel '{0}'.";
-        private const string ChannelNotCarriedMessage = "The chat has no {0} configured.";
 
         // The remedy names the tool that starts the bot, and where the steps of its credential are.
         private static readonly string BotNotRunningMessage =
@@ -86,7 +85,8 @@ namespace HSMServer.Model.ManagementApi.Chats
             };
 
             if (!carried)
-                return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.Invalid, field: "channel", message: string.Format(ChannelNotCarriedMessage, parsed));
+                return Fail<ChatTestMessageResultDto>(PolicyWriteOutcome.Invalid, field: "channel",
+                    message: ChatSetupNextSteps.ChannelNotCarried(chatId, parsed));
 
             var result = await _delivery.SendTestAsync(chat, parsed);
 
@@ -251,7 +251,7 @@ namespace HSMServer.Model.ManagementApi.Chats
         public DateTime ExpiresAt { get; init; }
 
         /// <summary>The steps a PERSON does inside Telegram — the orchestrator cannot press Start.</summary>
-        [Description("The steps a PERSON performs inside Telegram, with this invitation in place — relay them; the orchestrator cannot do them (ADR docs/adr/0002). The same steps as get_chat_setup_guide(channel: \"telegram-chat\").")]
+        [Description("The steps a PERSON performs inside Telegram with this invitation in place — the guide's steps of the invitation's kind; relay them, the orchestrator cannot do them (ADR docs/adr/0002).")]
         public List<string> NextSteps { get; init; }
     }
 

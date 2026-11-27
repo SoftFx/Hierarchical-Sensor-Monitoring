@@ -243,16 +243,22 @@ Step 6b as landed (#1831) settled six points the table above leaves open:
   them. `telegram-chat` answers both Telegram guides, the group's steps then the direct chat's one.
 - An HSM step is a call, written out with the arguments the channel needs (`create_chat(name: <a name>,
   slackWebhookUrl: <the URL>)`), and is never told to a person. The calls are named per channel, not per
-  step: the form's paste and save are one call. The guide's calls name registered tools only, and a test
-  resolves each against the real registration.
+  step: the form's paste and save are one call. The guide's calls name registered tools only, a test
+  resolves each against the real registration, and each call names its REST twin beside it. A call
+  that takes a secret — a webhook URL, the bot token — says how the secret reaches the client, in the
+  rule of `AGENT-SETUP.md`: a file the call is sent from, or the web UI, never the conversation.
 - The invitation's steps are the guide's own words of its kind with the invitation in place of the words
   that stand for it — the link under "invitation link", the command in backticks — replacing the three
   hand-written lines of #1826. Before an invitation is issued, the guide names the call that issues one.
 - Next steps ride every write answer of the chats surface, the verification and the bot credential
   (`nextSteps`, each line naming its call) and no tool description beyond a one-line pointer at the
-  guide. The one step no tool performs — restarting a stored token on the web Configuration page — is
-  a line that names the page. The REST delete answers 204 and carries none; its remarks and the MCP
-  envelope's own `nextSteps` say what the removal leaves.
+  guide. Each line is read off the state its answer leaves: the bot credential's off the whole status —
+  no token stored is the credential's guide and never a Restart, a switched-off bot is the call that
+  switches it on — and a line names a call in the shape the wire takes it (a policy's chats are a list
+  under `mode: "Custom"`, a template's a map by chat id). The one step no tool performs — restarting a
+  stored token on the web Configuration page — is a line that names the page. The REST delete answers
+  204 and carries none: its remarks and the MCP envelope's own `nextSteps` say what the removal leaves,
+  and its dry run's preview carries the call that applies the removal on both transports.
 - The gate is the chat reads' caller-wide gate for every channel: the guide tells nothing about the
   server but its bot's username, which is public in Telegram and rides in every invitation the surface
   hands out. `botName` travels with `telegram-chat` alone and is absent when no bot is stored — the

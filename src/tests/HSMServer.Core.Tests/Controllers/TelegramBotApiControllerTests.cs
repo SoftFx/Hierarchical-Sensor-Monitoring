@@ -133,7 +133,7 @@ namespace HSMServer.Core.Tests.Controllers
             var echo = Assert.IsType<TelegramBotDto>(BodyOf(result));
             Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true },
                 echo with { NextSteps = null });
-            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: true), echo.NextSteps);
+            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(echo), echo.NextSteps);
             Assert.Contains("\"NextSteps\"", WireOf(result));
             Assert.DoesNotContain(TelegramBotHarness.NewToken, WireOf(result));
         }

@@ -72,7 +72,7 @@ namespace HSMServer.Core.Tests.Mcp
             // The status half of the echo, then the next steps it carries (#1831): the next channel.
             Assert.Equal(new TelegramBotDto { BotName = "hsm_oncall_bot", IsEnabled = true, HasBotToken = true, IsRunning = true },
                 status with { NextSteps = null });
-            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(isRunning: true), status.NextSteps);
+            Assert.Equal(ChatSetupNextSteps.AfterBotSaved(status), status.NextSteps);
             Assert.Contains("\"nextSteps\"", JsonSerializer.Serialize(status, McpJsonUtilities.DefaultOptions));
             Assert.DoesNotContain(TelegramBotHarness.NewToken, JsonSerializer.Serialize(status, McpJsonUtilities.DefaultOptions));
         }

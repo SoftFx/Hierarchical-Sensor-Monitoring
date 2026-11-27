@@ -24,41 +24,56 @@ namespace HSMServer.Model.ManagementApi.Chats
     {
         private const string UnknownChannelMessage = "Unknown channel '{0}'. Channels: {1}.";
 
+        // How a secret reaches the orchestrator (AGENT-SETUP.md): written into a file by the
+        // person, or typed into the web UI by them — never pasted into the conversation.
+        private const string SecretOfTheUrl =
+            "The URL is a secret: the person writes it into a file the call is sent from, or adds the chat in the web UI (Configuration → Chats) — never pastes it into the conversation.";
+
+        private const string SecretOfTheToken =
+            "The token is a secret: the person writes botName and botToken into a file the call is sent from and deletes the file after, or sets them in the web UI (Configuration → Settings, tab Telegram) — never pastes the token into the conversation.";
+
         private readonly IApiTokenAuthorizationService _authorization;
         private readonly IServerConfig _config;
 
         // The words that stand for an invitation in the guide, where none was issued: the call
         // that issues one.
         private static readonly ChatSetupInvitationText IssuedByTheTool =
-            ChatSetupInvitationText.NotIssued(kind => $"{ChatSetupNextSteps.InvitationTool}(chatId: <chatId>, kind: \"{kind}\")");
+            ChatSetupInvitationText.NotIssued(kind => ChatSetupNextSteps.Invitation("<chatId>", $"\"{kind}\""));
 
         // The web form's steps of a webhook channel — paste the URL, save, send a test — as calls.
-        private static readonly ChatSetupToolStepDto[] SlackToolSteps = WebhookToolSteps("slack", "slackWebhookUrl");
-        private static readonly ChatSetupToolStepDto[] MattermostToolSteps = WebhookToolSteps("mattermost", "mattermostWebhookUrl");
+        private static readonly ChatSetupToolStepDto[] SlackToolSteps =
+            WebhookToolSteps(ChatSetupNextSteps.WebhookOf(ChatChannel.Slack));
+
+        private static readonly ChatSetupToolStepDto[] MattermostToolSteps =
+            WebhookToolSteps(ChatSetupNextSteps.WebhookOf(ChatChannel.Mattermost));
 
         private static readonly ChatSetupToolStepDto[] TelegramChatToolSteps =
         [
             new()
             {
                 Tool = "create_chat",
+                Rest = "POST /api/v1/chats",
                 Call = "create_chat(name: <a name>)",
                 Performs = "The chat the binding lands in — administrators only. A Telegram binding is never requested: it is a person's /start against an invitation.",
             },
             new()
             {
                 Tool = ChatSetupNextSteps.InvitationTool,
-                Call = $"{ChatSetupNextSteps.InvitationTool}(chatId: <chatId>, kind: \"direct\" | \"group\")",
+                Rest = "POST /api/v1/chats/{id}/telegram-invitations",
+                Call = ChatSetupNextSteps.Invitation("<chatId>", ChatSetupNextSteps.BothKinds),
                 Performs = "Issues the link of a direct chat or the command of a group — what the steps' invitation stands for — with its expiry and the person's steps. The bot must be running: get_telegram_bot says whether it is.",
             },
             new()
             {
                 Tool = "get_chat",
+                Rest = "GET /api/v1/chats/{id}",
                 Call = "get_chat(chatId: <chatId>)",
                 Performs = "Shows the binding: telegramChatId is set once the person has completed /start.",
             },
             new()
             {
                 Tool = "send_chat_test_message",
+                Rest = "POST /api/v1/chats/{id}/test-message",
                 Call = "send_chat_test_message(chatId: <chatId>, channel: \"telegram\")",
                 Performs = "The web form's Send test, once the chat is bound.",
             },
@@ -69,8 +84,9 @@ namespace HSMServer.Model.ManagementApi.Chats
             new()
             {
                 Tool = "update_telegram_bot",
+                Rest = "PATCH /api/v1/telegram-bot",
                 Call = "update_telegram_bot(botName: <the username>, botToken: <the token>, isEnabled: true)",
-                Performs = "The Configuration page's save and start in one call, administrators only: the token is asked of Telegram before anything is saved, and a new token starts the bot.",
+                Performs = "The Configuration page's save and start in one call, administrators only: the token is asked of Telegram before anything is saved, and a new token starts the bot. " + SecretOfTheToken,
             },
         ];
 
@@ -136,18 +152,21 @@ namespace HSMServer.Model.ManagementApi.Chats
             _ => MattermostToolSteps,
         };
 
-        private static ChatSetupToolStepDto[] WebhookToolSteps(string channel, string field) =>
+        private static ChatSetupToolStepDto[] WebhookToolSteps((ChatSetupChannel Guide, string Field) webhook) =>
         [
             new()
             {
                 Tool = "create_chat",
-                Call = $"create_chat(name: <a name>, {field}: <the URL>)",
-                Performs = $"The web form's paste and save — administrators only: the chat stores the webhook. On a chat that exists: update_chat(chatId: <chatId>, {field}: <the URL>).",
+                Rest = "POST /api/v1/chats",
+                Call = $"create_chat(name: <a name>, {webhook.Field}: <the URL>)",
+                Performs = $"The web form's paste and save — administrators only: the chat stores the webhook. " +
+                           $"On a chat that exists: update_chat(chatId: <chatId>, {webhook.Field}: <the URL>). {SecretOfTheUrl}",
             },
             new()
             {
                 Tool = "send_chat_test_message",
-                Call = $"send_chat_test_message(chatId: <chatId>, channel: \"{channel}\")",
+                Rest = "POST /api/v1/chats/{id}/test-message",
+                Call = $"send_chat_test_message(chatId: <chatId>, channel: \"{webhook.Guide.WireName()}\")",
                 Performs = "The web form's Send test: one message, and the answer says whether the channel received it.",
             },
         ];

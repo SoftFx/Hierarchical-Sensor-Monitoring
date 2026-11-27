@@ -389,10 +389,11 @@ namespace HSMServer.Mcp
     /// for REST's 204) or <c>preview</c> after a dry run (how many sensors'
     /// alerts reference the chat, and the folder bindings the deletion would
     /// take with it). The McpSensorDeleteResult shape with a TYPED preview arm,
-    /// so the tool's static output schema shows the chat-specific members. Beside
-    /// the arm travels what the removal leaves (#1831).
+    /// so the tool's static output schema shows the chat-specific members. After an
+    /// applied deletion the envelope carries the next step beside the arm (#1831); a
+    /// dry run's preview carries its own.
     /// </summary>
-    [Description("Result of the delete_chat tool: `value` names the deleted chat id after an applied deletion, `preview` carries the usage report after a dry run — exactly one of the two per call — and `nextSteps` says what to do next.")]
+    [Description("Result of the delete_chat tool: `value` names the deleted chat id after an applied deletion, `preview` carries the usage report after a dry run — exactly one of the two per call — and after an applied deletion `nextSteps` says what the removal left.")]
     public sealed record McpChatDeleteResult
     {
         /// <summary>The deleted chat id after an applied deletion; null (absent) after a dry run.</summary>
@@ -403,8 +404,8 @@ namespace HSMServer.Mcp
         [Description("The dry-run preview: how many sensors' alerts reference the chat, and the folder bindings the deletion would take with it. Nothing was removed. Absent after an applied deletion.")]
         public ChatDeletePreviewDto Preview { get; init; }
 
-        /// <summary>The next step of the removal, naming its tool call.</summary>
-        [Description("What to do next, naming its tool call: after a dry run — the call that applies the removal; after an applied one — the alerts that still reference the chat outside the folders it was bound to, which deliver nothing now.")]
+        /// <summary>What the removal left; null (absent) after a dry run, whose preview carries the next step itself.</summary>
+        [Description("What the removal left, naming the tools that mend it: the alerts that still reference the chat outside the folders it was bound to deliver nothing now. Absent after a dry run — its preview carries the call that applies the removal.")]
         public List<string> NextSteps { get; init; }
     }
 

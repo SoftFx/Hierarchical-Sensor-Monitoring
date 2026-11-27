@@ -393,7 +393,7 @@ namespace HSMServer.Core.Tests.Mcp
 
             // The chat setup (#1831): the guide's own description says what it answers and that it
             // is the web modals' text, and its parameter names every channel.
-            Assert.Contains("The same text as the web UI's help modals", tools["get_chat_setup_guide"].Description);
+            Assert.Contains("The web UI's help modals' own text", tools["get_chat_setup_guide"].Description);
             Assert.Contains("relay `steps` to the person", tools["get_chat_setup_guide"].Description);
 
             var guideChannels = Descriptions(tools["get_chat_setup_guide"]);
@@ -506,7 +506,7 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("absent when no bot is stored", guide);
 
             var invitation = Descriptions(tools["create_chat_telegram_invitation"]);
-            Assert.Contains("The same steps as get_chat_setup_guide(channel: \"telegram-chat\")", invitation);
+            Assert.Contains("the guide's steps of the invitation's kind", invitation);
 
             // The folder surface: the entity disambiguation (access-grouping
             // folder, not the tree's nested products).

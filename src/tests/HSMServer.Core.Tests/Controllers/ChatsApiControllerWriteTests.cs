@@ -232,6 +232,10 @@ namespace HSMServer.Core.Tests.Controllers
             var preview = Assert.IsType<ChatDeletePreviewDto>(BodyOf(result));
             Assert.True(preview.DryRun);
             Assert.Equal(chat.Id.ToString(), preview.EntityId);
+
+            // The preview is the dry run's whole answer here, as the envelope's arm is on MCP: it
+            // carries the next step itself (#1831) — the REST twin of the MCP line.
+            Assert.Equal([$"delete_chat(chatId: \"{chat.Id}\") without dryRun removes it."], preview.NextSteps);
             Assert.Single(_world.Store);
         }
 
