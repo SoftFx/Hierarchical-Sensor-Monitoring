@@ -2259,8 +2259,10 @@
         <member name="M:HSMServer.Model.TimeIntervalViewModel.FromNodeSetting(HSMServer.Core.Model.TimeIntervalModel,System.Collections.Generic.HashSet{HSMServer.Model.TimeInterval})">
             <summary>
             Reads a node's own setting (a folder's, or a product's or sensor's <c>CurValue</c>): as <see cref="M:HSMServer.Model.TimeIntervalViewModel.FromModel(HSMServer.Core.Model.TimeIntervalModel,System.Collections.Generic.HashSet{HSMServer.Model.TimeInterval})"/>,
-            except that FromParent on a view with no parent is shown as the item that never expires and kept as stored
-            while that item stays selected (see <see cref="F:HSMServer.Model.TimeIntervalViewModel._storedFromParent"/>).
+            and a FromParent is remembered, to be shown as the item that never expires and kept as stored while the node
+            has no parent (see <see cref="F:HSMServer.Model.TimeIntervalViewModel._storedFromParent"/>). A folder's own view, which never has a parent, shows it
+            at once (the folder's settings page renders the view itself); a node's view keeps FromParent and its form
+            decides when it is built.
             </summary>
         </member>
         <member name="M:HSMServer.Model.TimeIntervalViewModel.KeepsStoredFromParent(HSMServer.Model.TimeIntervalViewModel)">

@@ -976,6 +976,89 @@ namespace HSMServer.Core.Tests.Folders
             Assert.Equal(TimeInterval.None, SelectedInForm(form.ExpectedUpdateInterval));
         }
 
+        // Whether a product has nothing to inherit from is its folder NOW, not when its view was last updated: the tree
+        // updates a product's view before it attaches the new folder (TreeViewModel.ChangeProductHandler), and at start it
+        // attaches the folder first. A product stored as FromParent moved into a folder with a month shows "from parent
+        // (1 month)" and an unchanged save inherits the month, as before #1945; moved out of a folder, it shows Forever and
+        // an unchanged save keeps FromParent.
+
+        [Fact]
+        public async Task ProductStoredAsFromParent_MovedIntoAFolder_ShowsTheFoldersValue_AndAnUnchangedSaveInheritsIt()
+        {
+            var product = await _valuesCache.AddProductAsync($"product-{Guid.NewGuid():N}", Guid.NewGuid());
+            var folder = new FolderModel(new FolderAdd { Name = $"folder-{Guid.NewGuid():N}", Products = [], AuthorId = Guid.NewGuid(), Initiator = InitiatorInfo.System });
+            Assert.True(await _folders.TryAdd(folder, InitiatorInfo.System));
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+            await StoreFromParentAsync(product);
+
+            var (folders, tree) = await TreeAsync();
+            var node = tree.Nodes[product.Id];
+            Assert.Equal(TimeInterval.Forever, SelectedInForm(new HSMServer.Model.ViewModel.ProductInfoViewModel(node).SavedHistoryPeriod));
+
+            // The live move: the cache's update reaches the tree, which updates the view and then attaches the folder.
+            await folders.MoveProduct(node, null, folder.Id, InitiatorInfo.AsUser("operator"));
+            Assert.Equal(folder.Id, product.FolderId);
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(node);
+            Assert.Equal(TimeInterval.FromParent, SelectedInForm(form.SavedHistoryPeriod));
+            Assert.Equal("From parent (1 month)", form.SavedHistoryPeriod.DisplayValue);
+
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                KeepHistory = PostedUnchanged(form.SavedHistoryPeriod).ToModel(node.KeepHistory),
+                Initiator = InitiatorInfo.AsUser("operator"),
+            });
+
+            AssertInheritsCalendar(product.Settings.KeepHistory.CurValue, CoreTimeInterval.Month, 1);
+        }
+
+        [Fact]
+        public async Task ProductStoredAsFromParent_InAFolderAtStart_ShowsTheFoldersValue()
+        {
+            var (folder, product, _) = await ProductInFolderAsync();
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+
+            var (_, tree) = await TreeAsync(storeFromParent: product);
+
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(tree.Nodes[product.Id]);
+            Assert.Equal(TimeInterval.FromParent, SelectedInForm(form.SavedHistoryPeriod));
+            Assert.Equal("From parent (1 month)", form.SavedHistoryPeriod.DisplayValue);
+        }
+
+        [Fact]
+        public async Task ProductStoredAsFromParent_MovedOutOfAFolder_ShowsForever_AndAnUnchangedSaveDeletesNothing()
+        {
+            var (folder, product, key) = await ProductInFolderAsync();
+            await ChangeFolderAsync(folder, keepHistory: TimeInterval.Month);
+
+            var (folders, tree) = await TreeAsync(storeFromParent: product);
+            var node = tree.Nodes[product.Id];
+            var sensor = await SeedAsync(product, key, Old, DateTime.UtcNow.AddHours(-1));
+
+            await folders.MoveProduct(node, folder.Id, null, InitiatorInfo.AsUser("operator"));
+            Assert.Null(product.FolderId);
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+
+            var form = new HSMServer.Model.ViewModel.ProductInfoViewModel(node);
+            await ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                TTL = PostedUnchanged(form.ExpectedUpdateInterval).ToModel(node.TTL),
+                KeepHistory = PostedUnchanged(form.SavedHistoryPeriod).ToModel(node.KeepHistory),
+                SelfDestroy = PostedUnchanged(form.SelfDestroyPeriod).ToModel(node.SelfDestroy),
+                Initiator = InitiatorInfo.AsUser("operator"),
+            });
+
+            await _valuesCache.CheckSensorsHistoryAsync();
+
+            Assert.True((await ReadAsync(sensor, Old.AddDays(-1), Old.AddDays(1))).Count == 1,
+                $"old history deleted; the product now keeps history {product.Settings.KeepHistory.CurValue}");
+            Assert.True(product.Settings.KeepHistory.CurValue.IsFromParent);
+            Assert.Equal(TimeInterval.Forever, SelectedInForm(form.SavedHistoryPeriod));
+        }
+
         // A real choice on such a form is applied: the shown "Forever" is no lock.
         [Fact]
         public async Task FolderStoredAsFromParent_ChangedOnItsForm_TakesTheNewValue()
@@ -1026,6 +1109,31 @@ namespace HSMServer.Core.Tests.Folders
         // What the form posts back unchanged, bound in the model binder's order (CustomString before Interval).
         private static TimeIntervalViewModel PostedUnchanged(TimeIntervalViewModel shown) =>
             new() { CustomString = shown.CustomString, Interval = SelectedInForm(shown) };
+
+        private Task StoreFromParentAsync(ProductModel product) =>
+            ((ITreeValuesCache)_valuesCache).UpdateProductAsync(new ProductUpdate
+            {
+                Id = product.Id,
+                TTL = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                KeepHistory = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                SelfDestroy = new TimeIntervalModel(CoreTimeInterval.FromParent, 0L),
+                Initiator = InitiatorInfo.AsSystemMigrator(),
+            });
+
+        // The start: a folder manager read from the database (its folders list no product yet) and the tree built over
+        // it, as the server builds them. A product stored as FromParent in a folder is taken as the folder's own value
+        // by the folder manager's start (ResetServerPolicyForFolderProducts), so it is stored after that and before the
+        // tree, as one stored by an earlier build and not yet reset would be.
+        private async Task<(FolderManager Folders, TreeViewModel Tree)> TreeAsync(ProductModel storeFromParent = null)
+        {
+            var folders = BuildFolderManager();
+            await folders.Initialize();
+
+            if (storeFromParent is not null)
+                await StoreFromParentAsync(storeFromParent);
+
+            return (folders, new TreeViewModel(_valuesCache, folders, _userManager));
+        }
 
         private static string InheritedSettings(ProductModel product) =>
             $"{product.Settings.TTL.CurValue}|{product.Settings.KeepHistory.CurValue}|{product.Settings.SelfDestroy.CurValue}";

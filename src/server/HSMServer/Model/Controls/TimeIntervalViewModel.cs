@@ -23,11 +23,15 @@ namespace HSMServer.Model
         private TimeSpan _customSpan;
         private string _customString;
 
-        // A node setting with nothing to inherit from (a folder, a product in no folder) stored as FromParent: it never
-        // expires. Its list has no "from parent" item, so it is shown as the item that behaves the same (Forever, or
-        // None where the list has no Forever), and while that item stays selected the stored model is what is saved:
-        // an unchanged form neither changes the setting nor records a change (#1945). Null for every other view.
+        // A node's own setting stored as FromParent (FromNodeSetting), null for every other view. While the node has
+        // nothing to inherit from (a folder, a product in no folder), such a setting never expires and its list has no
+        // "from parent" item: it is shown as the item that behaves the same (_neverInterval: Forever, or None where the
+        // list has no Forever), and while that item stays selected the stored model is what is saved, so an unchanged
+        // form neither changes the setting nor records a change (#1945). Whether the node has a parent is asked when the
+        // form is built and when it is saved, not when the view was read: the tree updates a product's view before it
+        // attaches a new folder.
         private TimeIntervalModel _storedFromParent;
+        private TimeInterval _neverInterval;
 
 
         public List<SelectListItem> IntervalItems { get; }
@@ -115,7 +119,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalViewModel model, HashSet<TimeInterval> intervals) : this(intervals, model._parentRequest)
         {
-            Interval = model.TimeInterval;
+            Interval = model.ShowsStoredFromParentAsNever ? NeverIn(intervals) : model.TimeInterval;
             CustomSpan = model.CustomSpan;
         }
 
@@ -141,8 +145,8 @@ namespace HSMServer.Model
         {
             var stored = current ?? this;
 
-            if (stored._storedFromParent is { } fromParent && TimeInterval == stored.TimeInterval)
-                return fromParent;
+            if (stored.ShowsStoredFromParentAsNever && TimeInterval == stored._neverInterval)
+                return stored._storedFromParent;
 
             if (TimeInterval.IsStatic() || TimeInterval.IsCustom())
                 return new TimeIntervalModel(CustomSpan.Ticks);
@@ -172,17 +176,22 @@ namespace HSMServer.Model
 
         /// <summary>
         /// Reads a node's own setting (a folder's, or a product's or sensor's <c>CurValue</c>): as <see cref="FromModel"/>,
-        /// except that FromParent on a view with no parent is shown as the item that never expires and kept as stored
-        /// while that item stays selected (see <see cref="_storedFromParent"/>).
+        /// and a FromParent is remembered, to be shown as the item that never expires and kept as stored while the node
+        /// has no parent (see <see cref="_storedFromParent"/>). A folder's own view, which never has a parent, shows it
+        /// at once (the folder's settings page renders the view itself); a node's view keeps FromParent and its form
+        /// decides when it is built.
         /// </summary>
         internal TimeIntervalViewModel FromNodeSetting(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
         {
             FromModel(model, predefinedIntervals);
 
-            if (model.IsFromParent && !HasParent)
+            if (model.IsFromParent)
             {
-                Interval = predefinedIntervals?.Contains(TimeInterval.Forever) == true ? TimeInterval.Forever : TimeInterval.None;
                 _storedFromParent = model;
+                _neverInterval = NeverIn(predefinedIntervals);
+
+                if (_parentRequest is null)
+                    Interval = _neverInterval;
             }
 
             return this;
@@ -190,7 +199,12 @@ namespace HSMServer.Model
 
         /// <summary>True when <paramref name="posted"/> keeps the item this view shows for a stored FromParent.</summary>
         internal bool KeepsStoredFromParent(TimeIntervalViewModel posted) =>
-            _storedFromParent is not null && posted is not null && posted.TimeInterval == TimeInterval;
+            ShowsStoredFromParentAsNever && posted is not null && posted.TimeInterval == _neverInterval;
+
+        private bool ShowsStoredFromParentAsNever => _storedFromParent is not null && !HasParent;
+
+        private static TimeInterval NeverIn(HashSet<TimeInterval> intervals) =>
+            intervals?.Contains(TimeInterval.Forever) == true ? TimeInterval.Forever : TimeInterval.None;
 
         internal TimeIntervalViewModel FromModel(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
         {
