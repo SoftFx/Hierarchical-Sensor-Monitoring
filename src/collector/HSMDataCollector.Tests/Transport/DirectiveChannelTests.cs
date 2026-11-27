@@ -27,7 +27,7 @@ namespace HSMDataCollector.Tests.Transport
     /// event, and the library acts on none of today's directives, so it notes each unknown one
     /// once and moves on.
     ///
-    /// Compiled into both collector test projects (net472 and net6.0 builds of the collector).
+    /// Compiled into both collector test projects (net472 and net8.0 builds of the collector).
     /// </summary>
     [Trait("Category", "FakeServerE2E")]
     public sealed class DirectiveChannelTests
@@ -243,7 +243,7 @@ namespace HSMDataCollector.Tests.Transport
         [InlineData("Content-Language", "en")]
         [InlineData("Expires", "0")]
         // The .NET Framework handler replaces a hand-set Cookie with its own (empty) cookie
-        // container, so the header would be sent on net6.0 and lost on net472.
+        // container, so the header would be sent on net8.0 and lost on net472.
         [InlineData("Cookie", "route=a")]
         [InlineData("cookie2", "$Version=1")]
         public void Extra_request_header_the_collector_cannot_send_is_refused_at_construction(string name, string value)

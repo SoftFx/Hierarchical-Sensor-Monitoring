@@ -23,7 +23,7 @@ Per-process (`.module/Process <name>/...`; double bars, 1 s collect / 10 s bars 
 | `AddProcessMemory` | Process memory MB | `Process \ Working set` → MB |
 | `AddProcessThreadCount` | Process thread count | `Process \ Thread Count` |
 | `AddProcessThreadPoolThreadCount` | ThreadPool threads | .NET ThreadPool API (cross-platform impl) |
-| `AddProcessTimeInGC` | % time in GC | perf counter (net472) / `System.Runtime` EventListener (net6+) |
+| `AddProcessTimeInGC` | % time in GC | perf counter (net472) / `System.Runtime` EventListener (net8.0) |
 
 System (`.computer/System/...`):
 
@@ -214,7 +214,7 @@ EMA засеялась бы огромным отрицательным знач
   (scale the same double by 1 000 000, round half away from zero) rather than by
   `ToString("F6")` / `printf("%.6f")`, because those two disagree at a decimal midpoint
   (half-away-from-zero vs half-to-even) and the corpus pins this text byte-for-byte. As a side effect the mantissa is
-  now identical on net472 and net6.0, which the 15-digit/round-trip split used to make differ;
+  now identical on net472 and net8.0, which the 15-digit/round-trip split used to make differ;
   an absurd magnitude that would overflow the scaled integer falls back to the round-trip form
   on both sides. Pinned by `metric_source_contract:disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour`
   plus the mirrored unit tests (`FreeDiskSpacePredictionTests` / `native_disk_prediction_*`);

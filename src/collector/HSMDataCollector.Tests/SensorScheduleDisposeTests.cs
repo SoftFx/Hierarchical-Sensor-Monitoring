@@ -30,7 +30,7 @@ namespace HSMDataCollector.Tests
     /// <see cref="ScheduledTask.TryAttachRun"/>, and only while the task is in the timer wheel; the
     /// tests assert that every task of a disposed sensor is out of the wheel and refuses that call,
     /// which is what "cannot be invoked again" means for this scheduler. Compiled into both
-    /// collector test projects (net472 and net6.0).
+    /// collector test projects (net472 and net8.0).
     /// </summary>
     public sealed class SensorScheduleDisposeTests
     {

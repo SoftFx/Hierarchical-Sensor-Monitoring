@@ -45,7 +45,7 @@ flowchart LR
 |---|---|---|
 | HSM Agent | You want CPU, memory, disk and network of a Windows machine | Administrator rights on that machine |
 | HSM Linux probe | You want the same for a Debian host | root on that host |
-| [HSMDataCollector](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/HSMDataCollector) | Your .NET application reports its own metrics | .NET 6 or .NET Framework 4.7.2 |
+| [HSMDataCollector](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/HSMDataCollector) | Your .NET application reports its own metrics | .NET 8 or .NET Framework 4.7.2 |
 | [Native collector](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/tree/master/src/native/collector) | Your C++ application reports its own metrics | C++17; the `hsm-collector` vcpkg port |
 | [Sensor API](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/REST-API) | Anything that can make an HTTPS request | An access key |
 

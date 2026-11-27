@@ -337,11 +337,11 @@ wait.
 
 **.NET Framework.** The code is the same on both targets: `ClientWebSocket` takes the subprotocol, the request
 headers (`Key`, `ClientName`, `X-Hsm-Session`, the collector headers) and fragmented binary messages on net472 as
-on net6.0, and the table connection configures its socket through the session's own `SessionConnection.Configure`.
+on net8.0, and the table connection configures its socket through the session's own `SessionConnection.Configure`.
 What differs: (1) net472 has no per-connection certificate callback, so with `AllowUntrustedServerCertificate` on
 `wss` no session can exist there, and so no table connection: table sensors are `Unavailable`, as decided for the
 session; (2) a refused upgrade says its status differently, in the `HttpWebResponse` of a `WebException` inside the
-`WebSocketException` on .NET Framework and only in the exception's text on .NET 6 (`TableConnection.UpgradeStatus`
+`WebSocketException` on .NET Framework and only in the exception's text on .NET 8 (`TableConnection.UpgradeStatus`
 reads both; a status it cannot read is treated as "any other"). Checked on net48: the sockets of `ClientWebSocket`
 do not count against `ServicePointManager.DefaultConnectionLimit` (five to one host with a limit of two), so the
 second socket does not compete with the session or with the host's own requests.
@@ -409,7 +409,7 @@ sensor itself `State`, `StateReason`, `RowsAccepted`, `RowsDropped`, which an ap
 
 ## Tests
 
-- Unit, net48 (the net472 build) and net8.0 (the net6.0 build, linked): `TableSensorTests` (API, shapes, unavailable
+- Unit, net48 (the net472 build) and net8.0 (linked): `TableSensorTests` (API, shapes, unavailable
   sensors, registration answers, buffer and backlog bounds, splits, answers to blocks, stop, many threads against ticks),
   `TableRegistrationSessionTests` (registration over the scripted session: alone in its request, refusals final, faults
   retried). `TablePipelineRaceTests`: the orders of events found in review (a discard or a refusal racing a

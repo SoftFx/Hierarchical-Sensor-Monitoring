@@ -33,7 +33,7 @@ namespace HSMDataCollector.Tests
     /// the test says so. The wait before the drain gives a send up is the test's as well
     /// (<c>WaitBeforeAbandon</c>): it ends when the test says so. The only thing awaited from
     /// the clock is the stop budget itself (one second), and it is awaited as an event.
-    /// Compiled into both collector test projects (net472 and net6.0).
+    /// Compiled into both collector test projects (net472 and net8.0).
     ///
     /// That second, and the second a stop waits for a queue's loop to exit, are the
     /// collector's own and are measured by the clock. Beside tests that keep the thread pool

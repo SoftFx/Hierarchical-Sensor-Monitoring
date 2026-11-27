@@ -27,7 +27,7 @@ namespace HSMDataCollector.Tests.Transport
     /// type name of the response content.
     /// A4: a failure that repeats is reported once per deduplication window, not once per attempt.
     ///
-    /// Compiled into both collector test projects (net472 and net6.0 builds of the collector).
+    /// Compiled into both collector test projects (net472 and net8.0 builds of the collector).
     /// </summary>
     [Trait("Category", "FakeServerE2E")]
     public sealed class SendFailureReportingTests

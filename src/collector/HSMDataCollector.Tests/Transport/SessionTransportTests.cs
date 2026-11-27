@@ -25,7 +25,7 @@ namespace HSMDataCollector.Tests.Transport
     /// (<c>CollectorOptions.Transport = Session</c>). Every test runs a real collector against
     /// <see cref="ScriptedSessionServer"/> over a real WebSocket.
     ///
-    /// Compiled into both collector test projects (net472 and net6.0 builds of the collector).
+    /// Compiled into both collector test projects (net472 and net8.0 builds of the collector).
     /// </summary>
     [Trait("Category", "FakeServerE2E")]
     public sealed class SessionTransportTests

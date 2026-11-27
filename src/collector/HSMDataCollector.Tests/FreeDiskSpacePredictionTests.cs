@@ -138,7 +138,7 @@ namespace HSMDataCollector.Tests
 
                 // 0.38017 MiB/sec is 1368.611775 MiB/hour. The whole mantissa can be pinned since
                 // #1460: the comment now rounds the rate to six decimals with integer
-                // arithmetic, so net472 and net6.0 no longer render the same double differently.
+                // arithmetic, so net472 and net8.0 no longer render the same double differently.
                 Assert.Equal("Free space decreases by 1368.611775 Mbytes/hour.", relaxed.Comment);
             }
         }
@@ -424,7 +424,7 @@ namespace HSMDataCollector.Tests
 
 
         // MiB-aligned on purpose, and a power-of-two rate: the drain rate the comment renders is
-        // then an exact short decimal that net472's 15-digit formatter and net6.0's
+        // then an exact short decimal that net472's 15-digit formatter and net8.0's
         // shortest-round-trip formatter agree on, and it is a fixed point of the EMA, so a steady
         // drain is reported exactly rather than to within an ulp.
         private const long SeedFreeSpace = 52_428_800_000L;     // 50 000 MiB

@@ -5685,7 +5685,7 @@ namespace
 
         // 0.38017 MiB/sec is 1368.611775 MiB/hour. The whole mantissa is pinned since #1460: the
         // comment rounds the rate to six decimals with integer arithmetic, so managed net472,
-        // managed net6.0 and this collector all render it identically.
+        // managed net8.0 and this collector all render it identically.
         Require(
             relaxed.comment == "Free space decreases by 1368.611775 Mbytes/hour.",
             ("unexpected decayed-drain comment: " + relaxed.comment).c_str());

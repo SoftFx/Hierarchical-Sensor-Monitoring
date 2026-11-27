@@ -152,7 +152,7 @@ component that invoked it** (#1102 A1/A2, #1103). Isolation layers:
 - `SensorBase.HandleException` isolates each `ExceptionThrowing` subscriber individually (same
   policy as lifecycle events); a throwing subscriber does not starve later subscribers or stop the
   sensor send loop.
-- `ProcessEventListener` (net6 time-in-gc counters) guards `OnEventSourceCreated`/`OnEventWritten`
+- `ProcessEventListener` (net8.0 time-in-gc counters) guards `OnEventSourceCreated`/`OnEventWritten`
   and parses counter payloads null-safely (null `EventName`, missing `Name`/`Mean` keys, non-double
   `Mean` are all skipped). The callback body is extracted into the internal `ProcessEventCounters`
   method for direct adversarial testing.
@@ -194,7 +194,7 @@ Fixed test-first on the cpp-port-spike branch (each item has a dedicated unit-te
   actually elapsed since the previous sample (monotonic Stopwatch, injectable in tests), falling back
   to the configured period for the first sample / zero gap — no more inflated samples after machine
   sleep (`RateSensorElapsedTimeTests`).
-- **E4, DNS staleness**: net6+ uses `SocketsHttpHandler` with `PooledConnectionLifetime = 5 min`;
+- **E4, DNS staleness**: net8.0 uses `SocketsHttpHandler` with `PooledConnectionLifetime = 5 min`;
   net472 bounds the endpoint's `ServicePoint.ConnectionLeaseTimeout` — keep-alive connections
   periodically re-resolve DNS (`TransportAndTimeNormalizationTests`).
 - **E5, Local time normalization**: `SensorBase.SendValue` converts `DateTimeKind.Local` values of

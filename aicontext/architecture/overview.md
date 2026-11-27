@@ -36,7 +36,7 @@ Key internals:
 - `HsmHttpsClient` — HTTP client with configurable timeout and optional TLS certificate bypass
 - `MessageDeduplicator` — bounds error log volume from recurring exceptions
 
-Target frameworks: `net6.0` + `net472`.
+Target frameworks: `net8.0` + `net472` (`net6.0` until 4.x, #1975).
 
 ## HSMServer (web application)
 

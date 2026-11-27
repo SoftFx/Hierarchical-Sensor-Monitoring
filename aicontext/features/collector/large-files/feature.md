@@ -245,7 +245,7 @@ the connection up and down, a cut, a store.
 
 `HSMDataCollector.Tests/LargeFiles/` (in memory: `FakeFileStore` with the server's semantics, a fake channel, a virtual
 clock) and `Transport/LargeFileSessionTests.cs` (a real collector over a real WebSocket against the scripted server's file
-side), linked into `HSMDataCollector.IntegrationTests`, so they run on net472 (net48 host) and net6.0 (net8.0 host):
+side), linked into `HSMDataCollector.IntegrationTests`, so they run on net472 (net48 host) and net8.0:
 the settle rule on a growing file, files at start oldest first, the mask, a cut at every point, the state after a kill, a
 corrupt state, refusals of each kind, retries, checking, mismatches and their bounds, a changed file, the deny-write open
 on Windows, the speed limit, Stop and Dispose in the middle, thread safety of the public calls, exception isolation,

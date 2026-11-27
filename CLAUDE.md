@@ -13,7 +13,7 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
 | Layer | Technology |
 |---|---|
 | Server | ASP.NET Core 8.0 MVC + Razor Views |
-| DataCollector (client library) | .NET 6.0 / .NET Framework 4.7.2 (NuGet) |
+| DataCollector (client library) | .NET 8.0 / .NET Framework 4.7.2 (NuGet) |
 | Shared API DTOs | C# Class Library (`HSMSensorDataObjects`) |
 | Native collector / agent / wrapper | C++17, MSVC + CMake, libcurl; distributed via vcpkg registry (`hsm-collector`) |
 | Database | LevelDB (через LightningDB) |
@@ -64,7 +64,7 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
 
 1. **After behavior changes** -> update relevant docs in `aicontext/` from the actual implementation before review/handoff
 2. **DataCollector is a library used by third parties** -> public API changes must be backward-compatible; no breaking changes without major version bump
-3. **DataCollector targets net6.0 + net472** -> no APIs unavailable on either TFM; test both TFMs when touching shared collector code
+3. **DataCollector targets net8.0 + net472** -> no APIs unavailable on either TFM; test both TFMs when touching shared collector code
 4. **No business logic in controllers** -> logic lives in Services / Core
 5. **Thread safety is critical in DataCollector** -> all public sensor methods can be called from any thread; use `Interlocked`, `Volatile`, `lock` correctly
 6. **Exception isolation** -> exceptions in sensors, timers, callbacks must never crash the host process; always catch and route to `HandleException`

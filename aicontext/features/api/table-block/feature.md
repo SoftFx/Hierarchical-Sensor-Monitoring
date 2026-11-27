@@ -258,7 +258,7 @@ Not operator-visible.
 
 ## Dependencies
 
-- Depends on: `ZstdSharp.Port` 0.8.8 (zstd, the version the sealed history uses), `System.IO.Hashing` 8.0.0 (CRC-32). Both bring `System.Memory` to netstandard2.0. CRC-32 and not the CRC-32C of the sealed chunks: CRC-32C is only in `System.IO.Hashing` 11.0.0, whose build warns "doesn't support net6.0/net8.0" in every net6.0–net9.0 project that consumes the collector package; 8.0.0 builds without a warning on net472, net6.0 and net8.0.
+- Depends on: `ZstdSharp.Port` 0.8.8 (zstd, the version the sealed history uses), `System.IO.Hashing` 8.0.0 (CRC-32). Both bring `System.Memory` to netstandard2.0. CRC-32 and not the CRC-32C of the sealed chunks: CRC-32C is only in `System.IO.Hashing` 11.0.0, whose build warns "doesn't support net6.0/net8.0" in every net8.0–net9.0 project that consumes the collector package; 8.0.0 builds without a warning on net472 and net8.0.
 - Used by: the server (`TableSchema`, #1844); the server's block store and read path, the collectors and the client library in the later steps of #1842.
 
 ## Tests

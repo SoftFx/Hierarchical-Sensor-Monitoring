@@ -10,7 +10,7 @@ HSMDataCollector is a .NET NuGet package for sending sensor data from your appli
 dotnet add package HSMDataCollector
 ```
 
-Requires .NET 6 or later.
+Requires .NET 8 or later, or .NET Framework 4.7.2 or later. Versions before 5.0.0 also run on .NET 6 and 7.
 
 ---
 
