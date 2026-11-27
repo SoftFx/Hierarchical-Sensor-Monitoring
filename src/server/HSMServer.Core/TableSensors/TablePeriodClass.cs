@@ -9,8 +9,9 @@ namespace HSMServer.Core.TableSensors
     /// <para>
     /// The same rule as the cleanup of ordinary sensor history (<c>TimeIntervalModel.TimeIsUp</c> and the retention floor
     /// in <c>TreeValuesCache</c>): what never expires there is kept for ever here. A calendar preset counts by its nominal
-    /// length (a month 31 days: 5 weeks; three months 14; six months 27; a year 53), whether it is set on the sensor or the
-    /// product or inherited from a folder (<see cref="TimeIntervalModel.FolderPreset"/>, #1864). An inherited setting
+    /// length (a month 31 days: 5 weeks; three months 14; six months 27; a year 53; five years, 1826 days, 261 since #1945),
+    /// whether it is set on the sensor or the product or inherited from a folder (<see cref="TimeIntervalModel.FolderPreset"/>,
+    /// #1864). An inherited setting
     /// stored by an earlier build without its preset (<see cref="TimeInterval.FromFolder"/> with 0 ticks) is kept for ever,
     /// as the ordinary cleanup keeps it, until the start of the server resolves it from the folder.
     /// </para>
@@ -30,7 +31,7 @@ namespace HSMServer.Core.TableSensors
 
             long ticks = policy.AppliedInterval switch
             {
-                TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year => (long)policy.AppliedInterval,
+                TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year or TimeInterval.FiveYears => (long)policy.AppliedInterval,
                 TimeInterval.Ticks or TimeInterval.FromFolder => policy.Ticks,
                 _ => 0, // None, FromParent left unresolved: never expires
             };

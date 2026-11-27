@@ -171,7 +171,8 @@ namespace HSMServer.Model
                     Interval = TimeInterval.Forever;
             }
             // const ticks to enum, the fixed periods only: ticks equal to a calendar preset's nominal length (31, 93, 186,
-            // 365 days) are a custom period: read as the preset, they would be saved back as the calendar preset (#1864)
+            // 365, 1826 days) are a custom period: read as the preset, they would be saved back as the calendar preset
+            // (#1864; 1826 days, the collectors' history of version sensors, #1945)
             else if (TimeInterval.IsDefined(model.Ticks) && !((TimeInterval)model.Ticks).IsDynamic() &&
                      (predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true))
                 Interval = (TimeInterval)model.Ticks;

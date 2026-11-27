@@ -34,6 +34,7 @@ namespace HSMServer.Core.Model
         SixMonths = 160_704_000_000_000, // 31 * 6
 
         Year = 315_360_000_000_000, // 365 days
+        FiveYears = 1_577_664_000_000_000, // 5 * 365 + 1 days (#1945): the web enum's value, the nominal length
     }
 
 
@@ -54,8 +55,8 @@ namespace HSMServer.Core.Model
         public long Ticks { get; }
 
         /// <summary>
-        /// The calendar preset (a month, three months, six months, a year) a <see cref="TimeInterval.FromFolder"/> model
-        /// inherits from its folder (#1864); null for every other model. A calendar preset has no length in ticks, so
+        /// The calendar preset (a month, three months, six months, a year, five years) a <see cref="TimeInterval.FromFolder"/>
+        /// model inherits from its folder (#1864, five years #1945); null for every other model. A calendar preset has no length in ticks, so
         /// without it the inherited model carried 0 ticks and never expired.
         /// </summary>
         public TimeInterval? FolderPreset { get; }
@@ -94,7 +95,7 @@ namespace HSMServer.Core.Model
 
 
         public static bool IsCalendarPreset(TimeInterval interval) =>
-            interval is TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year;
+            interval is TimeInterval.Month or TimeInterval.ThreeMonths or TimeInterval.SixMonths or TimeInterval.Year or TimeInterval.FiveYears;
 
 
         internal bool TimeIsUp(DateTime time) =>
@@ -119,6 +120,7 @@ namespace HSMServer.Core.Model
             TimeInterval.SixMonths => time.AddMonths(6 * coef),
 
             TimeInterval.Year => time.AddYears(coef),
+            TimeInterval.FiveYears => time.AddYears(5 * coef),
 
             TimeInterval.Ticks or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
             TimeInterval.None => DateTime.MaxValue,

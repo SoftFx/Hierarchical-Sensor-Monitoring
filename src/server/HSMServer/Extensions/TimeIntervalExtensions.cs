@@ -15,7 +15,9 @@ namespace HSMServer.Extensions
 
         public static bool IsStatic(this TimeInterval interval) => interval is >= TimeInterval.OneMinute and < TimeInterval.Month;
 
-        public static bool IsDynamic(this TimeInterval interval) => interval is >= TimeInterval.Month and <= TimeInterval.Year;
+        // The calendar presets, stored as themselves rather than as ticks; five years since #1945 (before, it was neither
+        // static nor dynamic and was saved as "from parent").
+        public static bool IsDynamic(this TimeInterval interval) => interval is >= TimeInterval.Month and <= TimeInterval.FiveYears;
 
         public static bool IsDefined(this TimeInterval _, long ticks) => Enum.IsDefined(typeof(TimeInterval), ticks);
 
@@ -26,6 +28,7 @@ namespace HSMServer.Extensions
             CoreTimeInterval.ThreeMonths => TimeInterval.ThreeMonths,
             CoreTimeInterval.SixMonths => TimeInterval.SixMonths,
             CoreTimeInterval.Year => TimeInterval.Year,
+            CoreTimeInterval.FiveYears => TimeInterval.FiveYears,
 
             CoreTimeInterval.FromParent => TimeInterval.FromParent,
             CoreTimeInterval.None => TimeInterval.None,
@@ -39,6 +42,7 @@ namespace HSMServer.Extensions
             TimeInterval.ThreeMonths => CoreTimeInterval.ThreeMonths,
             TimeInterval.SixMonths => CoreTimeInterval.SixMonths,
             TimeInterval.Year => CoreTimeInterval.Year,
+            TimeInterval.FiveYears => CoreTimeInterval.FiveYears,
 
             _ => throw new NotImplementedException(),
         };

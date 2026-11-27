@@ -49,7 +49,7 @@ namespace HSMServer.Model
         [Display(Name = "1 year")]
         Year = 315_360_000_000_000, //365 days
         [Display(Name = "5 years")]
-        FiveYears = 5 * 315_360_000_000_000 + 864_000_000_000, //at least 1 leap year
+        FiveYears = 5 * 315_360_000_000_000 + 864_000_000_000, //at least 1 leap year; a calendar preset (#1945), the core's FiveYears
     }
 
 

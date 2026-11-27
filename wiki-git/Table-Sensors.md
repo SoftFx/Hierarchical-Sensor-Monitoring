@@ -155,6 +155,8 @@ For a table sensor the period is counted in **whole weeks**, rounded up:
 
 Rows are stored by week and deleted a whole week at a time, once the period has passed **after the end of the row's week**. A row is therefore kept at least for the period and at most one week longer. The server checks once an hour.
 
+"5 years" gives 261 weeks only when it was saved by a server newer than 3.46.0. Up to 3.46.0 the server saved a choice of "5 years" as "From parent" (a folder, a product in no folder, a sensor) or as "From folder" (a product in a folder), so the sensor kept what it inherited instead (for ever, under a folder). The server cannot tell such a stored value from a real "From parent", so it does not change it: set "5 years" again on the folder, product or sensor after the upgrade.
+
 One exception in server 3.45.0 only: a table sensor that takes "1 month", "3 months", "6 months" or "1 year" from a **folder** is kept for ever, as an ordinary sensor's history was in that case. Since 3.46.0 the folder's preset applies: after the upgrade the server moves such a sensor's rows to the files of that period, and rows older than it are deleted.
 
 **Changing the period.**

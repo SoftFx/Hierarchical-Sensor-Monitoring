@@ -3610,7 +3610,8 @@
             One TTL interval. `Interval` is a SPARSE TimeInterval enum (long):
             -100=FromFolder, -10=FromParent, -1=Ticks (authoritative — read Ticks),
             0=None, 26784000000000=Month (31 days), 80352000000000=ThreeMonths,
-            160704000000000=SixMonths, 315360000000000=Year (365 days).
+            160704000000000=SixMonths, 315360000000000=Year (365 days),
+            1577664000000000=FiveYears (1826 days).
             Undefined values answer 400 (they would throw inside the timeout scan later).
             </summary>
         </member>

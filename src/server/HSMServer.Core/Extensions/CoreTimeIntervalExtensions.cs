@@ -10,6 +10,7 @@ internal static class CoreTimeIntervalExtensions
       TimeInterval.FromParent => "From Parent",
       TimeInterval.ThreeMonths => "Three Months",
       TimeInterval.SixMonths => "Six Months",
+      TimeInterval.FiveYears => "Five Years",
       _ => interval.ToString()
    };
 }

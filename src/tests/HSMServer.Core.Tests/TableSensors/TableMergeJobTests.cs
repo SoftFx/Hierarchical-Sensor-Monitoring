@@ -970,6 +970,7 @@ namespace HSMServer.Core.Tests.TableSensors
             { new TimeIntervalModel(TimeInterval.ThreeMonths), 14 },
             { new TimeIntervalModel(TimeInterval.SixMonths), 27 },
             { new TimeIntervalModel(TimeInterval.Year), 53 },
+            { new TimeIntervalModel(TimeInterval.FiveYears), 261 }, // five years (1826 days), #1945
             { new TimeIntervalModel(TimeInterval.None), 0 },
             { TimeIntervalModel.None, 0 },
             { new TimeIntervalModel(TimeSpan.FromDays(7).Ticks), 1 },
@@ -987,6 +988,9 @@ namespace HSMServer.Core.Tests.TableSensors
             { new TimeIntervalModel(TimeInterval.ThreeMonths).ToFromFolderModel(), 14 },
             { new TimeIntervalModel(TimeInterval.SixMonths).ToFromFolderModel(), 27 },
             { new TimeIntervalModel(TimeInterval.Year).ToFromFolderModel(), 53 },
+            { new TimeIntervalModel(TimeInterval.FiveYears).ToFromFolderModel(), 261 },
+            // A custom period of the 5-year preset's nominal length, the collectors' default for version sensors.
+            { new TimeIntervalModel(TimeSpan.FromDays(1826).Ticks), 261 },
             { new TimeIntervalModel(TimeInterval.FromFolder, 0L), 0 },
             { TimeIntervalModel.None.ToFromFolderModel(), 0 },
             { new TimeIntervalModel(TimeInterval.FromParent), 0 },
