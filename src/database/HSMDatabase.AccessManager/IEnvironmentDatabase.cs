@@ -128,8 +128,9 @@ namespace HSMDatabase.AccessManager
         List<string> GetAllSensorsIds();
 
         /// <summary>
-        /// Every sensor in the list of sensors with the type of its entity (#1913): null when the entity is there but cannot
-        /// be read. An id without an entity is left out. A list that cannot be read throws, rather than reading as empty.
+        /// Every sensor entity stored in the database with its type (#1913), found by walking the stored rows, not by the list
+        /// of sensors (an entity whose id is missing from the list counts): null when a row stored under an id may be a
+        /// sensor's but cannot be read. A walk that fails throws.
         /// </summary>
         List<(string Id, byte? Type)> GetSensorTypes();
 

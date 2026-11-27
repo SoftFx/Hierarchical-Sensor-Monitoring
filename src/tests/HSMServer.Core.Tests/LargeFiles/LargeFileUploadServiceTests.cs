@@ -605,6 +605,8 @@ namespace HSMServer.Core.Tests.LargeFiles
         [InlineData("file", true)]
         [InlineData("unreadable", true)]
         [InlineData("double", false)]
+        [InlineData("unlisted", true)]
+        [InlineData("unlisted double", false)]
         public async Task A_file_sensor_in_the_database_but_not_in_the_tree_leaves_the_start_check_unable_to_tell(string unloaded, bool kept)
         {
             var sensor = await CreateFileSensorAsync("f");
@@ -612,8 +614,17 @@ namespace HSMServer.Core.Tests.LargeFiles
             var stray = StrayArchive(_product, DateTime.UtcNow.AddDays(-2));
 
             var entity = EntitiesFactory.BuildSensorEntity(name: "unloaded", parent: _product.ToString(),
-                type: (byte)(unloaded == "double" ? SensorType.Double : SensorType.File));
-            _databaseCoreManager.DatabaseCore.AddSensor(entity);
+                type: (byte)(unloaded.EndsWith("double") ? SensorType.Double : SensorType.File));
+
+            if (unloaded.StartsWith("unlisted"))
+            {
+                // The entity is written but its id did not make it into the list of sensors (AddSensor ignores a failed
+                // write of the list): the tree never builds it, and the list does not name it.
+                PutEnvironmentRow(entity.Id, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(entity));
+                Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.GetAllSensors(), s => s.Id == entity.Id);
+            }
+            else
+                _databaseCoreManager.DatabaseCore.AddSensor(entity);
 
             if (unloaded == "unreadable")
                 PutEnvironmentRow(entity.Id, System.Text.Encoding.UTF8.GetBytes("not an entity"));
@@ -625,6 +636,25 @@ namespace HSMServer.Core.Tests.LargeFiles
             Assert.Equal(kept, File.Exists(stray));
             Assert.Equal(kept ? 0 : 1, report.Store.OrphanArchivesRemoved);
             Assert.Equal(kept ? 1 : 0, Store.Statistics.StartDisagreements);
+        }
+
+        // A database without any sensor (the list of sensors never written): products, folders and access keys are not taken
+        // for sensors, so the check completes and an archive no record names goes after its day.
+        [Fact]
+        public async Task A_database_without_sensors_completes_the_start_check()
+        {
+            Assert.Empty(_databaseCoreManager.DatabaseCore.GetAllSensors());
+
+            // A record of the product, so the product's archives are not kept for want of one; its sensor is in no database.
+            var content = Content(Piece);
+            Store.Begin(new LargeFileUploadKey(_product, Guid.NewGuid(), "x.dmp", content.Length, Modified, null), "dmp", Piece, Piece);
+            var stray = StrayArchive(_product, DateTime.UtcNow.AddDays(-2));
+
+            var report = await _service.RunPassAsync(DateTime.UtcNow, atStart: true);
+
+            Assert.Equal(0, Store.Statistics.StartDisagreements);
+            Assert.Equal(1, report.Store.OrphanArchivesRemoved);
+            Assert.False(File.Exists(stray));
         }
 
         // #1913, gap 2: a value time that falls in no values database the server has open (its week's folder lost) is not

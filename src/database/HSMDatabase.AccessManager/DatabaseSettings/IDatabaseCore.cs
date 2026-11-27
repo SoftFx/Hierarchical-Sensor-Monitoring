@@ -170,9 +170,9 @@ namespace HSMServer.Core.DataLayer
         bool? SensorEntityExists(Guid sensorId);
 
         /// <summary>
-        /// Every sensor the database lists, with the type of its entity: null when the entity is there but cannot be read
-        /// (#1913: the check of large values at start cannot tell about such a sensor). A listed sensor without an entity is
-        /// left out. Throws when the list cannot be read.
+        /// Every sensor entity the database stores, with its type, whether or not the list of sensors names it: null when a
+        /// row stored under an id may be a sensor's but cannot be read (#1913: the check of large values at start cannot tell
+        /// about such a sensor). Throws when the database cannot be walked.
         /// </summary>
         List<(Guid Id, byte? Type)> GetSensorTypes();
 

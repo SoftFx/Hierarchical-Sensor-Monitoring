@@ -777,6 +777,31 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        /// <summary>
+        /// Every key and value of the database whose key <paramref name="keyFilter"/> takes, in key order (#1913). The value
+        /// of a key it does not take is not copied. A read that fails throws, also one that LevelDB reports only by ending
+        /// the iteration.
+        /// </summary>
+        public List<(byte[] Key, byte[] Value)> ReadAll(Func<byte[], bool> keyFilter)
+        {
+            var result = new List<(byte[], byte[])>();
+
+            using var options = new ReadOptions { FillCache = false };
+            using var iterator = _database.CreateIterator(options);
+
+            for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
+            {
+                var key = iterator.Key();
+
+                if (keyFilter(key))
+                    result.Add((key, iterator.Value()));
+            }
+
+            iterator.ThrowIfFailed(_databaseName);
+
+            return result;
+        }
+
         public void Dispose()
         {
             _database?.Dispose();
