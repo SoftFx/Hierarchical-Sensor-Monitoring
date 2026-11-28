@@ -32,8 +32,8 @@ Every write of every LevelDB database of the server goes through a **write guard
   write the memtable into a table, after which LevelDB deletes the old log. The guard accepts writes again only when no
   log numbered at or below the torn one is left in the directory (LevelDB reports nothing from a manual compaction).
 - The roll is tried right after the failure and then by a write at most once a second, and only when the volume has
-  room for the memtables: a roll whose flush fails gives LevelDB a background error, which only a reopen (a restart of
-  the server) clears.
+  room for the memtables (best effort: each database checks alone): a roll whose flush fails gives LevelDB a background
+  error, which only a reopen (a restart of the server) clears.
 - The direct writes of the LevelDB wrapper are banned in the store projects (analyzer error), so a new store cannot
   skip the guard.
 - Failed writes, refused writes and the databases refusing writes now are counted and posted by the self-monitoring
@@ -46,7 +46,9 @@ Every write of every LevelDB database of the server goes through a **write guard
   roll), without a restart. A database in which LevelDB itself holds a background error (its own flush failed on the
   full disk) still needs a restart; it is now visible as an Error sensor and logged.
 - Concurrent writes to one database no longer share one log record (LevelDB's group commit): one native write at a time.
-  LevelDB already queued them; the cost is the merging of many concurrent synced writes into one `fsync`.
+  LevelDB already queued them; the cost is the merging of concurrent writes (synced or not) into one log append and one
+  `fsync`. The history weeks are written mostly from the update queue; many concurrent writers of one
+  database are rare (table block puts).
 - Callers keep their own contract for a failed write (a registration answers `500`, #1756; a table block is not
   acknowledged). A refused write is a `ServerDatabaseException` like any store failure.
 - No storage format, key or file changes; a rollback to the previous server is safe.

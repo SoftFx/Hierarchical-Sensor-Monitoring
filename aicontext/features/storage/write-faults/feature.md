@@ -32,8 +32,9 @@ the checksum and dropped the rest of the block (10,076 bytes, the figure in the 
   `GuardedWrite` extensions. A database is registered with its guard at its open (`LevelDBDatabaseAdapter`,
   `LevelDbOpen.Open`).
 - **The writes of one database are serialized** by its guard (one native write at a time). LevelDB queues them anyway;
-  what is lost is the merging of writes that wait together into one log record (group commit), which matters only for
-  many concurrent synced writes to the same database.
+  what is lost is the merging of writes that wait together into one log record (group commit), synced or not: one log
+  append (and, for a synced write, one `fsync`) per write. It shows only with many concurrent writers of the same
+  database; the history weeks are written mostly from the update queue.
 - **After a failed native write no write of that database is acknowledged until the log the failure may have torn is
   closed.** A write in that state is refused with `LevelDbWritesRefusedException` (a `ServerDatabaseException`), and
   nothing of it reaches the database. The failed write itself throws the native error, as before.
@@ -45,7 +46,9 @@ the checksum and dropped the rest of the block (10,076 bytes, the figure in the 
   **only when the volume's free space takes the memtables** (`leveldb.approximate-memory-usage` plus 1 MB). A roll on a
   full volume would fail its memtable flush, and after a failed background flush LevelDB keeps the error and fails every
   later write of that database until it is opened again. With the check, a database whose write failed on a full disk
-  takes writes again by itself once the space is back, without a restart, and those writes survive a restart.
+  takes writes again by itself once the space is back, without a restart, and those writes survive a restart. The check
+  is best effort: each database checks alone (two rolling at once on one volume can together need more than is free),
+  and a volume whose free space cannot be read is rolled anyway. A roll that fails this way costs a restart, never data.
 - **When LevelDB holds a background error** (a flush or compaction failed before or despite the check, such as the
   history database of #1791 whose flush hit the full disk on its own), the database fails every write until it is
   opened again: **only a restart of the server recovers it.** The guard keeps refusing and reporting it meanwhile.
