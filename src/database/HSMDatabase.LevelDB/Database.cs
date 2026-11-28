@@ -34,6 +34,9 @@ namespace HSMDatabase.LevelDB
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly DB _database;
+        // Every write of the database goes through it (#1791): no write is acknowledged after a failed one until the
+        // write-ahead log the failure may have torn is closed.
+        private readonly LevelDbWriteGuard _writes;
         private static readonly WriteOptions _syncWrite = new() { Sync = true };
 
         private readonly ReadOptions _iteratorOptions = new();
@@ -49,8 +52,11 @@ namespace HSMDatabase.LevelDB
         private string _databaseName;
 
         // The native database, for the sealed week store (#1803): its merged reads need
-        // their own iterators, and its chunk rewrites a synced write batch.
+        // their own iterators, and its chunk rewrites a synced write batch (through
+        // GuardedWrite, which takes the guard of this database).
         internal DB Native => _database;
+
+        internal LevelDbWriteGuard Writes => _writes;
 
         public LevelDBDatabaseAdapter(string name)
         {
@@ -64,6 +70,7 @@ namespace HSMDatabase.LevelDB
                 try
                 {
                     _database = new DB(name, _databaseOptions);
+                    _writes = LevelDbWriteGuard.Register(_database, name);
 
                     return;
                 }
@@ -104,6 +111,7 @@ namespace HSMDatabase.LevelDB
                 try
                 {
                     _database = new DB(absolutePath, readOptions);
+                    _writes = LevelDbWriteGuard.Register(_database, absolutePath);
                     return;
                 }
                 catch (Exception ex)
@@ -123,9 +131,9 @@ namespace HSMDatabase.LevelDB
         {
             try
             {
-                _database.Delete(key);
+                _writes.Delete(key);
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not ServerDatabaseException)
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
@@ -137,9 +145,9 @@ namespace HSMDatabase.LevelDB
         {
             try
             {
-                _database.Delete(key, _syncWrite);
+                _writes.Delete(key, _syncWrite);
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not ServerDatabaseException)
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
@@ -161,7 +169,7 @@ namespace HSMDatabase.LevelDB
                     beforeFirstDelete = null;
                 }
 
-                _database.Delete(iterator.Key());
+                _writes.Delete(iterator.Key());
                 iterator.Next();
             }
         }
@@ -206,11 +214,11 @@ namespace HSMDatabase.LevelDB
                 }
 
                 if (removed > 0)
-                    _database.Write(batch);
+                    _writes.Write(batch);
 
                 return removed;
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not ServerDatabaseException)
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
@@ -258,9 +266,9 @@ namespace HSMDatabase.LevelDB
         {
             try
             {
-                _database.Put(key, value);
+                _writes.Put(key, value);
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not ServerDatabaseException)
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
@@ -272,9 +280,9 @@ namespace HSMDatabase.LevelDB
         {
             try
             {
-                _database.Put(key, value, _syncWrite);
+                _writes.Put(key, value, _syncWrite);
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not ServerDatabaseException)
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
@@ -303,9 +311,9 @@ namespace HSMDatabase.LevelDB
                     foreach (var key in deletes)
                         batch.Delete(key);
 
-                _database.Write(batch);
+                _writes.Write(batch);
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not ServerDatabaseException)
             {
                 throw new ServerDatabaseException(e.Message, e);
             }
@@ -703,6 +711,8 @@ namespace HSMDatabase.LevelDB
 
                 using (var backupDb = new DB(backupPath, _databaseOptions))
                 {
+                    var backupWrites = LevelDbWriteGuard.Register(backupDb, backupPath);
+
                     using (var snapshot = _database.CreateSnapshot())
                     {
                         using (var readOptions = new ReadOptions() { Snapshot = snapshot })
@@ -713,7 +723,7 @@ namespace HSMDatabase.LevelDB
                                 snapshotIterator.SeekToFirst();
                                 while (snapshotIterator.IsValid)
                                 {
-                                    backupDb.Put(snapshotIterator.Key(), snapshotIterator.Value());
+                                    backupWrites.Put(snapshotIterator.Key(), snapshotIterator.Value());
                                     snapshotIterator.Next();
                                 }
                             }

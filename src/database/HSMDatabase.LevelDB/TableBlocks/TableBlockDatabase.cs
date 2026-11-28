@@ -312,7 +312,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
                     try
                     {
-                        _blocks.Put(key, value, _syncWrite);
+                        _blocks.GuardedPut(key, value, _syncWrite);
                     }
                     catch (Exception ex)
                     {
@@ -328,7 +328,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
                     try
                     {
-                        _index.Put(key, EncodeIndex(entry), _plainWrite);
+                        _index.GuardedPut(key, EncodeIndex(entry), _plainWrite);
                     }
                     catch (Exception ex)
                     {
@@ -562,9 +562,9 @@ namespace HSMDatabase.LevelDB.TableBlocks
 
                         // Blocks first, synced: an index entry without its block is removed by a repeat, while a block
                         // without its index entry would be indexed again only if it were the tail.
-                        _blocks.Write(batch, _syncWrite);
+                        _blocks.GuardedWrite(batch, _syncWrite);
                         FaultHook?.Invoke("after-hour-blocks-deleted");
-                        _index.Write(batch, _plainWrite);
+                        _index.GuardedWrite(batch, _plainWrite);
                     }
                     catch (Exception ex) when (ex is not TableBlockStoreException)
                     {
@@ -917,7 +917,7 @@ namespace HSMDatabase.LevelDB.TableBlocks
                     continue;
                 }
 
-                _index.Put(key, EncodeIndex(entry), _plainWrite);
+                _index.GuardedPut(key, EncodeIndex(entry), _plainWrite);
                 maps.Publish(entry);
                 count++;
             }

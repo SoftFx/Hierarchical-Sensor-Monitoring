@@ -769,7 +769,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                         CountChunkWrite(key, chunk);
                     }
 
-                    _chunks.Native.Write(batch, _syncWrite);
+                    _chunks.Native.GuardedWrite(batch, _syncWrite);
                 }
             }
 
@@ -928,7 +928,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             else if (deleteWatermark)
                 batch.Delete(watermarkKey);
 
-            db.Write(batch, _syncWrite);
+            db.GuardedWrite(batch, _syncWrite);
 
             return true;
         }

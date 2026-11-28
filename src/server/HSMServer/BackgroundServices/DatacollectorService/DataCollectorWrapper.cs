@@ -78,6 +78,9 @@ namespace HSMServer.BackgroundServices
         // The large file store (#1883) and the archive side (#1885): archive builds and the download log, with default alerts.
         internal LargeFileSensors LargeFileSensors { get; }
 
+        // The failed and refused writes of every LevelDB database of the server (#1791).
+        internal StoreWriteFaultSensors StoreWriteFaultSensors { get; }
+
         private readonly IDatabaseCore _database;
 
         internal BackupSensors BackupSensors { get; }
@@ -130,6 +133,7 @@ namespace HSMServer.BackgroundServices
             HistorySealingSensors = new HistorySealingSensors(_collector);
             TableBlockSensors = new TableBlockSensors(_collector, db.TableBlocks, db.TableBatches);
             LargeFileSensors = new LargeFileSensors(_collector, db.LargeFiles);
+            StoreWriteFaultSensors = new StoreWriteFaultSensors(_collector);
 
             if (largeFileArchiveSide is not null)
                 LargeFileSensors.UseArchiveSide(largeFileArchiveSide.FailedBuilds, largeFileArchiveSide.HasDumpPassword);
@@ -245,6 +249,8 @@ namespace HSMServer.BackgroundServices
             TableBlockSensors.SendInfo();
 
             LargeFileSensors.SendInfo();
+
+            StoreWriteFaultSensors.SendInfo();
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
 

@@ -403,7 +403,7 @@ namespace HSMDatabase.LevelDB.Sealed
                     if (removed > 0)
                     {
                         store.MarkChanged();
-                        store.RowDatabase.Native.Write(batch);
+                        store.RowDatabase.Native.GuardedWrite(batch);
                         _report.OverlayRowsRemoved += removed;
                     }
 
@@ -667,7 +667,7 @@ namespace HSMDatabase.LevelDB.Sealed
             else if (removeWatermark)
                 batch.Delete(watermarkKey);
 
-            chunks.Write(batch, _syncWrite);
+            chunks.GuardedWrite(batch, _syncWrite);
         }
 
         #endregion
@@ -834,7 +834,7 @@ namespace HSMDatabase.LevelDB.Sealed
                     if (restored > 0)
                     {
                         store.MarkChanged();
-                        store.RowDatabase.Native.Write(batch, _syncWrite);
+                        store.RowDatabase.Native.GuardedWrite(batch, _syncWrite);
                         _report.RowsRestored += restored;
                     }
 
@@ -1217,7 +1217,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 foreach (var (key, _) in SensorRows(chunks, null, sensorId))
                     batch.Delete(key);
 
-            chunks.Write(batch, _syncWrite);
+            chunks.GuardedWrite(batch, _syncWrite);
         }
 
         /// <summary>

@@ -112,6 +112,15 @@
         <member name="M:HSMServer.BackgroundServices.LargeFileSensors.Gauges.#ctor(System.Int64,System.Int64,System.Int64,System.Int64)">
             <summary>The gauges of one sample, from the store's records.</summary>
         </member>
+        <member name="T:HSMServer.BackgroundServices.StoreWriteFaultSensors">
+            <summary>
+            Self-monitoring of the writes of every LevelDB database of the server (#1791), under <c>Database</c>, posted from the
+            self-monitoring sample: the native writes that failed, the writes refused after one, and the databases that refuse
+            writes now. A database refuses writes from a failed write until LevelDB can start a new write-ahead log (a full disk
+            that got space again), or until a restart. The values of these sensors are themselves stored in the history
+            database: while that one refuses writes they are only in memory.
+            </summary>
+        </member>
         <member name="T:HSMServer.BackgroundServices.TableBlockSensors">
             <summary>
             Self-monitoring of the block store of table sensors (#1844), under <c>Database/Tables</c>, posted from the 5-minute
