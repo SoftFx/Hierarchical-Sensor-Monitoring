@@ -137,7 +137,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                         if (deletedBytes > 0)
                             batch.Put(DeletedKey, EncodeDeleted(ReadDeleted(handle.Db) + deletedBytes));
 
-                        handle.Db.Write(batch, _syncWrite);
+                        handle.Db.GuardedWrite(batch, _syncWrite);
                         handle.Dirty = true;
 
                         Statistics.Add(ref Statistics.BatchesWritten, batches);
@@ -223,7 +223,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                         if (bytes > 0)
                             batch.Put(DeletedKey, EncodeDeleted(ReadDeleted(handle.Db) + bytes));
 
-                        handle.Db.Write(batch, _syncWrite);
+                        handle.Db.GuardedWrite(batch, _syncWrite);
                         handle.Dirty = true;
                         product.ChangeSensor(sensorId);
 
@@ -359,9 +359,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                 {
                     long left = Math.Max(0, ReadDeleted(after.Db) - before);
                     if (left == 0)
-                        after.Db.Delete(DeletedKey, _syncWrite);
+                        after.Db.GuardedDelete(DeletedKey, _syncWrite);
                     else
-                        after.Db.Put(DeletedKey, EncodeDeleted(left), _syncWrite);
+                        after.Db.GuardedPut(DeletedKey, EncodeDeleted(left), _syncWrite);
 
                     after.Dirty = true;
                 }

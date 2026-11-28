@@ -62,3 +62,36 @@ jobs:
           name: server-test-results
           path: ${{ runner.temp }}/test-results
           if-no-files-found: ignore
+
+  # #1791: the LevelDB tests on a really full volume (LevelDbDiskFullTests), which only a Linux runner can give them: a
+  # 4 MB tmpfs the tests fill. They are skipped in the job above (no HSM_TEST_SMALL_VOLUME there). Node because the test
+  # project builds HSMServer (through HSMServer.Core.Tests), which runs its webpack bundle.
+  disk-full:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Mount a small volume
+        run: |
+          sudo mkdir -p /mnt/hsm-small
+          sudo mount -t tmpfs -o size=4m,mode=1777 tmpfs /mnt/hsm-small
+          df -h /mnt/hsm-small
+
+      - name: Disk-full tests
+        env:
+          HSM_TEST_SMALL_VOLUME: /mnt/hsm-small
+        run: >
+          dotnet test src/tests/HSMDatabase.LevelDB.Tests -c Debug
+          --filter "FullyQualifiedName~LevelDbDiskFullTests"
+          --logger "console;verbosity=normal"

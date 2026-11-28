@@ -18,4 +18,18 @@
     <ProjectReference Include="..\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj" />
   </ItemGroup>
 
+  <!-- #1791: every write of a LevelDB database goes through the guard of the database (LevelDbWriteGuard); the wrapper's
+       direct writes are banned here (RS0030 is an error). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <AdditionalFiles Include="..\BannedSymbols.txt" Link="BannedSymbols.txt" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <WarningsAsErrors>$(WarningsAsErrors);RS0030</WarningsAsErrors>
+  </PropertyGroup>
+
 </Project>

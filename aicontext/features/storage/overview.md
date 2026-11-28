@@ -1,6 +1,6 @@
 # Storage Features Overview
 
-> Owner: storage | Last reviewed: 2026-11-19 | Canonical: yes
+> Owner: storage | Last reviewed: 2026-11-28 | Canonical: yes
 
 The storage area owns LevelDB/LMDB-backed persistence, key formats, value
 serialization, snapshots, journals, interval data, retention, and restart
@@ -16,6 +16,9 @@ recovery behavior.
 - [`large-files/`](large-files/feature.md) - the large file store and the large
   value of a File sensor (ADR-0022, #1883): files in a folder of their own, not
   a database.
+- [`write-faults/`](write-faults/feature.md) - what every LevelDB database does
+  after a write fails (ADR-0024, #1791): no write is acknowledged into a
+  write-ahead log a failed write may have torn.
 
 ## Feature Folders To Add Here
 

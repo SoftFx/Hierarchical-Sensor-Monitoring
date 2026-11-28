@@ -251,7 +251,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                             }
 
                             batch.Put(HourKey(hour, TagMark), record);
-                            handle.Db.Write(batch, _syncWrite);
+                            handle.Db.GuardedWrite(batch, _syncWrite);
                             handle.Dirty = true;
 
                             if (rewrite)
@@ -279,7 +279,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                     RemoveStaleParts(product, week, hour, ordered.Select(p => p.PeriodWeeks).ToHashSet());
 
                     Checkpoint?.Invoke("before-commit");
-                    product.HoursDb.Put(CommitKey(hour), record, _syncWrite);
+                    product.HoursDb.GuardedPut(CommitKey(hour), record, _syncWrite);
                 }
                 catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
                 {
@@ -316,7 +316,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                     if (DeleteHourKeys(handle.Db, hour, batch) == 0)
                         continue;
 
-                    handle.Db.Write(batch, _syncWrite);
+                    handle.Db.GuardedWrite(batch, _syncWrite);
                     handle.Dirty = true;
                     Statistics.Add(ref Statistics.PartsRewritten);
                     _logger.Warn($"The table batches of hour {new DateTime(hour, DateTimeKind.Utc):O} in class P{stale.PeriodWeeks} of product {product.Id}, " +
@@ -469,7 +469,7 @@ namespace HSMDatabase.LevelDB.TableBatches
                 try
                 {
                     Checkpoint?.Invoke("forget-hours");
-                    product.HoursDb.Write(batch, _syncWrite);
+                    product.HoursDb.GuardedWrite(batch, _syncWrite);
                 }
                 catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
                 {
@@ -1109,9 +1109,9 @@ namespace HSMDatabase.LevelDB.TableBatches
                     Checkpoint?.Invoke("placement-writing");
 
                     if (placement is null)
-                        product.PlacementsDb.Delete(PlacementKey(sensorId), _syncWrite);
+                        product.PlacementsDb.GuardedDelete(PlacementKey(sensorId), _syncWrite);
                     else
-                        product.PlacementsDb.Put(PlacementKey(sensorId), EncodePlacement(placement), _syncWrite);
+                        product.PlacementsDb.GuardedPut(PlacementKey(sensorId), EncodePlacement(placement), _syncWrite);
                 }
                 catch (Exception ex) when (ex is not TableBatchStoreException and not CheckpointException)
                 {
@@ -1274,7 +1274,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
 
             batch.Put(CompleteKey, CompleteValue);
-            product.PlacementsDb.Write(batch, _syncWrite);
+            product.PlacementsDb.GuardedWrite(batch, _syncWrite);
 
             product.Placements.Clear();
             foreach (var (sensor, placement) in rebuilt)
@@ -1470,7 +1470,7 @@ namespace HSMDatabase.LevelDB.TableBatches
             }
 
             batch.Put(CompleteKey, CompleteValue);
-            product.HoursDb.Write(batch, _syncWrite);
+            product.HoursDb.GuardedWrite(batch, _syncWrite);
 
             product.Hours.Clear();
             LoadCommits(product);

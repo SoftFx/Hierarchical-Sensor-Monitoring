@@ -17,6 +17,7 @@ namespace HSMDatabase.LevelDB
     /// whatever the Windows message says (it is localized). Any other error, a missing database or corruption included, is
     /// thrown at once; past the retries the last error is thrown.
     /// </para>
+    /// <para>The database is registered with <see cref="LevelDbWriteGuard"/>: its writes go through <see cref="LevelDbWrites"/> (#1791).</para>
     /// </summary>
     public static class LevelDbOpen
     {
@@ -38,7 +39,12 @@ namespace HSMDatabase.LevelDB
             {
                 try
                 {
-                    return open is null ? new DB(path, options) : open(path, options);
+                    var db = open is null ? new DB(path, options) : open(path, options);
+
+                    // Its writes go through the guard of the database (#1791).
+                    LevelDbWriteGuard.Register(db, path);
+
+                    return db;
                 }
                 catch (Exception ex) when (attempt < RetryPauses.Length && IsTransient(ex))
                 {

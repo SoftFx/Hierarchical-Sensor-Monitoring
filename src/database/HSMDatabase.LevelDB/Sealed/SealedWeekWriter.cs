@@ -82,7 +82,7 @@ namespace HSMDatabase.LevelDB.Sealed
             foreach (var chunk in chunks)
                 batch.Put(new DbKey(sensorId, ChunkCodec.ReadHeader(chunk).FirstKey).ToBytes(), chunk);
 
-            _database.Native.Write(batch, _syncWrite);
+            _database.Native.GuardedWrite(batch, _syncWrite);
         }
 
         /// <summary>
@@ -125,7 +125,7 @@ namespace HSMDatabase.LevelDB.Sealed
                 }
 
             if (any)
-                _database.Native.Write(batch, _syncWrite);
+                _database.Native.GuardedWrite(batch, _syncWrite);
         }
 
         /// <summary>
